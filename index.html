@@ -1,0 +1,3084 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>中小企业财税管理平台</title>
+  <style>
+    :root {
+      --bg: #f5efe5;
+      --paper: rgba(255, 251, 245, 0.88);
+      --panel: rgba(255, 248, 239, 0.94);
+      --ink: #1f2a2c;
+      --muted: #6b6f68;
+      --line: rgba(54, 62, 58, 0.12);
+      --accent: #c75c2d;
+      --accent-deep: #8f3d18;
+      --accent-soft: #f0c8af;
+      --green: #2f6b4f;
+      --gold: #caa15a;
+      --shadow: 0 20px 60px rgba(77, 55, 27, 0.14);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(199, 92, 45, 0.18), transparent 30%),
+        radial-gradient(circle at 85% 15%, rgba(47, 107, 79, 0.18), transparent 22%),
+        linear-gradient(180deg, #f7f1e8 0%, #efe3d3 48%, #e8dccd 100%);
+      min-height: 100vh;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.14) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.14) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.5), transparent 90%);
+    }
+
+    .shell {
+      width: min(1280px, calc(100% - 32px));
+      margin: 20px auto 48px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 24px;
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 999px;
+      background: rgba(255, 248, 239, 0.7);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      position: sticky;
+      top: 18px;
+      z-index: 20;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
+    }
+
+    .brand-copy strong,
+    .hero-copy h1,
+    .section-head h2,
+    .panel-head h3,
+    .flow-card h3,
+    .report-card h3 {
+      font-family: "Iowan Old Style", "Source Han Serif SC", "Songti SC", "STSong", serif;
+      letter-spacing: 0.02em;
+    }
+
+    .brand-copy strong {
+      display: block;
+      font-size: 1rem;
+    }
+
+    .brand-copy span,
+    .status-chip,
+    .meta,
+    .tiny {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    nav {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    nav a,
+    .ghost-btn,
+    .primary-btn,
+    .mini-btn,
+    .tab-btn,
+    .filter-btn {
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: transform 180ms ease, background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    nav a {
+      color: var(--ink);
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+    }
+
+    nav a:hover,
+    .ghost-btn:hover,
+    .mini-btn:hover,
+    .tab-btn:hover,
+    .filter-btn:hover {
+      transform: translateY(-1px);
+      border-color: var(--line);
+      background: rgba(255,255,255,0.55);
+    }
+
+    .hero {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 22px;
+      align-items: stretch;
+    }
+
+    .hero-copy,
+    .hero-side,
+    .section,
+    .flow-card,
+    .report-card,
+    .record-item,
+    .search-panel,
+    .library-panel,
+    .compliance-banner {
+      border: 1px solid rgba(255,255,255,0.42);
+      background: var(--paper);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-copy {
+      border-radius: 36px;
+      padding: 34px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-copy::after {
+      content: "";
+      position: absolute;
+      width: 260px;
+      height: 260px;
+      right: -60px;
+      top: -80px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(202, 161, 90, 0.32), transparent 65%);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      color: var(--accent-deep);
+      background: rgba(199, 92, 45, 0.1);
+      border: 1px solid rgba(199, 92, 45, 0.18);
+      font-weight: 600;
+      margin-bottom: 18px;
+    }
+
+    .hero-copy h1 {
+      font-size: clamp(2.4rem, 5vw, 4.5rem);
+      line-height: 1.04;
+      margin: 0 0 16px;
+      max-width: 10ch;
+    }
+
+    .hero-copy p {
+      margin: 0;
+      max-width: 62ch;
+      line-height: 1.75;
+      color: rgba(31, 42, 44, 0.78);
+      font-size: 1.03rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 24px;
+    }
+
+    .primary-btn,
+    .ghost-btn {
+      padding: 13px 18px;
+      border-radius: 16px;
+      font-size: 0.98rem;
+      font-weight: 600;
+    }
+
+    .primary-btn {
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+      box-shadow: 0 12px 28px rgba(143, 61, 24, 0.24);
+    }
+
+    .ghost-btn {
+      color: var(--ink);
+      background: rgba(255,255,255,0.4);
+      border: 1px solid var(--line);
+    }
+
+    .hero-side {
+      border-radius: 32px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      justify-content: space-between;
+    }
+
+    .hero-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: rgba(255,255,255,0.56);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+      border-radius: 22px;
+      padding: 18px;
+    }
+
+    .stat-card strong {
+      display: block;
+      font-size: 2rem;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .hero-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .hero-list-item {
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.48);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+    }
+
+    .hero-icon {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      color: #fff;
+      background: linear-gradient(135deg, #315f6d, #1f2a2c);
+      font-weight: 700;
+    }
+
+    .section {
+      margin-top: 22px;
+      padding: 26px;
+      border-radius: 32px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: 2rem;
+    }
+
+    .section-head p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      max-width: 58ch;
+      line-height: 1.7;
+    }
+
+    .panel-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+      border-radius: var(--radius-xl);
+      padding: 22px;
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .panel-head h3 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+
+    .tabs,
+    .filters {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn,
+    .filter-btn {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.56);
+      border: 1px solid rgba(54, 62, 58, 0.1);
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .tab-btn.active,
+    .filter-btn.active {
+      color: #fff;
+      background: linear-gradient(135deg, #315f6d, #1f2a2c);
+      box-shadow: 0 12px 24px rgba(31, 42, 44, 0.18);
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+      animation: rise 260ms ease;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .field,
+    .field-wide {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field-wide {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 0.92rem;
+      color: rgba(31, 42, 44, 0.82);
+      font-weight: 600;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid rgba(54, 62, 58, 0.12);
+      background: rgba(255,255,255,0.86);
+      border-radius: 16px;
+      padding: 13px 14px;
+      font: inherit;
+      color: var(--ink);
+      outline: none;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 104px;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: rgba(199, 92, 45, 0.46);
+      box-shadow: 0 0 0 4px rgba(199, 92, 45, 0.09);
+    }
+
+    .inline-actions {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+      align-items: center;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(47, 107, 79, 0.1);
+      color: var(--green);
+      border: 1px solid rgba(47, 107, 79, 0.18);
+      font-weight: 600;
+    }
+
+    .status-chip::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 6px rgba(47, 107, 79, 0.12);
+    }
+
+    .generated-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .record-item {
+      padding: 16px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.66);
+      display: grid;
+      gap: 10px;
+    }
+
+    .record-top {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .record-top strong {
+      font-size: 1.02rem;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .pill {
+      white-space: nowrap;
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      background: rgba(202, 161, 90, 0.18);
+      color: #775716;
+    }
+
+    .record-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .record-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .mini-btn {
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.62);
+      border: 1px solid rgba(54, 62, 58, 0.1);
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .flow-grid,
+    .report-grid,
+    .kpi-grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .flow-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .report-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .kpi-grid {
+      grid-template-columns: repeat(4, 1fr);
+      margin-top: 18px;
+    }
+
+    .flow-card,
+    .report-card {
+      padding: 22px;
+      border-radius: 24px;
+    }
+
+    .flow-card h3,
+    .report-card h3 {
+      margin: 0 0 10px;
+      font-size: 1.35rem;
+    }
+
+    .flow-card p,
+    .report-card p,
+    .compliance-banner p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .flow-number {
+      width: 42px;
+      height: 42px;
+      margin-bottom: 14px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      color: #fff;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+    }
+
+    .search-layout {
+      display: grid;
+      grid-template-columns: 0.92fr 1.08fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .search-panel,
+    .library-panel,
+    .compliance-banner {
+      padding: 22px;
+      border-radius: 26px;
+      background: rgba(255,255,255,0.68);
+    }
+
+    .search-box {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .search-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .search-row input {
+      flex: 1 1 240px;
+    }
+
+    .library-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .library-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(245, 239, 229, 0.86);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+    }
+
+    .library-row strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .compliance-banner {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: center;
+      background:
+        linear-gradient(135deg, rgba(31, 42, 44, 0.96), rgba(49, 95, 109, 0.9)),
+        linear-gradient(135deg, rgba(199, 92, 45, 0.18), transparent);
+      color: #f6efe7;
+    }
+
+    .compliance-banner p,
+    .compliance-banner .tiny {
+      color: rgba(246, 239, 231, 0.78);
+    }
+
+    .compliance-stamps {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .stamp {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.16);
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+
+    .footer {
+      padding: 28px 12px 0;
+      text-align: center;
+      color: rgba(31, 42, 44, 0.68);
+      font-size: 0.92rem;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .login-shell {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at 15% 20%, rgba(199, 92, 45, 0.24), transparent 24%),
+        radial-gradient(circle at 85% 18%, rgba(47, 107, 79, 0.22), transparent 20%),
+        linear-gradient(135deg, rgba(31, 42, 44, 0.92), rgba(62, 46, 28, 0.88));
+      backdrop-filter: blur(10px);
+    }
+
+    .login-shell.hidden {
+      display: none !important;
+    }
+
+    .login-card {
+      width: min(980px, 100%);
+      display: grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      border-radius: 34px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.22);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.28);
+      background: rgba(255, 248, 239, 0.92);
+    }
+
+    .login-intro {
+      padding: 36px;
+      color: #f8f1e8;
+      background:
+        linear-gradient(180deg, rgba(31, 42, 44, 0.66), rgba(31, 42, 44, 0.28)),
+        linear-gradient(135deg, #8f3d18, #315f6d);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 26px;
+    }
+
+    .login-intro h2,
+    .login-form h2 {
+      margin: 0 0 14px;
+      font-family: "Iowan Old Style", "Source Han Serif SC", "Songti SC", "STSong", serif;
+      font-size: clamp(2rem, 4vw, 3rem);
+      line-height: 1.08;
+    }
+
+    .login-intro p {
+      margin: 0;
+      line-height: 1.8;
+      color: rgba(248, 241, 232, 0.8);
+    }
+
+    .login-points {
+      display: grid;
+      gap: 12px;
+    }
+
+    .login-point {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .login-form {
+      padding: 36px;
+      display: grid;
+      align-content: center;
+      gap: 18px;
+      background: rgba(255, 251, 245, 0.94);
+    }
+
+    .login-form p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .demo-account {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(199, 92, 45, 0.08);
+      border: 1px solid rgba(199, 92, 45, 0.16);
+      color: var(--accent-deep);
+      font-weight: 600;
+      line-height: 1.7;
+    }
+
+    .login-message {
+      min-height: 24px;
+      color: var(--accent-deep);
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    .preview-shell {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(18, 23, 24, 0.56);
+      backdrop-filter: blur(8px);
+    }
+
+    .preview-shell.active {
+      display: flex;
+    }
+
+    .preview-card {
+      width: min(1040px, 100%);
+      max-height: min(88vh, 920px);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      border-radius: 30px;
+      background: rgba(255, 251, 245, 0.97);
+      border: 1px solid rgba(255,255,255,0.5);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+    }
+
+    .preview-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 20px 24px;
+      border-bottom: 1px solid rgba(54, 62, 58, 0.08);
+      background: linear-gradient(135deg, rgba(199, 92, 45, 0.08), rgba(49, 95, 109, 0.08));
+    }
+
+    .preview-head h3 {
+      margin: 0 0 6px;
+      font-size: 1.4rem;
+      font-family: "Iowan Old Style", "Source Han Serif SC", "Songti SC", "STSong", serif;
+    }
+
+    .preview-body {
+      overflow: auto;
+      padding: 24px;
+    }
+
+    .preview-paper {
+      width: min(820px, 100%);
+      margin: 0 auto;
+      padding: 32px;
+      border-radius: 24px;
+      border: 1px solid rgba(54, 62, 58, 0.08);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250, 245, 238, 0.98));
+      box-shadow: 0 20px 50px rgba(41, 33, 21, 0.08);
+    }
+
+    .paper-header {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 18px;
+      margin-bottom: 18px;
+      border-bottom: 1px dashed rgba(54, 62, 58, 0.16);
+    }
+
+    .paper-header h4 {
+      margin: 0 0 8px;
+      font-size: 1.8rem;
+      font-family: "Iowan Old Style", "Source Han Serif SC", "Songti SC", "STSong", serif;
+    }
+
+    .paper-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin: 18px 0 22px;
+    }
+
+    .paper-cell {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: #faf4ec;
+      border: 1px solid rgba(54, 62, 58, 0.08);
+    }
+
+    .paper-cell span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.86rem;
+      margin-bottom: 6px;
+    }
+
+    .paper-section {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px dashed rgba(54, 62, 58, 0.14);
+    }
+
+    .paper-section strong {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 1rem;
+    }
+
+    .paper-list {
+      margin: 0;
+      padding-left: 18px;
+      color: rgba(31, 42, 44, 0.84);
+      line-height: 1.8;
+    }
+
+    .paper-footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px dashed rgba(54, 62, 58, 0.14);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .official-title {
+      text-align: center;
+      margin: 8px 0 18px;
+      font-size: 1.9rem;
+      font-family: "Iowan Old Style", "Source Han Serif SC", "Songti SC", "STSong", serif;
+      letter-spacing: 0.08em;
+    }
+
+    .official-subtitle {
+      text-align: center;
+      color: var(--muted);
+      margin: -8px 0 18px;
+      font-size: 0.92rem;
+    }
+
+    .official-meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .official-meta div {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #faf4ec;
+      border: 1px solid rgba(54, 62, 58, 0.08);
+      font-size: 0.92rem;
+    }
+
+    .official-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.92rem;
+    }
+
+    .official-table th,
+    .official-table td {
+      border: 1px solid rgba(54, 62, 58, 0.18);
+      padding: 10px 12px;
+      vertical-align: top;
+    }
+
+    .official-table th {
+      background: #f4eadc;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .official-table td.label {
+      width: 22%;
+      background: #faf4ec;
+      font-weight: 600;
+    }
+
+    .signature-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .signature-row div {
+      padding-top: 16px;
+      border-top: 1px dashed rgba(54, 62, 58, 0.18);
+      text-align: center;
+    }
+
+    .uploader-box,
+    .bind-panel {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(250, 244, 236, 0.9);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+    }
+
+    .uploader-box strong,
+    .bind-panel strong,
+    .attachment-section strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 1rem;
+    }
+
+    .file-input {
+      margin-top: 10px;
+    }
+
+    .file-input input[type="file"] {
+      padding: 10px;
+      background: rgba(255,255,255,0.92);
+    }
+
+    .file-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .file-chip,
+    .attachment-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.78);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+    }
+
+    .attachment-row {
+      margin-top: 10px;
+    }
+
+    .count-badge {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(47, 107, 79, 0.12);
+      color: var(--green);
+      font-size: 0.84rem;
+      font-weight: 700;
+    }
+
+    .bind-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: end;
+      margin-top: 14px;
+    }
+
+    .attachment-section {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px dashed rgba(54, 62, 58, 0.14);
+    }
+
+    .analysis-box {
+      margin-top: 16px;
+      padding: 18px;
+      border-radius: 18px;
+      background: rgba(246, 240, 231, 0.92);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+    }
+
+    .analysis-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .analysis-item {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.78);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+    }
+
+    .analysis-item strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .analysis-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(49, 95, 109, 0.12);
+      color: #315f6d;
+      font-size: 0.84rem;
+      font-weight: 700;
+    }
+
+    .coverage-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .coverage-card {
+      padding: 20px;
+      border-radius: 24px;
+      background: rgba(255, 251, 245, 0.8);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+      box-shadow: var(--shadow);
+    }
+
+    .coverage-card h3 {
+      margin: 0 0 10px;
+      font-size: 1.2rem;
+      font-family: "Iowan Old Style", "Source Han Serif SC", "Songti SC", "STSong", serif;
+    }
+
+    .coverage-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .coverage-list {
+      margin: 0;
+      padding-left: 18px;
+      color: rgba(31, 42, 44, 0.82);
+      line-height: 1.75;
+    }
+
+    .attachment-empty {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(250, 244, 236, 0.8);
+      color: var(--muted);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+    }
+
+    @media (max-width: 1080px) {
+      .hero,
+      .panel-grid,
+      .search-layout,
+      .flow-grid,
+      .report-grid,
+      .kpi-grid,
+      .login-card,
+      .coverage-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .shell {
+        width: min(100% - 20px, 1280px);
+        margin-top: 10px;
+      }
+
+      .topbar {
+        border-radius: 28px;
+        padding: 16px;
+        align-items: start;
+      }
+
+      nav {
+        justify-content: flex-start;
+      }
+
+      .hero-copy,
+      .hero-side,
+      .section {
+        border-radius: 24px;
+      }
+
+      .hero-copy {
+        padding: 24px;
+      }
+
+      .section {
+        padding: 18px;
+      }
+
+      .panel {
+        padding: 18px;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+       .paper-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .bind-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .compliance-banner {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <section class="login-shell" id="loginShell">
+    <div class="login-card">
+      <div class="login-intro">
+        <div>
+          <div class="eyebrow" style="color:#fff;border-color:rgba(255,255,255,0.16);background:rgba(255,255,255,0.08);">登录后进入财税资料管理后台</div>
+          <h2>企业核心人员可先登录，再进行经营事项录入与财税归档测试</h2>
+          <p>这个版本适合本地演示和登录流程测试，进入后可继续体验单据录入、自动生成、查询下载和整包导出。</p>
+        </div>
+        <div class="login-points">
+          <div class="login-point">
+            <strong>测试路径完整</strong>
+            <div class="tiny" style="color:rgba(248,241,232,0.76);">登录、进入首页、录入事项、生成资料、导出文档。</div>
+          </div>
+          <div class="login-point">
+            <strong>适配中小企业财税场景</strong>
+            <div class="tiny" style="color:rgba(248,241,232,0.76);">覆盖收付款、工资、报销、增值税、个税、归档目录等核心流程。</div>
+          </div>
+          <div class="login-point">
+            <strong>无需后端即可本地验证</strong>
+            <div class="tiny" style="color:rgba(248,241,232,0.76);">前端演示账号即可快速测试登录体验。</div>
+          </div>
+        </div>
+      </div>
+      <div class="login-form">
+        <div>
+          <h2>登录系统</h2>
+          <p>请输入演示账号信息进入本地测试环境。</p>
+        </div>
+        <div class="demo-account">
+          演示账号：admin
+          <br />
+          演示密码：123456
+        </div>
+        <div class="field">
+          <label for="loginUsername">用户名</label>
+          <input id="loginUsername" type="text" placeholder="请输入用户名" value="admin" />
+        </div>
+        <div class="field">
+          <label for="loginPassword">密码</label>
+          <input id="loginPassword" type="password" placeholder="请输入密码" value="123456" />
+        </div>
+        <div class="record-actions">
+          <button class="primary-btn" id="loginBtn">登录进入系统</button>
+          <button class="ghost-btn" id="fillDemoBtn">填入演示账号</button>
+        </div>
+        <div class="login-message" id="loginMessage"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="preview-shell" id="previewShell">
+    <div class="preview-card">
+      <div class="preview-head">
+        <div>
+          <h3 id="previewTitle">在线预览</h3>
+          <div class="record-meta">
+            <span id="previewCode">编号</span>
+            <span id="previewType">类型</span>
+            <span id="previewDate">日期</span>
+          </div>
+        </div>
+        <div class="record-actions">
+          <button class="ghost-btn" id="previewDownloadBtn">下载当前资料</button>
+          <button class="primary-btn" id="previewCloseBtn">关闭预览</button>
+        </div>
+      </div>
+      <div class="preview-body">
+        <div class="preview-paper" id="previewContent"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">税财</div>
+        <div class="brand-copy">
+          <strong>中小企业财税管理平台</strong>
+          <span>经营记录、单据生成、税务报送、归档导出一体化</span>
+        </div>
+      </div>
+      <nav>
+        <a href="#entry">事项录入</a>
+        <a href="#flow">自动生成</a>
+        <a href="#reports">报表中心</a>
+        <a href="#archive">归档检索</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <article class="hero-copy">
+        <div class="eyebrow">适用于中国大陆中小企业财务与税务合规场景</div>
+        <h1>把日常经营动作，自动沉淀成合规财税资料</h1>
+        <p>
+          企业核心人员只需录入收款、付款、报销、采购、工资、合同履约、发票开具等日常行为，
+          系统即可自动整理单据、生成凭证、汇总台账、归类原始资料，并输出适合税务系统报送和内部管理使用的报表，
+          同时支持查询、编号、下载、导出与归档。
+        </p>
+        <div class="hero-actions">
+          <a class="primary-btn" href="#entry">开始录入事项</a>
+          <a class="ghost-btn" href="#archive">查看单据总库</a>
+        </div>
+      </article>
+
+      <aside class="hero-side">
+        <div class="hero-stat-grid">
+          <div class="stat-card">
+            <strong>286</strong>
+            <span class="meta">本月自动生成原始单据</span>
+          </div>
+          <div class="stat-card">
+            <strong>18</strong>
+            <span class="meta">待外送税务报表</span>
+          </div>
+          <div class="stat-card">
+            <strong>99.2%</strong>
+            <span class="meta">资料编号完整率</span>
+          </div>
+          <div class="stat-card">
+            <strong>6 类</strong>
+            <span class="meta">经营行为自动识别模型</span>
+          </div>
+        </div>
+        <div class="hero-list">
+          <div class="hero-list-item">
+            <div class="hero-icon">01</div>
+            <div>
+              <strong>经营事项录入</strong>
+              <div class="meta">支持票据上传、表单录入、经营行为描述直输。</div>
+            </div>
+          </div>
+          <div class="hero-list-item">
+            <div class="hero-icon">02</div>
+            <div>
+              <strong>自动生成财税单据</strong>
+              <div class="meta">自动形成收付款单、费用单、凭证草稿、税基明细等。</div>
+            </div>
+          </div>
+          <div class="hero-list-item">
+            <div class="hero-icon">03</div>
+            <div>
+              <strong>归档与导出</strong>
+              <div class="meta">一键下载台账、PDF 包、报表清单与电子归档索引。</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="section" id="entry">
+      <div class="section-head">
+        <div>
+          <h2>事项录入与单据生成</h2>
+          <p>通过不同录入方式采集经营信息，系统即时判断业务类型并自动补齐应生成的财务与税务资料。</p>
+        </div>
+        <div class="status-chip">自动校验税务字段与编号规则</div>
+      </div>
+
+      <div class="panel-grid">
+        <div class="panel">
+          <div class="panel-head">
+            <h3>录入中心</h3>
+            <div class="tabs">
+              <button class="tab-btn active" data-tab="voucher">单据录入</button>
+              <button class="tab-btn" data-tab="behavior">行为录入</button>
+              <button class="tab-btn" data-tab="tax">税务事项</button>
+            </div>
+          </div>
+
+          <div class="tab-panel active" data-panel="voucher">
+            <div class="form-grid">
+              <div class="field">
+                <label for="bizType">业务类型</label>
+                <select id="bizType">
+                  <option value="采购付款">采购付款</option>
+                  <option value="销售收款">销售收款</option>
+                  <option value="差旅报销">差旅报销</option>
+                  <option value="工资发放">工资发放</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="amount">金额（元）</label>
+                <input id="amount" type="number" value="16800" />
+              </div>
+              <div class="field">
+                <label for="counterparty">往来方</label>
+                <input id="counterparty" type="text" value="上海嘉衡设备有限公司" />
+              </div>
+              <div class="field">
+                <label for="invoiceType">发票类型</label>
+                <select id="invoiceType">
+                  <option value="增值税专用发票">增值税专用发票</option>
+                  <option value="增值税普通发票">增值税普通发票</option>
+                  <option value="未取得发票">未取得发票</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="occurDate">发生日期</label>
+                <input id="occurDate" type="date" value="2026-04-23" />
+              </div>
+              <div class="field">
+                <label for="operator">录入人</label>
+                <input id="operator" type="text" value="运营负责人" />
+              </div>
+              <div class="field-wide">
+                <label for="remarks">备注说明</label>
+                <textarea id="remarks">采购生产设备配件，用于本月交付订单，已完成对公转账，等待仓库签收入库。</textarea>
+              </div>
+            </div>
+            <div class="uploader-box">
+              <strong>原始凭证上传</strong>
+              <div class="tiny">可在录入时同步上传发票、合同、回单、付款截图、签收单等原始凭证。</div>
+              <div class="file-input">
+                <input id="voucherFiles" type="file" multiple />
+              </div>
+              <div class="file-list" id="voucherFileList"></div>
+            </div>
+            <div class="inline-actions">
+              <span class="tiny">系统将自动生成付款申请单、付款凭证草稿、进项发票归档卡、采购入库关联记录。</span>
+              <button class="primary-btn" id="generateVoucher">生成合规单据</button>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-panel="behavior">
+            <div class="form-grid">
+              <div class="field-wide">
+                <label for="behaviorText">直接描述经营行为</label>
+                <textarea id="behaviorText">今天招商银行扣除3月份账户管理费25元。</textarea>
+              </div>
+              <div class="field">
+                <label for="behaviorDept">归属部门</label>
+                <select id="behaviorDept">
+                  <option value="财务部">财务部</option>
+                  <option value="行政部">行政部</option>
+                  <option value="销售部">销售部</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="behaviorDate">记录日期</label>
+                <input id="behaviorDate" type="date" value="2026-04-23" />
+              </div>
+            </div>
+            <div class="uploader-box">
+              <strong>补充附件</strong>
+              <div class="tiny">支持上传工资表、审批单、截图、回单、差旅票据等，用于系统自动拆分绑定。</div>
+              <div class="file-input">
+                <input id="behaviorFiles" type="file" multiple />
+              </div>
+              <div class="file-list" id="behaviorFileList"></div>
+            </div>
+            <div class="analysis-box">
+              <div class="panel-head" style="margin-bottom:0;">
+                <div>
+                  <strong style="margin:0;">智能识别结果</strong>
+                  <div class="tiny">根据输入内容，在录入区附近直接展示最相关的凭证、单据和合规提醒。</div>
+                </div>
+                <button class="ghost-btn" id="analyzeBehaviorBtn">重新识别</button>
+              </div>
+              <div style="margin-top:14px;">
+                <span class="analysis-tag" id="behaviorSceneTag">待识别</span>
+              </div>
+              <div class="analysis-grid" id="behaviorAnalysisList"></div>
+            </div>
+            <div class="inline-actions">
+              <span class="tiny">系统会按行为类型生成最相关的会计凭证、原始凭证归档卡、台账更新项和必要的合规提醒，而不是固定生成无关税表。</span>
+              <button class="primary-btn" id="generateBehavior">解析并生成</button>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-panel="tax">
+            <div class="form-grid">
+              <div class="field">
+                <label for="taxPeriod">申报期</label>
+                <select id="taxPeriod">
+                  <option value="2026年4月">2026年4月</option>
+                  <option value="2026年3月">2026年3月</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="taxCategory">税种</label>
+                <select id="taxCategory">
+                  <option value="增值税及附加">增值税及附加</option>
+                  <option value="企业所得税">企业所得税</option>
+                  <option value="个人所得税">个人所得税</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="taxMode">生成模式</label>
+                <select id="taxMode">
+                  <option value="按现有台账汇总">按现有台账汇总</option>
+                  <option value="补录后汇总">补录后汇总</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="taxOwner">责任人</label>
+                <input id="taxOwner" type="text" value="财税主管" />
+              </div>
+              <div class="field-wide">
+                <label for="taxNotes">补充说明</label>
+                <textarea id="taxNotes">自动汇总销项、进项、未开票收入、费用税前扣除资料，并生成适配税务系统报送的申报底稿及内部复核单。</textarea>
+              </div>
+            </div>
+            <div class="uploader-box">
+              <strong>申报附件上传</strong>
+              <div class="tiny">可上传申报草稿、台账截图、底稿附件、复核说明等资料，并绑定至申报记录。</div>
+              <div class="file-input">
+                <input id="taxFiles" type="file" multiple />
+              </div>
+              <div class="file-list" id="taxFileList"></div>
+            </div>
+            <div class="inline-actions">
+              <span class="tiny">生成后可直接在“报表中心”中查看、导出与打包。</span>
+              <button class="primary-btn" id="generateTax">生成申报资料</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h3>最近生成记录</h3>
+            <span class="meta">仅展示实际生成或补传绑定后更新的记录，当前操作生成项会置顶</span>
+          </div>
+          <div class="generated-stack" id="generatedList"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="flow">
+      <div class="section-head">
+        <div>
+          <h2>自动处理流程</h2>
+          <p>让经营动作从“被记录”变成“可追溯、可申报、可稽核”的完整链路。</p>
+        </div>
+      </div>
+
+      <div class="flow-grid">
+        <article class="flow-card">
+          <div class="flow-number">1</div>
+          <h3>采集原始经营信息</h3>
+          <p>支持上传发票、回单、合同、工资表，也支持直接用自然语言描述当日经营事项，适合老板、运营、行政、财务多角色协作。</p>
+        </article>
+        <article class="flow-card">
+          <div class="flow-number">2</div>
+          <h3>自动识别与生成</h3>
+          <p>系统根据业务类型、税种、时间、对手方和金额自动生成付款单、报销单、收入确认单、凭证草稿、申报底稿和归档封面。</p>
+        </article>
+        <article class="flow-card">
+          <div class="flow-number">3</div>
+          <h3>编号、归档、导出</h3>
+          <p>所有资料统一编号、建立关联索引，并支持按月份、税种、主体、项目、业务线快速检索与一键导出。</p>
+        </article>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="report-card">
+          <h3>台账联动</h3>
+          <p>采购、销售、费用、工资、固定资产等台账自动同步更新。</p>
+        </div>
+        <div class="report-card">
+          <h3>复核留痕</h3>
+          <p>保留录入人、生成时间、复核状态、下载记录与外送版本。</p>
+        </div>
+        <div class="report-card">
+          <h3>税务适配</h3>
+          <p>为外送税务系统整理可直接使用的申报数据和附件目录。</p>
+        </div>
+        <div class="report-card">
+          <h3>合规沉淀</h3>
+          <p>把零散资料沉淀为企业长期可持续的财税资料资产库。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="reports">
+      <div class="section-head">
+        <div>
+          <h2>报表中心</h2>
+          <p>围绕财务管理与税务申报场景，集中查看、下载和批量导出关键报表。</p>
+        </div>
+        <div class="filters">
+          <button class="filter-btn active" data-filter="all">全部报表</button>
+          <button class="filter-btn" data-filter="财务">财务报表</button>
+          <button class="filter-btn" data-filter="税务">税务报表</button>
+          <button class="filter-btn" data-filter="归档">归档清单</button>
+        </div>
+      </div>
+
+      <div class="report-grid" id="reportGrid"></div>
+    </section>
+
+    <section class="section" id="coverage">
+      <div class="section-head">
+        <div>
+          <h2>规则覆盖库</h2>
+          <p>按资金、购销、费用、薪酬、资产、融资、税务和其他事项扩展识别规则，尽量贴近中国大陆中小企业日常财税管理场景。</p>
+        </div>
+        <div class="status-chip">规则库支持持续扩展与人工复核</div>
+      </div>
+      <div class="coverage-grid" id="coverageGrid"></div>
+    </section>
+
+    <section class="section" id="archive">
+      <div class="section-head">
+        <div>
+          <h2>归档检索与导出</h2>
+          <p>面向日常查询、资料补交、年度审计、税务检查与内部复盘等多种使用场景。</p>
+        </div>
+      </div>
+
+      <div class="search-layout">
+        <div class="search-panel">
+          <h3>单据查询</h3>
+          <p class="meta">按编号、关键字、对手方、税种或期间快速搜索所有已归档资料。</p>
+          <div class="search-box">
+            <div class="search-row">
+              <input id="searchInput" type="text" placeholder="输入编号、关键字或往来方，例如：工资、增值税、上海嘉衡" />
+              <button class="primary-btn" id="searchBtn">查询</button>
+            </div>
+            <div class="tiny">支持模糊搜索，结果可直接下载，也可按当前结果导出归档清单。</div>
+          </div>
+          <div class="bind-panel">
+            <strong>原始凭证补充上传</strong>
+            <div class="tiny">如果某条记录生成后才补齐原始凭证，可在这里选择相关记录并追加绑定附件。</div>
+            <div class="bind-grid">
+              <div class="field">
+                <label for="bindRecordSelect">选择绑定记录</label>
+                <select id="bindRecordSelect"></select>
+              </div>
+              <div class="field">
+                <label for="bindFiles">选择附件</label>
+                <input id="bindFiles" type="file" multiple />
+              </div>
+            </div>
+            <div class="record-actions" style="margin-top:14px;">
+              <button class="primary-btn" id="bindFilesBtn">补传并绑定</button>
+            </div>
+            <div class="file-list" id="bindFileList"></div>
+          </div>
+        </div>
+
+        <div class="library-panel">
+          <div class="panel-head">
+            <h3>资料总库</h3>
+            <div class="record-actions">
+              <button class="ghost-btn" id="exportLibrary">导出当前清单</button>
+              <button class="ghost-btn" id="downloadPackage">下载合规资料包</button>
+            </div>
+          </div>
+          <div class="library-list" id="libraryList"></div>
+        </div>
+      </div>
+
+      <div class="compliance-banner">
+        <div>
+          <h3>合规输出不仅是报表，更是成体系的原始资料链</h3>
+          <p>自动生成原始单据、附件索引、税务申报底稿、企业内部复核表和导出清单，确保企业在经营、财务、税务之间形成一致口径。</p>
+          <div class="compliance-stamps">
+            <span class="stamp">原始单据编号</span>
+            <span class="stamp">报表外送版本</span>
+            <span class="stamp">电子归档目录</span>
+            <span class="stamp">资料关联追踪</span>
+          </div>
+        </div>
+        <button class="primary-btn" id="exportAll">导出全部财税资料</button>
+      </div>
+    </section>
+
+    <div class="footer">
+      面向中国大陆中小企业经营场景设计的财税管理展示页，可作为产品原型、官网单页或内部系统首页基础版。
+    </div>
+  </div>
+
+  <script>
+    const generatedSeed = [
+      {
+        title: "采购付款申请单",
+        code: "FK-202604-0187",
+        type: "财务单据",
+        date: "2026-04-23",
+        note: "根据采购付款事项自动生成，已关联银行付款回单与供应商发票信息。",
+        party: "上海嘉衡设备有限公司",
+        amount: "16,800.00",
+        owner: "运营负责人",
+        summary: "采购生产设备配件并完成对公付款。",
+        sections: {
+          lines: ["设备配件采购款 16,800.00 元", "付款方式：对公转账", "关联资料：采购合同、发票、回单、入库单"],
+          checks: ["发票类型：增值税专用发票", "票据状态：已上传", "审批状态：财务待复核"]
+        },
+        attachments: [
+          { id: "a1", name: "采购合同.pdf", type: "application/pdf", sizeLabel: "1.8 MB", source: "示例附件", content: "采购合同扫描件预览：约定采购设备配件、付款方式与交付节点。" },
+          { id: "a2", name: "银行回单.png", type: "image/png", sizeLabel: "420 KB", source: "示例附件", content: "银行回单预览：已完成对公转账 16,800.00 元。" }
+        ]
+      },
+      {
+        title: "增值税申报底稿",
+        code: "TAX-VAT-202604-006",
+        type: "税务资料",
+        date: "2026-04-23",
+        note: "汇总销项、进项、未开票收入及附加税计算逻辑，可外送税务系统。",
+        party: "2026年4月申报期",
+        amount: "销项 386,000.00",
+        owner: "财税主管",
+        summary: "按本期台账汇总形成增值税及附加税申报底稿。",
+        sections: {
+          lines: ["销项税额 50,180.00 元", "进项税额 31,460.00 元", "应纳增值税 18,720.00 元"],
+          checks: ["附加税自动测算完成", "外送口径版本：V1.2", "复核状态：待负责人确认"]
+        },
+        attachments: [
+          { id: "a3", name: "销项汇总表.xlsx", type: "application/vnd.ms-excel", sizeLabel: "260 KB", source: "示例附件", content: "销项汇总表预览：按客户和税率归集本期销项数据。" }
+        ]
+      },
+      {
+        title: "费用报销与附件索引",
+        code: "BX-202604-042",
+        type: "归档资料",
+        date: "2026-04-22",
+        note: "自动归整差旅票据、审批记录、支付凭证和税前扣除说明。",
+        party: "销售部差旅事项",
+        amount: "8,420.00",
+        owner: "行政专员",
+        summary: "整合差旅报销及税前扣除备查资料。",
+        sections: {
+          lines: ["机票与高铁票据 4 份", "住宿发票 3 份", "出差审批与支付凭证已匹配"],
+          checks: ["附件完整率 100%", "归档目录自动生成", "税前扣除说明已附后"]
+        },
+        attachments: [
+          { id: "a4", name: "差旅审批单.pdf", type: "application/pdf", sizeLabel: "680 KB", source: "示例附件", content: "差旅审批单预览：审批人已确认出差路线与预算。" }
+        ]
+      }
+    ];
+
+    const reportData = [
+      { category: "财务", name: "小企业资产负债表", desc: "参照会小企01表样式展示期末余额与年初余额。", code: "FIN-202604-001", owner: "财务经理", amount: "资产总计 1,268,600.00", format: "balance_sheet", summary: "按小企业会计准则格式列示资产、负债和所有者权益。", sections: { lines: ["货币资金 528,600.00 元", "应收账款 186,000.00 元", "固定资产 380,000.00 元"], checks: ["资产总计 = 负债和所有者权益总计", "期末与年初口径一致", "适合月报、年报展示"] } },
+      { category: "财务", name: "小企业利润表", desc: "参照会小企02表样式展示营业收入、成本、费用和净利润。", code: "FIN-202604-002", owner: "财务经理", amount: "净利润 92,480.00", format: "income_statement", summary: "按费用功能分类展示本期经营成果。", sections: { lines: ["营业收入 865,000.00 元", "营业成本 562,000.00 元", "财务费用 2,840.00 元"], checks: ["净利润已测算", "税金及附加单独列示", "适合月报、年报展示"] } },
+      { category: "财务", name: "现金流量表", desc: "按经营、投资、筹资活动分类展示现金流量。", code: "FIN-202604-003", owner: "财务经理", amount: "净增加额 128,600.00", format: "cashflow_statement", summary: "参照现金流量表基本列报要求展示现金流入和流出。", sections: { lines: ["经营活动现金流入 928,000.00 元", "经营活动现金流出 742,000.00 元", "筹资活动现金流入 60,000.00 元"], checks: ["经营/投资/筹资分类展示", "期末现金余额已衔接", "适合管理与报送准备"] } },
+      { category: "税务", name: "增值税及附加申报底稿", desc: "自动对应销项、进项、附加税计提与申报口径。", code: "TAX-202604-001", owner: "财税主管", amount: "应纳税额 18,720.00", summary: "按申报期自动汇总增值税及附加税底稿。", sections: { lines: ["销项税额 50,180.00 元", "进项税额 31,460.00 元", "附加税 2,246.40 元"], checks: ["申报口径一致", "待导出税务系统", "复核节点待完成"] } },
+      { category: "税务", name: "企业所得税预缴测算表", desc: "按照收入、成本、费用和纳税调整项目自动测算。", code: "TAX-202604-002", owner: "财务总监", amount: "预缴税额 26,400.00", summary: "结合利润总额和纳税调整事项进行预缴测算。", sections: { lines: ["利润总额 352,000.00 元", "可扣除项目 246,400.00 元", "预缴企业所得税 26,400.00 元"], checks: ["纳税调整 4 项", "加计扣除已反映", "测算版本 V2"] } },
+      { category: "税务", name: "个人所得税申报清单", desc: "适配工资薪金、奖金、补贴等个税申报明细导出。", code: "TAX-202604-003", owner: "薪酬专员", amount: "申报人数 26", summary: "用于本期工资薪金个税集中申报。", sections: { lines: ["工资薪金申报人数 26 人", "补贴奖金申报条目 9 条", "专项附加扣除已同步"], checks: ["身份信息校验通过", "银行代发匹配完成", "导出模板已准备"] } },
+      { category: "归档", name: "原始单据归档目录", desc: "自动编号全部原始资料并建立电子目录。", code: "ARC-202604-001", owner: "档案管理员", amount: "资料数 286", summary: "汇总本月全部原始单据并形成统一归档目录。", sections: { lines: ["采购资料 74 份", "销售资料 81 份", "费用与工资资料 131 份"], checks: ["编号连续", "缺失附件 2 份", "待补录清单已列示"] } },
+      { category: "归档", name: "外送税务资料包清单", desc: "汇总需要提交税务系统或外部顾问的全部资料。", code: "ARC-202604-002", owner: "财税主管", amount: "资料包 18 份", summary: "用于税务系统报送和外部顾问资料交付。", sections: { lines: ["增值税附件 6 份", "个税附件 4 份", "所得税测算及备查 8 份"], checks: ["封面已生成", "目录已编号", "打包下载可用"] } },
+      { category: "归档", name: "年度审计备查索引", desc: "按期间和业务类型输出完整备查资料索引。", code: "ARC-202604-003", owner: "审计联络人", amount: "索引项 512", summary: "为年度审计提供完整备查索引和定位入口。", sections: { lines: ["收入循环索引 162 项", "采购付款索引 143 项", "费用薪酬索引 207 项"], checks: ["期间标签完整", "业务映射完整", "可追溯至原始单据"] } }
+    ];
+
+    const libraryData = [
+      { title: "4月采购付款资料包", code: "PKG-202604-021", extra: "包含付款申请、银行回单、专票扫描件、入库记录", tag: "可下载", type: "归档资料", owner: "采购经理", amount: "16,800.00", summary: "采购付款相关资料的一体化归档包。", sections: { lines: ["付款申请单 1 份", "银行回单 1 份", "专票扫描件 1 份"], checks: ["入库关联完成", "编号齐全", "可外送审计"] }, attachments: [{ id: "l1", name: "专票扫描件.pdf", type: "application/pdf", sizeLabel: "960 KB", source: "示例附件", content: "增值税专用发票扫描件预览。" }] },
+      { title: "3月工资与个税申报资料", code: "PAY-202603-008", extra: "工资表、奖金明细、个税申报清单、银行代发回单", tag: "已归档", type: "财务单据", owner: "薪酬专员", amount: "工资总额 178,000.00", summary: "工资发放与个税申报资料归档集合。", sections: { lines: ["工资表 1 份", "奖金明细 1 份", "银行代发回单 1 份"], checks: ["个税清单已同步", "员工签收已留档", "申报版本已归档"] }, attachments: [{ id: "l2", name: "工资表4月.xlsx", type: "application/vnd.ms-excel", sizeLabel: "340 KB", source: "示例附件", content: "工资表预览：含应发、实发、个税、社保等字段。" }] },
+      { title: "4月增值税申报附件目录", code: "VAT-202604-003", extra: "销项汇总、进项抵扣、附加税底稿、复核记录", tag: "待外送", type: "税务资料", owner: "财税主管", amount: "应纳税额 18,720.00", summary: "增值税申报全套附件与目录预览。", sections: { lines: ["销项汇总表 1 份", "进项抵扣明细 1 份", "附加税底稿 1 份"], checks: ["复核完成度 80%", "待系统外送", "附件目录已成型"] }, attachments: [{ id: "l3", name: "附加税底稿.pdf", type: "application/pdf", sizeLabel: "520 KB", source: "示例附件", content: "附加税底稿预览：自动计算城建税、教育费附加等。" }] },
+      { title: "销售收入确认与开票清单", code: "SALES-202604-015", extra: "合同节点、发货记录、开票信息、收款确认", tag: "可下载", type: "财务单据", owner: "销售运营", amount: "收入 268,000.00", summary: "销售合同履约、开票和收款确认的联动清单。", sections: { lines: ["合同节点 4 个", "发货记录 6 条", "开票信息 5 条"], checks: ["收入确认口径一致", "回款状态正常", "票据已关联"] }, attachments: [{ id: "l4", name: "销售合同首页.jpg", type: "image/jpeg", sizeLabel: "780 KB", source: "示例附件", content: "销售合同首页预览：合同编号、客户名称和金额条款。" }] }
+    ];
+
+    const ruleCatalog = [
+      {
+        id: "bank_fee",
+        scene: "银行账户管理费",
+        domain: "资金类",
+        keywords: ["银行", "账户管理费", "管理费", "手续费", "结算费", "服务费", "扣除"],
+        summary: "银行直接扣收账户管理费、手续费、结算费等。",
+        accounts: ["财务费用", "银行存款"],
+        taxes: ["企业所得税凭证留存", "增值税直接收费金融服务凭证关注"],
+        generatedDocs: [
+          { title: "银行手续费记账凭证", type: "财务单据", note: "登记银行扣费摘要、金额和会计处理建议。" },
+          { title: "银行扣款回单归档卡", type: "归档资料", note: "归档回单、对账单、收费通知等原始凭证。" },
+          { title: "税前扣除凭证补录提醒", type: "合规提醒", note: "提醒补齐外部凭证和备查资料。" }
+        ],
+        tips: ["不直接生成工资、个税或采购单据。", "正式会计科目仍应以企业执行的会计制度和内部科目体系为准。"],
+        basis: "会计基础工作规范、小企业会计准则、企业所得税税前扣除凭证管理办法"
+      },
+      {
+        id: "bank_interest_income",
+        scene: "银行利息收入",
+        domain: "资金类",
+        keywords: ["利息", "结息", "银行利息", "活期利息", "到账利息"],
+        summary: "银行结息、活期利息到账等资金收益事项。",
+        accounts: ["财务费用或利息收入明细", "银行存款"],
+        taxes: ["企业所得税收入归集"],
+        generatedDocs: [
+          { title: "银行利息收入登记单", type: "财务单据", note: "登记结息日期、金额、账户和摘要。" },
+          { title: "银行结息回单归档卡", type: "归档资料", note: "归档结息通知、对账单和银行回单。" }
+        ],
+        tips: ["需按企业执行准则和内部科目明确利息收入归集口径。"],
+        basis: "小企业会计准则、会计基础工作规范"
+      },
+      {
+        id: "sales_receipt",
+        scene: "销售收款",
+        domain: "收入类",
+        keywords: ["收款", "回款", "到账", "客户付款", "销售收入", "销售", "开票", "发货"],
+        summary: "客户回款、销售收款、开票和收入确认相关事项。",
+        accounts: ["银行存款", "应收账款", "主营业务收入", "应交税费"],
+        taxes: ["增值税销项", "企业所得税收入归集"],
+        generatedDocs: [
+          { title: "销售收款登记单", type: "财务单据", note: "登记客户、金额、到账方式和回款日期。" },
+          { title: "收入确认清单", type: "财务单据", note: "关联合同节点、开票、发货和验收依据。" },
+          { title: "销项资料归档卡", type: "归档资料", note: "归档合同、发票、回款回单和交付凭证。" }
+        ],
+        tips: ["需区分预收款、已开票未收款、未开票收入等场景。"],
+        basis: "企业会计准则收入准则、增值税相关申报规则"
+      },
+      {
+        id: "purchase_payment",
+        scene: "采购付款",
+        domain: "采购类",
+        keywords: ["采购", "付款", "供应商", "进货", "材料", "货款", "入库", "预付"],
+        summary: "采购货物、材料、服务后的付款或预付款事项。",
+        accounts: ["预付账款", "库存商品/原材料", "应付账款", "银行存款"],
+        taxes: ["增值税进项", "企业所得税成本归集"],
+        generatedDocs: [
+          { title: "采购付款申请单", type: "财务单据", note: "登记供应商、金额、合同和付款用途。" },
+          { title: "进项票据归档卡", type: "归档资料", note: "归档发票、回单、合同和入库单。" },
+          { title: "采购台账更新项", type: "财务台账", note: "同步采购和往来余额台账。" }
+        ],
+        tips: ["需核对合同、发票、入库和付款节点一致性。"],
+        basis: "小企业会计准则、增值税进项抵扣相关规则"
+      },
+      {
+        id: "expense_reimbursement",
+        scene: "费用报销",
+        domain: "费用类",
+        keywords: ["报销", "差旅", "住宿", "机票", "高铁", "打车", "餐费", "办公费"],
+        summary: "员工垫付后报销，或费用票据整理和付款事项。",
+        accounts: ["管理费用", "销售费用", "银行存款", "其他应付款"],
+        taxes: ["企业所得税税前扣除凭证留存"],
+        generatedDocs: [
+          { title: "费用报销单", type: "财务单据", note: "生成报销主单、用途和审批信息。" },
+          { title: "报销附件索引", type: "归档资料", note: "归档发票、审批单、行程单和付款凭证。" },
+          { title: "税前扣除核验单", type: "合规提醒", note: "校验票据合规性和报销标准。" }
+        ],
+        tips: ["报销类事项不应误并入工资薪金或采购付款。"],
+        basis: "会计基础工作规范、企业所得税税前扣除凭证管理办法"
+      },
+      {
+        id: "payroll",
+        scene: "薪酬发放",
+        domain: "薪酬类",
+        keywords: ["工资", "奖金", "绩效", "薪酬", "补贴", "津贴", "代发", "个税"],
+        summary: "工资、奖金、补贴、代发与个税相关事项。",
+        accounts: ["应付职工薪酬", "银行存款", "其他应付款", "应交税费"],
+        taxes: ["个人所得税", "社会保险费"],
+        generatedDocs: [
+          { title: "工资发放汇总单", type: "财务单据", note: "按工资、奖金、补贴拆分汇总。" },
+          { title: "个人所得税申报明细", type: "税务资料", note: "联动个税扣缴申报口径。" },
+          { title: "银行代发回单归档卡", type: "归档资料", note: "归档工资表、代发回单和签收留痕。" }
+        ],
+        tips: ["需区分报销和补贴，避免口径混淆。"],
+        basis: "小企业会计准则、个人所得税扣缴申报规则"
+      },
+      {
+        id: "social_security",
+        scene: "社保公积金缴纳",
+        domain: "薪酬类",
+        keywords: ["社保", "公积金", "养老", "医疗", "失业", "工伤", "生育"],
+        summary: "社保、公积金计提与缴纳事项。",
+        accounts: ["应付职工薪酬", "其他应付款", "银行存款"],
+        taxes: ["社会保险费", "住房公积金"],
+        generatedDocs: [
+          { title: "社保公积金缴费汇总单", type: "财务单据", note: "登记单位与个人承担金额。" },
+          { title: "缴费回单归档卡", type: "归档资料", note: "归档缴费通知、回单和申报结果。" }
+        ],
+        tips: ["需同步工资表和社保基数台账。"],
+        basis: "社保费申报缴纳规则、小企业会计准则"
+      },
+      {
+        id: "asset_purchase",
+        scene: "固定资产采购",
+        domain: "资产类",
+        keywords: ["固定资产", "设备", "电脑", "机器", "车辆", "办公家具"],
+        summary: "购置固定资产并形成付款、入库、验收和后续折旧管理。",
+        accounts: ["固定资产", "银行存款", "应付账款"],
+        taxes: ["增值税进项", "企业所得税折旧"],
+        generatedDocs: [
+          { title: "固定资产采购验收单", type: "财务单据", note: "登记资产名称、用途、验收和入账信息。" },
+          { title: "固定资产卡片", type: "财务台账", note: "生成资产编号、折旧方法和使用部门信息。" },
+          { title: "资产采购附件归档卡", type: "归档资料", note: "归档合同、发票、回单和验收单。" }
+        ],
+        tips: ["需与费用性采购区分，避免一次性错误费用化。"],
+        basis: "小企业会计准则、固定资产相关规定"
+      },
+      {
+        id: "depreciation",
+        scene: "折旧与摊销",
+        domain: "资产类",
+        keywords: ["折旧", "摊销", "无形资产", "长期待摊", "摊提"],
+        summary: "固定资产折旧、无形资产和长期待摊费用摊销。",
+        accounts: ["累计折旧", "累计摊销", "管理费用/制造费用/销售费用"],
+        taxes: ["企业所得税折旧摊销"],
+        generatedDocs: [
+          { title: "折旧摊销计提单", type: "财务单据", note: "按资产卡片和摊销规则自动计提。" },
+          { title: "折旧摊销台账", type: "财务台账", note: "留痕本期计提金额和累计余额。" }
+        ],
+        tips: ["应与固定资产卡片、无形资产台账保持一致。"],
+        basis: "小企业会计准则"
+      },
+      {
+        id: "loan_borrowing",
+        scene: "借款与融资",
+        domain: "融资类",
+        keywords: ["借款", "贷款", "融资", "授信", "借入", "放款"],
+        summary: "向银行或其他机构借款、提款和融资事项。",
+        accounts: ["短期借款", "长期借款", "银行存款"],
+        taxes: ["借款利息税前扣除关注"],
+        generatedDocs: [
+          { title: "借款提款登记单", type: "财务单据", note: "登记借款合同、利率、期限和到账信息。" },
+          { title: "融资合同归档卡", type: "归档资料", note: "归档合同、放款通知和到账回单。" }
+        ],
+        tips: ["需区分本金、利息和手续费。"],
+        basis: "小企业会计准则、企业所得税相关规则"
+      },
+      {
+        id: "loan_interest",
+        scene: "借款利息",
+        domain: "融资类",
+        keywords: ["利息支出", "贷款利息", "借款利息", "付息", "融资手续费"],
+        summary: "贷款利息、借款利息和融资手续费支付事项。",
+        accounts: ["财务费用", "银行存款", "应付利息"],
+        taxes: ["企业所得税税前扣除", "增值税发票留存"],
+        generatedDocs: [
+          { title: "利息支出记账凭证", type: "财务单据", note: "登记利息期间、利率和支付金额。" },
+          { title: "利息发票与回单归档卡", type: "归档资料", note: "归档发票、利息单和回单。" }
+        ],
+        tips: ["应关注资本化与费用化划分。"],
+        basis: "小企业会计准则、企业所得税税前扣除凭证管理办法"
+      },
+      {
+        id: "capital_injection",
+        scene: "股东出资",
+        domain: "融资类",
+        keywords: ["出资", "注资", "实缴", "增资", "股东打款", "资本金"],
+        summary: "股东出资、资本金到账和增资事项。",
+        accounts: ["实收资本", "资本公积", "银行存款"],
+        taxes: ["印花税关注"],
+        generatedDocs: [
+          { title: "股东出资登记单", type: "财务单据", note: "登记股东、金额、出资方式和到账日期。" },
+          { title: "资本金到账归档卡", type: "归档资料", note: "归档章程、决议、回单和验资资料。" }
+        ],
+        tips: ["需和公司法、工商变更资料保持一致。"],
+        basis: "小企业会计准则、印花税法"
+      },
+      {
+        id: "dividend",
+        scene: "利润分配",
+        domain: "权益类",
+        keywords: ["分红", "股利", "利润分配", "派息", "股东分配"],
+        summary: "利润分配、分红决议和股利支付事项。",
+        accounts: ["利润分配", "应付股利", "银行存款"],
+        taxes: ["个人所得税/企业所得税关注"],
+        generatedDocs: [
+          { title: "利润分配决议执行单", type: "财务单据", note: "登记分配方案、金额和支付安排。" },
+          { title: "分红支付归档卡", type: "归档资料", note: "归档决议、回单和税务处理资料。" }
+        ],
+        tips: ["需先确认可分配利润和相应纳税义务。"],
+        basis: "公司法、小企业会计准则、个人所得税相关规则"
+      },
+      {
+        id: "government_subsidy",
+        scene: "政府补助",
+        domain: "其他收益类",
+        keywords: ["补助", "补贴到账", "政府补助", "奖补", "稳岗返还"],
+        summary: "收到政府补助、奖补资金和返还事项。",
+        accounts: ["其他收益", "营业外收入", "银行存款"],
+        taxes: ["企业所得税口径复核"],
+        generatedDocs: [
+          { title: "政府补助登记单", type: "财务单据", note: "登记补助项目、来源、用途和到账金额。" },
+          { title: "补助文件归档卡", type: "归档资料", note: "归档通知文件、回单和使用说明。" }
+        ],
+        tips: ["需根据补助性质和执行准则确定会计处理口径。"],
+        basis: "企业会计准则政府补助准则"
+      },
+      {
+        id: "tax_vat",
+        scene: "增值税及附加",
+        domain: "税务类",
+        keywords: ["增值税", "销项", "进项", "附加税", "城建税", "教育费附加", "地方教育附加"],
+        summary: "增值税、附加税和进销项归集申报事项。",
+        accounts: ["应交税费", "税金及附加"],
+        taxes: ["增值税", "城市维护建设税", "教育费附加", "地方教育附加"],
+        generatedDocs: [
+          { title: "增值税及附加申报底稿", type: "税务资料", note: "汇总销项、进项和附加税测算。"},
+          { title: "增值税附件目录", type: "归档资料", note: "归档销项汇总、进项明细和复核资料。"}
+        ],
+        tips: ["需区分一般计税、简易计税、未开票收入等口径。"],
+        basis: "增值税相关法规、税务申报规则"
+      },
+      {
+        id: "tax_cit",
+        scene: "企业所得税",
+        domain: "税务类",
+        keywords: ["企业所得税", "所得税", "预缴", "汇算清缴", "纳税调整"],
+        summary: "企业所得税预缴、汇算和纳税调整事项。",
+        accounts: ["所得税费用", "应交税费"],
+        taxes: ["企业所得税"],
+        generatedDocs: [
+          { title: "企业所得税预缴测算表", type: "税务资料", note: "测算利润总额、调整项目和预缴税额。" },
+          { title: "纳税调整备查清单", type: "归档资料", note: "归档调整项目和凭证依据。" }
+        ],
+        tips: ["需区分会计口径与税法口径差异。"],
+        basis: "企业所得税法、企业所得税汇算清缴规则"
+      },
+      {
+        id: "tax_iit",
+        scene: "个人所得税扣缴",
+        domain: "税务类",
+        keywords: ["个人所得税", "个税", "扣缴", "工资薪金申报", "劳务报酬"],
+        summary: "个人所得税扣缴申报、补申报和复核事项。",
+        accounts: ["应交税费", "应付职工薪酬", "银行存款"],
+        taxes: ["个人所得税"],
+        generatedDocs: [
+          { title: "个人所得税申报清单", type: "税务资料", note: "汇总本期工资薪金和其他扣缴项目。" },
+          { title: "扣缴资料归档卡", type: "归档资料", note: "归档工资表、回单和申报回执。" }
+        ],
+        tips: ["需区分工资薪金、劳务报酬等不同所得项目。"],
+        basis: "个人所得税法、扣缴申报规则"
+      },
+      {
+        id: "tax_stamp",
+        scene: "印花税",
+        domain: "税务类",
+        keywords: ["印花税", "合同贴花", "购销合同", "借款合同", "租赁合同"],
+        summary: "购销、借款、租赁等合同相关印花税事项。",
+        accounts: ["税金及附加", "应交税费"],
+        taxes: ["印花税"],
+        generatedDocs: [
+          { title: "印花税测算清单", type: "税务资料", note: "按合同类型、计税依据和税率测算。" },
+          { title: "合同与印花税归档卡", type: "归档资料", note: "归档合同、计税依据和申报留痕。" }
+        ],
+        tips: ["应根据印花税法确定应税合同范围和计税依据。"],
+        basis: "中华人民共和国印花税法"
+      },
+      {
+        id: "inventory_loss",
+        scene: "存货盘点与报损",
+        domain: "资产类",
+        keywords: ["盘点", "报损", "盘亏", "盘盈", "存货损失", "库存差异"],
+        summary: "存货盘点差异、报损报废和调整事项。",
+        accounts: ["库存商品", "待处理财产损溢", "管理费用/营业外支出"],
+        taxes: ["企业所得税损失资料留存", "增值税进项转出关注"],
+        generatedDocs: [
+          { title: "存货盘点差异处理单", type: "财务单据", note: "登记盘盈盘亏和处理意见。" },
+          { title: "存货损失备查资料", type: "归档资料", note: "归档盘点表、审批单和处理依据。" }
+        ],
+        tips: ["需留痕审批和差异原因分析。"],
+        basis: "小企业会计准则、企业所得税资产损失相关规则"
+      },
+      {
+        id: "asset_disposal",
+        scene: "资产处置",
+        domain: "资产类",
+        keywords: ["处置", "出售设备", "报废", "清理", "转让资产"],
+        summary: "固定资产出售、报废、清理和转让事项。",
+        accounts: ["固定资产清理", "营业外收入/支出", "银行存款"],
+        taxes: ["增值税", "企业所得税"],
+        generatedDocs: [
+          { title: "资产处置清理单", type: "财务单据", note: "登记处置收入、成本和清理损益。" },
+          { title: "资产处置归档卡", type: "归档资料", note: "归档审批、合同、回单和发票。" }
+        ],
+        tips: ["需和资产卡片、累计折旧保持一致。"],
+        basis: "小企业会计准则"
+      },
+      {
+        id: "rent_and_utilities",
+        scene: "房租与水电物业",
+        domain: "费用类",
+        keywords: ["房租", "租金", "物业费", "水费", "电费", "燃气费"],
+        summary: "办公场地租金、水电、物业等期间费用事项。",
+        accounts: ["管理费用", "销售费用", "制造费用", "银行存款"],
+        taxes: ["企业所得税税前扣除", "增值税发票留存"],
+        generatedDocs: [
+          { title: "期间费用登记单", type: "财务单据", note: "登记租金、水电和物业等费用。"},
+          { title: "期间费用附件归档卡", type: "归档资料", note: "归档合同、发票、回单和分摊说明。"}
+        ],
+        tips: ["需要区分跨期费用和本期费用。"],
+        basis: "小企业会计准则、企业所得税税前扣除凭证管理办法"
+      },
+      {
+        id: "penalty_donation",
+        scene: "罚款与捐赠",
+        domain: "其他事项",
+        keywords: ["罚款", "违约金", "滞纳金", "捐赠", "公益捐赠"],
+        summary: "罚款、违约金、捐赠等非日常经营性事项。",
+        accounts: ["营业外支出", "银行存款"],
+        taxes: ["企业所得税扣除限制关注"],
+        generatedDocs: [
+          { title: "营业外支出登记单", type: "财务单据", note: "登记事项性质、金额和审批信息。" },
+          { title: "支出依据归档卡", type: "归档资料", note: "归档处罚通知、协议、付款回单等资料。" }
+        ],
+        tips: ["不同性质支出税前扣除政策差异较大，需人工复核。"],
+        basis: "企业所得税法、会计准则相关规定"
+      }
+    ];
+
+    const generatedList = document.getElementById("generatedList");
+    const reportGrid = document.getElementById("reportGrid");
+    const libraryList = document.getElementById("libraryList");
+    const searchInput = document.getElementById("searchInput");
+    const loginShell = document.getElementById("loginShell");
+    const loginUsername = document.getElementById("loginUsername");
+    const loginPassword = document.getElementById("loginPassword");
+    const loginMessage = document.getElementById("loginMessage");
+    const previewShell = document.getElementById("previewShell");
+    const previewTitle = document.getElementById("previewTitle");
+    const previewCode = document.getElementById("previewCode");
+    const previewType = document.getElementById("previewType");
+    const previewDate = document.getElementById("previewDate");
+    const previewContent = document.getElementById("previewContent");
+    const previewDownloadBtn = document.getElementById("previewDownloadBtn");
+    const voucherFiles = document.getElementById("voucherFiles");
+    const behaviorFiles = document.getElementById("behaviorFiles");
+    const taxFiles = document.getElementById("taxFiles");
+    const bindFiles = document.getElementById("bindFiles");
+    const voucherFileList = document.getElementById("voucherFileList");
+    const behaviorFileList = document.getElementById("behaviorFileList");
+    const taxFileList = document.getElementById("taxFileList");
+    const bindFileList = document.getElementById("bindFileList");
+    const bindRecordSelect = document.getElementById("bindRecordSelect");
+    const behaviorAnalysisList = document.getElementById("behaviorAnalysisList");
+    const behaviorSceneTag = document.getElementById("behaviorSceneTag");
+    const behaviorText = document.getElementById("behaviorText");
+    const coverageGrid = document.getElementById("coverageGrid");
+
+    let generatedItems = [...generatedSeed];
+    let activeReportFilter = "all";
+    let currentPreviewItem = null;
+    let voucherUploads = [];
+    let behaviorUploads = [];
+    let taxUploads = [];
+    let bindUploads = [];
+
+    function formatFileSize(bytes) {
+      if (!bytes) {
+        return "本地文件";
+      }
+      const mb = bytes / (1024 * 1024);
+      if (mb >= 1) {
+        return `${mb.toFixed(1)} MB`;
+      }
+      return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    }
+
+    function normalizeFiles(fileList, source) {
+      return Array.from(fileList || []).map((file, index) => ({
+        id: `${Date.now()}-${index}-${Math.random().toString(16).slice(2, 8)}`,
+        name: file.name,
+        type: file.type || "application/octet-stream",
+        sizeLabel: formatFileSize(file.size),
+        source,
+        file,
+        url: URL.createObjectURL(file)
+      }));
+    }
+
+    function renderUploadList(container, items) {
+      container.innerHTML = items.length
+        ? items.map((item) => `
+          <div class="file-chip">
+            <div>
+              <strong style="margin:0;">${escapeHtml(item.name)}</strong>
+              <div class="tiny">${escapeHtml(item.sizeLabel)} · ${escapeHtml(item.source)}</div>
+            </div>
+            <span class="count-badge">待绑定</span>
+          </div>
+        `).join("")
+        : '<div class="attachment-empty">尚未选择附件。</div>';
+    }
+
+    function getRecordOptions() {
+      return [
+        ...generatedItems.map((item) => ({ code: item.code, title: item.title })),
+        ...libraryData.map((item) => ({ code: item.code, title: item.title }))
+      ];
+    }
+
+    function renderBindRecordOptions() {
+      const options = getRecordOptions();
+      bindRecordSelect.innerHTML = options.map((item) => `<option value="${item.code}">${item.title}（${item.code}）</option>`).join("");
+    }
+
+    function parseAmountFromText(text) {
+      const match = text.match(/(\d+(?:\.\d+)?)\s*元/);
+      return match ? match[1] : "";
+    }
+
+    function parseMonthFromText(text) {
+      const match = text.match(/(\d{1,2})\s*月/);
+      return match ? `${match[1]}月` : "";
+    }
+
+    function parseBankFromText(text) {
+      const banks = ["招商银行", "工商银行", "建设银行", "农业银行", "中国银行", "交通银行", "浦发银行", "民生银行", "中信银行", "兴业银行"];
+      return banks.find((bank) => text.includes(bank)) || "开户银行";
+    }
+
+    function classifyBehavior(text) {
+      const normalized = text.trim();
+      if (!normalized) {
+        return {
+          id: "generic_pending",
+          scene: "通用经营事项",
+          domain: "待识别",
+          tag: "待输入后识别",
+          summary: "请输入经营行为，系统会匹配最相关的会计、税务和归档规则。",
+          accounts: [],
+          taxes: [],
+          generatedDocs: [],
+          tips: ["建议描述清楚时间、对象、金额和动作，例如“招商银行扣除3月份账户管理费25元”。"],
+          basis: "会计基础工作规范、小企业会计准则、税务申报规则"
+        };
+      }
+
+      const scored = ruleCatalog
+        .map((rule) => ({
+          rule,
+          score: rule.keywords.reduce((sum, keyword) => sum + (normalized.includes(keyword) ? 1 : 0), 0)
+        }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score);
+
+      if (scored.length) {
+        const best = scored[0].rule;
+        return {
+          ...best,
+          tag: `识别为${best.scene}类事项`
+        };
+      }
+
+      return {
+        id: "generic_pending",
+        scene: "通用经营事项",
+        domain: "待人工确认",
+        tag: "识别为待人工确认事项",
+        summary: "系统暂未判断出唯一业务类型，建议先生成通用记账凭证草稿和附件归档卡，再由财务复核。",
+        accounts: ["待财务复核"],
+        taxes: ["待人工判断"],
+        generatedDocs: [
+          { title: "通用记账凭证草稿", type: "财务单据", note: "待财务复核后确定具体会计科目。" },
+          { title: "原始凭证归档卡", type: "归档资料", note: "先归集全部附件并保留录入说明。" }
+        ],
+        tips: [
+          "先保留原始表述和附件，避免过度自动化导致错配单据。",
+          "对复杂事项应拆分为多个具体业务动作后分别入账。"
+        ],
+        basis: "会计基础工作规范、小企业会计准则"
+      };
+    }
+
+    function renderBehaviorAnalysis() {
+      const analysis = classifyBehavior(behaviorText.value);
+      behaviorSceneTag.textContent = analysis.tag;
+      behaviorAnalysisList.innerHTML = `
+        <div class="analysis-item">
+          <strong>识别摘要</strong>
+          <div class="meta">${escapeHtml(analysis.summary)}</div>
+        </div>
+        <div class="analysis-item">
+          <strong>分类与口径</strong>
+          <div class="record-meta">
+            <span>${escapeHtml(analysis.domain || "待识别")}</span>
+            <span>会计科目建议：${escapeHtml((analysis.accounts || []).join(" / ") || "待复核")}</span>
+          </div>
+          <div class="meta" style="margin-top:8px;">税务关注：${escapeHtml((analysis.taxes || []).join("、") || "暂无自动税务事项")}</div>
+        </div>
+        ${(analysis.generatedDocs || []).map((doc) => `
+          <div class="analysis-item">
+            <strong>${escapeHtml(doc.title)}</strong>
+            <div class="record-meta">
+              <span>${escapeHtml(doc.type)}</span>
+              <span>最相关单据</span>
+            </div>
+            <div class="meta" style="margin-top:8px;">${escapeHtml(doc.note)}</div>
+          </div>
+        `).join("")}
+        <div class="analysis-item">
+          <strong>合规与流程提醒</strong>
+          <ol class="paper-list">${analysis.tips.map((tip) => `<li>${escapeHtml(tip)}</li>`).join("")}</ol>
+        </div>
+        <div class="analysis-item">
+          <strong>规则依据</strong>
+          <div class="meta">${escapeHtml(analysis.basis || "系统规则库")}</div>
+        </div>
+      `;
+      return analysis;
+    }
+
+    function renderCoverageGrid() {
+      coverageGrid.innerHTML = ruleCatalog.map((rule) => `
+        <article class="coverage-card">
+          <div class="coverage-meta">
+            <span class="pill">${escapeHtml(rule.domain)}</span>
+            <span class="analysis-tag">${escapeHtml(rule.scene)}</span>
+          </div>
+          <h3>${escapeHtml(rule.scene)}</h3>
+          <p class="meta">${escapeHtml(rule.summary)}</p>
+          <ol class="coverage-list" style="margin-top:12px;">
+            <li>会计科目建议：${escapeHtml(rule.accounts.join(" / "))}</li>
+            <li>税务关注：${escapeHtml(rule.taxes.join("、"))}</li>
+            <li>生成资料：${escapeHtml(rule.generatedDocs.map((item) => item.title).join("、"))}</li>
+            <li>规则依据：${escapeHtml(rule.basis)}</li>
+          </ol>
+        </article>
+      `).join("");
+    }
+
+    function getAttachmentCount(item) {
+      return item.attachments?.length || 0;
+    }
+
+    function createAttachmentDownloadContent(item) {
+      return item.content || `${item.name}\n来源：${item.source || "系统上传"}\n该附件可在正式系统中预览原始文件。`;
+    }
+
+    function renderVoucherPreview(item) {
+      return `
+        <div class="official-title">记 账 凭 证</div>
+        <div class="official-subtitle">依据《会计基础工作规范》必备字段组织展示</div>
+        <div class="official-meta">
+          <div>凭证编号：${escapeHtml(item.code || "记-0001")}</div>
+          <div>日期：${escapeHtml(item.date || "2026-04-23")}</div>
+          <div>附件张数：${escapeHtml(String(getAttachmentCount(item)))}</div>
+        </div>
+        <table class="official-table">
+          <tr><td class="label">摘要</td><td colspan="3">${escapeHtml(item.summary || item.note || "")}</td></tr>
+          <tr><td class="label">会计科目</td><td>借：${escapeHtml((item.accounts || ["相关科目待复核"]).join("、"))}</td><td>贷：${escapeHtml(item.party || "相关往来/银行存款")}</td><td>金额：${escapeHtml(item.amount || "待复核")}</td></tr>
+          <tr><td class="label">原始凭证</td><td colspan="3">${escapeHtml(item.note || "已附后")}</td></tr>
+        </table>
+        <table class="official-table">
+          <tr><th>会计科目</th><th>明细说明</th><th>借方金额</th><th>贷方金额</th></tr>
+          <tr><td>${escapeHtml(item.accounts?.[0] || "待复核科目")}</td><td>${escapeHtml(item.sections?.lines?.[0] || "经济业务内容")}</td><td>${escapeHtml(item.amount || "0.00")}</td><td></td></tr>
+          <tr><td>${escapeHtml(item.accounts?.[1] || "银行存款/应付相关科目")}</td><td>${escapeHtml(item.sections?.lines?.[1] || "对应对方科目")}</td><td></td><td>${escapeHtml(item.amount || "0.00")}</td></tr>
+        </table>
+        <div class="signature-row">
+          <div>制单</div>
+          <div>稽核</div>
+          <div>记账</div>
+          <div>会计主管</div>
+        </div>
+      `;
+    }
+
+    function renderArchivePreview(item) {
+      return `
+        <div class="official-title">原 始 凭 证 归 档 封 面</div>
+        <div class="official-subtitle">按会计档案和原始凭证留存习惯整理展示</div>
+        <table class="official-table">
+          <tr><td class="label">归档编号</td><td>${escapeHtml(item.code || "ARC-0001")}</td><td class="label">归档日期</td><td>${escapeHtml(item.date || "2026-04-23")}</td></tr>
+          <tr><td class="label">资料名称</td><td>${escapeHtml(item.title)}</td><td class="label">责任部门</td><td>${escapeHtml(item.owner || "财务部")}</td></tr>
+          <tr><td class="label">关联事项</td><td colspan="3">${escapeHtml(item.summary || item.note || "")}</td></tr>
+          <tr><td class="label">附件目录</td><td colspan="3">${escapeHtml((item.attachments || []).map((a) => a.name).join("、") || "暂无附件")}</td></tr>
+        </table>
+        <table class="official-table">
+          <tr><th>序号</th><th>凭证/附件名称</th><th>来源</th><th>备注</th></tr>
+          ${(item.attachments || []).map((a, idx) => `<tr><td>${idx + 1}</td><td>${escapeHtml(a.name)}</td><td>${escapeHtml(a.source || "系统上传")}</td><td>可预览、可下载</td></tr>`).join("") || '<tr><td>1</td><td>待补附件</td><td>—</td><td>可后续补传</td></tr>'}
+        </table>
+      `;
+    }
+
+    function renderTaxPreview(item) {
+      const title = item.title || "";
+      if (title.includes("增值税")) {
+        return `
+          <div class="official-title">增 值 税 及 附 加 税 费 申 报 表</div>
+          <div class="official-subtitle">参考国家税务总局申报表主表字段组织展示</div>
+          <div class="official-meta">
+            <div>税款所属期：2026年04月01日至2026年04月30日</div>
+            <div>纳税人名称：示例中小企业</div>
+            <div>金额单位：元（列至角分）</div>
+          </div>
+          <table class="official-table">
+            <tr><th>项目</th><th>本期数</th><th>本年累计</th><th>说明</th></tr>
+            <tr><td>销项税额</td><td>50,180.00</td><td>182,400.00</td><td>对应销项发票及未开票收入</td></tr>
+            <tr><td>进项税额</td><td>31,460.00</td><td>116,280.00</td><td>对应已勾选认证票据</td></tr>
+            <tr><td>本期应纳增值税额</td><td>18,720.00</td><td>66,120.00</td><td>销项减进项</td></tr>
+            <tr><td>城市维护建设税</td><td>1,310.40</td><td>4,628.40</td><td>附加税费</td></tr>
+            <tr><td>教育费附加</td><td>561.60</td><td>1,983.60</td><td>附加税费</td></tr>
+            <tr><td>地方教育附加</td><td>374.40</td><td>1,322.40</td><td>附加税费</td></tr>
+          </table>
+        `;
+      }
+      if (title.includes("企业所得税")) {
+        return `
+          <div class="official-title">企 业 所 得 税 预 缴 测 算 表</div>
+          <div class="official-subtitle">按预缴测算习惯列示利润、调整与应纳税额</div>
+          <table class="official-table">
+            <tr><th>项目</th><th>金额</th><th>说明</th></tr>
+            <tr><td>利润总额</td><td>352,000.00</td><td>依据本期利润表</td></tr>
+            <tr><td>纳税调整增加额</td><td>18,000.00</td><td>不可税前扣除及调整项目</td></tr>
+            <tr><td>纳税调整减少额</td><td>62,000.00</td><td>优惠及加计扣除项目</td></tr>
+            <tr><td>应纳税所得额</td><td>308,000.00</td><td>测算口径</td></tr>
+            <tr><td>预缴税额</td><td>26,400.00</td><td>按适用税率测算</td></tr>
+          </table>
+        `;
+      }
+      if (title.includes("个人所得税")) {
+        return `
+          <div class="official-title">个 人 所 得 税 扣 缴 申 报 清 单</div>
+          <div class="official-subtitle">参考扣缴申报管理办法的全员全额申报信息组织展示</div>
+          <table class="official-table">
+            <tr><th>姓名</th><th>所得项目</th><th>收入额</th><th>扣除额</th><th>应纳税额</th></tr>
+            <tr><td>张某</td><td>工资薪金</td><td>18,000.00</td><td>7,500.00</td><td>315.00</td></tr>
+            <tr><td>李某</td><td>工资薪金</td><td>16,500.00</td><td>7,200.00</td><td>240.00</td></tr>
+            <tr><td colspan="5">其余人员略，正式系统可展开全员全额明细。</td></tr>
+          </table>
+        `;
+      }
+      return "";
+    }
+
+    function renderBalanceSheetPreview() {
+      return `
+        <div class="official-title">资 产 负 债 表</div>
+        <div class="official-subtitle">会小企01表 · 编制单位：示例中小企业 · 单位：元</div>
+        <table class="official-table">
+          <tr><th>资产</th><th>期末余额</th><th>年初余额</th><th>负债和所有者权益</th><th>期末余额</th><th>年初余额</th></tr>
+          <tr><td>货币资金</td><td>528,600.00</td><td>402,300.00</td><td>短期借款</td><td>120,000.00</td><td>160,000.00</td></tr>
+          <tr><td>应收账款</td><td>186,000.00</td><td>142,500.00</td><td>应付账款</td><td>94,200.00</td><td>88,400.00</td></tr>
+          <tr><td>存货</td><td>174,000.00</td><td>168,200.00</td><td>应付职工薪酬</td><td>36,800.00</td><td>32,400.00</td></tr>
+          <tr><td>固定资产</td><td>380,000.00</td><td>405,000.00</td><td>实收资本</td><td>500,000.00</td><td>500,000.00</td></tr>
+          <tr><td>资产总计</td><td>1,268,600.00</td><td>1,118,000.00</td><td>负债和所有者权益总计</td><td>1,268,600.00</td><td>1,118,000.00</td></tr>
+        </table>
+      `;
+    }
+
+    function renderIncomeStatementPreview() {
+      return `
+        <div class="official-title">利 润 表</div>
+        <div class="official-subtitle">会小企02表 · 编制单位：示例中小企业 · 单位：元</div>
+        <table class="official-table">
+          <tr><th>项目</th><th>本月金额</th><th>本年累计</th></tr>
+          <tr><td>营业收入</td><td>865,000.00</td><td>3,206,000.00</td></tr>
+          <tr><td>营业成本</td><td>562,000.00</td><td>2,074,000.00</td></tr>
+          <tr><td>税金及附加</td><td>12,840.00</td><td>42,460.00</td></tr>
+          <tr><td>销售费用</td><td>96,200.00</td><td>356,300.00</td></tr>
+          <tr><td>管理费用</td><td>72,640.00</td><td>290,540.00</td></tr>
+          <tr><td>财务费用</td><td>2,840.00</td><td>11,320.00</td></tr>
+          <tr><td>所得税费用</td><td>25,000.00</td><td>96,700.00</td></tr>
+          <tr><td>净利润</td><td>92,480.00</td><td>334,680.00</td></tr>
+        </table>
+      `;
+    }
+
+    function renderCashflowPreview() {
+      return `
+        <div class="official-title">现 金 流 量 表</div>
+        <div class="official-subtitle">会小企03表风格 · 按经营、投资、筹资活动列示</div>
+        <table class="official-table">
+          <tr><th>项目</th><th>本月金额</th></tr>
+          <tr><td>经营活动产生的现金流入小计</td><td>928,000.00</td></tr>
+          <tr><td>经营活动产生的现金流出小计</td><td>742,000.00</td></tr>
+          <tr><td>经营活动产生的现金流量净额</td><td>186,000.00</td></tr>
+          <tr><td>投资活动产生的现金流量净额</td><td>-117,400.00</td></tr>
+          <tr><td>筹资活动产生的现金流量净额</td><td>60,000.00</td></tr>
+          <tr><td>现金及现金等价物净增加额</td><td>128,600.00</td></tr>
+        </table>
+      `;
+    }
+
+    function renderStructuredPreview(item) {
+      if (item.format === "balance_sheet") return renderBalanceSheetPreview();
+      if (item.format === "income_statement") return renderIncomeStatementPreview();
+      if (item.format === "cashflow_statement") return renderCashflowPreview();
+      if ((item.type || "").includes("税务")) return renderTaxPreview(item);
+      if ((item.type || "").includes("财务单据")) return renderVoucherPreview(item);
+      if ((item.type || "").includes("归档") || (item.type || "").includes("合规提醒")) return renderArchivePreview(item);
+      return "";
+    }
+
+    function openAttachment(id) {
+      const attachments = [
+        ...generatedItems.flatMap((item) => item.attachments || []),
+        ...libraryData.flatMap((item) => item.attachments || [])
+      ];
+      const attachment = attachments.find((item) => item.id === id);
+      if (!attachment) {
+        return;
+      }
+
+      if (attachment.url) {
+        window.open(attachment.url, "_blank", "noopener");
+        return;
+      }
+
+      const blob = new Blob([createAttachmentDownloadContent(attachment)], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+
+    function downloadAttachment(id) {
+      const attachments = [
+        ...generatedItems.flatMap((item) => item.attachments || []),
+        ...libraryData.flatMap((item) => item.attachments || [])
+      ];
+      const attachment = attachments.find((item) => item.id === id);
+      if (!attachment) {
+        return;
+      }
+
+      const link = document.createElement("a");
+      link.href = attachment.url || URL.createObjectURL(new Blob([createAttachmentDownloadContent(attachment)], { type: "text/plain;charset=utf-8" }));
+      link.download = attachment.name;
+      link.click();
+      if (!attachment.url) {
+        setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+      }
+    }
+
+    function attachFilesToRecord(code, files, tagText) {
+      if (!files.length) {
+        return false;
+      }
+
+      const generated = generatedItems.find((item) => item.code === code);
+      const library = libraryData.find((item) => item.code === code);
+      const target = generated || library;
+
+      if (!target) {
+        return false;
+      }
+
+      target.attachments = [...(target.attachments || []), ...files];
+      if (library) {
+        library.tag = tagText || "附件已补充";
+        library.extra = `${library.extra}；已追加 ${files.length} 份原始凭证`;
+      }
+      return true;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function buildPreviewPaper(item) {
+      const lines = (item.sections?.lines || []).map((line) => `<li>${escapeHtml(line)}</li>`).join("");
+      const checks = (item.sections?.checks || []).map((line) => `<li>${escapeHtml(line)}</li>`).join("");
+      const structured = renderStructuredPreview(item);
+      const attachments = (item.attachments || []).map((attachment) => `
+        <div class="attachment-row">
+          <div>
+            <strong style="margin:0;">${escapeHtml(attachment.name)}</strong>
+            <div class="tiny">${escapeHtml(attachment.sizeLabel || "本地文件")} · ${escapeHtml(attachment.source || "系统绑定")}</div>
+          </div>
+          <div class="record-actions">
+            <button class="mini-btn" onclick="openAttachment('${attachment.id}')">预览附件</button>
+            <button class="mini-btn" onclick="downloadAttachment('${attachment.id}')">下载附件</button>
+          </div>
+        </div>
+      `).join("");
+
+      return `
+        ${structured || `
+          <div class="paper-header">
+            <div>
+              <h4>${escapeHtml(item.title)}</h4>
+              <div class="meta">${escapeHtml(item.summary || item.note || item.desc || item.extra || "")}</div>
+            </div>
+            <div class="pill">${escapeHtml(item.type || item.category || "资料")}</div>
+          </div>
+          <div class="paper-grid">
+            <div class="paper-cell">
+              <span>编号</span>
+              <strong>${escapeHtml(item.code || "自动生成")}</strong>
+            </div>
+            <div class="paper-cell">
+              <span>日期</span>
+              <strong>${escapeHtml(item.date || "2026-04-23")}</strong>
+            </div>
+            <div class="paper-cell">
+              <span>责任人</span>
+              <strong>${escapeHtml(item.owner || "系统自动生成")}</strong>
+            </div>
+            <div class="paper-cell">
+              <span>金额 / 指标</span>
+              <strong>${escapeHtml(item.amount || "自动汇总")}</strong>
+            </div>
+            <div class="paper-cell">
+              <span>关联对象 / 申报期</span>
+              <strong>${escapeHtml(item.party || "企业内部事项")}</strong>
+            </div>
+            <div class="paper-cell">
+              <span>说明</span>
+              <strong>${escapeHtml(item.note || item.desc || item.extra || "已自动生成并进入资料库")}</strong>
+            </div>
+          </div>
+          <div class="paper-section">
+            <strong>主要内容</strong>
+            <ol class="paper-list">${lines || "<li>系统已根据当前业务自动整理主要内容。</li>"}</ol>
+          </div>
+          <div class="paper-section">
+            <strong>校验与状态</strong>
+            <ol class="paper-list">${checks || "<li>系统已完成编号、归档与基本合规校验。</li>"}</ol>
+          </div>
+        `}
+        <div class="attachment-section">
+          <strong>原始凭证与附件</strong>
+          ${attachments || '<div class="attachment-empty">当前记录尚未绑定原始凭证，可在录入时上传或后续补充上传。</div>'}
+        </div>
+        <div class="paper-footer">
+          <span>在线预览版</span>
+          <span>可继续下载、导出、归档或外送税务系统</span>
+        </div>
+      `;
+    }
+
+    function openPreview(item) {
+      currentPreviewItem = item;
+      previewTitle.textContent = item.title;
+      previewCode.textContent = `编号 ${item.code || "自动生成"}`;
+      previewType.textContent = item.type || item.category || "资料";
+      previewDate.textContent = item.date || "2026-04-23";
+      previewContent.innerHTML = buildPreviewPaper(item);
+      previewShell.classList.add("active");
+    }
+
+    function closePreview() {
+      previewShell.classList.remove("active");
+    }
+
+    function renderGenerated() {
+      generatedList.innerHTML = generatedItems.map((item) => `
+        <article class="record-item">
+          <div class="record-top">
+            <div>
+              <strong>${item.title}</strong>
+              <div class="record-meta">
+                <span>编号 ${item.code}</span>
+                <span>${item.date}</span>
+                <span>${item.type}</span>
+                <span>附件 ${getAttachmentCount(item)} 份</span>
+              </div>
+            </div>
+            <span class="pill">${item.type}</span>
+          </div>
+          <div class="meta">${item.note}</div>
+          <div class="record-actions">
+            <button class="mini-btn" onclick="openPreviewByCode('${item.code}')">在线预览</button>
+            <button class="mini-btn" onclick="downloadText('${item.title}', '${item.code}', '${item.note}')">下载</button>
+            <button class="mini-btn" onclick="copyCode('${item.code}')">复制编号</button>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function renderReports() {
+      const filtered = activeReportFilter === "all"
+        ? reportData
+        : reportData.filter((item) => item.category === activeReportFilter);
+
+      reportGrid.innerHTML = filtered.map((item) => `
+        <article class="report-card">
+          <div class="pill">${item.category}</div>
+          <h3>${item.name}</h3>
+          <p>${item.desc}</p>
+          <div class="tiny" style="margin-top:10px;">支持在线预览主表内容，并可继续关联原始凭证。报表预览不会再改动右侧生成记录。</div>
+          <div class="record-actions" style="margin-top:16px;">
+            <button class="mini-btn" onclick="openReportPreview('${item.code}')">在线预览</button>
+            <button class="mini-btn" onclick="downloadText('${item.name}', '${item.category}', '${item.desc}')">下载报表</button>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function renderLibrary(filter = "") {
+      const keyword = filter.trim().toLowerCase();
+      const rows = keyword
+        ? libraryData.filter((item) =>
+            `${item.title} ${item.code} ${item.extra} ${item.tag} ${(item.attachments || []).map((attachment) => attachment.name).join(" ")}`.toLowerCase().includes(keyword)
+          )
+        : libraryData;
+
+      libraryList.innerHTML = rows.map((item) => `
+        <div class="library-row">
+          <div>
+            <strong>${item.title}</strong>
+            <div class="record-meta">
+              <span>编号 ${item.code}</span>
+              <span>${item.extra}</span>
+              <span>附件 ${getAttachmentCount(item)} 份</span>
+            </div>
+          </div>
+          <div class="record-actions">
+            <span class="pill">${item.tag}</span>
+            <button class="mini-btn" onclick="openLibraryPreview('${item.code}')">在线预览</button>
+            <button class="mini-btn" onclick="downloadText('${item.title}', '${item.code}', '${item.extra}')">下载</button>
+          </div>
+        </div>
+      `).join("");
+
+      if (!rows.length) {
+        libraryList.innerHTML = '<div class="record-item"><strong>没有匹配结果</strong><div class="meta">请尝试不同的关键字，例如业务类型、税种、月份或往来方。</div></div>';
+      }
+    }
+
+    function makeCode(prefix) {
+      const now = new Date();
+      const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const suffix = String(Math.floor(Math.random() * 900) + 100);
+      return `${prefix}-${ym}-${suffix}`;
+    }
+
+    function pushGenerated(title, type) {
+      generatedItems.unshift({
+        title,
+        code: makeCode(type === "税务资料" ? "TAX" : type === "归档资料" ? "ARC" : "DOC"),
+        type,
+        date: new Date().toISOString().slice(0, 10),
+        note: "由系统根据最新录入内容自动生成，已写入资料总库并建立索引关联。",
+        party: "本次录入事项",
+        amount: "自动汇总",
+        owner: "系统生成",
+        summary: `${title} 已生成在线预览版，可直接查看完整内容。`,
+        sections: {
+          lines: ["已根据录入信息整理主表内容", "已生成对应附件索引与关联信息", "已纳入归档和导出队列"],
+          checks: ["编号已生成", "资料已入库", "支持在线预览与下载"]
+        },
+        attachments: []
+      });
+      renderGenerated();
+      renderBindRecordOptions();
+    }
+
+    function buildBehaviorRecords(analysis) {
+      const text = behaviorText.value.trim();
+      const amount = parseAmountFromText(text) || "自动识别";
+      const bank = parseBankFromText(text);
+      const date = document.getElementById("behaviorDate").value || new Date().toISOString().slice(0, 10);
+      const owner = document.getElementById("behaviorDept").value || "业务部门";
+      const baseAttachments = [...behaviorUploads];
+      const focusedParty = analysis.id === "bank_fee" ? bank : owner;
+      return (analysis.generatedDocs || []).map((doc) => ({
+        title: doc.title,
+        code: makeCode(doc.type === "税务资料" ? "TAX" : doc.type === "归档资料" || doc.type === "合规提醒" ? "ARC" : "DOC"),
+        type: doc.type,
+        date,
+        note: doc.note,
+        party: focusedParty,
+        amount: `${amount}${amount === "自动识别" ? "" : " 元"}`,
+        owner: doc.type === "归档资料" ? "系统生成" : doc.type === "合规提醒" ? "系统提醒" : "系统解析",
+        summary: analysis.summary,
+        sections: {
+          lines: [
+            `业务摘要：${text || "行为录入事项"}`,
+            `建议会计科目：${(analysis.accounts || []).join(" / ") || "待复核"}`,
+            `税务关注：${(analysis.taxes || []).join("、") || "暂无自动税务事项"}`
+          ],
+          checks: [
+            ...(analysis.tips || []),
+            `规则依据：${analysis.basis || "系统规则库"}`
+          ]
+        },
+        attachments: baseAttachments
+      }));
+    }
+
+    function openPreviewByCode(code) {
+      const item = generatedItems.find((entry) => entry.code === code);
+      if (item) {
+        openPreview(item);
+      }
+    }
+
+    function openReportPreview(code) {
+      const item = reportData.find((entry) => entry.code === code);
+      if (item) {
+        openPreview({
+          title: item.name,
+          code: item.code,
+          type: `${item.category}报表`,
+          date: "2026-04-23",
+          note: item.desc,
+          owner: item.owner,
+          amount: item.amount,
+          summary: item.summary,
+          sections: item.sections,
+          party: "2026年4月",
+          attachments: []
+        });
+      }
+    }
+
+    function openLibraryPreview(code) {
+      const item = libraryData.find((entry) => entry.code === code);
+      if (item) {
+        openPreview(item);
+      }
+    }
+
+    function downloadText(title, code, content) {
+      const blob = new Blob(
+        [`标题：${title}\n编号：${code}\n内容：${content}\n导出时间：${new Date().toLocaleString("zh-CN")}`],
+        { type: "text/plain;charset=utf-8" }
+      );
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${title.replace(/\s+/g, "")}.txt`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    function copyCode(code) {
+      navigator.clipboard.writeText(code);
+    }
+
+    function enterSystem() {
+      loginShell.classList.add("hidden");
+      sessionStorage.setItem("taxDemoLoggedIn", "1");
+    }
+
+    function tryLogin() {
+      const username = loginUsername.value.trim();
+      const password = loginPassword.value.trim();
+
+      if (username === "admin" && password === "123456") {
+        loginMessage.textContent = "登录成功，正在进入系统...";
+        setTimeout(enterSystem, 320);
+        return;
+      }
+
+      loginMessage.textContent = "用户名或密码不正确，请使用演示账号 admin / 123456。";
+    }
+
+    document.querySelectorAll(".tab-btn").forEach((button) => {
+      button.addEventListener("click", () => {
+        const tab = button.dataset.tab;
+        document.querySelectorAll(".tab-btn").forEach((btn) => btn.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.remove("active"));
+        button.classList.add("active");
+        document.querySelector(`[data-panel="${tab}"]`).classList.add("active");
+      });
+    });
+
+    document.querySelectorAll(".filter-btn").forEach((button) => {
+      button.addEventListener("click", () => {
+        activeReportFilter = button.dataset.filter;
+        document.querySelectorAll(".filter-btn").forEach((btn) => btn.classList.remove("active"));
+        button.classList.add("active");
+        renderReports();
+      });
+    });
+
+    document.getElementById("generateVoucher").addEventListener("click", () => {
+      const bizType = document.getElementById("bizType").value;
+      const voucherRecord = {
+        title: `${bizType}资料包`,
+        code: makeCode("DOC"),
+        type: "财务单据",
+        date: new Date().toISOString().slice(0, 10),
+        note: "根据当前录入信息自动生成，并已绑定上传的原始凭证。",
+        party: document.getElementById("counterparty").value || "本次业务往来方",
+        amount: Number(document.getElementById("amount").value || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        owner: document.getElementById("operator").value || "录入人",
+        summary: `${bizType}事项已生成主记录，并自动关联上传原始凭证。`,
+        sections: {
+          lines: ["主记录已生成", "原始凭证已自动挂接", "支持后续查询、下载与预览"],
+          checks: ["编号已生成", "关联关系已建立", "可继续补传附件"]
+        },
+        attachments: [...voucherUploads]
+      };
+      const archiveRecord = {
+        title: "税前扣除与票据核验单",
+        code: makeCode("ARC"),
+        type: "归档资料",
+        date: new Date().toISOString().slice(0, 10),
+        note: "自动生成票据核验与税前扣除备查资料。",
+        party: document.getElementById("counterparty").value || "本次业务往来方",
+        amount: "自动汇总",
+        owner: "系统生成",
+        summary: "票据、回单和业务说明已自动归入备查档。",
+        sections: {
+          lines: ["票据清单已生成", "回单和说明已归档", "支持在资料总库中查询"],
+          checks: ["附件关联完成", "归档目录已更新", "可补传缺失附件"]
+        },
+        attachments: [...voucherUploads]
+      };
+      generatedItems.unshift(archiveRecord);
+      generatedItems.unshift(voucherRecord);
+      voucherUploads = [];
+      voucherFiles.value = "";
+      renderUploadList(voucherFileList, voucherUploads);
+      renderGenerated();
+      renderBindRecordOptions();
+    });
+
+    document.getElementById("generateBehavior").addEventListener("click", () => {
+      const analysis = renderBehaviorAnalysis();
+      const records = buildBehaviorRecords(analysis);
+      records.slice().reverse().forEach((record) => generatedItems.unshift(record));
+      behaviorUploads = [];
+      behaviorFiles.value = "";
+      renderUploadList(behaviorFileList, behaviorUploads);
+      renderGenerated();
+      renderBindRecordOptions();
+    });
+
+    document.getElementById("generateTax").addEventListener("click", () => {
+      const taxCategory = document.getElementById("taxCategory").value;
+      const taxRecord = {
+        title: `${taxCategory}申报底稿`,
+        code: makeCode("TAX"),
+        type: "税务资料",
+        date: new Date().toISOString().slice(0, 10),
+        note: "根据申报期和上传资料汇总形成申报底稿。",
+        party: document.getElementById("taxPeriod").value || "当前申报期",
+        amount: "自动测算",
+        owner: document.getElementById("taxOwner").value || "财税主管",
+        summary: "申报底稿已和上传附件自动绑定。",
+        sections: {
+          lines: ["申报主表已生成", "底稿附件已挂接", "支持外送前复核"],
+          checks: ["附件绑定成功", "归档封面待生成", "支持后续补传"]
+        },
+        attachments: [...taxUploads]
+      };
+      const exportRecord = {
+        title: "外送税务资料封面与目录",
+        code: makeCode("ARC"),
+        type: "归档资料",
+        date: new Date().toISOString().slice(0, 10),
+        note: "自动整理申报附件目录与外送封面。",
+        party: document.getElementById("taxPeriod").value || "当前申报期",
+        amount: "自动汇总",
+        owner: "系统生成",
+        summary: "外送资料目录已形成，可直接按记录查看附件。",
+        sections: {
+          lines: ["目录已生成", "封面已生成", "附件清单已关联"],
+          checks: ["可预览", "可导出", "可补传附件"]
+        },
+        attachments: [...taxUploads]
+      };
+      generatedItems.unshift(exportRecord);
+      generatedItems.unshift(taxRecord);
+      taxUploads = [];
+      taxFiles.value = "";
+      renderUploadList(taxFileList, taxUploads);
+      renderGenerated();
+      renderBindRecordOptions();
+    });
+
+    document.getElementById("searchBtn").addEventListener("click", () => {
+      renderLibrary(searchInput.value);
+    });
+
+    searchInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        renderLibrary(searchInput.value);
+      }
+    });
+
+    document.getElementById("exportLibrary").addEventListener("click", () => {
+      const content = libraryData.map((item) => `${item.code} | ${item.title} | ${item.extra} | ${item.tag}`).join("\n");
+      downloadText("资料总库清单", "LIBRARY", content);
+    });
+
+    document.getElementById("downloadPackage").addEventListener("click", () => {
+      downloadText("合规资料包", "PACKAGE", "包含原始单据目录、税务申报底稿、复核记录、电子归档索引。");
+    });
+
+    document.getElementById("exportAll").addEventListener("click", () => {
+      const allText = [
+        "中小企业财税资料总导出",
+        "",
+        "一、自动生成记录",
+        ...generatedItems.map((item) => `${item.code} | ${item.title} | ${item.type}`),
+        "",
+        "二、资料总库",
+        ...libraryData.map((item) => `${item.code} | ${item.title} | ${item.tag}`),
+        "",
+        "三、报表中心",
+        ...reportData.map((item) => `${item.category} | ${item.name}`)
+      ].join("\n");
+      downloadText("全部财税资料导出", "ALL", allText);
+    });
+
+    voucherFiles.addEventListener("change", () => {
+      voucherUploads = normalizeFiles(voucherFiles.files, "录入时上传");
+      renderUploadList(voucherFileList, voucherUploads);
+    });
+
+    behaviorFiles.addEventListener("change", () => {
+      behaviorUploads = normalizeFiles(behaviorFiles.files, "行为录入上传");
+      renderUploadList(behaviorFileList, behaviorUploads);
+    });
+
+    taxFiles.addEventListener("change", () => {
+      taxUploads = normalizeFiles(taxFiles.files, "申报附件上传");
+      renderUploadList(taxFileList, taxUploads);
+    });
+
+    bindFiles.addEventListener("change", () => {
+      bindUploads = normalizeFiles(bindFiles.files, "补充上传");
+      renderUploadList(bindFileList, bindUploads);
+    });
+
+    document.getElementById("bindFilesBtn").addEventListener("click", () => {
+      const code = bindRecordSelect.value;
+      const ok = attachFilesToRecord(code, bindUploads, "附件已补充");
+      if (!ok) {
+        renderUploadList(bindFileList, []);
+        bindFileList.innerHTML = '<div class="attachment-empty">请选择要绑定的记录和附件。</div>';
+        return;
+      }
+      bindUploads = [];
+      bindFiles.value = "";
+      renderUploadList(bindFileList, bindUploads);
+      renderGenerated();
+      renderLibrary(searchInput.value);
+    });
+
+    behaviorText.addEventListener("input", renderBehaviorAnalysis);
+    document.getElementById("analyzeBehaviorBtn").addEventListener("click", renderBehaviorAnalysis);
+
+    previewDownloadBtn.addEventListener("click", () => {
+      if (currentPreviewItem) {
+        downloadText(
+          currentPreviewItem.title,
+          currentPreviewItem.code || "PREVIEW",
+          [
+            currentPreviewItem.summary || "",
+            ...(currentPreviewItem.sections?.lines || []),
+            ...(currentPreviewItem.sections?.checks || [])
+          ].join("\n")
+        );
+      }
+    });
+
+    document.getElementById("previewCloseBtn").addEventListener("click", closePreview);
+
+    previewShell.addEventListener("click", (event) => {
+      if (event.target === previewShell) {
+        closePreview();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closePreview();
+      }
+    });
+
+    document.getElementById("fillDemoBtn").addEventListener("click", () => {
+      loginUsername.value = "admin";
+      loginPassword.value = "123456";
+      loginMessage.textContent = "已填入演示账号，可直接登录。";
+    });
+
+    document.getElementById("loginBtn").addEventListener("click", tryLogin);
+
+    loginPassword.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        tryLogin();
+      }
+    });
+
+    loginUsername.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        tryLogin();
+      }
+    });
+
+    if (sessionStorage.getItem("taxDemoLoggedIn") === "1") {
+      loginShell.classList.add("hidden");
+    }
+
+    renderUploadList(voucherFileList, voucherUploads);
+    renderUploadList(behaviorFileList, behaviorUploads);
+    renderUploadList(taxFileList, taxUploads);
+    renderUploadList(bindFileList, bindUploads);
+    renderBindRecordOptions();
+    renderBehaviorAnalysis();
+    renderCoverageGrid();
+    renderGenerated();
+    renderReports();
+    renderLibrary();
+  </script>
+</body>
+</html>
