@@ -145,6 +145,12 @@
       border: 1px solid transparent;
     }
 
+    nav a.active {
+      color: #fff;
+      background: linear-gradient(135deg, #315f6d, #1f2a2c);
+      box-shadow: 0 12px 24px rgba(31, 42, 44, 0.18);
+    }
+
     nav a:hover,
     .ghost-btn:hover,
     .mini-btn:hover,
@@ -310,6 +316,15 @@
       margin-top: 22px;
       padding: 26px;
       border-radius: 32px;
+    }
+
+    .page-section {
+      display: none;
+    }
+
+    .page-section.active {
+      display: block;
+      animation: rise 260ms ease;
     }
 
     .section-head {
@@ -1143,6 +1158,52 @@
       line-height: 1.75;
     }
 
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .settings-card {
+      padding: 22px;
+      border-radius: 24px;
+      background: rgba(255, 251, 245, 0.82);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+      box-shadow: var(--shadow);
+    }
+
+    .settings-card h3 {
+      margin: 0 0 10px;
+      font-size: 1.2rem;
+      font-family: "Iowan Old Style", "Source Han Serif SC", "Songti SC", "STSong", serif;
+    }
+
+    .settings-stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+    }
+
+    .status-box {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
     .attachment-empty {
       padding: 14px 16px;
       border-radius: 16px;
@@ -1299,14 +1360,16 @@
         </div>
       </div>
       <nav>
-        <a href="#entry">事项录入</a>
-        <a href="#flow">自动生成</a>
-        <a href="#reports">报表中心</a>
-        <a href="#archive">归档检索</a>
+        <a href="#" data-route="home">总览</a>
+        <a href="#" data-route="entry">录入中心</a>
+        <a href="#" data-route="reports">单据报表</a>
+        <a href="#" data-route="coverage">规则库</a>
+        <a href="#" data-route="archive">归档检索</a>
+        <a href="#" data-route="settings">系统设置</a>
       </nav>
     </header>
 
-    <section class="hero">
+    <section class="hero page-section active" id="hero" data-page="home">
       <article class="hero-copy">
         <div class="eyebrow">适用于中国大陆中小企业财务与税务合规场景</div>
         <h1>把日常经营动作，自动沉淀成合规财税资料</h1>
@@ -1316,8 +1379,8 @@
           同时支持查询、编号、下载、导出与归档。
         </p>
         <div class="hero-actions">
-          <a class="primary-btn" href="#entry">开始录入事项</a>
-          <a class="ghost-btn" href="#archive">查看单据总库</a>
+          <button class="primary-btn" data-page-jump="entry">开始录入事项</button>
+          <button class="ghost-btn" data-page-jump="archive">查看单据总库</button>
         </div>
       </article>
 
@@ -1366,7 +1429,7 @@
       </aside>
     </section>
 
-    <section class="section" id="entry">
+    <section class="section page-section" id="entry" data-page="entry">
       <div class="section-head">
         <div>
           <h2>事项录入与单据生成</h2>
@@ -1544,7 +1607,7 @@
       </div>
     </section>
 
-    <section class="section" id="flow">
+    <section class="section page-section" id="flow" data-page="home">
       <div class="section-head">
         <div>
           <h2>自动处理流程</h2>
@@ -1590,7 +1653,7 @@
       </div>
     </section>
 
-    <section class="section" id="reports">
+    <section class="section page-section" id="reports" data-page="reports">
       <div class="section-head">
         <div>
           <h2>报表中心</h2>
@@ -1607,7 +1670,7 @@
       <div class="report-grid" id="reportGrid"></div>
     </section>
 
-    <section class="section" id="coverage">
+    <section class="section page-section" id="coverage" data-page="coverage">
       <div class="section-head">
         <div>
           <h2>规则覆盖库</h2>
@@ -1618,7 +1681,74 @@
       <div class="coverage-grid" id="coverageGrid"></div>
     </section>
 
-    <section class="section" id="archive">
+    <section class="section page-section" id="settings" data-page="settings">
+      <div class="section-head">
+        <div>
+          <h2>系统设置</h2>
+          <p>配置本地 Ollama 大模型、网络参考检索接口和 AI 辅助判断开关。行为录入时会优先采用本地规则，再结合 AI 与网络参考做初步判断。</p>
+        </div>
+        <div class="status-chip">设置保存在当前浏览器本地</div>
+      </div>
+      <div class="settings-grid">
+        <div class="settings-card">
+          <h3>本地 Ollama 设置</h3>
+          <div class="settings-stack">
+            <div class="toggle-row">
+              <span>启用 AI 辅助判断</span>
+              <input id="enableAiAssist" type="checkbox" checked />
+            </div>
+            <div class="field">
+              <label for="ollamaBaseUrl">Ollama 地址</label>
+              <input id="ollamaBaseUrl" type="text" value="http://127.0.0.1:11434" />
+            </div>
+            <div class="field">
+              <label for="ollamaModel">模型名称</label>
+              <input id="ollamaModel" type="text" value="qwen2.5:7b" />
+            </div>
+            <div class="field">
+              <label for="ollamaTemperature">温度</label>
+              <input id="ollamaTemperature" type="number" step="0.1" min="0" max="1" value="0.2" />
+            </div>
+            <div class="record-actions">
+              <button class="primary-btn" id="saveSettingsBtn">保存设置</button>
+              <button class="ghost-btn" id="testOllamaBtn">测试 Ollama</button>
+            </div>
+          </div>
+          <div class="status-box" id="ollamaStatus">尚未测试本地 Ollama 连接。</div>
+        </div>
+        <div class="settings-card">
+          <h3>网络参考检索设置</h3>
+          <div class="settings-stack">
+            <div class="toggle-row">
+              <span>启用网络参考</span>
+              <input id="enableWebReference" type="checkbox" />
+            </div>
+            <div class="field">
+              <label for="searchProvider">检索方式</label>
+              <select id="searchProvider">
+                <option value="duckduckgo">DuckDuckGo Instant Answer</option>
+                <option value="custom">自定义 JSON 检索接口</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="searchEndpoint">自定义检索接口地址</label>
+              <input id="searchEndpoint" type="text" placeholder="https://your-search-api.example.com/search" />
+            </div>
+            <div class="field">
+              <label for="searchApiKey">接口密钥（可选）</label>
+              <input id="searchApiKey" type="password" placeholder="可留空" />
+            </div>
+            <div class="record-actions">
+              <button class="ghost-btn" id="testSearchBtn">测试网络参考</button>
+              <button class="ghost-btn" data-page-jump="entry">返回录入中心</button>
+            </div>
+          </div>
+          <div class="status-box" id="searchStatus">网络参考默认关闭；开启后将尝试为行为录入补充公开网页参考摘要。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section page-section" id="archive" data-page="archive">
       <div class="section-head">
         <div>
           <h2>归档检索与导出</h2>
@@ -2134,6 +2264,18 @@
     const behaviorSceneTag = document.getElementById("behaviorSceneTag");
     const behaviorText = document.getElementById("behaviorText");
     const coverageGrid = document.getElementById("coverageGrid");
+    const pageSections = document.querySelectorAll(".page-section");
+    const topRouteLinks = document.querySelectorAll("[data-route]");
+    const enableAiAssist = document.getElementById("enableAiAssist");
+    const ollamaBaseUrl = document.getElementById("ollamaBaseUrl");
+    const ollamaModel = document.getElementById("ollamaModel");
+    const ollamaTemperature = document.getElementById("ollamaTemperature");
+    const enableWebReference = document.getElementById("enableWebReference");
+    const searchProvider = document.getElementById("searchProvider");
+    const searchEndpoint = document.getElementById("searchEndpoint");
+    const searchApiKey = document.getElementById("searchApiKey");
+    const ollamaStatus = document.getElementById("ollamaStatus");
+    const searchStatus = document.getElementById("searchStatus");
 
     let generatedItems = [...generatedSeed];
     let activeReportFilter = "all";
@@ -2142,6 +2284,86 @@
     let behaviorUploads = [];
     let taxUploads = [];
     let bindUploads = [];
+    let activePage = "home";
+    let currentBehaviorAnalysis = null;
+    let aiAnalysisState = {
+      aiEnabled: true,
+      aiUsed: false,
+      webUsed: false,
+      refs: [],
+      aiResult: null,
+      loading: false,
+      error: ""
+    };
+
+    const settingsKey = "financeTaxationSystemSettings";
+
+    function getDefaultSettings() {
+      return {
+        enableAiAssist: true,
+        ollamaBaseUrl: "http://127.0.0.1:11434",
+        ollamaModel: "qwen2.5:7b",
+        ollamaTemperature: 0.2,
+        enableWebReference: false,
+        searchProvider: "duckduckgo",
+        searchEndpoint: "",
+        searchApiKey: ""
+      };
+    }
+
+    function loadSettings() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(settingsKey) || "{}");
+        return { ...getDefaultSettings(), ...saved };
+      } catch (error) {
+        return getDefaultSettings();
+      }
+    }
+
+    function saveSettings() {
+      const settings = {
+        enableAiAssist: enableAiAssist.checked,
+        ollamaBaseUrl: ollamaBaseUrl.value.trim() || "http://127.0.0.1:11434",
+        ollamaModel: ollamaModel.value.trim() || "qwen2.5:7b",
+        ollamaTemperature: Number(ollamaTemperature.value || 0.2),
+        enableWebReference: enableWebReference.checked,
+        searchProvider: searchProvider.value,
+        searchEndpoint: searchEndpoint.value.trim(),
+        searchApiKey: searchApiKey.value.trim()
+      };
+      localStorage.setItem(settingsKey, JSON.stringify(settings));
+      ollamaStatus.textContent = "系统设置已保存，行为录入时会按最新配置调用 AI 辅助判断。";
+      return settings;
+    }
+
+    function applySettingsToForm(settings) {
+      enableAiAssist.checked = !!settings.enableAiAssist;
+      ollamaBaseUrl.value = settings.ollamaBaseUrl;
+      ollamaModel.value = settings.ollamaModel;
+      ollamaTemperature.value = settings.ollamaTemperature;
+      enableWebReference.checked = !!settings.enableWebReference;
+      searchProvider.value = settings.searchProvider;
+      searchEndpoint.value = settings.searchEndpoint;
+      searchApiKey.value = settings.searchApiKey;
+    }
+
+    function routeTo(page) {
+      activePage = page;
+      pageSections.forEach((section) => {
+        section.classList.toggle("active", section.dataset.page === page);
+      });
+      topRouteLinks.forEach((link) => {
+        link.classList.toggle("active", link.dataset.route === page);
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function relatedPageForItem(item) {
+      if ((item.type || "").includes("税务") || (item.category || "") === "税务") return "reports";
+      if ((item.type || "").includes("归档") || (item.type || "").includes("合规提醒") || (item.category || "") === "归档") return "archive";
+      if ((item.type || "").includes("财务单据") || (item.category || "") === "财务") return "reports";
+      return "archive";
+    }
 
     function formatFileSize(bytes) {
       if (!bytes) {
@@ -2260,8 +2482,104 @@
       };
     }
 
-    function renderBehaviorAnalysis() {
-      const analysis = classifyBehavior(behaviorText.value);
+    function findRuleByScene(scene) {
+      return ruleCatalog.find((rule) => rule.scene === scene) || null;
+    }
+
+    async function fetchWebReferences(query, settings) {
+      if (!settings.enableWebReference || !query.trim()) {
+        return [];
+      }
+
+      if (settings.searchProvider === "duckduckgo") {
+        const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&no_redirect=1`;
+        const response = await fetch(url);
+        const data = await response.json();
+        const refs = [];
+        if (data.AbstractText) {
+          refs.push({ title: data.Heading || "DuckDuckGo 摘要", snippet: data.AbstractText, source: "DuckDuckGo" });
+        }
+        if (Array.isArray(data.RelatedTopics)) {
+          data.RelatedTopics.slice(0, 3).forEach((item) => {
+            if (item.Text) {
+              refs.push({ title: item.FirstURL || "相关条目", snippet: item.Text, source: "DuckDuckGo" });
+            }
+          });
+        }
+        return refs.slice(0, 4);
+      }
+
+      if (settings.searchProvider === "custom" && settings.searchEndpoint) {
+        const headers = settings.searchApiKey ? { Authorization: `Bearer ${settings.searchApiKey}` } : {};
+        const separator = settings.searchEndpoint.includes("?") ? "&" : "?";
+        const response = await fetch(`${settings.searchEndpoint}${separator}q=${encodeURIComponent(query)}`, { headers });
+        const data = await response.json();
+        const candidates = data.results || data.items || data.data || [];
+        return candidates.slice(0, 4).map((item) => ({
+          title: item.title || item.name || "检索结果",
+          snippet: item.snippet || item.content || item.description || "",
+          source: item.url || item.link || "自定义接口"
+        }));
+      }
+
+      return [];
+    }
+
+    async function callOllamaAnalysis(query, baseAnalysis, refs, settings) {
+      if (!settings.enableAiAssist || !query.trim()) {
+        return null;
+      }
+
+      const scenes = ruleCatalog.map((rule) => rule.scene).join("、");
+      const prompt = `
+你是中国大陆中小企业财务税务管理助手。请根据用户的经营行为描述，结合本地规则候选和网络参考，判断最可能的业务场景。
+
+用户输入：
+${query}
+
+本地规则初判：
+场景：${baseAnalysis.scene}
+会计科目建议：${(baseAnalysis.accounts || []).join(" / ")}
+税务关注：${(baseAnalysis.taxes || []).join("、")}
+
+可选场景：
+${scenes}
+
+网络参考摘要：
+${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.snippet}`).join("\n") : "无"}
+
+请严格输出 JSON，不要输出其他文字：
+{
+  "recommended_scene": "从可选场景中选择一个，或返回通用经营事项",
+  "confidence": 0.0,
+  "summary": "一句话说明判断依据",
+  "account_suggestion": ["科目1","科目2"],
+  "tax_focus": ["税务点1","税务点2"],
+  "risk_note": "一句话提示需要人工复核的风险点"
+}
+      `.trim();
+
+      const response = await fetch(`${settings.ollamaBaseUrl.replace(/\/$/, "")}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: settings.ollamaModel,
+          stream: false,
+          options: { temperature: settings.ollamaTemperature },
+          messages: [
+            { role: "system", content: "你必须只输出合法 JSON。" },
+            { role: "user", content: prompt }
+          ]
+        })
+      });
+      const data = await response.json();
+      const content = data.message?.content || data.response || "";
+      const jsonText = content.match(/\{[\s\S]*\}/)?.[0] || content;
+      return JSON.parse(jsonText);
+    }
+
+    function renderBehaviorAnalysis(analysis = classifyBehavior(behaviorText.value)) {
+      currentBehaviorAnalysis = analysis;
       behaviorSceneTag.textContent = analysis.tag;
       behaviorAnalysisList.innerHTML = `
         <div class="analysis-item">
@@ -2294,8 +2612,55 @@
           <strong>规则依据</strong>
           <div class="meta">${escapeHtml(analysis.basis || "系统规则库")}</div>
         </div>
+        <div class="analysis-item">
+          <strong>AI 辅助判断</strong>
+          <div class="meta">${aiAnalysisState.loading ? "正在调用本地 Ollama 与网络参考进行辅助判断..." : aiAnalysisState.aiUsed ? escapeHtml(aiAnalysisState.aiResult?.summary || "已完成 AI 辅助判断。") : "当前仅展示本地规则判断。可在系统设置中启用 Ollama 与网络参考。"}
+          </div>
+          <div class="meta" style="margin-top:8px;">${aiAnalysisState.aiUsed && aiAnalysisState.aiResult ? `AI 推荐场景：${escapeHtml(aiAnalysisState.aiResult.recommended_scene || analysis.scene)}；人工复核提示：${escapeHtml(aiAnalysisState.aiResult.risk_note || "无")}` : escapeHtml(aiAnalysisState.error || "无额外 AI 结果")}</div>
+          <div class="meta" style="margin-top:8px;">${aiAnalysisState.webUsed && aiAnalysisState.refs.length ? `网络参考：${escapeHtml(aiAnalysisState.refs.map((ref) => ref.title).join("、"))}` : "网络参考：未启用或未获取到结果"}</div>
+        </div>
       `;
       return analysis;
+    }
+
+    async function refreshBehaviorAnalysis() {
+      const settings = loadSettings();
+      const baseAnalysis = classifyBehavior(behaviorText.value);
+      aiAnalysisState = {
+        aiEnabled: settings.enableAiAssist,
+        aiUsed: false,
+        webUsed: false,
+        refs: [],
+        aiResult: null,
+        loading: !!settings.enableAiAssist || !!settings.enableWebReference,
+        error: ""
+      };
+      renderBehaviorAnalysis(baseAnalysis);
+
+      try {
+        const refs = await fetchWebReferences(`${behaviorText.value.trim()} 财务 税务 会计 处理`, settings);
+        aiAnalysisState.refs = refs;
+        aiAnalysisState.webUsed = refs.length > 0;
+
+        if (settings.enableAiAssist) {
+          const aiResult = await callOllamaAnalysis(behaviorText.value, baseAnalysis, refs, settings);
+          aiAnalysisState.aiResult = aiResult;
+          aiAnalysisState.aiUsed = true;
+          const matchedRule = findRuleByScene(aiResult?.recommended_scene || "");
+          if (matchedRule) {
+            aiAnalysisState.loading = false;
+            return renderBehaviorAnalysis({
+              ...matchedRule,
+              tag: `AI + 规则识别为${matchedRule.scene}类事项`
+            });
+          }
+        }
+      } catch (error) {
+        aiAnalysisState.error = error.message || "AI 或网络参考调用失败";
+      }
+
+      aiAnalysisState.loading = false;
+      return renderBehaviorAnalysis(baseAnalysis);
     }
 
     function renderCoverageGrid() {
@@ -2695,6 +3060,7 @@
           <div class="meta">${item.note}</div>
           <div class="record-actions">
             <button class="mini-btn" onclick="openPreviewByCode('${item.code}')">在线预览</button>
+            <button class="mini-btn" onclick="jumpToRelatedPage('${item.code}')">查看相关页面</button>
             <button class="mini-btn" onclick="downloadText('${item.title}', '${item.code}', '${item.note}')">下载</button>
             <button class="mini-btn" onclick="copyCode('${item.code}')">复制编号</button>
           </div>
@@ -2715,6 +3081,7 @@
           <div class="tiny" style="margin-top:10px;">支持在线预览主表内容，并可继续关联原始凭证。报表预览不会再改动右侧生成记录。</div>
           <div class="record-actions" style="margin-top:16px;">
             <button class="mini-btn" onclick="openReportPreview('${item.code}')">在线预览</button>
+            <button class="mini-btn" onclick="routeTo('archive')">查看归档资料</button>
             <button class="mini-btn" onclick="downloadText('${item.name}', '${item.category}', '${item.desc}')">下载报表</button>
           </div>
         </article>
@@ -2742,6 +3109,7 @@
           <div class="record-actions">
             <span class="pill">${item.tag}</span>
             <button class="mini-btn" onclick="openLibraryPreview('${item.code}')">在线预览</button>
+            <button class="mini-btn" onclick="jumpToLibraryPage('${item.code}')">关联页面</button>
             <button class="mini-btn" onclick="downloadText('${item.title}', '${item.code}', '${item.extra}')">下载</button>
           </div>
         </div>
@@ -2798,6 +3166,7 @@
         amount: `${amount}${amount === "自动识别" ? "" : " 元"}`,
         owner: doc.type === "归档资料" ? "系统生成" : doc.type === "合规提醒" ? "系统提醒" : "系统解析",
         summary: analysis.summary,
+        accounts: analysis.accounts || [],
         sections: {
           lines: [
             `业务摘要：${text || "行为录入事项"}`,
@@ -2817,6 +3186,13 @@
       const item = generatedItems.find((entry) => entry.code === code);
       if (item) {
         openPreview(item);
+      }
+    }
+
+    function jumpToRelatedPage(code) {
+      const item = generatedItems.find((entry) => entry.code === code);
+      if (item) {
+        routeTo(relatedPageForItem(item));
       }
     }
 
@@ -2843,6 +3219,13 @@
       const item = libraryData.find((entry) => entry.code === code);
       if (item) {
         openPreview(item);
+      }
+    }
+
+    function jumpToLibraryPage(code) {
+      const item = libraryData.find((entry) => entry.code === code);
+      if (item) {
+        routeTo(relatedPageForItem(item));
       }
     }
 
@@ -2899,6 +3282,17 @@
       });
     });
 
+    document.querySelectorAll("[data-route]").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        routeTo(link.dataset.route);
+      });
+    });
+
+    document.querySelectorAll("[data-page-jump]").forEach((button) => {
+      button.addEventListener("click", () => routeTo(button.dataset.pageJump));
+    });
+
     document.getElementById("generateVoucher").addEventListener("click", () => {
       const bizType = document.getElementById("bizType").value;
       const voucherRecord = {
@@ -2942,8 +3336,34 @@
       renderBindRecordOptions();
     });
 
-    document.getElementById("generateBehavior").addEventListener("click", () => {
-      const analysis = renderBehaviorAnalysis();
+    async function testOllamaConnection() {
+      const settings = saveSettings();
+      ollamaStatus.textContent = "正在测试本地 Ollama 连接...";
+      try {
+        const response = await fetch(`${settings.ollamaBaseUrl.replace(/\/$/, "")}/api/tags`);
+        const data = await response.json();
+        const models = (data.models || []).map((item) => item.name).join("、");
+        ollamaStatus.textContent = `Ollama 连接成功。当前可见模型：${models || "已连接，但未返回模型列表"}`;
+      } catch (error) {
+        ollamaStatus.textContent = `Ollama 连接失败：${error.message || "请确认本地服务已启动"}`;
+      }
+    }
+
+    async function testSearchConnection() {
+      const settings = saveSettings();
+      searchStatus.textContent = "正在测试网络参考接口...";
+      try {
+        const refs = await fetchWebReferences("银行账户管理费 会计 处理", settings);
+        searchStatus.textContent = refs.length
+          ? `网络参考接口可用，已获取 ${refs.length} 条摘要：${refs.map((ref) => ref.title).join("、")}`
+          : "接口已调用，但未返回可用参考摘要。";
+      } catch (error) {
+        searchStatus.textContent = `网络参考测试失败：${error.message || "请检查接口地址或浏览器跨域限制"}`;
+      }
+    }
+
+    document.getElementById("generateBehavior").addEventListener("click", async () => {
+      const analysis = await refreshBehaviorAnalysis();
       const records = buildBehaviorRecords(analysis);
       records.slice().reverse().forEach((record) => generatedItems.unshift(record));
       behaviorUploads = [];
@@ -3066,8 +3486,22 @@
       renderLibrary(searchInput.value);
     });
 
-    behaviorText.addEventListener("input", renderBehaviorAnalysis);
-    document.getElementById("analyzeBehaviorBtn").addEventListener("click", renderBehaviorAnalysis);
+    behaviorText.addEventListener("input", () => {
+      aiAnalysisState = {
+        aiEnabled: loadSettings().enableAiAssist,
+        aiUsed: false,
+        webUsed: false,
+        refs: [],
+        aiResult: null,
+        loading: false,
+        error: ""
+      };
+      renderBehaviorAnalysis();
+    });
+    document.getElementById("analyzeBehaviorBtn").addEventListener("click", refreshBehaviorAnalysis);
+    document.getElementById("saveSettingsBtn").addEventListener("click", saveSettings);
+    document.getElementById("testOllamaBtn").addEventListener("click", testOllamaConnection);
+    document.getElementById("testSearchBtn").addEventListener("click", testSearchConnection);
 
     previewDownloadBtn.addEventListener("click", () => {
       if (currentPreviewItem) {
@@ -3121,6 +3555,9 @@
       loginShell.classList.add("hidden");
     }
 
+    const initialSettings = loadSettings();
+    applySettingsToForm(initialSettings);
+    routeTo(activePage);
     renderUploadList(voucherFileList, voucherUploads);
     renderUploadList(behaviorFileList, behaviorUploads);
     renderUploadList(taxFileList, taxUploads);
