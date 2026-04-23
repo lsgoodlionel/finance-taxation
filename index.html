@@ -988,6 +988,17 @@
       text-align: center;
     }
 
+    .note-box {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #faf4ec;
+      border: 1px solid rgba(54, 62, 58, 0.08);
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+
     .uploader-box,
     .bind-panel {
       margin-top: 16px;
@@ -1741,9 +1752,9 @@
       { category: "财务", name: "小企业资产负债表", desc: "参照会小企01表样式展示期末余额与年初余额。", code: "FIN-202604-001", owner: "财务经理", amount: "资产总计 1,268,600.00", format: "balance_sheet", summary: "按小企业会计准则格式列示资产、负债和所有者权益。", sections: { lines: ["货币资金 528,600.00 元", "应收账款 186,000.00 元", "固定资产 380,000.00 元"], checks: ["资产总计 = 负债和所有者权益总计", "期末与年初口径一致", "适合月报、年报展示"] } },
       { category: "财务", name: "小企业利润表", desc: "参照会小企02表样式展示营业收入、成本、费用和净利润。", code: "FIN-202604-002", owner: "财务经理", amount: "净利润 92,480.00", format: "income_statement", summary: "按费用功能分类展示本期经营成果。", sections: { lines: ["营业收入 865,000.00 元", "营业成本 562,000.00 元", "财务费用 2,840.00 元"], checks: ["净利润已测算", "税金及附加单独列示", "适合月报、年报展示"] } },
       { category: "财务", name: "现金流量表", desc: "按经营、投资、筹资活动分类展示现金流量。", code: "FIN-202604-003", owner: "财务经理", amount: "净增加额 128,600.00", format: "cashflow_statement", summary: "参照现金流量表基本列报要求展示现金流入和流出。", sections: { lines: ["经营活动现金流入 928,000.00 元", "经营活动现金流出 742,000.00 元", "筹资活动现金流入 60,000.00 元"], checks: ["经营/投资/筹资分类展示", "期末现金余额已衔接", "适合管理与报送准备"] } },
-      { category: "税务", name: "增值税及附加申报底稿", desc: "自动对应销项、进项、附加税计提与申报口径。", code: "TAX-202604-001", owner: "财税主管", amount: "应纳税额 18,720.00", summary: "按申报期自动汇总增值税及附加税底稿。", sections: { lines: ["销项税额 50,180.00 元", "进项税额 31,460.00 元", "附加税 2,246.40 元"], checks: ["申报口径一致", "待导出税务系统", "复核节点待完成"] } },
-      { category: "税务", name: "企业所得税预缴测算表", desc: "按照收入、成本、费用和纳税调整项目自动测算。", code: "TAX-202604-002", owner: "财务总监", amount: "预缴税额 26,400.00", summary: "结合利润总额和纳税调整事项进行预缴测算。", sections: { lines: ["利润总额 352,000.00 元", "可扣除项目 246,400.00 元", "预缴企业所得税 26,400.00 元"], checks: ["纳税调整 4 项", "加计扣除已反映", "测算版本 V2"] } },
-      { category: "税务", name: "个人所得税申报清单", desc: "适配工资薪金、奖金、补贴等个税申报明细导出。", code: "TAX-202604-003", owner: "薪酬专员", amount: "申报人数 26", summary: "用于本期工资薪金个税集中申报。", sections: { lines: ["工资薪金申报人数 26 人", "补贴奖金申报条目 9 条", "专项附加扣除已同步"], checks: ["身份信息校验通过", "银行代发匹配完成", "导出模板已准备"] } },
+      { category: "税务", name: "增值税及附加申报底稿", desc: "自动对应销项、进项、附加税计提与申报口径。", code: "TAX-202604-001", owner: "财税主管", amount: "应纳税额 18,720.00", format: "vat_return", summary: "按申报期自动汇总增值税及附加税底稿。", sections: { lines: ["销项税额 50,180.00 元", "进项税额 31,460.00 元", "附加税 2,246.40 元"], checks: ["申报口径一致", "待导出税务系统", "复核节点待完成"] } },
+      { category: "税务", name: "企业所得税预缴测算表", desc: "按照收入、成本、费用和纳税调整项目自动测算。", code: "TAX-202604-002", owner: "财务总监", amount: "预缴税额 26,400.00", format: "cit_return", summary: "结合利润总额和纳税调整事项进行预缴测算。", sections: { lines: ["利润总额 352,000.00 元", "可扣除项目 246,400.00 元", "预缴企业所得税 26,400.00 元"], checks: ["纳税调整 4 项", "加计扣除已反映", "测算版本 V2"] } },
+      { category: "税务", name: "个人所得税申报清单", desc: "适配工资薪金、奖金、补贴等个税申报明细导出。", code: "TAX-202604-003", owner: "薪酬专员", amount: "申报人数 26", format: "iit_return", summary: "用于本期工资薪金个税集中申报。", sections: { lines: ["工资薪金申报人数 26 人", "补贴奖金申报条目 9 条", "专项附加扣除已同步"], checks: ["身份信息校验通过", "银行代发匹配完成", "导出模板已准备"] } },
       { category: "归档", name: "原始单据归档目录", desc: "自动编号全部原始资料并建立电子目录。", code: "ARC-202604-001", owner: "档案管理员", amount: "资料数 286", summary: "汇总本月全部原始单据并形成统一归档目录。", sections: { lines: ["采购资料 74 份", "销售资料 81 份", "费用与工资资料 131 份"], checks: ["编号连续", "缺失附件 2 份", "待补录清单已列示"] } },
       { category: "归档", name: "外送税务资料包清单", desc: "汇总需要提交税务系统或外部顾问的全部资料。", code: "ARC-202604-002", owner: "财税主管", amount: "资料包 18 份", summary: "用于税务系统报送和外部顾问资料交付。", sections: { lines: ["增值税附件 6 份", "个税附件 4 份", "所得税测算及备查 8 份"], checks: ["封面已生成", "目录已编号", "打包下载可用"] } },
       { category: "归档", name: "年度审计备查索引", desc: "按期间和业务类型输出完整备查资料索引。", code: "ARC-202604-003", owner: "审计联络人", amount: "索引项 512", summary: "为年度审计提供完整备查索引和定位入口。", sections: { lines: ["收入循环索引 162 项", "采购付款索引 143 项", "费用薪酬索引 207 项"], checks: ["期间标签完整", "业务映射完整", "可追溯至原始单据"] } }
@@ -2314,25 +2325,39 @@
       return item.content || `${item.name}\n来源：${item.source || "系统上传"}\n该附件可在正式系统中预览原始文件。`;
     }
 
+    function resolvePreviewMeta(item) {
+      return {
+        unitName: item.unitName || "示例中小企业（上海）有限公司",
+        taxNo: item.taxNo || "91310000MA1K12345X",
+        period: item.period || "2026年04月01日至2026年04月30日",
+        date: item.date || "2026-04-23",
+        amountUnit: item.amountUnit || "元"
+      };
+    }
+
     function renderVoucherPreview(item) {
+      const meta = resolvePreviewMeta(item);
       return `
         <div class="official-title">记 账 凭 证</div>
-        <div class="official-subtitle">依据《会计基础工作规范》必备字段组织展示</div>
+        <div class="official-subtitle">依据《会计基础工作规范》记账凭证基本项目组织展示</div>
         <div class="official-meta">
+          <div>编制单位：${escapeHtml(meta.unitName)}</div>
           <div>凭证编号：${escapeHtml(item.code || "记-0001")}</div>
-          <div>日期：${escapeHtml(item.date || "2026-04-23")}</div>
+          <div>填制日期：${escapeHtml(meta.date)}</div>
           <div>附件张数：${escapeHtml(String(getAttachmentCount(item)))}</div>
         </div>
         <table class="official-table">
           <tr><td class="label">摘要</td><td colspan="3">${escapeHtml(item.summary || item.note || "")}</td></tr>
+          <tr><td class="label">业务日期</td><td>${escapeHtml(meta.date)}</td><td class="label">金额单位</td><td>${escapeHtml(meta.amountUnit)}</td></tr>
           <tr><td class="label">会计科目</td><td>借：${escapeHtml((item.accounts || ["相关科目待复核"]).join("、"))}</td><td>贷：${escapeHtml(item.party || "相关往来/银行存款")}</td><td>金额：${escapeHtml(item.amount || "待复核")}</td></tr>
-          <tr><td class="label">原始凭证</td><td colspan="3">${escapeHtml(item.note || "已附后")}</td></tr>
+          <tr><td class="label">所附原始凭证</td><td colspan="3">${escapeHtml(item.note || "已附后")}</td></tr>
         </table>
         <table class="official-table">
           <tr><th>会计科目</th><th>明细说明</th><th>借方金额</th><th>贷方金额</th></tr>
           <tr><td>${escapeHtml(item.accounts?.[0] || "待复核科目")}</td><td>${escapeHtml(item.sections?.lines?.[0] || "经济业务内容")}</td><td>${escapeHtml(item.amount || "0.00")}</td><td></td></tr>
           <tr><td>${escapeHtml(item.accounts?.[1] || "银行存款/应付相关科目")}</td><td>${escapeHtml(item.sections?.lines?.[1] || "对应对方科目")}</td><td></td><td>${escapeHtml(item.amount || "0.00")}</td></tr>
         </table>
+        <div class="note-box">常规要求：记账凭证应包含填制日期、凭证编号、经济业务摘要、会计科目、金额、所附原始凭证张数及相关签章栏位；收付款凭证通常还会保留出纳签章位。</div>
         <div class="signature-row">
           <div>制单</div>
           <div>稽核</div>
@@ -2343,48 +2368,64 @@
     }
 
     function renderArchivePreview(item) {
+      const meta = resolvePreviewMeta(item);
       return `
         <div class="official-title">原 始 凭 证 归 档 封 面</div>
-        <div class="official-subtitle">按会计档案和原始凭证留存习惯整理展示</div>
+        <div class="official-subtitle">按原始凭证基本要素与会计档案归档习惯整理展示</div>
         <table class="official-table">
-          <tr><td class="label">归档编号</td><td>${escapeHtml(item.code || "ARC-0001")}</td><td class="label">归档日期</td><td>${escapeHtml(item.date || "2026-04-23")}</td></tr>
+          <tr><td class="label">归档编号</td><td>${escapeHtml(item.code || "ARC-0001")}</td><td class="label">归档日期</td><td>${escapeHtml(meta.date)}</td></tr>
           <tr><td class="label">资料名称</td><td>${escapeHtml(item.title)}</td><td class="label">责任部门</td><td>${escapeHtml(item.owner || "财务部")}</td></tr>
+          <tr><td class="label">接受单位</td><td>${escapeHtml(meta.unitName)}</td><td class="label">金额单位</td><td>${escapeHtml(meta.amountUnit)}</td></tr>
           <tr><td class="label">关联事项</td><td colspan="3">${escapeHtml(item.summary || item.note || "")}</td></tr>
           <tr><td class="label">附件目录</td><td colspan="3">${escapeHtml((item.attachments || []).map((a) => a.name).join("、") || "暂无附件")}</td></tr>
         </table>
         <table class="official-table">
-          <tr><th>序号</th><th>凭证/附件名称</th><th>来源</th><th>备注</th></tr>
-          ${(item.attachments || []).map((a, idx) => `<tr><td>${idx + 1}</td><td>${escapeHtml(a.name)}</td><td>${escapeHtml(a.source || "系统上传")}</td><td>可预览、可下载</td></tr>`).join("") || '<tr><td>1</td><td>待补附件</td><td>—</td><td>可后续补传</td></tr>'}
+          <tr><th>序号</th><th>凭证/附件名称</th><th>来源</th><th>金额/说明</th><th>备注</th></tr>
+          ${(item.attachments || []).map((a, idx) => `<tr><td>${idx + 1}</td><td>${escapeHtml(a.name)}</td><td>${escapeHtml(a.source || "系统上传")}</td><td>${escapeHtml(item.amount || "—")}</td><td>可预览、可下载</td></tr>`).join("") || '<tr><td>1</td><td>待补附件</td><td>—</td><td>—</td><td>可后续补传</td></tr>'}
         </table>
+        <div class="note-box">常规要求：原始凭证通常应具备凭证名称、填制日期、填制单位或填制人、经办签章、接受单位、经济业务内容、数量/单价/金额等基本要素；系统展示页以归档封面和附件目录形式留痕。</div>
       `;
     }
 
     function renderTaxPreview(item) {
       const title = item.title || "";
+      const meta = resolvePreviewMeta(item);
       if (title.includes("增值税")) {
         return `
           <div class="official-title">增 值 税 及 附 加 税 费 申 报 表</div>
-          <div class="official-subtitle">参考国家税务总局申报表主表字段组织展示</div>
+          <div class="official-subtitle">参考国家税务总局申报表主表字段组织展示（示意版）</div>
           <div class="official-meta">
-            <div>税款所属期：2026年04月01日至2026年04月30日</div>
-            <div>纳税人名称：示例中小企业</div>
-            <div>金额单位：元（列至角分）</div>
+            <div>税款所属期：${escapeHtml(meta.period)}</div>
+            <div>纳税人名称：${escapeHtml(meta.unitName)}</div>
+            <div>纳税人识别号：${escapeHtml(meta.taxNo)}</div>
           </div>
           <table class="official-table">
-            <tr><th>项目</th><th>本期数</th><th>本年累计</th><th>说明</th></tr>
-            <tr><td>销项税额</td><td>50,180.00</td><td>182,400.00</td><td>对应销项发票及未开票收入</td></tr>
-            <tr><td>进项税额</td><td>31,460.00</td><td>116,280.00</td><td>对应已勾选认证票据</td></tr>
-            <tr><td>本期应纳增值税额</td><td>18,720.00</td><td>66,120.00</td><td>销项减进项</td></tr>
-            <tr><td>城市维护建设税</td><td>1,310.40</td><td>4,628.40</td><td>附加税费</td></tr>
-            <tr><td>教育费附加</td><td>561.60</td><td>1,983.60</td><td>附加税费</td></tr>
-            <tr><td>地方教育附加</td><td>374.40</td><td>1,322.40</td><td>附加税费</td></tr>
+            <tr><th>项目</th><th>栏次</th><th>本期数</th><th>本年累计</th><th>说明</th></tr>
+            <tr><td>按适用税率计税销售额</td><td>1</td><td>386,000.00</td><td>1,462,000.00</td><td>对应销项口径</td></tr>
+            <tr><td>销项税额</td><td>11</td><td>50,180.00</td><td>182,400.00</td><td>对应销项发票及未开票收入</td></tr>
+            <tr><td>进项税额</td><td>12</td><td>31,460.00</td><td>116,280.00</td><td>对应已勾选认证票据</td></tr>
+            <tr><td>本期应纳税额</td><td>20</td><td>18,720.00</td><td>66,120.00</td><td>销项减进项</td></tr>
+            <tr><td>城市维护建设税</td><td>23</td><td>1,310.40</td><td>4,628.40</td><td>附加税费</td></tr>
+            <tr><td>教育费附加</td><td>24</td><td>561.60</td><td>1,983.60</td><td>附加税费</td></tr>
+            <tr><td>地方教育附加</td><td>25</td><td>374.40</td><td>1,322.40</td><td>附加税费</td></tr>
           </table>
+          <div class="signature-row">
+            <div>纳税人（签章）</div>
+            <div>经办人</div>
+            <div>代理机构</div>
+            <div>受理税务机关</div>
+          </div>
         `;
       }
       if (title.includes("企业所得税")) {
         return `
           <div class="official-title">企 业 所 得 税 预 缴 测 算 表</div>
-          <div class="official-subtitle">按预缴测算习惯列示利润、调整与应纳税额</div>
+          <div class="official-subtitle">按企业所得税预缴测算和申报准备习惯列示</div>
+          <div class="official-meta">
+            <div>税款所属期：${escapeHtml(meta.period)}</div>
+            <div>纳税人名称：${escapeHtml(meta.unitName)}</div>
+            <div>纳税人识别号：${escapeHtml(meta.taxNo)}</div>
+          </div>
           <table class="official-table">
             <tr><th>项目</th><th>金额</th><th>说明</th></tr>
             <tr><td>利润总额</td><td>352,000.00</td><td>依据本期利润表</td></tr>
@@ -2393,27 +2434,35 @@
             <tr><td>应纳税所得额</td><td>308,000.00</td><td>测算口径</td></tr>
             <tr><td>预缴税额</td><td>26,400.00</td><td>按适用税率测算</td></tr>
           </table>
+          <div class="note-box">系统展示为申报前测算底稿。正式申报仍应以税务机关当期有效申报表和填报口径为准，并保留纳税调整备查资料。</div>
         `;
       }
       if (title.includes("个人所得税")) {
         return `
           <div class="official-title">个 人 所 得 税 扣 缴 申 报 清 单</div>
           <div class="official-subtitle">参考扣缴申报管理办法的全员全额申报信息组织展示</div>
+          <div class="official-meta">
+            <div>所属期：${escapeHtml(meta.period)}</div>
+            <div>扣缴义务人：${escapeHtml(meta.unitName)}</div>
+            <div>统一社会信用代码：${escapeHtml(meta.taxNo)}</div>
+          </div>
           <table class="official-table">
-            <tr><th>姓名</th><th>所得项目</th><th>收入额</th><th>扣除额</th><th>应纳税额</th></tr>
+            <tr><th>姓名</th><th>所得项目</th><th>收入额</th><th>专项扣除</th><th>预扣预缴税额</th></tr>
             <tr><td>张某</td><td>工资薪金</td><td>18,000.00</td><td>7,500.00</td><td>315.00</td></tr>
             <tr><td>李某</td><td>工资薪金</td><td>16,500.00</td><td>7,200.00</td><td>240.00</td></tr>
             <tr><td colspan="5">其余人员略，正式系统可展开全员全额明细。</td></tr>
           </table>
+          <div class="note-box">扣缴义务人应依法办理全员全额扣缴申报；展示页突出人员、所得项目、支付数额、扣除事项和税额等核心字段。</div>
         `;
       }
       return "";
     }
 
     function renderBalanceSheetPreview() {
+      const meta = resolvePreviewMeta({});
       return `
         <div class="official-title">资 产 负 债 表</div>
-        <div class="official-subtitle">会小企01表 · 编制单位：示例中小企业 · 单位：元</div>
+        <div class="official-subtitle">会小企01表 · 编制单位：${escapeHtml(meta.unitName)} · 单位：元</div>
         <table class="official-table">
           <tr><th>资产</th><th>期末余额</th><th>年初余额</th><th>负债和所有者权益</th><th>期末余额</th><th>年初余额</th></tr>
           <tr><td>货币资金</td><td>528,600.00</td><td>402,300.00</td><td>短期借款</td><td>120,000.00</td><td>160,000.00</td></tr>
@@ -2426,9 +2475,10 @@
     }
 
     function renderIncomeStatementPreview() {
+      const meta = resolvePreviewMeta({});
       return `
         <div class="official-title">利 润 表</div>
-        <div class="official-subtitle">会小企02表 · 编制单位：示例中小企业 · 单位：元</div>
+        <div class="official-subtitle">会小企02表 · 编制单位：${escapeHtml(meta.unitName)} · 单位：元</div>
         <table class="official-table">
           <tr><th>项目</th><th>本月金额</th><th>本年累计</th></tr>
           <tr><td>营业收入</td><td>865,000.00</td><td>3,206,000.00</td></tr>
@@ -2444,9 +2494,10 @@
     }
 
     function renderCashflowPreview() {
+      const meta = resolvePreviewMeta({});
       return `
         <div class="official-title">现 金 流 量 表</div>
-        <div class="official-subtitle">会小企03表风格 · 按经营、投资、筹资活动列示</div>
+        <div class="official-subtitle">会小企03表风格 · 编制单位：${escapeHtml(meta.unitName)} · 单位：元</div>
         <table class="official-table">
           <tr><th>项目</th><th>本月金额</th></tr>
           <tr><td>经营活动产生的现金流入小计</td><td>928,000.00</td></tr>
@@ -2463,6 +2514,7 @@
       if (item.format === "balance_sheet") return renderBalanceSheetPreview();
       if (item.format === "income_statement") return renderIncomeStatementPreview();
       if (item.format === "cashflow_statement") return renderCashflowPreview();
+      if (item.format === "vat_return" || item.format === "cit_return" || item.format === "iit_return") return renderTaxPreview(item);
       if ((item.type || "").includes("税务")) return renderTaxPreview(item);
       if ((item.type || "").includes("财务单据")) return renderVoucherPreview(item);
       if ((item.type || "").includes("归档") || (item.type || "").includes("合规提醒")) return renderArchivePreview(item);
