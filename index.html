@@ -502,12 +502,48 @@
       gap: 12px;
     }
 
+    .generated-group {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.38);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+    }
+
+    .generated-group-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .generated-group-head strong {
+      display: block;
+      font-size: 1rem;
+    }
+
+    .generated-summary {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(199, 92, 45, 0.08);
+      border: 1px solid rgba(199, 92, 45, 0.16);
+      color: var(--ink);
+      line-height: 1.7;
+    }
+
     .record-item {
       padding: 16px;
       border-radius: 20px;
       background: rgba(255,255,255,0.66);
       display: grid;
       gap: 10px;
+    }
+
+    .record-item.current {
+      border: 1px solid rgba(199, 92, 45, 0.2);
+      box-shadow: 0 10px 30px rgba(199, 92, 45, 0.08);
     }
 
     .record-top {
@@ -545,6 +581,20 @@
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
+    }
+
+    .record-note-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .record-note {
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.66);
+      border: 1px solid rgba(54, 62, 58, 0.08);
+      color: var(--ink);
+      line-height: 1.6;
     }
 
     .mini-btn {
@@ -1599,9 +1649,10 @@
 
         <div class="panel">
           <div class="panel-head">
-            <h3>最近生成记录</h3>
-            <span class="meta">仅展示实际生成或补传绑定后更新的记录，当前操作生成项会置顶</span>
+            <h3>本次生成与历史记录</h3>
+            <span class="meta">本次输入刚生成的单据会单独置顶展示，历史记录会分开保留，避免混淆</span>
           </div>
+          <div class="generated-summary" id="generatedSummary">当前还没有新的生成批次。完成一次识别并生成后，这里会单独列出本次新增单据、缺失凭证和补录入口。</div>
           <div class="generated-stack" id="generatedList"></div>
         </div>
       </div>
@@ -1703,7 +1754,7 @@
             </div>
             <div class="field">
               <label for="ollamaModel">模型名称</label>
-              <input id="ollamaModel" type="text" value="qwen2.5:7b" />
+              <input id="ollamaModel" type="text" value="gemma4:latest" />
             </div>
             <div class="field">
               <label for="ollamaTemperature">温度</label>
@@ -1902,7 +1953,7 @@
         id: "bank_fee",
         scene: "银行账户管理费",
         domain: "资金类",
-        keywords: ["银行", "账户管理费", "管理费", "手续费", "结算费", "服务费", "扣除"],
+        keywords: ["账户管理费", "银行账户管理费", "结算费", "银行手续费", "扣除手续费", "扣除管理费"],
         summary: "银行直接扣收账户管理费、手续费、结算费等。",
         accounts: ["财务费用", "银行存款"],
         taxes: ["企业所得税凭证留存", "增值税直接收费金融服务凭证关注"],
@@ -1933,7 +1984,7 @@
         id: "sales_receipt",
         scene: "销售收款",
         domain: "收入类",
-        keywords: ["收款", "回款", "到账", "客户付款", "销售收入", "销售", "开票", "发货"],
+        keywords: ["收款", "回款", "客户付款", "销售收入", "销售回款", "开票", "发货", "验收收款"],
         summary: "客户回款、销售收款、开票和收入确认相关事项。",
         accounts: ["银行存款", "应收账款", "主营业务收入", "应交税费"],
         taxes: ["增值税销项", "企业所得税收入归集"],
@@ -1944,6 +1995,22 @@
         ],
         tips: ["需区分预收款、已开票未收款、未开票收入等场景。"],
         basis: "企业会计准则收入准则、增值税相关申报规则"
+      },
+      {
+        id: "revenue_adjustment",
+        scene: "收入调整与退款",
+        domain: "收入类",
+        keywords: ["退款", "折让", "红字发票", "冲减收入", "退费", "未开票收入", "跨期履约", "收入调整"],
+        summary: "客户退款、销售折让、红字开票、未开票收入补记和跨期履约等收入调整事项。",
+        accounts: ["主营业务收入", "应交税费", "应收账款/合同负债", "银行存款"],
+        taxes: ["增值税红字及销项调整", "企业所得税收入口径复核"],
+        generatedDocs: [
+          { title: "收入调整审批单", type: "财务单据", note: "登记退款、折让、红字发票或未开票收入补记的业务原因和金额。" },
+          { title: "收入调整附件归档卡", type: "归档资料", note: "归档退款协议、红字信息表、对账单、回单和履约说明。" },
+          { title: "税务口径复核提醒", type: "合规提醒", note: "提示复核收入确认时点、红字开票和纳税调整资料。" }
+        ],
+        tips: ["收入冲减、红字发票和退款必须与合同、对账和付款路径一致。", "未开票收入和跨期履约应同步复核会计与税法口径。"],
+        basis: "企业会计准则收入准则、增值税发票管理及申报规则"
       },
       {
         id: "purchase_payment",
@@ -1965,10 +2032,10 @@
         id: "expense_reimbursement",
         scene: "费用报销",
         domain: "费用类",
-        keywords: ["报销", "差旅", "住宿", "机票", "高铁", "打车", "餐费", "办公费"],
-        summary: "员工垫付后报销，或费用票据整理和付款事项。",
-        accounts: ["管理费用", "销售费用", "银行存款", "其他应付款"],
-        taxes: ["企业所得税税前扣除凭证留存"],
+        keywords: ["报销", "差旅", "住宿", "机票", "高铁", "打车", "餐费", "办公费", "研讨会", "会议", "培训", "会务"],
+        summary: "员工因公务出差、参会或垫付日常费用后报销，需区分交通、住宿、餐饮、会务等费用并留存完整凭证。",
+        accounts: ["管理费用-差旅费/会议费", "销售费用-差旅费", "银行存款", "其他应付款"],
+        taxes: ["企业所得税税前扣除凭证留存", "增值税专票抵扣条件复核"],
         generatedDocs: [
           { title: "费用报销单", type: "财务单据", note: "生成报销主单、用途和审批信息。" },
           { title: "报销附件索引", type: "归档资料", note: "归档发票、审批单、行程单和付款凭证。" },
@@ -1976,6 +2043,70 @@
         ],
         tips: ["报销类事项不应误并入工资薪金或采购付款。"],
         basis: "会计基础工作规范、企业所得税税前扣除凭证管理办法"
+      },
+      {
+        id: "business_entertainment",
+        scene: "业务招待费",
+        domain: "费用类",
+        keywords: ["业务招待", "招待费", "招待客户", "客户吃饭", "客户用餐", "宴请客户", "商务宴请", "招待"],
+        summary: "客户接待、商务宴请、业务洽谈用餐等业务招待事项。",
+        accounts: ["管理费用-业务招待费", "销售费用-业务招待费", "银行存款", "其他应付款"],
+        taxes: ["企业所得税业务招待费扣除限额关注", "税前扣除凭证留存"],
+        generatedDocs: [
+          { title: "业务招待费登记单", type: "财务单据", note: "登记招待对象、事由、金额和参与人员。" },
+          { title: "业务招待附件归档卡", type: "归档资料", note: "归档发票、付款凭证和业务接待说明。" },
+          { title: "业务招待税务复核提醒", type: "合规提醒", note: "提醒复核税前扣除口径和备查资料完整性。" }
+        ],
+        tips: ["应保留招待对象、业务事由、参与人员和付款凭证。", "会计科目应结合企业内部核算口径在管理费用和销售费用间进一步细分。"],
+        basis: "会计基础工作规范、企业所得税法及实施条例、企业所得税税前扣除凭证管理办法"
+      },
+      {
+        id: "startup_setup_cost",
+        scene: "设立与开办费用",
+        domain: "创业准备类",
+        keywords: ["注册公司", "公司设立", "开办费", "刻章", "工商注册", "银行开户", "验资", "代理记账服务费", "税控", "发票开通"],
+        summary: "公司设立、工商税务开户、刻章、开户、代理记账和发票开通等开办期事项。",
+        accounts: ["管理费用-开办费", "长期待摊费用", "银行存款", "其他应付款"],
+        taxes: ["印花税关注", "税前扣除凭证留存", "税务登记及票种核定留痕"],
+        generatedDocs: [
+          { title: "设立与开办费用登记单", type: "财务单据", note: "登记设立事项、服务机构、费用类型和支付时间。" },
+          { title: "开办期资料归档卡", type: "归档资料", note: "归档营业执照、章程、开户资料、服务合同和发票。" },
+          { title: "设立合规检查清单", type: "合规提醒", note: "核对税务登记、发票开通、印花税及留档资料。" }
+        ],
+        tips: ["开办期支出需结合企业会计政策判断一次费用化或按规定摊销。", "工商、税务、开户和刻章类资料应长期留存备查。"],
+        basis: "会计基础工作规范、小企业会计准则、印花税法、企业所得税税前扣除凭证管理办法"
+      },
+      {
+        id: "cloud_software_service",
+        scene: "云服务与软件订阅",
+        domain: "费用类",
+        keywords: ["云服务", "服务器", "阿里云", "腾讯云", "华为云", "软件订阅", "SaaS", "域名", "短信服务", "API 服务", "开发工具订阅"],
+        summary: "科技创业公司常见的云主机、域名、SaaS、开发工具和 API 能力订阅支出。",
+        accounts: ["管理费用-办公费/服务费", "研发费用", "销售费用", "银行存款"],
+        taxes: ["增值税进项发票留存", "企业所得税税前扣除凭证留存"],
+        generatedDocs: [
+          { title: "云服务与订阅费用登记单", type: "财务单据", note: "登记供应商、周期、服务类型和费用归属部门。" },
+          { title: "云资源与软件附件归档卡", type: "归档资料", note: "归档订单、合同、发票、付款回单和资源截图。" },
+          { title: "订阅费用口径复核单", type: "合规提醒", note: "提示研发、管理、销售费用归集口径和跨期摊销复核。" }
+        ],
+        tips: ["应区分一次性采购、按月订阅和可明确归属于研发项目的支出。", "跨期服务费需关注受益期间与摊销口径。"],
+        basis: "会计基础工作规范、小企业会计准则、企业所得税税前扣除凭证管理办法"
+      },
+      {
+        id: "rd_outsourcing",
+        scene: "研发外包与技术服务",
+        domain: "研发类",
+        keywords: ["研发外包", "技术服务", "软件开发外包", "委外开发", "委外", "技术咨询", "测试服务", "UI 设计服务", "代码开发服务", "委外软件开发服务", "研发验收"],
+        summary: "研发外包、测试、技术咨询和软件开发服务采购等科技公司高频事项。",
+        accounts: ["研发费用", "管理费用", "应付账款", "银行存款"],
+        taxes: ["增值税进项", "企业所得税研发费用加计扣除关注", "合同印花税关注"],
+        generatedDocs: [
+          { title: "研发外包服务验收单", type: "财务单据", note: "登记项目名称、服务内容、验收节点和费用金额。" },
+          { title: "研发外包资料归档卡", type: "归档资料", note: "归档合同、需求说明、验收单、发票和付款回单。" },
+          { title: "研发费用归集复核单", type: "合规提醒", note: "提示研发费用归集、加计扣除口径和留档资料。" }
+        ],
+        tips: ["研发外包费用应与项目、合同、验收成果和付款节点一一对应。", "如拟享受研发费用加计扣除，应同步留存项目立项和过程资料。"],
+        basis: "企业会计准则及小企业会计准则、企业所得税法、研发费用加计扣除相关规则"
       },
       {
         id: "payroll",
@@ -2012,7 +2143,7 @@
         id: "asset_purchase",
         scene: "固定资产采购",
         domain: "资产类",
-        keywords: ["固定资产", "设备", "电脑", "机器", "车辆", "办公家具"],
+        keywords: ["固定资产", "电脑", "显示器", "机器", "车辆", "汽车", "轿车", "买车", "购车", "采购汽车", "购买汽车", "办公家具", "测试设备采购"],
         summary: "购置固定资产并形成付款、入库、验收和后续折旧管理。",
         accounts: ["固定资产", "银行存款", "应付账款"],
         taxes: ["增值税进项", "企业所得税折旧"],
@@ -2028,7 +2159,7 @@
         id: "depreciation",
         scene: "折旧与摊销",
         domain: "资产类",
-        keywords: ["折旧", "摊销", "无形资产", "长期待摊", "摊提"],
+        keywords: ["折旧", "摊销", "计提折旧", "计提摊销", "无形资产", "长期待摊", "摊提"],
         summary: "固定资产折旧、无形资产和长期待摊费用摊销。",
         accounts: ["累计折旧", "累计摊销", "管理费用/制造费用/销售费用"],
         taxes: ["企业所得税折旧摊销"],
@@ -2043,7 +2174,7 @@
         id: "loan_borrowing",
         scene: "借款与融资",
         domain: "融资类",
-        keywords: ["借款", "贷款", "融资", "授信", "借入", "放款"],
+        keywords: ["借款", "贷款", "银行贷款", "流动资金贷款", "授信", "借入", "放款", "贷款到账"],
         summary: "向银行或其他机构借款、提款和融资事项。",
         accounts: ["短期借款", "长期借款", "银行存款"],
         taxes: ["借款利息税前扣除关注"],
@@ -2058,7 +2189,7 @@
         id: "loan_interest",
         scene: "借款利息",
         domain: "融资类",
-        keywords: ["利息支出", "贷款利息", "借款利息", "付息", "融资手续费"],
+        keywords: ["利息支出", "贷款利息", "借款利息", "付息", "融资手续费", "支付利息"],
         summary: "贷款利息、借款利息和融资手续费支付事项。",
         accounts: ["财务费用", "银行存款", "应付利息"],
         taxes: ["企业所得税税前扣除", "增值税发票留存"],
@@ -2073,7 +2204,7 @@
         id: "capital_injection",
         scene: "股东出资",
         domain: "融资类",
-        keywords: ["出资", "注资", "实缴", "增资", "股东打款", "资本金"],
+        keywords: ["股东出资", "出资", "注资", "实缴", "实缴资本", "增资", "股东打款", "资本金", "资本金到账", "股东实缴"],
         summary: "股东出资、资本金到账和增资事项。",
         accounts: ["实收资本", "资本公积", "银行存款"],
         taxes: ["印花税关注"],
@@ -2103,7 +2234,7 @@
         id: "government_subsidy",
         scene: "政府补助",
         domain: "其他收益类",
-        keywords: ["补助", "补贴到账", "政府补助", "奖补", "稳岗返还"],
+        keywords: ["补助", "补贴到账", "政府补助", "奖补", "稳岗返还", "科技创新补助", "创新补助", "专项补助"],
         summary: "收到政府补助、奖补资金和返还事项。",
         accounts: ["其他收益", "营业外收入", "银行存款"],
         taxes: ["企业所得税口径复核"],
@@ -2193,7 +2324,7 @@
         id: "asset_disposal",
         scene: "资产处置",
         domain: "资产类",
-        keywords: ["处置", "出售设备", "报废", "清理", "转让资产"],
+        keywords: ["资产处置", "处置", "出售设备", "出售旧设备", "报废", "清理", "转让资产", "处置损益"],
         summary: "固定资产出售、报废、清理和转让事项。",
         accounts: ["固定资产清理", "营业外收入/支出", "银行存款"],
         taxes: ["增值税", "企业所得税"],
@@ -2208,16 +2339,96 @@
         id: "rent_and_utilities",
         scene: "房租与水电物业",
         domain: "费用类",
-        keywords: ["房租", "租金", "物业费", "水费", "电费", "燃气费"],
-        summary: "办公场地租金、水电、物业等期间费用事项。",
-        accounts: ["管理费用", "销售费用", "制造费用", "银行存款"],
-        taxes: ["企业所得税税前扣除", "增值税发票留存"],
+        keywords: ["房租", "租金", "物业费", "水费", "电费", "燃气费", "办公室租赁", "办公场地", "租房押金", "押金", "押一付三"],
+        summary: "办公场地租金、押金、水电、物业等期间费用和租赁保证金事项。",
+        accounts: ["管理费用", "长期待摊费用/预付账款", "其他应收款", "银行存款"],
+        taxes: ["企业所得税税前扣除", "增值税发票留存", "租赁合同印花税关注"],
         generatedDocs: [
           { title: "期间费用登记单", type: "财务单据", note: "登记租金、水电和物业等费用。"},
           { title: "期间费用附件归档卡", type: "归档资料", note: "归档合同、发票、回单和分摊说明。"}
         ],
-        tips: ["需要区分跨期费用和本期费用。"],
-        basis: "小企业会计准则、企业所得税税前扣除凭证管理办法"
+        tips: ["需要区分押金、预付租金、跨期费用和本期费用。", "租赁合同如属于应税凭证，还需关注印花税计税依据和申报期限。"],
+        basis: "小企业会计准则、企业所得税税前扣除凭证管理办法、中华人民共和国印花税法"
+      },
+      {
+        id: "ip_and_qualification",
+        scene: "知识产权与资质申请",
+        domain: "无形资产类",
+        keywords: ["商标", "软著", "软件著作权", "专利", "知识产权", "资质申请", "ICP", "高新认定", "代理申请"],
+        summary: "商标、软著、专利、ICP 等知识产权和经营资质申请事项。",
+        accounts: ["管理费用", "无形资产", "银行存款", "其他应付款"],
+        taxes: ["税前扣除凭证留存", "无形资产摊销口径关注", "知识产权公示留痕关注"],
+        generatedDocs: [
+          { title: "知识产权与资质费用登记单", type: "财务单据", note: "登记申请事项、代理机构、官方收费与会计处理建议。" },
+          { title: "知识产权资料归档卡", type: "归档资料", note: "归档申请文件、受理通知、缴费凭证、代理合同和发票。" },
+          { title: "资本化与费用化复核单", type: "合规提醒", note: "提示判断一次费用化还是计入无形资产并后续摊销。" }
+        ],
+        tips: ["应区分官方行政收费、代理服务费和后续维护费。", "如形成可辨认无形资产，应同步建立摊销或权属管理台账。"],
+        basis: "会计基础工作规范、小企业会计准则、企业所得税税前扣除凭证管理办法"
+      },
+      {
+        id: "receivable_and_bad_debt",
+        scene: "应收与坏账管理",
+        domain: "往来类",
+        keywords: ["应收账款", "催收", "逾期", "对账函", "坏账", "坏账准备", "长期未回款", "收款风险"],
+        summary: "客户回款跟踪、逾期催收、对账函和坏账风险管理事项。",
+        accounts: ["应收账款", "坏账准备", "信用减值损失", "银行存款"],
+        taxes: ["企业所得税坏账损失资料留存", "收入与回款口径勾稽"],
+        generatedDocs: [
+          { title: "应收账款跟踪单", type: "财务单据", note: "登记账龄、回款节点、催收进展和责任人。" },
+          { title: "对账与催收资料归档卡", type: "归档资料", note: "归档对账函、催收记录、律师函和回款凭证。" },
+          { title: "坏账风险复核提醒", type: "合规提醒", note: "提示复核减值计提、核销条件和税务备查资料。" }
+        ],
+        tips: ["仅凭口述“收不回来”不能直接确认坏账损失，应先形成对账和催收证据链。", "会计减值与税务损失扣除口径可能不同，需要分别留档。"],
+        basis: "小企业会计准则、企业所得税资产损失相关规则"
+      },
+      {
+        id: "monthly_close",
+        scene: "月度结账与申报准备",
+        domain: "月结类",
+        keywords: ["月末结账", "月度结账", "结账", "结转成本", "试算平衡", "月度申报", "结账报表", "月结"],
+        summary: "月末结账、试算平衡、折旧摊销、成本结转和税务申报前准备事项。",
+        accounts: ["本年利润", "税金及附加", "累计折旧/累计摊销", "应交税费"],
+        taxes: ["增值税及附加", "个人所得税", "企业所得税预缴关注", "社保费申报勾稽"],
+        generatedDocs: [
+          { title: "月度结账检查清单", type: "财务单据", note: "按总账、往来、存货、固定资产和费用结转逐项核对。" },
+          { title: "月度申报准备包", type: "税务资料", note: "汇总增值税、个税、附加税和社保相关底稿与附件目录。" },
+          { title: "月末资料归档索引", type: "归档资料", note: "归档试算平衡表、明细账、回单、发票台账和复核记录。" }
+        ],
+        tips: ["正式申报前应先完成总账与辅助台账勾稽。", "系统生成的是结账和申报准备包，不等于已完成正式报税。"],
+        basis: "会计基础工作规范、小企业会计准则、税务申报规则"
+      },
+      {
+        id: "annual_compliance",
+        scene: "年度归档与工商年报",
+        domain: "年结类",
+        keywords: ["工商年报", "企业年报", "年度报告", "年度归档", "税务稽核", "审计备查", "公示系统", "年报公示"],
+        summary: "年度归档、工商年报、公示信息核对、审计备查和税务稽核资料准备事项。",
+        accounts: ["年度报表复核", "归档管理"],
+        taxes: ["工商年报信息一致性", "税务稽核备查", "年度申报资料留存"],
+        generatedDocs: [
+          { title: "年度归档总索引", type: "归档资料", note: "汇总全年原始凭证、台账、报表、合同和申报回执目录。" },
+          { title: "工商年报数据核对表", type: "财务单据", note: "核对股东出资、从业人数、资产负债和营业收入等口径。" },
+          { title: "税务稽核备查资料包", type: "税务资料", note: "整理申报回执、纳税底稿、合同档案和异常事项说明。" }
+        ],
+        tips: ["工商年报、公示系统信息和财务报表口径应保持一致。", "系统展示的是备查包和核对表，实际填报仍需登录官方系统完成。"],
+        basis: "企业信息公示暂行条例、会计基础工作规范、税收征管及备查规则"
+      },
+      {
+        id: "rd_super_deduction",
+        scene: "研发加计扣除与汇算备查",
+        domain: "研发税务类",
+        keywords: ["研发加计扣除", "加计扣除", "研发项目", "委托研发", "研发台账", "研发费用归集", "汇算清缴"],
+        summary: "研发项目归集、委托研发、研发费用加计扣除和企业所得税汇算备查事项。",
+        accounts: ["研发费用", "无形资产", "所得税费用", "应交税费"],
+        taxes: ["企业所得税汇算清缴", "研发费用加计扣除", "委托研发 80% 口径关注"],
+        generatedDocs: [
+          { title: "研发项目归集总表", type: "财务单据", note: "按项目归集人工、材料、折旧、委外和其他研发费用。" },
+          { title: "研发加计扣除备查清单", type: "税务资料", note: "整理立项、过程记录、归集明细、辅助账和优惠享受资料。" },
+          { title: "委外研发核验提醒", type: "合规提醒", note: "提示委托研发合同、成果验收和费用明细的完整性核查。" }
+        ],
+        tips: ["企业应按研发项目分别归集费用，研发与生产经营费用不得混同。", "委托外部研发支出通常按实际发生额的 80% 计入委托方可加计扣除范围，仍需满足资料留存要求。"],
+        basis: "企业所得税法、研发费用加计扣除政策执行指引、会计基础工作规范"
       },
       {
         id: "penalty_donation",
@@ -2251,6 +2462,7 @@
     const previewDate = document.getElementById("previewDate");
     const previewContent = document.getElementById("previewContent");
     const previewDownloadBtn = document.getElementById("previewDownloadBtn");
+    const generatedSummary = document.getElementById("generatedSummary");
     const voucherFiles = document.getElementById("voucherFiles");
     const behaviorFiles = document.getElementById("behaviorFiles");
     const taxFiles = document.getElementById("taxFiles");
@@ -2286,6 +2498,9 @@
     let bindUploads = [];
     let activePage = "home";
     let currentBehaviorAnalysis = null;
+    let latestGeneratedBatch = [];
+    let latestGeneratedSummary = "当前还没有新的生成批次。完成一次识别并生成后，这里会单独列出本次新增单据、缺失凭证和补录入口。";
+    let codeSequence = 0;
     let aiAnalysisState = {
       aiEnabled: true,
       aiUsed: false,
@@ -2293,7 +2508,9 @@
       refs: [],
       aiResult: null,
       loading: false,
-      error: ""
+      error: "",
+      stageLabel: "等待识别",
+      progressSteps: []
     };
 
     const settingsKey = "financeTaxationSystemSettings";
@@ -2302,7 +2519,7 @@
       return {
         enableAiAssist: true,
         ollamaBaseUrl: "http://127.0.0.1:11434",
-        ollamaModel: "qwen2.5:7b",
+        ollamaModel: "gemma4:latest",
         ollamaTemperature: 0.2,
         enableWebReference: false,
         searchProvider: "duckduckgo",
@@ -2314,7 +2531,7 @@
     function loadSettings() {
       try {
         const saved = JSON.parse(localStorage.getItem(settingsKey) || "{}");
-        return { ...getDefaultSettings(), ...saved };
+        return { ...getDefaultSettings(), ...saved, searchApiKey: "" };
       } catch (error) {
         return getDefaultSettings();
       }
@@ -2324,15 +2541,16 @@
       const settings = {
         enableAiAssist: enableAiAssist.checked,
         ollamaBaseUrl: ollamaBaseUrl.value.trim() || "http://127.0.0.1:11434",
-        ollamaModel: ollamaModel.value.trim() || "qwen2.5:7b",
+        ollamaModel: ollamaModel.value.trim() || "gemma4:latest",
         ollamaTemperature: Number(ollamaTemperature.value || 0.2),
         enableWebReference: enableWebReference.checked,
         searchProvider: searchProvider.value,
         searchEndpoint: searchEndpoint.value.trim(),
         searchApiKey: searchApiKey.value.trim()
       };
-      localStorage.setItem(settingsKey, JSON.stringify(settings));
-      ollamaStatus.textContent = "系统设置已保存，行为录入时会按最新配置调用 AI 辅助判断。";
+      const persistentSettings = { ...settings, searchApiKey: "" };
+      localStorage.setItem(settingsKey, JSON.stringify(persistentSettings));
+      ollamaStatus.textContent = "系统设置已保存。检索密钥仅保留在当前页面，不会写入本地存储。";
       return settings;
     }
 
@@ -2344,7 +2562,7 @@
       enableWebReference.checked = !!settings.enableWebReference;
       searchProvider.value = settings.searchProvider;
       searchEndpoint.value = settings.searchEndpoint;
-      searchApiKey.value = settings.searchApiKey;
+      searchApiKey.value = "";
     }
 
     function routeTo(page) {
@@ -2388,6 +2606,24 @@
       }));
     }
 
+    function revokeFileUrls(items) {
+      (items || []).forEach((item) => {
+        if (item?.url) {
+          URL.revokeObjectURL(item.url);
+        }
+      });
+    }
+
+    function isTrustedLocalEndpoint(rawUrl) {
+      try {
+        const parsed = new URL(rawUrl);
+        const hostname = parsed.hostname.toLowerCase();
+        return ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname) || hostname.endsWith(".local");
+      } catch (error) {
+        return false;
+      }
+    }
+
     function renderUploadList(container, items) {
       container.innerHTML = items.length
         ? items.map((item) => `
@@ -2427,6 +2663,72 @@
     function parseBankFromText(text) {
       const banks = ["招商银行", "工商银行", "建设银行", "农业银行", "中国银行", "交通银行", "浦发银行", "民生银行", "中信银行", "兴业银行"];
       return banks.find((bank) => text.includes(bank)) || "开户银行";
+    }
+
+    function formatAmountValue(value) {
+      if (!Number.isFinite(value)) {
+        return "待复核";
+      }
+      return value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function extractParticipantNames(text) {
+      const nameSegment = text.match(/(?:昨天|今天|近日)?(.+?)(?:坐飞机|乘飞机|乘坐飞机|搭乘飞机|座飞机|前往|赴)/);
+      const candidate = (nameSegment?.[1] || "").replace(/[、，,\s和及]/g, "");
+      const names = candidate.match(/(?:张|王|李|赵|刘|陈|杨|黄|吴|周|徐|孙|马|朱|胡|郭|何|高|林|罗|郑|梁|谢|宋|唐|许|韩|冯|邓|曹|彭|曾|肖|田|董|袁|潘|于|蒋|蔡|余|杜|叶|程|魏|苏|吕|丁|任|沈|姚|卢|姜|崔|钟|谭|陆|汪|范|金|石|廖|贾|夏|韦|付|方|白|邹|孟|熊|秦|邱|江|尹|薛|阎|段|雷|侯|龙|史|陶|黎|贺|顾|毛|郝|龚|邵|万|钱|严|赖|覃|洪|武|戴|莫|孔|向|汤)[一-龥]/g) || [];
+      return [...new Set(names)];
+    }
+
+    function parsePerPersonAmount(text, keywords) {
+      const pattern = new RegExp(`(?:${keywords.join("|")})[^，。；\\n]*?每人(?:往返)?(\\d+(?:\\.\\d+)?)元`);
+      const match = text.match(pattern);
+      return match ? Number(match[1]) : 0;
+    }
+
+    function parseSlashAmountList(text) {
+      const match = text.match(/分别为([0-9./／]+)/);
+      if (!match) {
+        return [];
+      }
+      return match[1]
+        .split(/[\/／]/)
+        .map((part) => Number(part))
+        .filter((value) => Number.isFinite(value) && value > 0);
+    }
+
+    function parseCountFromText(text, label) {
+      const match = text.match(new RegExp(`${label}(\\d+)`));
+      return match ? Number(match[1]) : 0;
+    }
+
+    function parseTravelExpenseDetails(text) {
+      const participants = extractParticipantNames(text);
+      const participantCount = participants.length || 0;
+      const airfarePerPerson = parsePerPersonAmount(text, ["飞机票", "机票", "高铁票", "火车票"]);
+      const lodgingPerPerson = parsePerPersonAmount(text, ["住宿", "酒店", "宾馆"]);
+      const mealAmounts = parseSlashAmountList(text);
+      const mealInvoiceCount = parseCountFromText(text, "餐饮发票") || mealAmounts.length;
+      const airfareTotal = airfarePerPerson && participantCount ? airfarePerPerson * participantCount : 0;
+      const lodgingTotal = lodgingPerPerson && participantCount ? lodgingPerPerson * participantCount : 0;
+      const mealTotal = mealAmounts.reduce((sum, value) => sum + value, 0);
+      const total = airfareTotal + lodgingTotal + mealTotal;
+      return {
+        participants,
+        participantCount,
+        airfarePerPerson,
+        lodgingPerPerson,
+        mealAmounts,
+        mealInvoiceCount,
+        airfareTotal,
+        lodgingTotal,
+        mealTotal,
+        total
+      };
+    }
+
+    function getMatchedKeywords(text, analysis) {
+      const keywords = analysis?.keywords || [];
+      return keywords.filter((keyword) => text.includes(keyword));
     }
 
     function classifyBehavior(text) {
@@ -2510,6 +2812,9 @@
       }
 
       if (settings.searchProvider === "custom" && settings.searchEndpoint) {
+        if (settings.searchApiKey && !isTrustedLocalEndpoint(settings.searchEndpoint)) {
+          throw new Error("出于安全考虑，带密钥的自定义检索接口仅支持本地地址，请改用本地代理。");
+        }
         const headers = settings.searchApiKey ? { Authorization: `Bearer ${settings.searchApiKey}` } : {};
         const separator = settings.searchEndpoint.includes("?") ? "&" : "?";
         const response = await fetch(`${settings.searchEndpoint}${separator}q=${encodeURIComponent(query)}`, { headers });
@@ -2581,6 +2886,12 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
     function renderBehaviorAnalysis(analysis = classifyBehavior(behaviorText.value)) {
       currentBehaviorAnalysis = analysis;
       behaviorSceneTag.textContent = analysis.tag;
+      const matchedKeywords = getMatchedKeywords(behaviorText.value.trim(), analysis);
+      const progressSteps = aiAnalysisState.progressSteps?.length
+        ? aiAnalysisState.progressSteps.map((step) => `
+          <li>${escapeHtml(step)}</li>
+        `).join("")
+        : '<li>等待开始识别。</li>';
       behaviorAnalysisList.innerHTML = `
         <div class="analysis-item">
           <strong>识别摘要</strong>
@@ -2613,14 +2924,37 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
           <div class="meta">${escapeHtml(analysis.basis || "系统规则库")}</div>
         </div>
         <div class="analysis-item">
+          <strong>识别依据</strong>
+          <div class="meta">命中关键词：${escapeHtml(matchedKeywords.length ? matchedKeywords.join("、") : "当前未命中明确关键词，系统按通用事项处理。")}</div>
+          <div class="meta" style="margin-top:8px;">本地规则判断：${escapeHtml(analysis.summary || "暂无规则摘要")}</div>
+          <div class="meta" style="margin-top:8px;">AI 归纳依据：${escapeHtml(aiAnalysisState.aiUsed ? (aiAnalysisState.aiResult?.summary || "已调用 AI，但未返回摘要。") : "当前仅展示本地规则判断。")}</div>
+        </div>
+        <div class="analysis-item">
           <strong>AI 辅助判断</strong>
-          <div class="meta">${aiAnalysisState.loading ? "正在调用本地 Ollama 与网络参考进行辅助判断..." : aiAnalysisState.aiUsed ? escapeHtml(aiAnalysisState.aiResult?.summary || "已完成 AI 辅助判断。") : "当前仅展示本地规则判断。可在系统设置中启用 Ollama 与网络参考。"}
+          <div class="meta">${escapeHtml(aiAnalysisState.stageLabel || "等待识别")}
+          </div>
+          <ol class="paper-list" style="margin-top:8px;">${progressSteps}</ol>
+          <div class="meta" style="margin-top:8px;">${aiAnalysisState.loading ? "识别过程中会依次展示本地规则、网络参考、本地模型和最终结论。" : aiAnalysisState.aiUsed ? escapeHtml(aiAnalysisState.aiResult?.summary || "已完成 AI 辅助判断。") : "当前仅展示本地规则判断。可在系统设置中启用 Ollama 与网络参考。"}
           </div>
           <div class="meta" style="margin-top:8px;">${aiAnalysisState.aiUsed && aiAnalysisState.aiResult ? `AI 推荐场景：${escapeHtml(aiAnalysisState.aiResult.recommended_scene || analysis.scene)}；人工复核提示：${escapeHtml(aiAnalysisState.aiResult.risk_note || "无")}` : escapeHtml(aiAnalysisState.error || "无额外 AI 结果")}</div>
           <div class="meta" style="margin-top:8px;">${aiAnalysisState.webUsed && aiAnalysisState.refs.length ? `网络参考：${escapeHtml(aiAnalysisState.refs.map((ref) => ref.title).join("、"))}` : "网络参考：未启用或未获取到结果"}</div>
         </div>
       `;
       return analysis;
+    }
+
+    function updateAiStage(stageLabel, detail, options = {}) {
+      aiAnalysisState.stageLabel = stageLabel;
+      if (detail) {
+        aiAnalysisState.progressSteps = [...(aiAnalysisState.progressSteps || []), detail];
+      }
+      if (typeof options.loading === "boolean") {
+        aiAnalysisState.loading = options.loading;
+      }
+      if (Object.prototype.hasOwnProperty.call(options, "error")) {
+        aiAnalysisState.error = options.error;
+      }
+      renderBehaviorAnalysis(currentBehaviorAnalysis || classifyBehavior(behaviorText.value));
     }
 
     async function refreshBehaviorAnalysis() {
@@ -2633,22 +2967,34 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
         refs: [],
         aiResult: null,
         loading: !!settings.enableAiAssist || !!settings.enableWebReference,
-        error: ""
+        error: "",
+        stageLabel: "正在进行本地规则初判...",
+        progressSteps: []
       };
       renderBehaviorAnalysis(baseAnalysis);
+      updateAiStage("本地规则初判完成", `规则初判结果：${baseAnalysis.scene}`);
 
       try {
+        updateAiStage(
+          settings.enableWebReference ? "正在获取网络参考..." : "已跳过网络参考",
+          settings.enableWebReference ? "开始查询公开网页参考摘要。" : "当前未启用网络参考。"
+        );
         const refs = await fetchWebReferences(`${behaviorText.value.trim()} 财务 税务 会计 处理`, settings);
         aiAnalysisState.refs = refs;
         aiAnalysisState.webUsed = refs.length > 0;
+        updateAiStage(
+          settings.enableAiAssist ? "正在调用本地大模型..." : "已完成规则识别",
+          refs.length ? `网络参考已返回 ${refs.length} 条摘要。` : "网络参考未返回有效摘要。"
+        );
 
         if (settings.enableAiAssist) {
           const aiResult = await callOllamaAnalysis(behaviorText.value, baseAnalysis, refs, settings);
           aiAnalysisState.aiResult = aiResult;
           aiAnalysisState.aiUsed = true;
+          updateAiStage("本地大模型已返回结果", `AI 推荐场景：${aiResult?.recommended_scene || "通用经营事项"}`);
           const matchedRule = findRuleByScene(aiResult?.recommended_scene || "");
           if (matchedRule) {
-            aiAnalysisState.loading = false;
+            updateAiStage("最终识别完成", `最终采用“${matchedRule.scene}”规则输出结果。`, { loading: false });
             return renderBehaviorAnalysis({
               ...matchedRule,
               tag: `AI + 规则识别为${matchedRule.scene}类事项`
@@ -2656,10 +3002,12 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
           }
         }
       } catch (error) {
-        aiAnalysisState.error = error.message || "AI 或网络参考调用失败";
+        updateAiStage("识别过程中出现异常", error.message || "AI 或网络参考调用失败", {
+          error: error.message || "AI 或网络参考调用失败"
+        });
       }
 
-      aiAnalysisState.loading = false;
+      updateAiStage("最终识别完成", `当前采用“${baseAnalysis.scene}”作为输出结果。`, { loading: false });
       return renderBehaviorAnalysis(baseAnalysis);
     }
 
@@ -2702,6 +3050,24 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
 
     function renderVoucherPreview(item) {
       const meta = resolvePreviewMeta(item);
+      const entryLines = item.entryLines?.length
+        ? item.entryLines
+        : [
+            {
+              account: item.accounts?.[0] || "待复核科目",
+              description: item.sections?.lines?.[0] || "经济业务内容",
+              debit: item.amount || "0.00",
+              credit: ""
+            },
+            {
+              account: item.accounts?.[1] || "银行存款/应付相关科目",
+              description: item.sections?.lines?.[1] || "对应对方科目",
+              debit: "",
+              credit: item.amount || "0.00"
+            }
+          ];
+      const debitAccounts = entryLines.filter((line) => line.debit).map((line) => line.account).join("、") || "待复核";
+      const creditAccounts = entryLines.filter((line) => line.credit).map((line) => line.account).join("、") || "待复核";
       return `
         <div class="official-title">记 账 凭 证</div>
         <div class="official-subtitle">依据《会计基础工作规范》记账凭证基本项目组织展示</div>
@@ -2714,13 +3080,19 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
         <table class="official-table">
           <tr><td class="label">摘要</td><td colspan="3">${escapeHtml(item.summary || item.note || "")}</td></tr>
           <tr><td class="label">业务日期</td><td>${escapeHtml(meta.date)}</td><td class="label">金额单位</td><td>${escapeHtml(meta.amountUnit)}</td></tr>
-          <tr><td class="label">会计科目</td><td>借：${escapeHtml((item.accounts || ["相关科目待复核"]).join("、"))}</td><td>贷：${escapeHtml(item.party || "相关往来/银行存款")}</td><td>金额：${escapeHtml(item.amount || "待复核")}</td></tr>
+          <tr><td class="label">会计科目</td><td>借：${escapeHtml(debitAccounts)}</td><td>贷：${escapeHtml(creditAccounts)}</td><td>金额：${escapeHtml(item.amount || "待复核")}</td></tr>
           <tr><td class="label">所附原始凭证</td><td colspan="3">${escapeHtml(item.note || "已附后")}</td></tr>
         </table>
         <table class="official-table">
           <tr><th>会计科目</th><th>明细说明</th><th>借方金额</th><th>贷方金额</th></tr>
-          <tr><td>${escapeHtml(item.accounts?.[0] || "待复核科目")}</td><td>${escapeHtml(item.sections?.lines?.[0] || "经济业务内容")}</td><td>${escapeHtml(item.amount || "0.00")}</td><td></td></tr>
-          <tr><td>${escapeHtml(item.accounts?.[1] || "银行存款/应付相关科目")}</td><td>${escapeHtml(item.sections?.lines?.[1] || "对应对方科目")}</td><td></td><td>${escapeHtml(item.amount || "0.00")}</td></tr>
+          ${entryLines.map((line) => `
+            <tr>
+              <td>${escapeHtml(line.account || "待复核科目")}</td>
+              <td>${escapeHtml(line.description || "经济业务内容")}</td>
+              <td>${escapeHtml(line.debit || "")}</td>
+              <td>${escapeHtml(line.credit || "")}</td>
+            </tr>
+          `).join("")}
         </table>
         <div class="note-box">常规要求：记账凭证应包含填制日期、凭证编号、经济业务摘要、会计科目、金额、所附原始凭证张数及相关签章栏位；收付款凭证通常还会保留出纳签章位。</div>
         <div class="signature-row">
@@ -2960,6 +3332,18 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
       const lines = (item.sections?.lines || []).map((line) => `<li>${escapeHtml(line)}</li>`).join("");
       const checks = (item.sections?.checks || []).map((line) => `<li>${escapeHtml(line)}</li>`).join("");
       const structured = renderStructuredPreview(item);
+      const missingAttachments = (item.missingAttachments || []).length
+        ? `
+          <div class="paper-section">
+            <strong>待补原始凭证</strong>
+            <ol class="paper-list">${item.missingAttachments.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ol>
+          </div>
+        `
+        : "";
+      const followupNotes = [
+        item.followupAction ? `补录入口：${item.followupAction}` : "",
+        item.lookupHint ? `查询入口：${item.lookupHint}` : ""
+      ].filter(Boolean).map((line) => `<div class="record-note">${escapeHtml(line)}</div>`).join("");
       const attachments = (item.attachments || []).map((attachment) => `
         <div class="attachment-row">
           <div>
@@ -3017,6 +3401,8 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
             <ol class="paper-list">${checks || "<li>系统已完成编号、归档与基本合规校验。</li>"}</ol>
           </div>
         `}
+        ${missingAttachments}
+        ${followupNotes ? `<div class="record-note-list">${followupNotes}</div>` : ""}
         <div class="attachment-section">
           <strong>原始凭证与附件</strong>
           ${attachments || '<div class="attachment-empty">当前记录尚未绑定原始凭证，可在录入时上传或后续补充上传。</div>'}
@@ -3043,7 +3429,9 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
     }
 
     function renderGenerated() {
-      generatedList.innerHTML = generatedItems.map((item) => `
+      const latestCodes = new Set((latestGeneratedBatch || []).map((item) => item.code));
+      const historyItems = generatedItems.filter((item) => !latestCodes.has(item.code));
+      const renderRecord = (item, isCurrent = false) => `
         <article class="record-item">
           <div class="record-top">
             <div>
@@ -3053,11 +3441,15 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
                 <span>${item.date}</span>
                 <span>${item.type}</span>
                 <span>附件 ${getAttachmentCount(item)} 份</span>
+                ${(item.missingAttachments || []).length ? `<span>待补凭证 ${(item.missingAttachments || []).length} 项</span>` : "<span>凭证状态 已关联或待补录说明可查</span>"}
               </div>
             </div>
             <span class="pill">${item.type}</span>
           </div>
           <div class="meta">${item.note}</div>
+          ${(item.missingAttachments || []).length ? `<div class="record-note">待补凭证：${escapeHtml(item.missingAttachments.join("、"))}</div>` : ""}
+          ${item.followupAction ? `<div class="record-note">补录入口：${escapeHtml(item.followupAction)}</div>` : ""}
+          ${item.lookupHint ? `<div class="record-note">查询入口：${escapeHtml(item.lookupHint)}</div>` : ""}
           <div class="record-actions">
             <button class="mini-btn" onclick="openPreviewByCode('${item.code}')">在线预览</button>
             <button class="mini-btn" onclick="jumpToRelatedPage('${item.code}')">查看相关页面</button>
@@ -3065,7 +3457,33 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
             <button class="mini-btn" onclick="copyCode('${item.code}')">复制编号</button>
           </div>
         </article>
-      `).join("");
+      `;
+
+      generatedSummary.textContent = latestGeneratedSummary;
+      generatedList.innerHTML = `
+        <section class="generated-group">
+          <div class="generated-group-head">
+            <div>
+              <strong>本次输入刚生成的结果</strong>
+              <div class="tiny">只展示当前这次识别新拆分出来的单据、台账、归档和提醒。</div>
+            </div>
+            <span class="status-chip">${latestGeneratedBatch.length} 项</span>
+          </div>
+          ${latestGeneratedBatch.length
+            ? latestGeneratedBatch.map((item) => renderRecord(item, true).replace('class="record-item"', 'class="record-item current"')).join("")
+            : '<div class="record-item"><strong>当前没有新的生成记录</strong><div class="meta">请在左侧录入并点击“解析并生成”，系统会把本次新增结果单独列在这里。</div></div>'}
+        </section>
+        <section class="generated-group">
+          <div class="generated-group-head">
+            <div>
+              <strong>历史记录</strong>
+              <div class="tiny">以下为之前已有或更早生成的记录，用于持续查询，不与本次结果混排。</div>
+            </div>
+            <span class="pill">历史资料</span>
+          </div>
+          ${historyItems.map((item) => renderRecord(item)).join("")}
+        </section>
+      `;
     }
 
     function renderReports() {
@@ -3122,9 +3540,529 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
 
     function makeCode(prefix) {
       const now = new Date();
-      const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-      const suffix = String(Math.floor(Math.random() * 900) + 100);
-      return `${prefix}-${ym}-${suffix}`;
+      const stamp = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, "0"),
+        String(now.getDate()).padStart(2, "0"),
+        String(now.getHours()).padStart(2, "0"),
+        String(now.getMinutes()).padStart(2, "0"),
+        String(now.getSeconds()).padStart(2, "0"),
+        String(now.getMilliseconds()).padStart(3, "0")
+      ].join("");
+      const existingCodes = new Set([
+        ...generatedItems.map((item) => item.code),
+        ...libraryData.map((item) => item.code),
+        ...reportData.map((item) => item.code)
+      ]);
+
+      let code = "";
+      do {
+        codeSequence = (codeSequence + 1) % 1000;
+        code = `${prefix}-${stamp}-${String(codeSequence).padStart(3, "0")}`;
+      } while (existingCodes.has(code));
+
+      return code;
+    }
+
+    function buildMissingAttachmentNotes(record) {
+      const required = record.requiredAttachments || [];
+      const attachments = record.attachments || [];
+      const attachmentNames = attachments.map((item) => item.name || "");
+      const missing = required.filter((need) => !attachmentNames.some((name) => name.includes(need)));
+      record.missingAttachments = missing;
+      return missing;
+    }
+
+    function finalizeGeneratedRecord(record) {
+      const missing = buildMissingAttachmentNotes(record);
+      return {
+        ...record,
+        followupAction: record.followupAction || "可在“归档检索与导出 -> 原始凭证补充上传”中补齐附件。",
+        lookupHint: record.lookupHint || "补齐后可在“归档检索与导出 -> 资料总库”中按编号或关键字查询。 ",
+        missingAttachments: missing
+      };
+    }
+
+    function buildAssetPurchaseRecords(text, amount, date, owner, attachments) {
+      const amountLabel = `${amount}${amount === "自动识别" ? "" : " 元"}`;
+      const sharedChecks = ["固定资产应区分购置价款、可抵扣进项税额和后续折旧。", "涉及车辆时应继续补录牌照、用途、启用日期和验收信息。", "正式入账前需由财务复核是否达到固定资产确认条件。"];
+      return [
+        finalizeGeneratedRecord({
+          title: "固定资产采购审批与付款单",
+          code: makeCode("DOC"),
+          type: "财务单据",
+          date,
+          note: "根据购车事项生成付款与审批主单，作为资金支付和内部审批留痕。",
+          party: owner,
+          amount: amountLabel,
+          owner: "系统解析",
+          summary: "本次购车事项先形成固定资产采购审批与付款记录。",
+          sections: {
+            lines: [
+              `业务摘要：${text}`,
+              `建议处理：先登记固定资产采购审批、付款节点和资金来源。`,
+              "建议分拆：采购审批单、固定资产卡片、验收交付记录、缺失凭证补录提醒。"
+            ],
+            checks: [...sharedChecks, "付款前需核对购车合同、付款申请和审批链。 "]
+          },
+          attachments,
+          requiredAttachments: ["购车合同", "付款回单", "付款申请", "审批单"],
+          followupAction: "如缺少付款申请、审批单或回单，请到“归档检索与导出 -> 原始凭证补充上传”补录到本记录。",
+          lookupHint: "付款单生成后，可在“资料总库”按“固定资产”或本单编号查询。"
+        }),
+        finalizeGeneratedRecord({
+          title: "固定资产卡片",
+          code: makeCode("LED"),
+          type: "财务台账",
+          date,
+          note: "自动生成固定资产主卡片，用于后续折旧、使用部门和资产编码管理。",
+          party: "固定资产管理",
+          amount: amountLabel,
+          owner: "系统生成",
+          summary: "系统已为购入汽车预生成固定资产卡片，但仍需补全资产属性。",
+          sections: {
+            lines: [
+              `资产名称：汽车`,
+              "建议字段：资产编号、启用日期、使用部门、折旧年限、残值率。",
+              "后续动作：验收完成后确认达到可使用状态，再启动折旧。 "
+            ],
+            checks: [...sharedChecks, "未登记车辆信息前，不建议直接开始计提折旧。 "]
+          },
+          attachments,
+          requiredAttachments: ["机动车销售统一发票", "车辆登记信息", "验收交付单"],
+          followupAction: "缺少发票、验收单或车辆登记资料时，请去“原始凭证补充上传”补到固定资产卡片。",
+          lookupHint: "固定资产卡片补齐后，可在“资料总库”里按“固定资产卡片”快速查询。"
+        }),
+        finalizeGeneratedRecord({
+          title: "固定资产验收与交付记录",
+          code: makeCode("ARC"),
+          type: "归档资料",
+          date,
+          note: "归档交车资料、验收记录、保险与登记信息，形成后续折旧和审计依据。",
+          party: "行政部 / 用车部门",
+          amount: "待补完整附件",
+          owner: "系统生成",
+          summary: "交付和验收资料尚未齐全时，系统会单独标记为待补原始凭证。",
+          sections: {
+            lines: [
+              "建议归档：交车清单、验收签字、保险单、行驶证或登记资料。",
+              "若本次只有一句行为描述而无附件，先生成归档卡并列出缺失凭证清单。",
+              "补齐后可作为固定资产达到预定可使用状态的重要依据。 "
+            ],
+            checks: ["当前记录默认进入待补附件状态。", "如无法取得验收资料，应在说明中备注原因。", "可在归档检索页持续追踪补录状态。 "]
+          },
+          attachments,
+          requiredAttachments: ["交车清单", "验收交付单", "保险单", "行驶证"],
+          followupAction: "验收与交付资料请在“归档检索与导出 -> 原始凭证补充上传”继续补齐。",
+          lookupHint: "后续可在“资料总库”搜索“汽车 验收”或按编号查询归档状态。"
+        }),
+        finalizeGeneratedRecord({
+          title: "固定资产缺失凭证提醒",
+          code: makeCode("CHK"),
+          type: "合规提醒",
+          date,
+          note: "当前仅凭一句经营描述无法直接完成固定资产入账，需要继续补录关键原始凭证。",
+          party: "财务复核",
+          amount: "待补凭证",
+          owner: "系统提醒",
+          summary: "系统已自动列出需要补录和查询的凭证位置。",
+          sections: {
+            lines: [
+              "缺失重点：购车合同、付款回单、机动车销售统一发票、验收交付单、车辆登记信息。",
+              "补录入口：归档检索与导出 -> 原始凭证补充上传。",
+              "查询入口：归档检索与导出 -> 资料总库。"
+            ],
+            checks: ["未补齐凭证时仅生成草稿与提醒，不应直接完成最终入账。", "税务处理需确认发票类型及可抵扣情况。", "如涉及贷款购车，还应补充借款合同与利息资料。 "]
+          },
+          attachments,
+          requiredAttachments: ["购车合同", "付款回单", "机动车销售统一发票", "验收交付单", "车辆登记信息"],
+          followupAction: "请先去“原始凭证补充上传”补齐凭证，再回到本记录复核。",
+          lookupHint: "若已补齐，可在“资料总库”按本提醒编号查询关联记录是否更新为附件完整。"
+        })
+      ];
+    }
+
+    function buildTravelMeetingRecords(text, analysis, date, owner, attachments) {
+      const detail = parseTravelExpenseDetails(text);
+      const participantNames = detail.participants.length ? detail.participants.join("、") : "待补录参会人员";
+      const participantCountLabel = detail.participantCount || "待确认";
+      const airfareTotal = formatAmountValue(detail.airfareTotal);
+      const lodgingTotal = formatAmountValue(detail.lodgingTotal);
+      const mealTotal = formatAmountValue(detail.mealTotal);
+      const totalAmount = formatAmountValue(detail.total);
+      const totalText = detail.total ? `${totalAmount} 元` : "待复核";
+      const commonRequired = ["出差审批单", "会议通知或邀请函", "机票行程单/电子客票", "住宿发票", "付款凭证"];
+      const mealRequired = detail.mealInvoiceCount ? [`餐饮发票 ${detail.mealInvoiceCount} 张`] : ["餐饮发票"];
+      const accountingEntries = [
+        {
+          account: "管理费用-差旅费/会议费",
+          description: `机票 ${airfareTotal} 元 + 住宿 ${lodgingTotal} 元 + 餐饮 ${mealTotal} 元，参会人员 ${participantNames}`,
+          debit: totalText,
+          credit: ""
+        },
+        {
+          account: "其他应付款-员工垫付款",
+          description: `按员工先行垫付口径暂估报销；实际付款时再冲减其他应付款。`,
+          debit: "",
+          credit: totalText
+        }
+      ];
+
+      return [
+        finalizeGeneratedRecord({
+          title: "出差与参会审批单",
+          code: makeCode("DOC"),
+          type: "财务单据",
+          date,
+          note: "对本次北京专业技术研讨会的出差目的、人员、天数和预算进行审批留痕。",
+          party: owner,
+          amount: totalText,
+          owner: "系统解析",
+          summary: "先形成出差与参会审批记录，再进入报销与会计处理。",
+          sections: {
+            lines: [
+              `参会人员：${participantNames}；人数：${participantCountLabel}。`,
+              `差旅测算：机票 ${airfareTotal} 元，住宿 ${lodgingTotal} 元，餐饮 ${mealTotal} 元，合计 ${totalAmount} 元。`,
+              "用途判断：因赴北京参加专业技术研讨会，整体更接近公务差旅/参会报销而非业务招待。 "
+            ],
+            checks: [
+              "应先取得或补录出差审批单、会议通知/邀请函。",
+              "若公司制度要求预算审批或部门负责人签批，应同步留痕。",
+              "仅口述费用明细而未上传票据时，不宜直接完成最终报销。 "
+            ]
+          },
+          attachments,
+          requiredAttachments: ["出差审批单", "会议通知或邀请函", "参会名单"],
+          followupAction: "如缺少出差审批或会议通知，请先在“原始凭证补充上传”补齐后再推进报销。",
+          lookupHint: "审批单生成后，可在“资料总库”按“差旅 审批”或本单编号查询。"
+        }),
+        finalizeGeneratedRecord({
+          title: "差旅费报销单",
+          code: makeCode("DOC"),
+          type: "财务单据",
+          date,
+          note: "按机票、住宿、餐饮三类费用汇总生成差旅报销主单。",
+          party: participantNames,
+          amount: totalText,
+          owner: "系统解析",
+          summary: "系统已按人数和单价自动汇总差旅报销金额。",
+          accounts: ["管理费用-差旅费/会议费", "其他应付款-员工垫付款"],
+          entryLines: accountingEntries,
+          sections: {
+            lines: [
+              `机票：${detail.participantCount || "待确认"} 人 × ${formatAmountValue(detail.airfarePerPerson)} 元 = ${airfareTotal} 元。`,
+              `住宿：${detail.participantCount || "待确认"} 人 × ${formatAmountValue(detail.lodgingPerPerson)} 元 = ${lodgingTotal} 元。`,
+              `餐饮：${detail.mealInvoiceCount || detail.mealAmounts.length || "待确认"} 张发票，合计 ${mealTotal} 元。`
+            ],
+            checks: [
+              "当前按员工先垫付口径生成“借管理费用/贷其他应付款”的报销草稿。",
+              "如已由公司公账直接支付，应改为贷银行存款或应付账款，并按实际支付路径调整。",
+              "餐饮支出应核对是否属于差旅期间合理公务支出，避免混入招待或福利性质费用。 "
+            ]
+          },
+          attachments,
+          requiredAttachments: [...commonRequired, ...mealRequired],
+          followupAction: "请在“原始凭证补充上传”补齐机票、住宿发票、餐饮发票和付款凭证后，再由财务复核报销。",
+          lookupHint: "报销单补齐后，可在“资料总库”按“差旅费报销单”或人员姓名查询。"
+        }),
+        finalizeGeneratedRecord({
+          title: "差旅票据与行程附件索引",
+          code: makeCode("ARC"),
+          type: "归档资料",
+          date,
+          note: "归档会议通知、机票、住宿票据、餐饮发票、付款凭证和行程说明。",
+          party: "归档检索",
+          amount: `${detail.mealInvoiceCount || detail.mealAmounts.length || 0} 张餐饮发票待核`,
+          owner: "系统生成",
+          summary: "建立本次差旅与参会事项的完整归档目录。",
+          sections: {
+            lines: [
+              `应归档的关键附件：会议通知/邀请函、出差审批单、往返机票、住宿发票、餐饮发票 ${detail.mealInvoiceCount || detail.mealAmounts.length || "待确认"} 张。`,
+              `餐饮发票口述金额：${detail.mealAmounts.length ? detail.mealAmounts.join(" / ") : "待补录明细"}。`,
+              "建议附加行程单、签到记录或会议纪要，以增强业务真实性和关联性证明。 "
+            ],
+            checks: [
+              "当前仅识别到文本描述，附件尚未上传。",
+              "如果餐饮发票抬头、日期、地点与差旅行程不一致，应单独标记复核。",
+              "归档完成后可作为税前扣除和内控审计的重要备查资料。 "
+            ]
+          },
+          attachments,
+          requiredAttachments: [...commonRequired, ...mealRequired, "行程说明或签到材料"],
+          followupAction: "请在“原始凭证补充上传”中上传差旅相关票据，系统会自动更新本索引。",
+          lookupHint: "后续可在“资料总库”搜索“北京 研讨会 差旅”或本索引编号查看归档状态。"
+        }),
+        finalizeGeneratedRecord({
+          title: "税前扣除与进项复核单",
+          code: makeCode("CHK"),
+          type: "合规提醒",
+          date,
+          note: "提示核对税前扣除凭证完整性，以及住宿等专票的进项抵扣条件。",
+          party: "财务复核",
+          amount: totalText,
+          owner: "系统提醒",
+          summary: "用于在报销前复核税务风险和凭证完整性。",
+          sections: {
+            lines: [
+              "企业所得税税前扣除应同时满足真实性、合法性、关联性要求。",
+              "住宿费专票如属于员工因公务出差且用于生产经营，通常可按规定判断进项抵扣；非公务或福利性支出则不可抵扣。",
+              "仅有口述“餐饮发票5张”不足以完成税前扣除复核，仍需上传发票、付款凭证和会议/出差证明。 "
+            ],
+            checks: [
+              "若会议主办方统一安排食宿，应区分会议费和差旅费，不宜重复报销。",
+              "应结合公司差旅制度审核是否超标准、是否存在无关餐饮或个人消费。",
+              "如无真实会议通知、审批、行程和票据链条，报销和税前扣除均存在风险。 "
+            ]
+          },
+          attachments,
+          requiredAttachments: [...commonRequired, ...mealRequired],
+          followupAction: "请在报销前完成票据链和审批链补录，再由财务确认税前扣除与进项抵扣口径。",
+          lookupHint: "复核完成后，可在“资料总库”按“税前扣除”或本单编号查询。"
+        })
+      ];
+    }
+
+    function buildMonthlyCloseRecords(text, date, owner, attachments) {
+      const monthLabel = parseMonthFromText(text) || `${new Date(date).getMonth() + 1}月`;
+      return [
+        finalizeGeneratedRecord({
+          title: "月度结账检查清单",
+          code: makeCode("DOC"),
+          type: "财务单据",
+          date,
+          note: "围绕总账、往来、资产、成本、费用和报表一致性生成月结核对清单。",
+          party: `${monthLabel}结账`,
+          amount: "月结任务",
+          owner: owner || "财务负责人",
+          summary: "系统已按月结逻辑生成核对顺序，避免直接跳到申报。",
+          sections: {
+            lines: [
+              "先核对银行、现金、应收应付、发票台账和原始凭证完整性。",
+              "再处理折旧摊销、成本结转、工资社保、税金计提和试算平衡。",
+              "最后生成利润表、资产负债表、现金流量表草稿并完成复核留痕。"
+            ],
+            checks: [
+              "月结不应先于原始凭证归集和往来勾稽。",
+              "试算平衡未通过时，不应进入正式申报阶段。",
+              "系统生成的是检查清单和草稿，不直接替代最终会计结账。"
+            ]
+          },
+          attachments,
+          requiredAttachments: ["试算平衡表", "总账及明细账", "银行对账单", "发票台账", "工资社保台账"]
+        }),
+        finalizeGeneratedRecord({
+          title: "月度申报准备包",
+          code: makeCode("TAX"),
+          type: "税务资料",
+          date,
+          note: "按申报前复核习惯整理增值税、附加税、个税、社保和所得税预缴关注资料。",
+          party: `${monthLabel}申报期`,
+          amount: "待测算",
+          owner: owner || "财税主管",
+          summary: "将月度税务事项统一整理为底稿和附件目录，便于正式申报前复核。",
+          sections: {
+            lines: [
+              "增值税及附加：销项、进项、未开票收入、进项转出和附加税测算。",
+              "个税与社保：工资表、扣缴清单、申报回执和缴费回单勾稽。",
+              "所得税预缴：利润总额、纳税调整事项和税收优惠备查资料初步汇总。"
+            ],
+            checks: [
+              "正式申报仍应在官方系统完成。",
+              "如企业为小规模纳税人或存在简易计税，应按实际身份调整口径。",
+              "当月有红字发票、退款或异常交易时，应先补做收入调整资料。"
+            ]
+          },
+          attachments,
+          requiredAttachments: ["销项汇总表", "进项明细表", "工资表", "个税申报清单", "社保缴费回单"]
+        }),
+        finalizeGeneratedRecord({
+          title: "月末资料归档索引",
+          code: makeCode("ARC"),
+          type: "归档资料",
+          date,
+          note: "归档本月试算平衡、报表、凭证、发票台账和复核记录，形成可回溯月结底稿。",
+          party: "归档检索",
+          amount: "月度资料包",
+          owner: "系统生成",
+          summary: "把月结底稿和申报附件单独归档，后续查账和稽核更容易定位。",
+          sections: {
+            lines: [
+              "建议目录：总账、明细账、凭证汇总、税务底稿、工资社保资料、银行回单。",
+              "系统会把缺失附件单独列为待补，不把口述或截图当作最终合规资料。",
+              "补齐后可在资料总库按月份、税种、业务类型或编号查询。"
+            ],
+            checks: [
+              "缺少申报回执时，归档状态应显示为待补。",
+              "如月度报表与税务口径差异较大，应另附说明。",
+              "年终审计和稽核会直接依赖本索引的完整性。"
+            ]
+          },
+          attachments,
+          requiredAttachments: ["月度报表", "记账凭证", "申报回执", "复核记录"]
+        })
+      ];
+    }
+
+    function buildAnnualComplianceRecords(text, date, owner, attachments) {
+      const yearLabel = String(new Date(date).getFullYear());
+      return [
+        finalizeGeneratedRecord({
+          title: "年度归档总索引",
+          code: makeCode("ARC"),
+          type: "归档资料",
+          date,
+          note: "汇总全年原始凭证、合同、报表、税务底稿和回执目录。",
+          party: `${yearLabel}年度`,
+          amount: "全年资料包",
+          owner: "系统生成",
+          summary: "把全年资料按经营、财务、税务和合规四条线统一索引，便于审计和核查。",
+          sections: {
+            lines: [
+              "经营线：合同、订单、交付、验收、对账和回款资料。",
+              "财务线：凭证、总账、明细账、资产台账、工资社保和月度报表。",
+              "税务线：增值税、个税、企业所得税、印花税申报底稿、回执和异常说明。"
+            ],
+            checks: [
+              "年度索引必须能回溯到每一笔关键业务的原始凭证。",
+              "缺失附件应继续显示待补，而不是默认归档完成。",
+              "外送审计、税务稽核和工商年报核对都应以该索引为入口。"
+            ]
+          },
+          attachments,
+          requiredAttachments: ["全年总账", "全年明细账", "全年申报回执", "合同档案", "原始凭证索引"]
+        }),
+        finalizeGeneratedRecord({
+          title: "工商年报数据核对表",
+          code: makeCode("DOC"),
+          type: "财务单据",
+          date,
+          note: "核对工商年报、公示系统信息与财务账面、税务口径的一致性。",
+          party: `${yearLabel}年度`,
+          amount: "年报核对",
+          owner: owner || "财务负责人",
+          summary: "先做口径核对，再去国家企业信用信息公示系统正式填报，避免系统外数据冲突。",
+          sections: {
+            lines: [
+              "重点核对：股东认缴/实缴、从业人数、资产总额、负债总额、营业总收入、利润总额、纳税总额。",
+              "如本年发生股权变更、知识产权出质、行政许可变化，应同步检查即时公示义务。",
+              "企业信息公示应真实、及时；部分信息可选择不向社会公示，但仍需保持备查一致。 "
+            ],
+            checks: [
+              "该表仅作核对底稿，不代表已完成官方公示系统填报。",
+              "如财务报表、税务申报和年报口径不一致，应单独附说明。",
+              "出资、股权变更等信息形成后通常还涉及 20 个工作日内即时公示要求。"
+            ]
+          },
+          attachments,
+          requiredAttachments: ["营业执照信息", "股东出资资料", "年度财务报表", "纳税申报汇总", "从业人数统计"]
+        }),
+        finalizeGeneratedRecord({
+          title: "税务稽核备查资料包",
+          code: makeCode("TAX"),
+          type: "税务资料",
+          date,
+          note: "集中整理全年申报底稿、异常事项说明、纳税调整和重点合同资料。",
+          party: `${yearLabel}年度`,
+          amount: "备查资料",
+          owner: owner || "财税主管",
+          summary: "把稽核常看的底稿和说明单独打包，降低后续核查翻找成本。",
+          sections: {
+            lines: [
+              "建议包含：增值税进销项底稿、企业所得税预缴与汇算草稿、个税扣缴清单、印花税测算、异常交易说明。",
+              "对收入调整、坏账、政府补助、固定资产和研发费用等高风险项目，应形成专项说明。",
+              "所有申报表在系统中仅展示为底稿/示意版，正式申报应以税务机关当期系统口径为准。"
+            ],
+            checks: [
+              "如发现申报期间口径不一致，应先补充调整说明再归档。",
+              "正式回执未留存时，应继续标记为待补。",
+              "外部顾问或审计机构需要的资料，可从本资料包继续扩展导出。"
+            ]
+          },
+          attachments,
+          requiredAttachments: ["增值税底稿", "企业所得税底稿", "个税申报清单", "印花税测算表", "异常事项说明"]
+        })
+      ];
+    }
+
+    function buildRdSuperDeductionRecords(text, date, owner, attachments) {
+      const monthLabel = parseMonthFromText(text) || "本年度";
+      return [
+        finalizeGeneratedRecord({
+          title: "研发项目归集总表",
+          code: makeCode("DOC"),
+          type: "财务单据",
+          date,
+          note: "按研发项目归集人工、折旧、材料、委外和其他费用，为汇算和研发加计扣除准备基础资料。",
+          party: monthLabel,
+          amount: "研发费用归集",
+          owner: owner || "研发财务接口人",
+          summary: "系统会把研发费用从普通费用中单独拉出来，避免研发与经营费用混同。",
+          sections: {
+            lines: [
+              "建议按项目维度分别归集研发人员人工、直接投入、折旧摊销、设计试验和委外研发支出。",
+              "委托外部研发应保留合同、立项、验收和费用明细，必要时取得受托方支出明细。",
+              "失败研发活动如满足研发定义，其相关费用也可能需要独立留档。"
+            ],
+            checks: [
+              "研发项目、研发人员和研发成果应能相互勾稽。",
+              "研发费用与生产经营费用划分不清时，不宜直接按优惠口径处理。",
+              "系统生成的是归集总表草稿，仍需企业结合研发管理台账复核。"
+            ]
+          },
+          attachments,
+          requiredAttachments: ["研发立项资料", "研发辅助账", "人员工时或分摊说明", "委外合同", "验收资料"]
+        }),
+        finalizeGeneratedRecord({
+          title: "研发加计扣除备查清单",
+          code: makeCode("TAX"),
+          type: "税务资料",
+          date,
+          note: "整理研发优惠享受所需的立项、过程、归集、辅助账和汇算资料。",
+          party: "企业所得税汇算",
+          amount: "优惠备查",
+          owner: owner || "财税主管",
+          summary: "把研发优惠资料和企业所得税汇算关联起来，避免年底再倒查。",
+          sections: {
+            lines: [
+              "备查核心：项目立项决议、研发过程记录、费用归集明细、研发辅助账、成果证明和优惠测算。",
+              "委托研发支出通常按实际发生额的 80% 计入委托方可加计扣除范围，仍需结合合同和真实业务判断。",
+              "形成无形资产的研发支出，应进一步关注资本化和后续摊销口径。"
+            ],
+            checks: [
+              "备查清单不等于系统自动替你完成汇算申报。",
+              "如享受其他所得税优惠，应继续核对能否叠加或是否存在限制。",
+              "委托方与受托方存在关联关系时，费用明细资料更要完整。"
+            ]
+          },
+          attachments,
+          requiredAttachments: ["项目立项书", "研发辅助账", "费用归集明细", "委外研发合同", "成果或验收资料"]
+        }),
+        finalizeGeneratedRecord({
+          title: "委外研发核验提醒",
+          code: makeCode("CHK"),
+          type: "合规提醒",
+          date,
+          note: "针对科技创业公司常见的委外开发、测试和技术服务，提示研发归集与税务优惠风险。",
+          party: "研发与财务",
+          amount: "重点复核",
+          owner: "系统提醒",
+          summary: "委外研发最容易在合同、验收、费用归属和税务优惠口径上出问题，系统会单独提示。",
+          sections: {
+            lines: [
+              "应区分真正的委托研发、普通技术服务和一般运营外包，不宜全部按研发优惠口径处理。",
+              "缺少立项、成果、验收和费用明细时，不建议直接进入研发加计扣除备查包。",
+              "若涉及知识产权归属、成果使用权和资本化判断，应同步补齐协议约定。 "
+            ],
+            checks: [
+              "未补齐合同和验收资料时，只能先生成提醒，不宜默认合规。",
+              "受托方是否出具支出明细，会影响委托方后续备查完整性。",
+              "建议研发、业务和财务共同确认项目真实性与归集边界。"
+            ]
+          },
+          attachments,
+          requiredAttachments: ["委外合同", "需求说明", "验收单", "费用明细", "付款回单"]
+        })
+      ];
     }
 
     function pushGenerated(title, type) {
@@ -3156,6 +4094,21 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
       const owner = document.getElementById("behaviorDept").value || "业务部门";
       const baseAttachments = [...behaviorUploads];
       const focusedParty = analysis.id === "bank_fee" ? bank : owner;
+      if (analysis.id === "expense_reimbursement" && /(机票|飞机票|住宿|研讨会|会议|培训)/.test(text)) {
+        return buildTravelMeetingRecords(text, analysis, date, owner, baseAttachments);
+      }
+      if (analysis.id === "asset_purchase") {
+        return buildAssetPurchaseRecords(text, amount, date, owner, baseAttachments);
+      }
+      if (analysis.id === "monthly_close") {
+        return buildMonthlyCloseRecords(text, date, owner, baseAttachments);
+      }
+      if (analysis.id === "annual_compliance") {
+        return buildAnnualComplianceRecords(text, date, owner, baseAttachments);
+      }
+      if (analysis.id === "rd_super_deduction") {
+        return buildRdSuperDeductionRecords(text, date, owner, baseAttachments);
+      }
       return (analysis.generatedDocs || []).map((doc) => ({
         title: doc.title,
         code: makeCode(doc.type === "税务资料" ? "TAX" : doc.type === "归档资料" || doc.type === "合规提醒" ? "ARC" : "DOC"),
@@ -3178,8 +4131,13 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
             `规则依据：${analysis.basis || "系统规则库"}`
           ]
         },
-        attachments: baseAttachments
-      }));
+        attachments: baseAttachments,
+        requiredAttachments: doc.type === "财务单据"
+          ? ["业务说明", "付款凭证"]
+          : doc.type === "归档资料"
+            ? ["原始发票", "回单或审批资料"]
+            : ["业务说明"]
+      })).map((item) => finalizeGeneratedRecord(item));
     }
 
     function openPreviewByCode(code) {
@@ -3238,7 +4196,7 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
       link.href = URL.createObjectURL(blob);
       link.download = `${title.replace(/\s+/g, "")}.txt`;
       link.click();
-      URL.revokeObjectURL(link.href);
+      setTimeout(() => URL.revokeObjectURL(link.href), 2000);
     }
 
     function copyCode(code) {
@@ -3329,6 +4287,8 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
       };
       generatedItems.unshift(archiveRecord);
       generatedItems.unshift(voucherRecord);
+      latestGeneratedBatch = [voucherRecord, archiveRecord];
+      latestGeneratedSummary = `本次录入共生成 2 项资料：${latestGeneratedBatch.map((item) => item.title).join("、")}。若后续补齐发票、回单或签收资料，可到“归档检索与导出 -> 原始凭证补充上传”继续绑定。`;
       voucherUploads = [];
       voucherFiles.value = "";
       renderUploadList(voucherFileList, voucherUploads);
@@ -3366,6 +4326,20 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
       const analysis = await refreshBehaviorAnalysis();
       const records = buildBehaviorRecords(analysis);
       records.slice().reverse().forEach((record) => generatedItems.unshift(record));
+      latestGeneratedBatch = records;
+      const missingCount = records.reduce((sum, item) => sum + (item.missingAttachments || []).length, 0);
+      const lookupKeywords = analysis.id === "asset_purchase"
+        ? "固定资产/购车/汽车"
+        : analysis.id === "expense_reimbursement"
+          ? "差旅/报销/研讨会/会议"
+          : analysis.id === "monthly_close"
+            ? "月结/申报/试算平衡"
+            : analysis.id === "annual_compliance"
+              ? "工商年报/年度归档/稽核"
+              : analysis.id === "rd_super_deduction"
+                ? "研发加计扣除/汇算/研发项目"
+          : `${analysis.scene}/${analysis.domain}`;
+      latestGeneratedSummary = `本次根据“${behaviorText.value.trim() || analysis.scene}”共生成 ${records.length} 项结果：${records.map((item) => item.title).join("、")}。${missingCount ? `当前仍有 ${missingCount} 项待补原始凭证，请到“归档检索与导出 -> 原始凭证补充上传”补录。` : "本次所需凭证已随输入附件一并挂接或已生成补录说明。"} 在“资料总库”可按编号或“${lookupKeywords}”等关键字继续查询。`;
       behaviorUploads = [];
       behaviorFiles.value = "";
       renderUploadList(behaviorFileList, behaviorUploads);
@@ -3409,6 +4383,8 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
       };
       generatedItems.unshift(exportRecord);
       generatedItems.unshift(taxRecord);
+      latestGeneratedBatch = [taxRecord, exportRecord];
+      latestGeneratedSummary = `本次申报资料生成了 ${latestGeneratedBatch.map((item) => item.title).join("、")}。如需补充底稿附件，可到“归档检索与导出 -> 原始凭证补充上传”继续绑定。`;
       taxUploads = [];
       taxFiles.value = "";
       renderUploadList(taxFileList, taxUploads);
@@ -3452,21 +4428,25 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
     });
 
     voucherFiles.addEventListener("change", () => {
+      revokeFileUrls(voucherUploads);
       voucherUploads = normalizeFiles(voucherFiles.files, "录入时上传");
       renderUploadList(voucherFileList, voucherUploads);
     });
 
     behaviorFiles.addEventListener("change", () => {
+      revokeFileUrls(behaviorUploads);
       behaviorUploads = normalizeFiles(behaviorFiles.files, "行为录入上传");
       renderUploadList(behaviorFileList, behaviorUploads);
     });
 
     taxFiles.addEventListener("change", () => {
+      revokeFileUrls(taxUploads);
       taxUploads = normalizeFiles(taxFiles.files, "申报附件上传");
       renderUploadList(taxFileList, taxUploads);
     });
 
     bindFiles.addEventListener("change", () => {
+      revokeFileUrls(bindUploads);
       bindUploads = normalizeFiles(bindFiles.files, "补充上传");
       renderUploadList(bindFileList, bindUploads);
     });
@@ -3481,6 +4461,7 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
       }
       bindUploads = [];
       bindFiles.value = "";
+      latestGeneratedSummary = `已将补充附件绑定到编号 ${code} 的记录。你可以在“资料总库”或当前批次卡片中继续查看更新后的附件状态。`;
       renderUploadList(bindFileList, bindUploads);
       renderGenerated();
       renderLibrary(searchInput.value);
@@ -3494,7 +4475,9 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
         refs: [],
         aiResult: null,
         loading: false,
-        error: ""
+        error: "",
+        stageLabel: "等待识别",
+        progressSteps: []
       };
       renderBehaviorAnalysis();
     });
