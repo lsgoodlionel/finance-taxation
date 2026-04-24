@@ -375,6 +375,29 @@
       font-size: 1.35rem;
     }
 
+    .report-query-bar {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+      padding: 18px;
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,0.42);
+      background: var(--paper);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+    }
+
+    .report-query-summary {
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.42);
+      background: rgba(255,255,255,0.66);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+    }
+
     .tabs,
     .filters {
       display: flex;
@@ -429,6 +452,10 @@
     .field-wide {
       display: grid;
       gap: 8px;
+    }
+
+    .field.hidden {
+      display: none;
     }
 
     .field-wide {
@@ -660,7 +687,7 @@
 
     .search-layout {
       display: grid;
-      grid-template-columns: 0.92fr 1.08fr;
+      grid-template-columns: 1fr;
       gap: 18px;
       align-items: start;
     }
@@ -671,6 +698,35 @@
       padding: 22px;
       border-radius: 26px;
       background: rgba(255,255,255,0.68);
+    }
+
+    .archive-query-compact {
+      max-width: 100%;
+    }
+
+    .archive-query-compact .search-box {
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .archive-query-compact .search-filters {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .archive-query-compact .search-summary {
+      margin-top: 8px;
+      padding: 10px 12px;
+    }
+
+    .archive-query-compact h3 {
+      margin-bottom: 4px;
+    }
+
+    .archive-query-compact .meta,
+    .archive-query-compact .tiny {
+      line-height: 1.5;
     }
 
     .search-box {
@@ -689,26 +745,69 @@
       flex: 1 1 240px;
     }
 
-    .library-list {
+    .search-filters {
       display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
-      margin-top: 16px;
+      margin-top: 14px;
     }
 
-    .library-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 12px;
-      align-items: center;
-      padding: 14px;
-      border-radius: 18px;
+    .search-summary {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 16px;
       background: rgba(245, 239, 229, 0.86);
       border: 1px solid rgba(54, 62, 58, 0.08);
+      color: var(--ink);
+      line-height: 1.7;
     }
 
-    .library-row strong {
+    .library-list {
+      margin-top: 16px;
+      overflow: auto;
+      border-radius: 18px;
+      border: 1px solid rgba(54, 62, 58, 0.08);
+      background: rgba(245, 239, 229, 0.86);
+    }
+
+    .library-table {
+      width: 100%;
+      min-width: 1180px;
+      border-collapse: collapse;
+    }
+
+    .library-table th,
+    .library-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(54, 62, 58, 0.08);
+      text-align: left;
+      vertical-align: top;
+      font-size: 0.92rem;
+      color: var(--ink);
+    }
+
+    .library-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: rgba(232, 224, 211, 0.96);
+      font-size: 0.82rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: rgba(39, 70, 81, 0.9);
+    }
+
+    .library-table tbody tr:hover {
+      background: rgba(255,255,255,0.48);
+    }
+
+    .library-cell-title {
+      display: grid;
+      gap: 6px;
+    }
+
+    .library-cell-title strong {
       display: block;
-      margin-bottom: 6px;
     }
 
     .compliance-banner {
@@ -1718,6 +1817,62 @@
         </div>
       </div>
 
+      <div class="report-query-bar">
+        <div class="field">
+          <label for="reportScope">查询方案</label>
+          <select id="reportScope">
+            <option value="month">月度查询</option>
+            <option value="quarter">季度查询</option>
+            <option value="year">年度查询</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="reportYear">年度</label>
+          <select id="reportYear">
+            <option value="2026">2026 年</option>
+            <option value="2025">2025 年</option>
+            <option value="2024">2024 年</option>
+          </select>
+        </div>
+        <div class="field" id="reportMonthField">
+          <label for="reportMonth">月份</label>
+          <select id="reportMonth">
+            <option value="01">1 月</option>
+            <option value="02">2 月</option>
+            <option value="03">3 月</option>
+            <option value="04" selected>4 月</option>
+            <option value="05">5 月</option>
+            <option value="06">6 月</option>
+            <option value="07">7 月</option>
+            <option value="08">8 月</option>
+            <option value="09">9 月</option>
+            <option value="10">10 月</option>
+            <option value="11">11 月</option>
+            <option value="12">12 月</option>
+          </select>
+        </div>
+        <div class="field hidden" id="reportQuarterField">
+          <label for="reportQuarter">季度</label>
+          <select id="reportQuarter">
+            <option value="Q1">第一季度</option>
+            <option value="Q2" selected>第二季度</option>
+            <option value="Q3">第三季度</option>
+            <option value="Q4">第四季度</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="reportVersion">展示口径</label>
+          <select id="reportVersion">
+            <option value="standard">常规填报格式</option>
+            <option value="management">管理分析格式</option>
+          </select>
+        </div>
+        <div class="field" style="align-self:end;">
+          <button class="primary-btn" id="applyReportQuery">刷新报表视图</button>
+        </div>
+      </div>
+      <div class="report-query-summary" id="reportQuerySummary">当前按 2026 年 4 月月度方案展示报表，可切换到季度或年度后重新查看财务三表和税务资料。</div>
+
       <div class="report-grid" id="reportGrid"></div>
     </section>
 
@@ -1808,45 +1963,75 @@
       </div>
 
       <div class="search-layout">
-        <div class="search-panel">
-          <h3>单据查询</h3>
-          <p class="meta">按编号、关键字、对手方、税种或期间快速搜索所有已归档资料。</p>
-          <div class="search-box">
-            <div class="search-row">
-              <input id="searchInput" type="text" placeholder="输入编号、关键字或往来方，例如：工资、增值税、上海嘉衡" />
-              <button class="primary-btn" id="searchBtn">查询</button>
-            </div>
-            <div class="tiny">支持模糊搜索，结果可直接下载，也可按当前结果导出归档清单。</div>
-          </div>
-          <div class="bind-panel">
-            <strong>原始凭证补充上传</strong>
-            <div class="tiny">如果某条记录生成后才补齐原始凭证，可在这里选择相关记录并追加绑定附件。</div>
-            <div class="bind-grid">
-              <div class="field">
-                <label for="bindRecordSelect">选择绑定记录</label>
-                <select id="bindRecordSelect"></select>
-              </div>
-              <div class="field">
-                <label for="bindFiles">选择附件</label>
-                <input id="bindFiles" type="file" multiple />
-              </div>
-            </div>
-            <div class="record-actions" style="margin-top:14px;">
-              <button class="primary-btn" id="bindFilesBtn">补传并绑定</button>
-            </div>
-            <div class="file-list" id="bindFileList"></div>
-          </div>
-        </div>
-
         <div class="library-panel">
           <div class="panel-head">
-            <h3>资料总库</h3>
+            <h3>已生成单据总列表</h3>
             <div class="record-actions">
               <button class="ghost-btn" id="exportLibrary">导出当前清单</button>
               <button class="ghost-btn" id="downloadPackage">下载合规资料包</button>
             </div>
           </div>
+          <div class="search-panel archive-query-compact" style="padding:0; border:none; background:transparent; box-shadow:none;">
+            <h3>单据总库查询</h3>
+            <p class="meta">支持按类别、时间、部门、业务、编号、关键字等单一或多条件组合筛选所有已生成单据。</p>
+            <div class="search-box">
+              <div class="search-row">
+                <input id="searchInput" type="text" placeholder="输入编号、关键字、往来方或摘要，例如：工资、增值税、上海嘉衡" />
+                <button class="primary-btn" id="searchBtn">查询</button>
+              </div>
+              <div class="search-filters">
+                <div class="field">
+                  <label for="searchCategory">类别</label>
+                  <select id="searchCategory">
+                    <option value="all">全部类别</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="searchDepartment">部门 / 责任人</label>
+                  <select id="searchDepartment">
+                    <option value="all">全部部门</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="searchBusiness">业务类型</label>
+                  <input id="searchBusiness" type="text" placeholder="例如：差旅、固定资产、增值税" />
+                </div>
+                <div class="field">
+                  <label for="searchStartDate">开始日期</label>
+                  <input id="searchStartDate" type="date" />
+                </div>
+                <div class="field">
+                  <label for="searchEndDate">结束日期</label>
+                  <input id="searchEndDate" type="date" />
+                </div>
+                <div class="field" style="align-self:end;">
+                  <button class="ghost-btn" id="resetSearchBtn">重置筛选</button>
+                </div>
+              </div>
+              <div class="tiny">可按多个条件叠加筛选。下方列表会显示主要数据，点击“在线预览”可查看完整原始单据。</div>
+              <div class="search-summary" id="librarySummary">当前将汇总显示所有已生成单据，并按筛选条件实时更新数量、附件和待补凭证情况。</div>
+            </div>
+          </div>
           <div class="library-list" id="libraryList"></div>
+        </div>
+
+        <div class="search-panel">
+          <h3>原始凭证补充上传</h3>
+          <div class="tiny">如果某条记录生成后才补齐原始凭证，可在这里选择相关记录并追加绑定附件。</div>
+          <div class="bind-grid" style="margin-top:14px;">
+            <div class="field">
+              <label for="bindRecordSelect">选择绑定记录</label>
+              <select id="bindRecordSelect"></select>
+            </div>
+            <div class="field">
+              <label for="bindFiles">选择附件</label>
+              <input id="bindFiles" type="file" multiple />
+            </div>
+          </div>
+          <div class="record-actions" style="margin-top:14px;">
+            <button class="primary-btn" id="bindFilesBtn">补传并绑定</button>
+          </div>
+          <div class="file-list" id="bindFileList"></div>
         </div>
       </div>
 
@@ -2449,8 +2634,22 @@
 
     const generatedList = document.getElementById("generatedList");
     const reportGrid = document.getElementById("reportGrid");
+    const reportScope = document.getElementById("reportScope");
+    const reportYear = document.getElementById("reportYear");
+    const reportMonth = document.getElementById("reportMonth");
+    const reportQuarter = document.getElementById("reportQuarter");
+    const reportVersion = document.getElementById("reportVersion");
+    const reportMonthField = document.getElementById("reportMonthField");
+    const reportQuarterField = document.getElementById("reportQuarterField");
+    const reportQuerySummary = document.getElementById("reportQuerySummary");
     const libraryList = document.getElementById("libraryList");
     const searchInput = document.getElementById("searchInput");
+    const searchCategory = document.getElementById("searchCategory");
+    const searchDepartment = document.getElementById("searchDepartment");
+    const searchBusiness = document.getElementById("searchBusiness");
+    const searchStartDate = document.getElementById("searchStartDate");
+    const searchEndDate = document.getElementById("searchEndDate");
+    const librarySummary = document.getElementById("librarySummary");
     const loginShell = document.getElementById("loginShell");
     const loginUsername = document.getElementById("loginUsername");
     const loginPassword = document.getElementById("loginPassword");
@@ -2491,7 +2690,15 @@
 
     let generatedItems = [...generatedSeed];
     let activeReportFilter = "all";
+    let reportQueryState = {
+      scope: "month",
+      year: "2026",
+      month: "04",
+      quarter: "Q2",
+      version: "standard"
+    };
     let currentPreviewItem = null;
+    let currentLibraryRows = [];
     let voucherUploads = [];
     let behaviorUploads = [];
     let taxUploads = [];
@@ -2510,7 +2717,9 @@
       loading: false,
       error: "",
       stageLabel: "等待识别",
-      progressSteps: []
+      progressSteps: [],
+      streamLines: [],
+      streamBuffer: ""
     };
 
     const settingsKey = "financeTaxationSystemSettings";
@@ -2643,6 +2852,96 @@
         ...generatedItems.map((item) => ({ code: item.code, title: item.title })),
         ...libraryData.map((item) => ({ code: item.code, title: item.title }))
       ];
+    }
+
+    function normalizeRecordDate(value) {
+      if (!value) return "2026-04-23";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+      const codeMatch = String(value).match(/(20\d{2})(\d{2})/);
+      if (codeMatch) {
+        return `${codeMatch[1]}-${codeMatch[2]}-01`;
+      }
+      return "2026-04-23";
+    }
+
+    function inferArchiveCategory(item) {
+      if (item.category === "财务") return "财务报表";
+      if (item.category === "税务") return "税务报表";
+      if (item.category === "归档") return "归档清单";
+      return item.type || item.category || "资料";
+    }
+
+    function inferArchiveBusiness(item) {
+      return item.businessType
+        || item.scene
+        || item.domain
+        || item.summary
+        || item.title
+        || item.name
+        || "通用业务";
+    }
+
+    function getArchiveRows() {
+      const generatedRows = generatedItems.map((item) => ({
+        ...item,
+        title: item.title,
+        date: normalizeRecordDate(item.date),
+        categoryLabel: inferArchiveCategory(item),
+        departmentLabel: item.owner || "系统生成",
+        businessLabel: inferArchiveBusiness(item),
+        amountLabel: item.amount || "自动汇总",
+        attachmentCount: (item.attachments || []).length,
+        missingCount: (item.missingAttachments || []).length,
+        sourceLabel: "系统生成单据"
+      }));
+
+      const libraryRows = libraryData.map((item) => ({
+        ...item,
+        title: item.title,
+        date: normalizeRecordDate(item.date || item.code),
+        categoryLabel: inferArchiveCategory(item),
+        departmentLabel: item.owner || "资料库",
+        businessLabel: item.extra || item.summary || item.title,
+        amountLabel: item.amount || "自动汇总",
+        attachmentCount: (item.attachments || []).length,
+        missingCount: (item.missingAttachments || []).length,
+        sourceLabel: "资料总库"
+      }));
+
+      const reportRows = reportData.map((item) => ({
+        title: item.name,
+        code: item.code,
+        type: `${item.category}报表`,
+        category: item.category,
+        format: item.format,
+        owner: item.owner,
+        amount: item.amount,
+        summary: item.summary,
+        sections: item.sections,
+        attachments: [],
+        date: normalizeRecordDate(item.code),
+        categoryLabel: inferArchiveCategory(item),
+        departmentLabel: item.owner || "报表中心",
+        businessLabel: item.name,
+        amountLabel: item.amount || "自动汇总",
+        attachmentCount: 0,
+        missingCount: 0,
+        sourceLabel: "报表中心"
+      }));
+
+      return [...generatedRows, ...libraryRows, ...reportRows].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    }
+
+    function populateArchiveFilters() {
+      const rows = getArchiveRows();
+      const categories = [...new Set(rows.map((item) => item.categoryLabel).filter(Boolean))];
+      const departments = [...new Set(rows.map((item) => item.departmentLabel).filter(Boolean))];
+      const currentCategory = searchCategory.value || "all";
+      const currentDepartment = searchDepartment.value || "all";
+      searchCategory.innerHTML = ['<option value="all">全部类别</option>', ...categories.map((item) => `<option value="${item}">${escapeHtml(item)}</option>`)].join("");
+      searchDepartment.innerHTML = ['<option value="all">全部部门</option>', ...departments.map((item) => `<option value="${item}">${escapeHtml(item)}</option>`)].join("");
+      searchCategory.value = categories.includes(currentCategory) ? currentCategory : "all";
+      searchDepartment.value = departments.includes(currentDepartment) ? currentDepartment : "all";
     }
 
     function renderBindRecordOptions() {
@@ -2830,6 +3129,14 @@
       return [];
     }
 
+    function extractVisibleAiLines(content) {
+      return content
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("步骤："))
+        .slice(0, 8);
+    }
+
     async function callOllamaAnalysis(query, baseAnalysis, refs, settings) {
       if (!settings.enableAiAssist || !query.trim()) {
         return null;
@@ -2853,7 +3160,8 @@ ${scenes}
 网络参考摘要：
 ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.snippet}`).join("\n") : "无"}
 
-请严格输出 JSON，不要输出其他文字：
+请先输出 3 到 5 行可展示的判断过程摘要，每行都以“步骤：”开头，只能描述命中的事实、规则比对、风险提示和当前判断，不要展示内部推理。
+然后紧接着输出 JSON，不要输出其他说明文字：
 {
   "recommended_scene": "从可选场景中选择一个，或返回通用经营事项",
   "confidence": 0.0,
@@ -2869,16 +3177,43 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: settings.ollamaModel,
-          stream: false,
+          stream: true,
           options: { temperature: settings.ollamaTemperature },
           messages: [
-            { role: "system", content: "你必须只输出合法 JSON。" },
+            { role: "system", content: "你必须先输出几行以“步骤：”开头的可展示判断摘要，再输出一个合法 JSON。不要输出私有推理，不要输出额外解释。" },
             { role: "user", content: prompt }
           ]
         })
       });
-      const data = await response.json();
-      const content = data.message?.content || data.response || "";
+      if (!response.body) {
+        throw new Error("本地模型未返回流式内容。");
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let raw = "";
+      let pending = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        pending += decoder.decode(value, { stream: true });
+        const lines = pending.split("\n");
+        pending = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          const payload = JSON.parse(trimmed);
+          const piece = payload.message?.content || payload.response || "";
+          if (!piece) continue;
+          raw += piece;
+          aiAnalysisState.streamBuffer = raw;
+          aiAnalysisState.streamLines = extractVisibleAiLines(raw);
+          renderBehaviorAnalysis(currentBehaviorAnalysis || baseAnalysis);
+        }
+      }
+
+      raw += decoder.decode();
+      const content = raw;
       const jsonText = content.match(/\{[\s\S]*\}/)?.[0] || content;
       return JSON.parse(jsonText);
     }
@@ -2892,6 +3227,9 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
           <li>${escapeHtml(step)}</li>
         `).join("")
         : '<li>等待开始识别。</li>';
+      const streamLines = aiAnalysisState.streamLines?.length
+        ? aiAnalysisState.streamLines.map((line) => `<li>${escapeHtml(line.replace(/^步骤：/, "").trim())}</li>`).join("")
+        : "<li>模型过程摘要将在调用本地大模型后流式显示。</li>";
       behaviorAnalysisList.innerHTML = `
         <div class="analysis-item">
           <strong>识别摘要</strong>
@@ -2939,6 +3277,11 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
           <div class="meta" style="margin-top:8px;">${aiAnalysisState.aiUsed && aiAnalysisState.aiResult ? `AI 推荐场景：${escapeHtml(aiAnalysisState.aiResult.recommended_scene || analysis.scene)}；人工复核提示：${escapeHtml(aiAnalysisState.aiResult.risk_note || "无")}` : escapeHtml(aiAnalysisState.error || "无额外 AI 结果")}</div>
           <div class="meta" style="margin-top:8px;">${aiAnalysisState.webUsed && aiAnalysisState.refs.length ? `网络参考：${escapeHtml(aiAnalysisState.refs.map((ref) => ref.title).join("、"))}` : "网络参考：未启用或未获取到结果"}</div>
         </div>
+        <div class="analysis-item">
+          <strong>模型过程摘要（流式）</strong>
+          <ol class="paper-list">${streamLines}</ol>
+          <div class="meta" style="margin-top:8px;">仅展示可读的判断摘要、证据比对和风险提示，不展示模型私有推理。</div>
+        </div>
       `;
       return analysis;
     }
@@ -2969,7 +3312,9 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
         loading: !!settings.enableAiAssist || !!settings.enableWebReference,
         error: "",
         stageLabel: "正在进行本地规则初判...",
-        progressSteps: []
+        progressSteps: [],
+        streamLines: [],
+        streamBuffer: ""
       };
       renderBehaviorAnalysis(baseAnalysis);
       updateAiStage("本地规则初判完成", `规则初判结果：${baseAnalysis.scene}`);
@@ -3046,6 +3391,92 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
         date: item.date || "2026-04-23",
         amountUnit: item.amountUnit || "元"
       };
+    }
+
+    function getReportQueryLabels() {
+      const year = reportQueryState.year;
+      const monthLabel = `${year} 年 ${String(Number(reportQueryState.month))} 月`;
+      const monthEndMap = {
+        "01": "31",
+        "02": "28",
+        "03": "31",
+        "04": "30",
+        "05": "31",
+        "06": "30",
+        "07": "31",
+        "08": "31",
+        "09": "30",
+        "10": "31",
+        "11": "30",
+        "12": "31"
+      };
+
+      if (reportQueryState.scope === "quarter") {
+        const quarterLabelMap = {
+          Q1: "第一季度",
+          Q2: "第二季度",
+          Q3: "第三季度",
+          Q4: "第四季度"
+        };
+        return {
+          scheme: "季度查询",
+          periodTitle: `${year} 年${quarterLabelMap[reportQueryState.quarter]}`,
+          periodRange: `${year} 年${quarterLabelMap[reportQueryState.quarter]}`,
+          incomeCurrentLabel: "本季度金额",
+          incomeAccumLabel: "本年累计金额",
+          cashCurrentLabel: "本季度金额",
+          cashAccumLabel: "本年累计金额",
+          balanceEndLabel: "期末余额",
+          balanceStartLabel: "年初余额"
+        };
+      }
+
+      if (reportQueryState.scope === "year") {
+        return {
+          scheme: "年度查询",
+          periodTitle: `${year} 年度`,
+          periodRange: `${year}年01月01日至${year}年12月31日`,
+          incomeCurrentLabel: "本年金额",
+          incomeAccumLabel: "上年同期金额",
+          cashCurrentLabel: "本年金额",
+          cashAccumLabel: "上年同期金额",
+          balanceEndLabel: "年末余额",
+          balanceStartLabel: "年初余额"
+        };
+      }
+
+      return {
+        scheme: "月度查询",
+        periodTitle: monthLabel,
+        periodRange: `${year}年${reportQueryState.month}月01日至${year}年${reportQueryState.month}月${monthEndMap[reportQueryState.month] || "30"}日`,
+        incomeCurrentLabel: "本月金额",
+        incomeAccumLabel: "本年累计金额",
+        cashCurrentLabel: "本月金额",
+        cashAccumLabel: "本年累计金额",
+        balanceEndLabel: "期末余额",
+        balanceStartLabel: "年初余额"
+      };
+    }
+
+    function syncReportQueryForm() {
+      const isQuarter = reportScope.value === "quarter";
+      const isYear = reportScope.value === "year";
+      reportMonthField.classList.toggle("hidden", isQuarter || isYear);
+      reportQuarterField.classList.toggle("hidden", !isQuarter);
+    }
+
+    function applyReportQueryState() {
+      reportQueryState = {
+        scope: reportScope.value,
+        year: reportYear.value,
+        month: reportMonth.value,
+        quarter: reportQuarter.value,
+        version: reportVersion.value
+      };
+      syncReportQueryForm();
+      const labels = getReportQueryLabels();
+      reportQuerySummary.textContent = `当前按${labels.periodTitle}${labels.scheme}展示报表，资产负债表、利润表、现金流量表会同步切换期间列头；税务资料和归档清单也会按相同期间口径查看。`;
+      renderReports();
     }
 
     function renderVoucherPreview(item) {
@@ -3195,62 +3626,81 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
       return "";
     }
 
-    function renderBalanceSheetPreview() {
-      const meta = resolvePreviewMeta({});
+    function renderBalanceSheetPreview(item = {}) {
+      const labels = getReportQueryLabels();
+      const meta = resolvePreviewMeta({ ...item, period: labels.periodRange });
       return `
         <div class="official-title">资 产 负 债 表</div>
-        <div class="official-subtitle">会小企01表 · 编制单位：${escapeHtml(meta.unitName)} · 单位：元</div>
+        <div class="official-subtitle">会小企01表常规列报格式 · 编制单位：${escapeHtml(meta.unitName)} · 报表期间：${escapeHtml(labels.periodTitle)} · 单位：元</div>
         <table class="official-table">
-          <tr><th>资产</th><th>期末余额</th><th>年初余额</th><th>负债和所有者权益</th><th>期末余额</th><th>年初余额</th></tr>
+          <tr><th>资产</th><th>${escapeHtml(labels.balanceEndLabel)}</th><th>${escapeHtml(labels.balanceStartLabel)}</th><th>负债和所有者权益</th><th>${escapeHtml(labels.balanceEndLabel)}</th><th>${escapeHtml(labels.balanceStartLabel)}</th></tr>
           <tr><td>货币资金</td><td>528,600.00</td><td>402,300.00</td><td>短期借款</td><td>120,000.00</td><td>160,000.00</td></tr>
-          <tr><td>应收账款</td><td>186,000.00</td><td>142,500.00</td><td>应付账款</td><td>94,200.00</td><td>88,400.00</td></tr>
-          <tr><td>存货</td><td>174,000.00</td><td>168,200.00</td><td>应付职工薪酬</td><td>36,800.00</td><td>32,400.00</td></tr>
-          <tr><td>固定资产</td><td>380,000.00</td><td>405,000.00</td><td>实收资本</td><td>500,000.00</td><td>500,000.00</td></tr>
-          <tr><td>资产总计</td><td>1,268,600.00</td><td>1,118,000.00</td><td>负债和所有者权益总计</td><td>1,268,600.00</td><td>1,118,000.00</td></tr>
+          <tr><td>应收票据及应收账款</td><td>186,000.00</td><td>142,500.00</td><td>应付票据及应付账款</td><td>94,200.00</td><td>88,400.00</td></tr>
+          <tr><td>预付款项</td><td>36,400.00</td><td>22,800.00</td><td>合同负债</td><td>28,300.00</td><td>16,000.00</td></tr>
+          <tr><td>其他应收款</td><td>14,200.00</td><td>10,100.00</td><td>应付职工薪酬</td><td>36,800.00</td><td>32,400.00</td></tr>
+          <tr><td>存货</td><td>174,000.00</td><td>168,200.00</td><td>应交税费</td><td>25,600.00</td><td>18,500.00</td></tr>
+          <tr><td>固定资产净额</td><td>380,000.00</td><td>405,000.00</td><td>其他应付款</td><td>18,700.00</td><td>15,900.00</td></tr>
+          <tr><td>无形资产</td><td>42,100.00</td><td>51,600.00</td><td>实收资本</td><td>500,000.00</td><td>500,000.00</td></tr>
+          <tr><td>长期待摊费用</td><td>16,300.00</td><td>18,500.00</td><td>资本公积</td><td>88,000.00</td><td>88,000.00</td></tr>
+          <tr><td>其他非流动资产</td><td>0.00</td><td>0.00</td><td>未分配利润</td><td>466,000.00</td><td>301,700.00</td></tr>
+          <tr><td>资产总计</td><td>1,377,600.00</td><td>1,221,000.00</td><td>负债和所有者权益总计</td><td>1,377,600.00</td><td>1,221,000.00</td></tr>
         </table>
+        <div class="note-box">当前预览已改为更接近常规财务报表的对照式列报，并支持月度、季度、年度查询切换。正式出具仍应以企业最终账务数据和报表模板为准。</div>
       `;
     }
 
-    function renderIncomeStatementPreview() {
-      const meta = resolvePreviewMeta({});
+    function renderIncomeStatementPreview(item = {}) {
+      const labels = getReportQueryLabels();
+      const meta = resolvePreviewMeta({ ...item, period: labels.periodRange });
       return `
         <div class="official-title">利 润 表</div>
-        <div class="official-subtitle">会小企02表 · 编制单位：${escapeHtml(meta.unitName)} · 单位：元</div>
+        <div class="official-subtitle">会小企02表常规列报格式 · 编制单位：${escapeHtml(meta.unitName)} · 报表期间：${escapeHtml(labels.periodTitle)} · 单位：元</div>
         <table class="official-table">
-          <tr><th>项目</th><th>本月金额</th><th>本年累计</th></tr>
-          <tr><td>营业收入</td><td>865,000.00</td><td>3,206,000.00</td></tr>
-          <tr><td>营业成本</td><td>562,000.00</td><td>2,074,000.00</td></tr>
+          <tr><th>项目</th><th>${escapeHtml(labels.incomeCurrentLabel)}</th><th>${escapeHtml(labels.incomeAccumLabel)}</th></tr>
+          <tr><td>一、营业收入</td><td>865,000.00</td><td>3,206,000.00</td></tr>
+          <tr><td>减：营业成本</td><td>562,000.00</td><td>2,074,000.00</td></tr>
           <tr><td>税金及附加</td><td>12,840.00</td><td>42,460.00</td></tr>
           <tr><td>销售费用</td><td>96,200.00</td><td>356,300.00</td></tr>
           <tr><td>管理费用</td><td>72,640.00</td><td>290,540.00</td></tr>
+          <tr><td>研发费用</td><td>18,500.00</td><td>74,600.00</td></tr>
           <tr><td>财务费用</td><td>2,840.00</td><td>11,320.00</td></tr>
-          <tr><td>所得税费用</td><td>25,000.00</td><td>96,700.00</td></tr>
-          <tr><td>净利润</td><td>92,480.00</td><td>334,680.00</td></tr>
+          <tr><td>二、营业利润</td><td>100,980.00</td><td>358,080.00</td></tr>
+          <tr><td>加：营业外收入</td><td>16,500.00</td><td>28,900.00</td></tr>
+          <tr><td>减：营业外支出</td><td>0.00</td><td>3,020.00</td></tr>
+          <tr><td>三、利润总额</td><td>117,480.00</td><td>383,960.00</td></tr>
+          <tr><td>减：所得税费用</td><td>25,000.00</td><td>96,700.00</td></tr>
+          <tr><td>四、净利润</td><td>92,480.00</td><td>287,260.00</td></tr>
         </table>
+        <div class="note-box">利润表已改成更符合常规填报阅读习惯的项目层级，并随月度、季度、年度查询自动切换期间列头。</div>
       `;
     }
 
-    function renderCashflowPreview() {
-      const meta = resolvePreviewMeta({});
+    function renderCashflowPreview(item = {}) {
+      const labels = getReportQueryLabels();
+      const meta = resolvePreviewMeta({ ...item, period: labels.periodRange });
       return `
         <div class="official-title">现 金 流 量 表</div>
-        <div class="official-subtitle">会小企03表风格 · 编制单位：${escapeHtml(meta.unitName)} · 单位：元</div>
+        <div class="official-subtitle">会小企03表常规列报格式 · 编制单位：${escapeHtml(meta.unitName)} · 报表期间：${escapeHtml(labels.periodTitle)} · 单位：元</div>
         <table class="official-table">
-          <tr><th>项目</th><th>本月金额</th></tr>
-          <tr><td>经营活动产生的现金流入小计</td><td>928,000.00</td></tr>
-          <tr><td>经营活动产生的现金流出小计</td><td>742,000.00</td></tr>
-          <tr><td>经营活动产生的现金流量净额</td><td>186,000.00</td></tr>
-          <tr><td>投资活动产生的现金流量净额</td><td>-117,400.00</td></tr>
-          <tr><td>筹资活动产生的现金流量净额</td><td>60,000.00</td></tr>
-          <tr><td>现金及现金等价物净增加额</td><td>128,600.00</td></tr>
+          <tr><th>项目</th><th>${escapeHtml(labels.cashCurrentLabel)}</th><th>${escapeHtml(labels.cashAccumLabel)}</th></tr>
+          <tr><td>销售商品、提供劳务收到的现金</td><td>928,000.00</td><td>3,368,000.00</td></tr>
+          <tr><td>收到其他与经营活动有关的现金</td><td>64,000.00</td><td>196,000.00</td></tr>
+          <tr><td>购买商品、接受劳务支付的现金</td><td>492,000.00</td><td>1,804,000.00</td></tr>
+          <tr><td>支付给职工以及为职工支付的现金</td><td>186,000.00</td><td>712,000.00</td></tr>
+          <tr><td>支付的各项税费</td><td>64,000.00</td><td>214,000.00</td></tr>
+          <tr><td>经营活动产生的现金流量净额</td><td>250,000.00</td><td>834,000.00</td></tr>
+          <tr><td>投资活动产生的现金流量净额</td><td>-117,400.00</td><td>-356,800.00</td></tr>
+          <tr><td>筹资活动产生的现金流量净额</td><td>60,000.00</td><td>120,000.00</td></tr>
+          <tr><td>现金及现金等价物净增加额</td><td>192,600.00</td><td>597,200.00</td></tr>
         </table>
+        <div class="note-box">现金流量表已补充为更常见的经营、投资、筹资活动列报结构，并支持期间金额与累计金额联动查看。</div>
       `;
     }
 
     function renderStructuredPreview(item) {
-      if (item.format === "balance_sheet") return renderBalanceSheetPreview();
-      if (item.format === "income_statement") return renderIncomeStatementPreview();
-      if (item.format === "cashflow_statement") return renderCashflowPreview();
+      if (item.format === "balance_sheet") return renderBalanceSheetPreview(item);
+      if (item.format === "income_statement") return renderIncomeStatementPreview(item);
+      if (item.format === "cashflow_statement") return renderCashflowPreview(item);
       if (item.format === "vat_return" || item.format === "cit_return" || item.format === "iit_return") return renderTaxPreview(item);
       if ((item.type || "").includes("税务")) return renderTaxPreview(item);
       if ((item.type || "").includes("财务单据")) return renderVoucherPreview(item);
@@ -3487,6 +3937,7 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
     }
 
     function renderReports() {
+      const labels = getReportQueryLabels();
       const filtered = activeReportFilter === "all"
         ? reportData
         : reportData.filter((item) => item.category === activeReportFilter);
@@ -3496,7 +3947,7 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
           <div class="pill">${item.category}</div>
           <h3>${item.name}</h3>
           <p>${item.desc}</p>
-          <div class="tiny" style="margin-top:10px;">支持在线预览主表内容，并可继续关联原始凭证。报表预览不会再改动右侧生成记录。</div>
+          <div class="tiny" style="margin-top:10px;">当前查询方案：${escapeHtml(labels.periodTitle)} · ${escapeHtml(labels.scheme)} · ${reportQueryState.version === "standard" ? "常规填报格式" : "管理分析格式"}。支持在线预览主表内容，并可继续关联原始凭证。</div>
           <div class="record-actions" style="margin-top:16px;">
             <button class="mini-btn" onclick="openReportPreview('${item.code}')">在线预览</button>
             <button class="mini-btn" onclick="routeTo('archive')">查看归档资料</button>
@@ -3506,35 +3957,91 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
       `).join("");
     }
 
-    function renderLibrary(filter = "") {
+    function renderLibrary(filter = searchInput.value || "") {
+      populateArchiveFilters();
       const keyword = filter.trim().toLowerCase();
-      const rows = keyword
-        ? libraryData.filter((item) =>
-            `${item.title} ${item.code} ${item.extra} ${item.tag} ${(item.attachments || []).map((attachment) => attachment.name).join(" ")}`.toLowerCase().includes(keyword)
-          )
-        : libraryData;
+      const categoryFilter = searchCategory.value || "all";
+      const departmentFilter = searchDepartment.value || "all";
+      const businessKeyword = (searchBusiness.value || "").trim().toLowerCase();
+      const startDate = searchStartDate.value;
+      const endDate = searchEndDate.value;
+      const rows = getArchiveRows().filter((item) => {
+        const haystack = [
+          item.title,
+          item.code,
+          item.summary,
+          item.note,
+          item.party,
+          item.businessLabel,
+          item.departmentLabel,
+          item.categoryLabel,
+          ...(item.attachments || []).map((attachment) => attachment.name)
+        ].join(" ").toLowerCase();
 
-      libraryList.innerHTML = rows.map((item) => `
-        <div class="library-row">
-          <div>
-            <strong>${item.title}</strong>
-            <div class="record-meta">
-              <span>编号 ${item.code}</span>
-              <span>${item.extra}</span>
-              <span>附件 ${getAttachmentCount(item)} 份</span>
-            </div>
-          </div>
-          <div class="record-actions">
-            <span class="pill">${item.tag}</span>
-            <button class="mini-btn" onclick="openLibraryPreview('${item.code}')">在线预览</button>
-            <button class="mini-btn" onclick="jumpToLibraryPage('${item.code}')">关联页面</button>
-            <button class="mini-btn" onclick="downloadText('${item.title}', '${item.code}', '${item.extra}')">下载</button>
-          </div>
-        </div>
-      `).join("");
+        const matchKeyword = !keyword || haystack.includes(keyword);
+        const matchCategory = categoryFilter === "all" || item.categoryLabel === categoryFilter;
+        const matchDepartment = departmentFilter === "all" || item.departmentLabel === departmentFilter;
+        const matchBusiness = !businessKeyword || String(item.businessLabel || "").toLowerCase().includes(businessKeyword) || haystack.includes(businessKeyword);
+        const matchStart = !startDate || item.date >= startDate;
+        const matchEnd = !endDate || item.date <= endDate;
+        return matchKeyword && matchCategory && matchDepartment && matchBusiness && matchStart && matchEnd;
+      });
+
+      currentLibraryRows = rows;
+      const attachmentTotal = rows.reduce((sum, item) => sum + (item.attachmentCount || 0), 0);
+      const missingTotal = rows.reduce((sum, item) => sum + (item.missingCount || 0), 0);
+      librarySummary.textContent = `当前筛选结果共 ${rows.length} 条单据，附件 ${attachmentTotal} 份，待补原始凭证 ${missingTotal} 项。可继续按类别、时间、部门、业务等条件组合筛选。`;
+
+      libraryList.innerHTML = `
+        <table class="library-table">
+          <thead>
+            <tr>
+              <th>编号</th>
+              <th>单据名称</th>
+              <th>类别</th>
+              <th>日期</th>
+              <th>部门 / 责任人</th>
+              <th>业务</th>
+              <th>金额 / 指标</th>
+              <th>附件</th>
+              <th>待补</th>
+              <th>来源</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((item) => `
+              <tr>
+                <td>${escapeHtml(item.code)}</td>
+                <td>
+                  <div class="library-cell-title">
+                    <strong>${escapeHtml(item.title)}</strong>
+                    <span class="meta">${escapeHtml(item.summary || item.note || item.extra || item.desc || "已生成并进入单据总库。")}</span>
+                  </div>
+                </td>
+                <td>${escapeHtml(item.categoryLabel)}</td>
+                <td>${escapeHtml(item.date)}</td>
+                <td>${escapeHtml(item.departmentLabel)}</td>
+                <td>${escapeHtml(item.businessLabel || "通用业务")}</td>
+                <td>${escapeHtml(item.amountLabel || "自动汇总")}</td>
+                <td>${escapeHtml(String(item.attachmentCount || 0))} 份</td>
+                <td>${escapeHtml(String(item.missingCount || 0))} 项</td>
+                <td>${escapeHtml(item.sourceLabel || "资料库")}</td>
+                <td>
+                  <div class="record-actions">
+                    <button class="mini-btn" onclick="openPreviewByCode('${item.code}')">在线预览</button>
+                    <button class="mini-btn" onclick="downloadRecordByCode('${item.code}')">下载</button>
+                  </div>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
 
       if (!rows.length) {
-        libraryList.innerHTML = '<div class="record-item"><strong>没有匹配结果</strong><div class="meta">请尝试不同的关键字，例如业务类型、税种、月份或往来方。</div></div>';
+        librarySummary.textContent = "当前筛选条件下没有匹配到单据，请放宽时间、类别、部门或业务条件后重试。";
+        libraryList.innerHTML = '<div class="record-item"><strong>没有匹配结果</strong><div class="meta">请尝试不同的关键字，或清空部分筛选条件后重新查询。</div></div>';
       }
     }
 
@@ -4140,15 +4647,25 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
       })).map((item) => finalizeGeneratedRecord(item));
     }
 
+    function findAnyRecordByCode(code) {
+      return getArchiveRows().find((entry) => entry.code === code) || null;
+    }
+
+    function downloadRecordByCode(code) {
+      const item = findAnyRecordByCode(code);
+      if (!item) return;
+      downloadText(item.title, item.code, item.summary || item.note || item.extra || item.desc || "已生成并可在系统中查看完整内容。");
+    }
+
     function openPreviewByCode(code) {
-      const item = generatedItems.find((entry) => entry.code === code);
+      const item = findAnyRecordByCode(code);
       if (item) {
         openPreview(item);
       }
     }
 
     function jumpToRelatedPage(code) {
-      const item = generatedItems.find((entry) => entry.code === code);
+      const item = findAnyRecordByCode(code);
       if (item) {
         routeTo(relatedPageForItem(item));
       }
@@ -4157,6 +4674,7 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
     function openReportPreview(code) {
       const item = reportData.find((entry) => entry.code === code);
       if (item) {
+        const labels = getReportQueryLabels();
         openPreview({
           title: item.name,
           code: item.code,
@@ -4166,8 +4684,11 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
           owner: item.owner,
           amount: item.amount,
           summary: item.summary,
+          period: labels.periodRange,
+          unitName: "示例中小企业（上海）有限公司",
           sections: item.sections,
-          party: "2026年4月",
+          party: labels.periodTitle,
+          format: item.format,
           attachments: []
         });
       }
@@ -4250,6 +4771,9 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
     document.querySelectorAll("[data-page-jump]").forEach((button) => {
       button.addEventListener("click", () => routeTo(button.dataset.pageJump));
     });
+
+    reportScope.addEventListener("change", syncReportQueryForm);
+    document.getElementById("applyReportQuery").addEventListener("click", applyReportQueryState);
 
     document.getElementById("generateVoucher").addEventListener("click", () => {
       const bizType = document.getElementById("bizType").value;
@@ -4396,14 +4920,29 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
       renderLibrary(searchInput.value);
     });
 
+    document.getElementById("resetSearchBtn").addEventListener("click", () => {
+      searchInput.value = "";
+      searchCategory.value = "all";
+      searchDepartment.value = "all";
+      searchBusiness.value = "";
+      searchStartDate.value = "";
+      searchEndDate.value = "";
+      renderLibrary("");
+    });
+
     searchInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         renderLibrary(searchInput.value);
       }
     });
 
+    [searchCategory, searchDepartment, searchBusiness, searchStartDate, searchEndDate].forEach((element) => {
+      element.addEventListener("change", () => renderLibrary(searchInput.value));
+    });
+    searchBusiness.addEventListener("input", () => renderLibrary(searchInput.value));
+
     document.getElementById("exportLibrary").addEventListener("click", () => {
-      const content = libraryData.map((item) => `${item.code} | ${item.title} | ${item.extra} | ${item.tag}`).join("\n");
+      const content = currentLibraryRows.map((item) => `${item.code} | ${item.title} | ${item.categoryLabel} | ${item.date} | ${item.departmentLabel} | ${item.businessLabel} | ${item.amountLabel}`).join("\n");
       downloadText("资料总库清单", "LIBRARY", content);
     });
 
@@ -4477,7 +5016,9 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
         loading: false,
         error: "",
         stageLabel: "等待识别",
-        progressSteps: []
+        progressSteps: [],
+        streamLines: [],
+        streamBuffer: ""
       };
       renderBehaviorAnalysis();
     });
@@ -4549,7 +5090,7 @@ ${refs.length ? refs.map((ref, index) => `${index + 1}. ${ref.title} | ${ref.sni
     renderBehaviorAnalysis();
     renderCoverageGrid();
     renderGenerated();
-    renderReports();
+    applyReportQueryState();
     renderLibrary();
   </script>
 </body>
