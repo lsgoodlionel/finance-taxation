@@ -1,0 +1,21 @@
+[
+  {
+    "id": "bal-001",
+    "accountCode": "1002",
+    "accountName": "银行存款",
+    "period": "2026-04",
+    "openingDebit": "402300.00",
+    "periodDebit": "928000.00",
+    "periodCredit": "801700.00",
+    "closingDebit": "528600.00"
+  },
+  {
+    "id": "bal-002",
+    "accountCode": "6001",
+    "accountName": "主营业务收入",
+    "period": "2026-04",
+    "openingCredit": "2341000.00",
+    "periodCredit": "865000.00",
+    "closingCredit": "3206000.00"
+  }
+]

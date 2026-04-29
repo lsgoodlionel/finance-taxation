@@ -1,0 +1,12 @@
+{
+  "id": "demo-company",
+  "name": "示例中小企业（上海）有限公司",
+  "creditCode": "91310000MA1K12345X",
+  "legalRepresentative": "李明",
+  "phone": "021-58880001",
+  "address": "上海市浦东新区张江高科技园区示例路 88 号",
+  "bankName": "招商银行上海张江支行",
+  "bankAccount": "110000123456789",
+  "taxpayerIdentity": "general",
+  "vatMethod": "standard"
+}

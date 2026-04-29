@@ -1,0 +1,10 @@
+[
+  {
+    "id": "tax-001",
+    "taxType": "增值税及附加",
+    "taxpayerIdentity": "general",
+    "taxPeriod": "2026-04",
+    "amount": "18720.00",
+    "status": "draft"
+  }
+]

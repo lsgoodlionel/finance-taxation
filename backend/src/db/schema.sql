@@ -201,6 +201,17 @@ create table taxpayer_profiles (
   created_at timestamp not null default current_timestamp
 );
 
+create table tax_rulesets (
+  id uuid primary key,
+  company_id uuid not null references companies(id),
+  taxpayer_identity varchar(32) not null,
+  vat_method varchar(32) not null,
+  rule_code varchar(100) not null,
+  rule_name varchar(200) not null,
+  config_json text,
+  created_at timestamp not null default current_timestamp
+);
+
 -- Ledger domain
 create table chart_of_accounts (
   id uuid primary key,
@@ -253,6 +264,32 @@ create table account_balances (
   unique (company_id, account_id, period)
 );
 
+create table bank_journal_entries (
+  id uuid primary key,
+  company_id uuid not null references companies(id),
+  journal_date date not null,
+  account_name varchar(200) not null,
+  summary text,
+  debit_amount numeric(18,2) not null default 0,
+  credit_amount numeric(18,2) not null default 0,
+  balance numeric(18,2) not null default 0,
+  related_document_id uuid references documents(id),
+  created_at timestamp not null default current_timestamp
+);
+
+create table cash_journal_entries (
+  id uuid primary key,
+  company_id uuid not null references companies(id),
+  journal_date date not null,
+  cashier varchar(100),
+  summary text,
+  debit_amount numeric(18,2) not null default 0,
+  credit_amount numeric(18,2) not null default 0,
+  balance numeric(18,2) not null default 0,
+  related_document_id uuid references documents(id),
+  created_at timestamp not null default current_timestamp
+);
+
 -- Reconciliation and audit
 create table reconciliation_checks (
   id uuid primary key,
@@ -261,6 +298,32 @@ create table reconciliation_checks (
   period varchar(50),
   status varchar(30) not null default 'pending',
   result_json text,
+  created_at timestamp not null default current_timestamp
+);
+
+create table reconciliation_issues (
+  id uuid primary key,
+  company_id uuid not null references companies(id),
+  check_id uuid not null references reconciliation_checks(id),
+  issue_type varchar(100) not null,
+  severity varchar(20) not null default 'medium',
+  status varchar(20) not null default 'open',
+  description text not null,
+  related_object_type varchar(50),
+  related_object_id uuid,
+  detail_json text,
+  created_at timestamp not null default current_timestamp
+);
+
+create table print_jobs (
+  id uuid primary key,
+  company_id uuid not null references companies(id),
+  document_id uuid references documents(id),
+  print_type varchar(50) not null,
+  output_format varchar(20) not null default 'pdf',
+  status varchar(20) not null default 'queued',
+  file_path varchar(255),
+  created_by uuid references users(id),
   created_at timestamp not null default current_timestamp
 );
 

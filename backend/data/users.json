@@ -1,0 +1,12 @@
+[
+  {
+    "id": "demo-user",
+    "companyId": "demo-company",
+    "username": "admin",
+    "displayName": "系统管理员",
+    "role": "admin",
+    "passwordSalt": "finance-taxation-demo-salt",
+    "passwordHash": "18bf58ac0a233c79dae298fb62c11999626951121214a7300523f3f9707a9c62",
+    "status": "active"
+  }
+]

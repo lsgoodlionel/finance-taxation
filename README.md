@@ -159,6 +159,22 @@ python3 -m http.server 8080
 http://127.0.0.1:8080/
 ```
 
+## GitHub Actions
+
+仓库当前已经补充 GitHub Actions，覆盖两类自动检查：
+
+- `CI`
+  - 在 `push` 和 `pull_request` 上执行
+  - 校验前端脚本语法
+  - 校验后端源码语法
+  - 校验 `backend/data` 下的 JSON 数据文件可解析
+  - 校验关键项目文件是否存在
+- `PR Review Summary`
+  - 在 PR 打开、更新、重新打开、转为 Ready for review 时执行
+  - 自动在 PR 里回帖说明当前自动审查覆盖范围和人工仍需复核的重点
+
+当前自动审查仍属于基础质量门禁，不替代人工财税规则复核，也不替代正式端到端测试。
+
 ## 演示登录
 
 - 用户名：`admin`

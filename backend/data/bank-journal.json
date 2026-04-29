@@ -1,0 +1,11 @@
+[
+  {
+    "id": "bj-001",
+    "journalDate": "2026-04-23",
+    "accountName": "招商银行基本户",
+    "summary": "支付采购款",
+    "debitAmount": "0.00",
+    "creditAmount": "16800.00",
+    "balance": "528600.00"
+  }
+]

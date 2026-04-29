@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "codex/**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Frontend And Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check frontend script syntax
+        run: node --check src/scripts/app.js
+
+      - name: Check backend source syntax
+        run: find backend/src -name '*.js' -print0 | xargs -0 -n1 node --check
+
+      - name: Validate backend JSON data files
+        run: |
+          node --input-type=module <<'EOF'
+          import { readdirSync, readFileSync, statSync } from "node:fs";
+          import path from "node:path";
+
+          const dataDir = path.join(process.cwd(), "backend", "data");
+          for (const name of readdirSync(dataDir)) {
+            const fullPath = path.join(dataDir, name);
+            if (!statSync(fullPath).isFile() || !name.endsWith(".json")) continue;
+            JSON.parse(readFileSync(fullPath, "utf8"));
+            console.log(`validated ${name}`);
+          }
+          EOF
+
+      - name: Verify key project files
+        run: |
+          test -f index.html
+          test -f README.md
+          test -f backend/package.json
+          test -f backend/src/server.js
+          test -f docs/backend-phase-6-9-validation.md

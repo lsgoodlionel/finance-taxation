@@ -1,0 +1,23 @@
+[
+  {
+    "id": "tp-001",
+    "taxpayerIdentity": "general",
+    "vatMethod": "standard",
+    "effectiveFrom": "2026-01-01",
+    "description": "一般纳税人一般计税"
+  },
+  {
+    "id": "tp-002",
+    "taxpayerIdentity": "small-scale",
+    "vatMethod": "standard",
+    "effectiveFrom": "2026-01-01",
+    "description": "小规模纳税人"
+  },
+  {
+    "id": "tp-003",
+    "taxpayerIdentity": "general",
+    "vatMethod": "simplified",
+    "effectiveFrom": "2026-01-01",
+    "description": "一般纳税人简易计税"
+  }
+]

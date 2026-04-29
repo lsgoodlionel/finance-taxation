@@ -1,0 +1,13 @@
+[
+  {
+    "id": "vch-001",
+    "voucherNo": "记-202604-001",
+    "voucherDate": "2026-04-23",
+    "summary": "采购付款入账",
+    "status": "posted",
+    "entries": [
+      { "account": "库存商品", "debit": "16800.00", "credit": "0.00" },
+      { "account": "银行存款", "debit": "0.00", "credit": "16800.00" }
+    ]
+  }
+]

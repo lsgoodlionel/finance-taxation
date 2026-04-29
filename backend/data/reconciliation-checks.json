@@ -1,0 +1,14 @@
+[
+  {
+    "id": "chk-001",
+    "checkType": "contract-invoice-cash-revenue",
+    "period": "2026-04",
+    "status": "warning"
+  },
+  {
+    "id": "chk-002",
+    "checkType": "payroll-iit-social-housing",
+    "period": "2026-04",
+    "status": "pass"
+  }
+]

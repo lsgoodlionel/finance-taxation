@@ -1,0 +1,11 @@
+[
+  {
+    "id": "cj-001",
+    "journalDate": "2026-04-10",
+    "cashier": "王会计",
+    "summary": "备用金报销",
+    "debitAmount": "0.00",
+    "creditAmount": "500.00",
+    "balance": "1200.00"
+  }
+]

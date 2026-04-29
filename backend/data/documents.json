@@ -1,0 +1,17 @@
+[
+  {
+    "id": "doc-001",
+    "companyId": "demo-company",
+    "code": "FK-202604-0187",
+    "title": "采购付款申请单",
+    "documentType": "财务单据",
+    "category": "采购类",
+    "businessScene": "采购付款",
+    "department": "运营部",
+    "owner": "运营负责人",
+    "amount": "16800.00",
+    "documentDate": "2026-04-23",
+    "status": "draft",
+    "attachmentIds": []
+  }
+]

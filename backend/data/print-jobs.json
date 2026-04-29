@@ -1,0 +1,9 @@
+[
+  {
+    "id": "print-001",
+    "printType": "voucher",
+    "outputFormat": "pdf",
+    "status": "done",
+    "filePath": "/exports/voucher-202604-001.pdf"
+  }
+]

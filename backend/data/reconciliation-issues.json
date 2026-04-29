@@ -1,0 +1,10 @@
+[
+  {
+    "id": "iss-001",
+    "checkId": "chk-001",
+    "issueType": "revenue-mismatch",
+    "severity": "high",
+    "status": "open",
+    "description": "合同金额与已开票金额一致，但回款金额低于收入确认金额。"
+  }
+]
