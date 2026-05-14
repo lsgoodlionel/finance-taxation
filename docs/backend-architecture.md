@@ -24,6 +24,16 @@
 - 登录 / 登出 / Token 刷新
 - 用户、角色、权限点
 - 菜单权限、按钮权限、数据权限
+- 董事长、财务负责人、会计、出纳、人事、研发负责人等角色模型
+
+### 2.1 Sprint 0 补充
+
+Sprint 0 第二批任务已经先补齐设计基线：
+
+- [RBAC 与组织模型](./rbac-organization-model.md)
+- [Business Events 与 Tasks 模型](./business-events-task-model.md)
+
+后端正式实现时，应优先围绕这两份模型推进数据库与 API。
 
 ### 3. 单据与归档模块
 
@@ -80,6 +90,30 @@
 - `GET /api/company/taxpayer-profiles`
 - `POST /api/company/taxpayer-profiles`
 
+### 权限
+
+- `GET /api/access/me`
+- `GET /api/access/menu`
+- `GET /api/roles`
+- `POST /api/roles`
+- `GET /api/permissions`
+- `GET /api/departments`
+- `POST /api/departments`
+
+### 经营事项与任务
+
+- `GET /api/events`
+- `POST /api/events`
+- `GET /api/events/:id`
+- `PUT /api/events/:id`
+- `POST /api/events/:id/analyze`
+- `POST /api/events/:id/relations`
+- `GET /api/tasks`
+- `POST /api/tasks`
+- `GET /api/tasks/:id`
+- `PUT /api/tasks/:id`
+- `POST /api/tasks/:id/approve`
+
 ### 单据
 
 - `GET /api/documents`
@@ -133,12 +167,12 @@
 
 ## 下一步建议
 
-1. 选定后端技术栈并初始化项目
-2. 按 `schema.sql` 建库
-3. 优先打通最小闭环：
+1. 将 `rbac-organization-model.md` 转为正式表结构与中间件
+2. 将 `business-events-task-model.md` 转为正式表结构与 API
+3. 按 `schema.sql` 与 V2 模型并轨建库
+4. 优先打通最小闭环：
    - 登录
-   - 企业信息
-   - 单据新增
-   - 附件上传
-   - 单据查询
-   - 单据详情
+   - 权限菜单
+   - 经营事项新增
+   - 任务拆解
+   - 单据与附件承接

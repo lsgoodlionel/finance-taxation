@@ -153,6 +153,9 @@
 
 - `index.html`
 - `src/`
+- `apps/web/`
+- `apps/api/`
+- `packages/domain-model/`
 - `backend/`
 - `docs/`
 - `README.md`
@@ -172,6 +175,60 @@ python3 -m http.server 8080
 ```text
 http://127.0.0.1:8080/
 ```
+
+## Sprint 0 基线
+
+V2 已开始进入 `Sprint 0`，当前仓库新增了正式工程骨架：
+
+- `apps/web`
+  - React + TypeScript + Vite 的正式前端入口
+- `apps/api`
+  - TypeScript 后端入口，用于承接后续正式 API 模块
+- `packages/domain-model`
+  - `business_events`、`tasks` 等共享领域类型起点
+- `apps/api/src/db/entities.sql`
+  - Sprint 0 的角色、组织、经营事项、任务实体草案
+- `apps/api/migrations/`
+  - 正式 migration 目录占位
+- 根目录 `package.json`
+  - 提供 `npm run verify` 作为基础质量门禁
+- `docs/rbac-organization-model.md`
+  - 正式 RBAC、组织、数据域设计基线
+- `docs/business-events-task-model.md`
+  - 正式 `business_events` / `tasks` 统一对象设计基线
+
+当前 `npm run verify` 会执行：
+
+- 原型前端脚本语法检查
+- 现有 JS 后端语法检查
+- `backend/data` JSON 结构检查
+- `docs/v2-progress-board.md` 结构检查
+
+此外，V2 根目录还预留了：
+
+```bash
+npm run typecheck:v2
+```
+
+用于在依赖安装完成后检查：
+
+- `apps/web`
+- `apps/api`
+
+`Sprint 0` 第二批任务当前已经补齐：
+
+- `TASK-01-01` 用户、角色、权限模型设计
+- `TASK-02-01` `business_events` 数据模型
+- `TASK-03-01` 董事长首页基础卡片
+- `TASK-05-01` 任务模型设计
+
+`Sprint 0` 目前还补齐了：
+
+- `apps/web` 的正式路由与 layout 基线
+- `apps/api` 的模块化路由占位结构
+- `apps/api/src/db/entities.sql` 数据实体草案
+- `apps/api/.env.example` 与 `apps/web/.env.example` 配置基线
+- 已安装 workspace 依赖并生成 `package-lock.json`
 
 ## GitHub Actions
 

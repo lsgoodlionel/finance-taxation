@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: V2 Collaboration Guide
+    url: ./docs/v2-collaboration-operating-model.md
+    about: Read the collaboration rules before creating cross-workstream tasks.

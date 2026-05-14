@@ -1,0 +1,50 @@
+name: V2 Bug
+description: Report a defect during Sprint execution.
+title: "[BUG] "
+labels:
+  - bug
+body:
+  - type: input
+    id: impacted_task
+    attributes:
+      label: Impacted Task ID
+      placeholder: TASK-07-03
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps To Reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Result
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Evidence

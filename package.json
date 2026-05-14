@@ -1,0 +1,17 @@
+{
+  "name": "finance-taxation-workspace",
+  "version": "0.2.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "check:prototype": "node --check src/scripts/app.js",
+    "check:backend-js": "find backend/src -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "check:data": "node tools/check-json.mjs backend/data",
+    "check:progress": "node tools/check-progress-board.mjs docs/v2-progress-board.md",
+    "typecheck:v2": "npm run -w @finance-taxation/web typecheck && npm run -w @finance-taxation/api typecheck",
+    "verify": "npm run check:prototype && npm run check:backend-js && npm run check:data && npm run check:progress"
+  }
+}

@@ -1,0 +1,68 @@
+import { NavLink, Outlet } from "react-router-dom";
+
+const navItems = [
+  { to: "/dashboard/chairman", label: "董事长驾驶舱" },
+  { to: "/events", label: "经营事项总线" },
+  { to: "/tasks", label: "任务中心" }
+];
+
+export function AppLayout() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #f7f4ea 0%, #eef5fb 45%, #e9f1e3 100%)",
+        color: "#1e2a37",
+        fontFamily: "\"PingFang SC\", \"Microsoft YaHei\", sans-serif"
+      }}
+    >
+      <header
+        style={{
+          maxWidth: "1180px",
+          margin: "0 auto",
+          padding: "24px 24px 12px"
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "20px"
+          }}
+        >
+          <div>
+            <div style={{ color: "#6c7a89", letterSpacing: "0.08em", fontSize: "12px" }}>
+              SPRINT 0 V2 FOUNDATION
+            </div>
+            <h1 style={{ margin: "8px 0 0", fontSize: "28px" }}>
+              Finance Taxation V2 Workspace
+            </h1>
+          </div>
+          <nav style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                style={({ isActive }) => ({
+                  textDecoration: "none",
+                  color: isActive ? "#ffffff" : "#1e2a37",
+                  background: isActive ? "#1e2a37" : "rgba(255,255,255,0.72)",
+                  border: "1px solid rgba(20,40,60,0.08)",
+                  borderRadius: "999px",
+                  padding: "10px 16px",
+                  fontSize: "14px"
+                })}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
+      </header>
+      <main style={{ maxWidth: "1180px", margin: "0 auto", padding: "12px 24px 40px" }}>
+        <Outlet />
+      </main>
+    </div>
+  );
+}
