@@ -2,13 +2,16 @@ import { useEffect, useState } from "react";
 import type { Voucher } from "@finance-taxation/domain-model";
 import {
   approveVoucher,
+  createVoucherFromTemplate,
   getVoucherDetail,
   listVouchers,
+  listVoucherTemplates,
   login,
   postVoucher,
   refreshSession,
   updateVoucher,
   type VoucherDetail,
+  type VoucherTemplate,
   validateVoucher
 } from "../lib/api";
 
@@ -41,22 +44,37 @@ export function VouchersPage() {
   } | null>(null);
   const [message, setMessage] = useState("正在准备凭证数据。");
   const [summaryDraft, setSummaryDraft] = useState("");
+  const [templates, setTemplates] = useState<VoucherTemplate[]>([]);
+  const [templateForm, setTemplateForm] = useState({
+    templateKey: "sales",
+    amount: "",
+    businessEventId: "",
+    summary: ""
+  });
 
   useEffect(() => {
     async function bootstrap() {
       try {
         await login("chairman", "123456");
         await refreshSession();
-        const payload = await listVouchers();
+        const [payload, templatePayload] = await Promise.all([
+          listVouchers(),
+          listVoucherTemplates()
+        ]);
         setVouchers(payload.items);
+        setTemplates(templatePayload.items);
         const first = payload.items[0]?.id || null;
         setSelectedVoucherId(first);
         if (first) {
           const firstDetail = await getVoucherDetail(first);
           setDetail(firstDetail);
           setSummaryDraft(firstDetail.summary);
+          setTemplateForm((current) => ({
+            ...current,
+            businessEventId: firstDetail.businessEventId
+          }));
         }
-        setMessage(`已加载 ${payload.total} 个凭证对象。`);
+        setMessage(`已加载 ${payload.total} 个凭证对象和 ${templatePayload.total} 个模板。`);
       } catch (error) {
         setMessage((error as Error).message);
       }
@@ -73,6 +91,10 @@ export function VouchersPage() {
       const nextDetail = await getVoucherDetail(targetId);
       setDetail(nextDetail);
       setSummaryDraft(nextDetail.summary);
+      setTemplateForm((current) => ({
+        ...current,
+        businessEventId: nextDetail.businessEventId
+      }));
     }
   }
 
@@ -81,6 +103,54 @@ export function VouchersPage() {
       <article style={panelStyle()}>
         <h2 style={{ marginTop: 0 }}>凭证中心占位页</h2>
         <p style={{ lineHeight: 1.8 }}>{message}</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: "10px", marginTop: "16px" }}>
+          <select
+            value={templateForm.templateKey}
+            onChange={(event) =>
+              setTemplateForm((current) => ({ ...current, templateKey: event.target.value }))
+            }
+          >
+            {templates.map((item) => (
+              <option key={item.key} value={item.key}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+          <input
+            placeholder="关联事项编号"
+            value={templateForm.businessEventId}
+            onChange={(event) =>
+              setTemplateForm((current) => ({ ...current, businessEventId: event.target.value }))
+            }
+          />
+          <input
+            placeholder="金额"
+            value={templateForm.amount}
+            onChange={(event) =>
+              setTemplateForm((current) => ({ ...current, amount: event.target.value }))
+            }
+          />
+          <input
+            placeholder="摘要（可选）"
+            value={templateForm.summary}
+            onChange={(event) =>
+              setTemplateForm((current) => ({ ...current, summary: event.target.value }))
+            }
+          />
+          <button
+            onClick={() =>
+              void createVoucherFromTemplate(templateForm)
+                .then(async (created) => {
+                  await refreshVoucherState(created.id);
+                  setMessage(`已按模板 ${templateForm.templateKey} 生成凭证 ${created.id}。`);
+                  setTemplateForm((current) => ({ ...current, amount: "", summary: "" }));
+                })
+                .catch((error) => setMessage((error as Error).message))
+            }
+          >
+            模板生成
+          </button>
+        </div>
       </article>
       <section style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: "20px" }}>
         <article style={panelStyle()}>
