@@ -8,6 +8,15 @@
 
 本次版本在原有原型基础上，重点补强了以下能力：
 
+- V2 报表、税务、研发、风险深化
+  - 财务三表已补月 / 季 / 年快照持久化
+  - 已支持报表差异分析、老板口径摘要、报表打印版
+  - 已支持纳税人口径档案、税率规则与期间规则、增值税底稿、企业所得税准备、个税申报资料、印花税与附加税汇总
+  - 已支持税务批次复核、留档、复核记录、留档记录
+  - 已支持研发加计扣除资料包摘要、资本化 / 费用化冲突复核、政策补贴与研发口径提示
+  - 已支持风险评分、异常关闭与复盘记录，以及收入/采购/研发勾稽规则深化
+  - 已支持月结 / 审计 / 稽核资料包导出
+
 - 行为录入智能识别增强
   - 本地规则优先识别
   - 可选网络参考摘要
@@ -153,14 +162,13 @@
 
 - `index.html` / `src/` — 旧版单页原型（保留供参考）
 - `apps/web/` — V2 前端（React + TypeScript + Vite）
-  - `src/pages/` — 7 个业务页面（驾驶舱 / 事项 / 任务 / 单据 / 凭证 / 总账 / 税务）
+  - `src/pages/` — 10 个业务页面（驾驶舱 / 事项 / 任务 / 单据 / 凭证 / 总账 / 报表 / 税务 / 研发 / 风险）
   - `src/lib/api.ts` — 统一 API 客户端
   - `src/components/AppLayout.tsx` — 主导航布局
 - `apps/api/` — V2 后端（Node.js + TypeScript）
-  - `src/modules/` — 模块化路由（auth / access / events / tasks / documents / vouchers / tax / ledger）
+  - `src/modules/` — 模块化路由（auth / access / events / tasks / documents / vouchers / ledger / reports / tax / rnd / risk）
   - `src/middleware/auth.ts` — JWT 认证中间件
-  - `src/services/jsonStore.ts` — JSON 文件存储层（Phase 1 临时存储）
-  - `src/data/` — Phase 1 运行时数据目录
+  - `src/db/` — PostgreSQL client、migration runner、实体草案
 - `packages/domain-model/` — 共享领域类型包（BusinessEvent / Task / Voucher / TaxItem 等）
 - `backend/` — 旧版 JS 后端（保留供迁移参考）
 - `docs/` — V2 设计文档与进度板
@@ -258,6 +266,57 @@ npm run typecheck:v2
 - `tax_filing_batches` 已具备详情、批次校验、提交动作
 - `vouchers` 过账时会同步生成总账分录与过账批次
 - V2 前端已增加 `ledger` 占位页承接总账查询
+- V2 前端已增加 `reports` 报表中心，支持资产负债表 / 利润表 / 现金流量表按月、季、年查询
+- V2 前端已增加 `rnd` 研发辅助账中心，支持研发项目主数据与辅助账摘要查看
+- V2 前端已支持研发成本归集和工时录入，并回显到项目详情
+- V2 前端已增加 `risk` 风险勾稽中心，支持按事项执行风险检查并集中查看发现
+- 董事长驾驶舱已增加报表 / 研发 / 风险快捷入口
+- 经营事项详情页已支持直接执行风险检查
+
+## Phase 2 新增实现
+
+- `EPIC-08` 财务三表首版
+  - 后端已实现：
+    - `GET /api/reports/balance-sheet`
+    - `GET /api/reports/profit-statement`
+    - `GET /api/reports/cash-flow`
+  - 前端已接入报表中心页，支持月度 / 季度 / 年度切换
+- `TASK-RND-01` 研发项目辅助账首版
+  - 已新增 PostgreSQL migration：
+    - `rnd_projects`
+    - `rnd_cost_lines`
+    - `rnd_time_entries`
+  - 后端已实现：
+    - `GET /api/rnd/projects`
+    - `POST /api/rnd/projects`
+    - `GET /api/rnd/projects/:id`
+  - 已提供研发费用化 / 资本化 / 工时 / 可选加计扣除基数摘要
+  - 已支持研发成本归集、工时录入和加计扣除资料包摘要
+- `TASK-RISK-01` 风险勾稽首版
+  - 已新增 PostgreSQL migration：
+    - `risk_findings`
+  - 后端已实现：
+    - `GET /api/risk/findings`
+    - `POST /api/events/:id/risk-check`
+  - 首版规则包括：
+    - 销售收入已入账但未形成增值税事项
+    - 已过账凭证缺少关联原始单据
+    - 研发支出未归集到研发项目辅助账
+    - 存在逾期且阻塞的执行任务
+    - 工资事项缺少个税处理
+    - 工资事项缺少社保处理
+    - 工资事项缺少公积金支持资料
+  - 风险结果已返回评分和优先级
+- `TASK-08-04 / 08-05`
+  - 已支持报表快照保存、快照列表和差异分析
+- `TASK-09-02 / 09-04 / 13-05`
+  - 已支持税率规则与期间规则解析
+  - 已支持企业所得税预缴与汇算准备视图
+  - 已支持增值税底稿和企业所得税准备打印版
+- `TASK-10-05`
+  - 已支持研发项目资本化 / 费用化冲突复核和口径建议
+- `TASK-11-01 ~ 11-04`
+  - 已扩展销售合同缺失、回款依据缺失、采购进项税缺失、采购发票/付款依据缺失等风险规则
 - V2 前端已增加 `documents` 占位页承接单据对象查询
 - V2 前端已增加 `tax` 占位页承接税务事项和申报批次查询
 - `documents` 前端已支持单据详情、附件绑定和归档动作承接
@@ -268,7 +327,7 @@ npm run typecheck:v2
 - `vouchers` 前端已支持修改凭证摘要
 - `ledger` 前端已增加科目余额视图
 
-当前已接入的 V2 接口（38 个）：
+当前已接入的 V2 接口（约 76 个）：
 
 **认证与权限**
 
@@ -279,65 +338,81 @@ npm run typecheck:v2
 
 **经营事项与任务**
 
-- `GET /api/events`
-- `POST /api/events`（需 `events.create` 权限）
-- `GET /api/events/:id`
-- `PUT /api/events/:id`（需 `events.create` 权限）
-- `POST /api/events/:id/analyze`（需 `events.create` 权限）
+- `GET /api/events`、`POST /api/events`
+- `GET /api/events/:id`、`PUT /api/events/:id`
+- `POST /api/events/:id/analyze`
+- `POST /api/events/:id/risk-check`（触发风险勾稽）
 - `GET /api/tasks`
 
 **单据**
 
-- `GET /api/documents`
-- `GET /api/documents/:id`
-- `PUT /api/documents/:id`（需 `documents.manage` 权限）
-- `POST /api/documents/:id/attach`（需 `documents.manage` 权限）
-- `POST /api/documents/:id/upload`（multipart 文件上传，需 `documents.manage` 权限）
-- `POST /api/documents/:id/archive`（需 `documents.manage` 权限）
-- `GET /api/documents/:id/attachments`
+- `GET /api/documents`、`GET /api/documents/:id`、`PUT /api/documents/:id`
+- `POST /api/documents/:id/attach`、`POST /api/documents/:id/upload`（multipart）
+- `POST /api/documents/:id/archive`、`GET /api/documents/:id/attachments`
 
 **凭证**
 
-- `GET /api/vouchers`
-- `GET /api/vouchers/:id`
-- `PUT /api/vouchers/:id`（需 `ledger.post` 权限）
-- `GET /api/vouchers/:id/validate`
-- `POST /api/vouchers/:id/approve`（需 `ledger.post` 权限）
-- `POST /api/vouchers/:id/post`（需 `ledger.post` 权限）
+- `GET /api/vouchers`、`GET /api/vouchers/:id`、`PUT /api/vouchers/:id`
+- `GET /api/vouchers/:id/validate`、`POST /api/vouchers/:id/approve`、`POST /api/vouchers/:id/post`
 - `GET /api/vouchers/:id/posting-records`
+- `GET /api/vouchers/templates`（凭证模板列表）
+- `POST /api/vouchers`（模板生成模式）
 
 **税务**
 
-- `GET /api/tax-items`
-- `GET /api/tax-items/:id`
-- `PUT /api/tax-items/:id`（需 `tax.manage` 权限）
-- `GET /api/tax-filing-batches`
-- `POST /api/tax-filing-batches`（需 `tax.manage` 权限）
-- `GET /api/tax-filing-batches/:id`
-- `POST /api/tax-filing-batches/:id/validate`（需 `tax.manage` 权限）
-- `POST /api/tax-filing-batches/:id/submit`（需 `tax.manage` 权限）
+- `GET /api/tax-items`、`GET /api/tax-items/:id`、`PUT /api/tax-items/:id`
+- `GET /api/tax-filing-batches`、`POST /api/tax-filing-batches`、`GET /api/tax-filing-batches/:id`
+- `POST /api/tax-filing-batches/:id/validate`、`POST /api/tax-filing-batches/:id/submit`
+- `POST /api/tax-filing-batches/:id/review`、`POST /api/tax-filing-batches/:id/archive`
+- `GET /api/tax-filing-batches/:id/reviews`、`GET /api/tax-filing-batches/:id/archives`
+- `GET /api/taxpayer-profiles`、`POST /api/taxpayer-profiles`、`PUT /api/taxpayer-profiles/:id/activate`
+- `GET /api/tax/rules`、`GET /api/tax/vat-working-paper`、`GET /api/tax/corporate-income-tax-preparation`
+- `GET /api/tax/individual-income-tax-materials`、`GET /api/tax/stamp-and-surtax-summary`
+- `GET /api/tax/printable`
 
 **总账**
 
-- `GET /api/ledger/entries`
-- `GET /api/ledger/posting-batches`
-- `GET /api/ledger/summary`
-- `GET /api/ledger/balances`
+- `GET /api/ledger/entries`、`GET /api/ledger/posting-batches`
+- `GET /api/ledger/summary`、`GET /api/ledger/balances`
 
 **科目主数据**
 
 - `GET /api/accounts`（支持 `category` / `q` / `leafOnly` 过滤）
 - `GET /api/accounts/:code`
 
-当前已接入的 V2 页面（7 个）：
+**财务报表**
 
-- 董事长驾驶舱（`/dashboard/chairman`）— 真实数据：银行余额 / 应收 / 税负 / 风险事项
-- 经营事项总线（`/events`）
+- `GET /api/reports/balance-sheet`、`GET /api/reports/profit-statement`、`GET /api/reports/cash-flow`
+- `GET /api/reports/snapshots`、`POST /api/reports/snapshots`、`GET /api/reports/diff`
+- `GET /api/reports/chairman-summary`、`GET /api/reports/printable`
+
+**研发辅助账**
+
+- `GET /api/rnd/projects`、`POST /api/rnd/projects`、`GET /api/rnd/projects/:id`
+- `POST /api/rnd/projects/:id/cost-lines`、`POST /api/rnd/projects/:id/time-entries`
+- `GET /api/rnd/projects/:id/super-deduction-package`
+
+**风险勾稽**
+
+- `GET /api/risk/findings`、`POST /api/risk/findings/:id/close`
+- `GET /api/risk/closure-records`
+
+**资料包**
+
+- `GET /api/packages/closing-bundle`（月结 / 审计 / 稽核资料包）
+
+当前已接入的 V2 页面（10 个）：
+
+- 董事长驾驶舱（`/dashboard/chairman`）— 真实数据：银行余额 / 利润 / 税负 / 风险事项 / AI 摘要
+- 经营事项总线（`/events`）— 支持风险检查入口
 - 任务中心（`/tasks`）
 - 单据中心（`/documents`）— 支持 multipart 文件上传
-- 凭证中心（`/vouchers`）
+- 凭证中心（`/vouchers`）— 支持凭证模板生成
 - 总账中心（`/ledger`）
-- 税务中心（`/tax`）
+- 财务报表（`/reports`）— 三表 + 快照 + 差异分析 + 老板摘要 + 打印版
+- 税务中心（`/tax`）— 增值税底稿 + 企所税 + 个税 + 印花税 + 申报批次管理
+- 研发辅助账（`/rnd`）— 项目主数据 + 成本归集 + 加计扣除资料包
+- 风险勾稽（`/risk`）— 规则引擎 + 风险发现 + 异常关闭复盘
 
 ## Phase 2 Sprint 1 完成项（2026-05-14）
 
@@ -360,14 +435,25 @@ DATABASE_URL=postgres://user:pass@127.0.0.1:5432/finance_taxation_v2
 npm run -w @finance-taxation/api db:migrate
 ```
 
-## Phase 2 后续计划
+## Phase 2 完成情况
 
-按优先级：
+**所有 Phase 2 任务已收口**，按完成顺序：
 
-1. **DB-MIGRATE-AUTH / EVENTS / TASKS**：将各业务模块从 JSON 文件存储迁移至 PostgreSQL（P0）
-2. **TASK-07-02**：凭证模板与自动分录（P1）
-3. **TASK-03-02 / 03 / 04**：驾驶舱深化——利润概览 / 风险卡片 / AI 摘要（P2）
-4. **EPIC-08**：资产负债表、利润表、现金流量表生成（P2）
+1. **DB-MIGRATE**（全部完成）：所有业务模块（auth / events / tasks / vouchers / ledger / documents / tax / rnd / risk / reports）已切换到 PostgreSQL；原 JSON 数据文件（`apps/api/src/data/*.v2.json`）已全部删除；新增 migrations 001–006
+2. **TASK-07-02**：凭证模板与自动分录（5 种模板：销售/采购/费用报销/工资计提/固定资产采购）
+3. **TASK-03-02/03/04**：驾驶舱利润概览、风险待办列表、AI 今日工作摘要
+4. **EPIC-08**：财务三表（资产负债表/利润表/现金流量表）+ 快照持久化 + 差异分析 + 老板口径摘要 + 打印版 + 月结/审计/稽核资料包
+5. **EPIC-09**（全部完成）：纳税人口径档案、税率规则与期间规则、增值税底稿、企业所得税预缴准备、个税申报资料、印花税与附加税汇总、批次复核与留档
+6. **EPIC-10**（全部完成）：研发项目辅助账、成本归集、工时录入、加计扣除资料包、资本化/费用化冲突复核、政策补贴与口径提示
+7. **EPIC-11**（全部完成）：风险规则引擎、评分模型、收入/采购/工资/研发/税务勾稽规则深化、风险关闭与复盘记录
+
+**Phase 3 优先顺序：**
+
+1. `TASK-09-08` — 税务批次自动归集与期间锁定
+2. `TASK-10-07` — 研发项目成果与补贴申报资料绑定
+3. `TASK-11-07` — 风险处置 SLA、升级和关闭后回归检查
+4. `TASK-13-07` — 报表 / 税务 / 资料包 PDF 导出
+5. `TASK-12-01` — 企业制度库
 
 ## GitHub Actions
 

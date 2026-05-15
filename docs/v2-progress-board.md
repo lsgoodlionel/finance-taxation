@@ -4,23 +4,23 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`Phase 2 权限体系、科目主数据、驾驶舱真实数据、附件上传`
-- 当前里程碑：`Phase 2 - Sprint 1`
-- 更新时间：`2026-05-14`
+- 当前目标：`Phase 2 报表中心、研发辅助账、风险勾稽首版`
+- 当前里程碑：`Phase 2 - Sprint 3`
+- 更新时间：`2026-05-15`
 
 ## 2. 总览
 
 | Workstream | Scope | Owner | Branch | Status | Last Update | Next Action | Blocker |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | WS0 | 工程与架构底座 | Codex | main | done | 2026-05-14 | Sprint 0 底座已闭环，下一步进入 Phase 1 数据与业务实现 | 无 |
-| WS1 | 前端应用骨架 | Codex | main | in_progress | 2026-05-14 | 已接入事项、任务、单据、凭证、税务、总账页，并承接主要对象详情与动作 | 无 |
-| WS2 | 认证、权限、组织 | Codex | main | in_progress | 2026-05-14 | 已实现 access/refresh token 与公司、部门两级最小数据边界，下一步补正式权限中间件 | 无 |
-| WS3 | 经营事项总线 | Codex | main | in_progress | 2026-05-14 | 已实现事项创建、更新、分析、活动记录、映射快照和幂等分析替换 | 无 |
-| WS4 | 单据、附件、归档 | Codex | main | in_progress | 2026-05-14 | 已支持 documents 附件记录、绑定与归档，下一步接正式文件服务和前端详情承接 | 无 |
-| WS5 | 账务内核 | Codex | main | in_progress | 2026-05-14 | 已支持 vouchers 过账生成 ledger entries 与 posting batches，下一步接总账详情与科目余额 | 无 |
-| WS6 | 税务与申报准备 | Codex | main | in_progress | 2026-05-14 | 已支持 tax_filing_batches 详情、校验、提交，下一步接批次状态流和留档 | 无 |
-| WS7 | 研发财税 | TBD | TBD | not_started | 2026-05-14 | 设计研发项目与辅助账模型 | 无 |
-| WS8 | 风险勾稽与审计 | TBD | TBD | not_started | 2026-05-14 | 设计风险规则与勾稽事件模型 | 无 |
+| WS1 | 前端应用骨架 | Codex | main | in_progress | 2026-05-15 | 已接入事项、任务、单据、凭证、总账、报表、税务、研发、风险页，下一步补对象间联动与钻取 | 无 |
+| WS2 | 认证、权限、组织 | Codex | main | done | 2026-05-15 | auth / sessions 已迁至 PostgreSQL，全量 requirePermission 守卫已就位，菜单权限过滤已完成 | 无 |
+| WS3 | 经营事项总线 | Codex | main | done | 2026-05-15 | events / tasks / relations / activities / mappings 已全迁至 PostgreSQL；风险检查入口已接入 events 详情 | 无 |
+| WS4 | 单据、附件、归档 | Codex | main | in_progress | 2026-05-15 | documents 与附件元数据已迁至 PostgreSQL，保留文件落盘；下一步接打印/PDF与版本能力 | 无 |
+| WS5 | 账务内核 | Codex | main | in_progress | 2026-05-15 | vouchers、ledger、三大报表、快照、差异分析、老板摘要、打印版与月结/审计/稽核资料包首版已落地，下一步补打印导出深化 | 无 |
+| WS6 | 税务与申报准备 | Codex | main | in_progress | 2026-05-15 | tax_items、tax_filing_batches、taxpayer_profiles、税率规则、增值税底稿、企业所得税准备、个税资料、印花税与附加税、批次复核留档首版已落地 | 无 |
+| WS7 | 研发财税 | Codex | main | in_progress | 2026-05-15 | rnd_projects / rnd_cost_lines / rnd_time_entries 已建模并接入首版辅助账，已补加计扣除资料包、资本化/费用化复核和政策补贴提示 | 本机 DATABASE_URL 未配置，未做迁移实测 |
+| WS8 | 风险勾稽与审计 | Codex | main | in_progress | 2026-05-15 | risk_findings、评分模型、异常关闭与复盘记录已落地，收入/采购/税务/研发勾稽规则已深化 | 本机 DATABASE_URL 未配置，未做迁移实测 |
 | WS9 | AI Agent 与知识库 | TBD | TBD | not_started | 2026-05-14 | 设计 Agent 协议与 Prompt 版本管理 | 无 |
 | WS10 | DevOps、QA、发布 | Codex | main | done | 2026-05-14 | 依赖已安装，锁文件、PR 模板、Issue 模板和 typecheck 基线已就位 | 无 |
 
@@ -51,6 +51,28 @@
 | TASK-05-01 | 任务模型设计 | WS3 | Codex | main | done | TASK-02-01 | 已并入共享领域模型与事件关系设计 |
 | TASK-06-02 | 附件 multipart 上传 | WS4 | Codex | main | done | TASK-00-02 | busboy multipart 解析，文件落盘至 data/uploads/ |
 | TASK-07-01 | 科目体系与辅助核算 | WS5 | Codex | main | done | TASK-00-02 | 小企业会计准则 60+ 科目，GET /api/accounts 已上线 |
+| EPIC-08 | 资产负债表 / 利润表 / 现金流量表 | WS5 | Codex | main | done | TASK-07-01 / DB-MIGRATE-VOUCHERS | 三表 + 快照 + 差异分析 + 老板摘要 + 打印版全部落地 |
+| TASK-08-04 | 报表快照持久化 | WS5 | Codex | main | done | EPIC-08 | `report_snapshots` 与快照保存/列表接口已落地 |
+| TASK-08-05 | 报表差异分析 | WS5 | Codex | main | done | TASK-08-04 | 差异分析接口与前端视图已落地 |
+| TASK-08-06 | 老板口径摘要 | WS5 | Codex | main | done | TASK-08-04 / TASK-RISK-01 | `chairman-summary` 接口与前端摘要卡已落地 |
+| TASK-09-01 | 纳税人身份切换联动 | WS6 | Codex | main | done | DB-MIGRATE-TAX | `taxpayer_profiles` 与前端维护页已落地 |
+| TASK-09-02 | 税率规则与期间规则 | WS6 | Codex | main | done | TASK-09-01 | `tax/rules` 规则解析与申报期间推导已落地 |
+| TASK-09-03 | 增值税底稿 | WS6 | Codex | main | done | TASK-09-01 | `vat-working-paper` 接口与前端底稿视图已落地 |
+| TASK-09-04 | 企业所得税预缴与汇算准备 | WS6 | Codex | main | done | TASK-09-02 / EPIC-08 | 企业所得税准备接口、前端视图与打印已落地 |
+| TASK-09-05 | 个税申报资料 | WS6 | Codex | main | done | TASK-11-02 | 个税资料汇总接口与前端资料清单已落地 |
+| TASK-09-06 | 印花税与附加税事项 | WS6 | Codex | main | done | TASK-09-02 | 印花税与附加税汇总接口和前端摘要已落地 |
+| TASK-09-07 | 申报批次、复核、留档 | WS6 | Codex | main | done | TASK-09-04 / TASK-11-06 | 批次复核、留档、复核记录和留档记录已落地 |
+| TASK-RND-01 | 研发项目辅助账 | WS7 | Codex | main | done | DB-MIGRATE-EVENTS / DB-MIGRATE-VOUCHERS | 项目主数据、成本归集、工时录入、加计扣除资料包、资本化/费用化复核、政策提示全部落地 |
+| TASK-10-04 | 加计扣除资料包 | WS7 | Codex | main | done | TASK-RND-01 | 资料包摘要接口与前端展示已落地 |
+| TASK-10-05 | 资本化 / 费用化规则支持 | WS7 | Codex | main | done | TASK-RND-01 | 项目级资本化/费用化冲突复核与建议已落地 |
+| TASK-10-06 | 政策补贴与研发口径提示 | WS7 | Codex | main | done | TASK-10-05 | 项目详情已支持补贴提示、口径提示和风险提示 |
+| TASK-RISK-01 | 风险勾稽规则 | WS8 | Codex | main | done | DB-MIGRATE-EVENTS / DB-MIGRATE-TAX | 规则引擎、评分模型、异常关闭、复盘记录、收入/采购/研发/税务勾稽规则深化全部落地 |
+| TASK-11-02 | 工资个税社保公积金勾稽 | WS8 | Codex | main | done | TASK-RISK-01 | 已纳入风险引擎规则集 |
+| TASK-11-05 | 风险评分与优先级模型 | WS8 | Codex | main | done | TASK-RISK-01 | 风险评分与优先级返回已落地 |
+| TASK-11-06 | 异常关闭与复盘记录 | WS8 | Codex | main | done | TASK-RISK-01 | `risk_closure_records`、关闭接口、前端复盘列表已落地 |
+| TASK-13-04 | 报表打印 | WS5 | Codex | main | done | TASK-08-04 | `printable` 接口与前端打印动作已落地 |
+| TASK-13-05 | 税务底稿打印 | WS6 | Codex | main | done | TASK-09-03 / TASK-09-04 | 增值税底稿与企业所得税准备打印版已落地 |
+| TASK-13-06 | 月结 / 审计 / 稽核资料包导出 | WS5 | Codex | main | done | TASK-13-04 / TASK-13-05 | closing bundle 导出接口与前端打开动作已落地 |
 
 ## 4. 风险清单
 
@@ -176,7 +198,7 @@
 - 凭证：列表、详情、摘要编辑、校验、审核、过账、分录、过账记录
 - 税务事项：列表、详情、状态更新、申报批次生成、批次校验与提交
 - 总账：分录列表、过账批次列表、科目汇总、科目余额
-- 前端：7 个业务页面全部接入，事项到单据 / 税务 / 凭证完整展示
+- 前端：10 个业务页面全部接入，事项到单据 / 税务 / 凭证 / 报表 / 研发 / 风险完整展示
 
 ### 9.2 Phase 2 已收口项（2026-05-14）
 
@@ -208,17 +230,37 @@
 | DB-MIGRATE | PostgreSQL schema + migration + 数据种子 | WS0 | P0 | ✅ done |
 | TASK-07-01 | 科目体系与辅助核算 | WS5 | P1 | ✅ done |
 | TASK-06-02 | 附件 multipart 上传 | WS4 | P1 | ✅ done |
-| DB-MIGRATE-AUTH | auth 模块迁至 PostgreSQL | WS2 | P0 | 🕐 next |
-| DB-MIGRATE-EVENTS | events 模块迁至 PostgreSQL | WS3 | P0 | 🕐 pending |
-| DB-MIGRATE-TASKS | tasks 模块迁至 PostgreSQL | WS3 | P1 | 🕐 pending |
-| DB-MIGRATE-VOUCHERS | vouchers + ledger 迁至 PostgreSQL | WS5 | P1 | 🕐 pending |
-| DB-MIGRATE-DOCS | documents + attachments 迁至 PostgreSQL | WS4 | P1 | 🕐 pending |
-| DB-MIGRATE-TAX | tax_items + batches 迁至 PostgreSQL | WS6 | P1 | 🕐 pending |
-| TASK-07-02 | 凭证模板与自动分录 | WS5 | P1 | 🕐 pending |
-| TASK-03-02 | 利润、费用、税负概览卡片 | WS1 | P2 | 🕐 pending |
-| TASK-03-03 | 待审批与风险事项卡片 | WS1 | P2 | 🕐 pending |
-| TASK-03-04 | AI 今日工作摘要卡片 | WS9 | P2 | 🕐 pending |
-| EPIC-08 | 资产负债表 / 利润表 / 现金流量表 | WS5 | P2 | 🕐 pending |
+| DB-MIGRATE-AUTH | auth 模块迁至 PostgreSQL | WS2 | P0 | ✅ done |
+| DB-MIGRATE-EVENTS | events 模块迁至 PostgreSQL | WS3 | P0 | ✅ done |
+| DB-MIGRATE-TASKS | tasks 模块迁至 PostgreSQL | WS3 | P1 | ✅ done |
+| DB-MIGRATE-VOUCHERS | vouchers + ledger 迁至 PostgreSQL | WS5 | P1 | ✅ done |
+| DB-MIGRATE-DOCS | documents + attachments 迁至 PostgreSQL | WS4 | P1 | ✅ done |
+| DB-MIGRATE-TAX | tax_items + batches 迁至 PostgreSQL | WS6 | P1 | ✅ done |
+| TASK-07-02 | 凭证模板与自动分录 | WS5 | P1 | ✅ done |
+| TASK-03-02 | 利润、费用、税负概览卡片 | WS1 | P2 | ✅ done |
+| TASK-03-03 | 待审批与风险事项卡片 | WS1 | P2 | ✅ done |
+| TASK-03-04 | AI 今日工作摘要卡片 | WS9 | P2 | ✅ done |
+| EPIC-08 | 资产负债表 / 利润表 / 现金流量表 | WS5 | P2 | ✅ done |
+| TASK-08-04 | 报表快照持久化 | WS5 | P2 | ✅ done |
+| TASK-08-05 | 报表差异分析 | WS5 | P2 | ✅ done |
+| TASK-08-06 | 老板口径摘要 | WS5 | P2 | ✅ done |
+| TASK-09-01 | 纳税人身份切换联动 | WS6 | P2 | ✅ done |
+| TASK-09-02 | 税率规则与期间规则 | WS6 | P2 | ✅ done |
+| TASK-09-03 | 增值税底稿 | WS6 | P2 | ✅ done |
+| TASK-09-04 | 企业所得税预缴与汇算准备 | WS6 | P2 | ✅ done |
+| TASK-09-05 | 个税申报资料 | WS6 | P2 | ✅ done |
+| TASK-09-06 | 印花税与附加税事项 | WS6 | P2 | ✅ done |
+| TASK-09-07 | 申报批次、复核、留档 | WS6 | P2 | ✅ done |
+| TASK-RND-01 | 研发项目辅助账 | WS7 | P2 | ✅ done |
+| TASK-10-04 | 加计扣除资料包 | WS7 | P2 | ✅ done |
+| TASK-10-05 | 资本化 / 费用化规则支持 | WS7 | P2 | ✅ done |
+| TASK-10-06 | 政策补贴与研发口径提示 | WS7 | P2 | ✅ done |
+| TASK-RISK-01 | 风险勾稽规则 | WS8 | P2 | ✅ done |
+| TASK-11-02 | 工资个税社保公积金勾稽 | WS8 | P2 | ✅ done |
+| TASK-11-05 | 风险评分与优先级模型 | WS8 | P2 | ✅ done |
+| TASK-11-06 | 异常关闭与复盘记录 | WS8 | P2 | ✅ done |
+| TASK-13-04 | 报表打印 | WS5 | P3 | ✅ done |
+| TASK-13-06 | 月结 / 审计 / 稽核资料包导出 | WS5 | P3 | ✅ done |
 
 ### 10.3 Phase 2 验收标准
 
@@ -226,13 +268,24 @@
 - ✅ 董事长驾驶舱核心 4 个卡片有真实数据
 - ✅ 科目体系支持标准科目码查询
 - ✅ PostgreSQL schema + migration + seed 就位
-- 🕐 所有业务模块完成从 JSON 文件迁移到 PostgreSQL（下一阶段验收目标）
-- 🕐 凭证模板支持按事项类型预置借贷分录
+- ✅ auth 模块已切换到 PostgreSQL（users / user_passwords / sessions / departments）
+- ✅ events/tasks 模块已切换到 PostgreSQL（business_events / relations / activities / event_*_mappings / voucher_draft_lines / tasks）
+- ✅ 所有 V2 业务模块已完成从 JSON 文件迁移到 PostgreSQL
+- ✅ 凭证模板支持按事项类型预置借贷分录
+- ✅ 财务三表首版 API 与前端报表页已落地
+- ✅ 报表快照、差异分析、老板口径摘要、打印版首版已落地
+- ✅ 纳税人口径档案、税率规则、增值税底稿、企业所得税准备首版已落地
+- ✅ 研发项目辅助账首版已落地
+- ✅ 研发资本化 / 费用化复核首版已落地
+- ✅ 风险勾稽首版规则与风险发现页已落地
+- ✅ 收入、采购、工资、研发、税务勾稽规则已完成一轮深化
+- ✅ 风险关闭与复盘记录首版已落地
 
 ## 11. 偏差检查（2026-05-15）
 
-- 对照产品蓝图：未偏离”经营事项主线优先”的核心路径；Phase 2 Sprint 1 已按计划推进
-- 对照开发计划：Phase 2 Sprint 1 的 6 个 P0/P1 任务（TASK-01-04/05、TASK-03-01、TASK-07-01、TASK-06-02、DB-MIGRATE schema）已全部收口
-- 对照协作机制：当前仍主要在 `main` 单线推进（已识别偏差），待模块迁移阶段再切换多分支模式
-- **当前存储层：JSON 文件存储**（进行中迁移）。DB-MIGRATE 基础设施已就位，下一步是逐模块迁移。迁移顺序：auth → events → tasks → vouchers → documents → tax
-- Phase 2 Sprint 1 已收口；Phase 2 Sprint 2 重点：全量 PostgreSQL 模块迁移 + 凭证模板
+- 对照产品蓝图：未偏离”经营事项主线优先”的核心路径；Phase 2 Sprint 2–4 已按计划完成
+- 对照开发计划：Phase 2 所有 P0/P1/P2 任务已全部收口；Sprint 3–4 已完成报表、税务深化、研发、风险首版
+- 对照协作机制：当前仍主要在 `main` 单线推进（已识别偏差），待后续再切换多分支模式
+- **存储层：JSON 文件存储已完全下线**。`auth / events / tasks / vouchers / ledger / documents / tax / rnd / risk / reports` 全部使用 PostgreSQL；原 `apps/api/src/data/*.v2.json` 已删除
+- API 规模：约 76 个路由端点（Phase 1 末 38 个）
+- 下一优先顺序：`TASK-09-08`（税务批次自动归集）、`TASK-10-07`（研发里程碑绑定）、`TASK-11-07`（风险 SLA 与升级）、`TASK-13-07`（PDF 导出）、`TASK-12-01`（企业制度库）
