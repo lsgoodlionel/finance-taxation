@@ -4,8 +4,8 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`Phase 3 Sprint P3-1：合同管理模块`
-- 当前里程碑：`Phase 3 - Sprint P3-1`
+- 当前目标：`Phase 3 Sprint P3-3：AI 财税秘书 v1`
+- 当前里程碑：`Phase 3 - Sprint P3-3`
 - 更新时间：`2026-05-15`
 
 ## 2. 总览
@@ -22,6 +22,7 @@
 | WS7 | 研发财税 | Codex | main | in_progress | 2026-05-15 | rnd_projects / rnd_cost_lines / rnd_time_entries 已建模并接入首版辅助账，已补加计扣除资料包、资本化/费用化复核和政策补贴提示 | 本机 DATABASE_URL 未配置，未做迁移实测 |
 | WS8 | 风险勾稽与审计 | Codex | main | in_progress | 2026-05-15 | risk_findings、评分模型、异常关闭与复盘记录已落地，收入/采购/税务/研发勾稽规则已深化 | 本机 DATABASE_URL 未配置，未做迁移实测 |
 | WS3 补全 | 合同管理模块（P3-1） | Codex | main | done | 2026-05-15 | contracts 表、CRUD API、ContractsPage、权限守卫、菜单项均已落地 | 无 |
+| WS-HR | 员工/工资/社保/公积金（P3-2） | Codex | main | done | 2026-05-15 | employees + payroll_policy + payroll_records 表、计算引擎（IIT 七级）、PayrollPage、权限守卫均已落地 | 无 |
 | WS9 | AI Agent 与知识库 | TBD | TBD | not_started | 2026-05-14 | 设计 Agent 协议与 Prompt 版本管理 | 无 |
 | WS10 | DevOps、QA、发布 | Codex | main | done | 2026-05-14 | 依赖已安装，锁文件、PR 模板、Issue 模板和 typecheck 基线已就位 | 无 |
 
@@ -290,3 +291,40 @@
 - **存储层：JSON 文件存储已完全下线**。`auth / events / tasks / vouchers / ledger / documents / tax / rnd / risk / reports` 全部使用 PostgreSQL；原 `apps/api/src/data/*.v2.json` 已删除
 - API 规模：约 76 个路由端点（Phase 1 末 38 个）
 - 下一优先顺序：`TASK-09-08`（税务批次自动归集）、`TASK-10-07`（研发里程碑绑定）、`TASK-11-07`（风险 SLA 与升级）、`TASK-13-07`（PDF 导出）、`TASK-12-01`（企业制度库）
+
+## 12. Phase 3 Sprint 完成情况（2026-05-15）
+
+### Sprint P3-1：合同管理（✅ done）
+
+| 项目 | 状态 |
+| --- | --- |
+| `migrations/007_contracts.sql` + `business_events.contract_id` 外键 | ✅ |
+| `apps/api/src/modules/contracts/routes.ts` — listContracts / createContract / getContractDetail / updateContract / closeContract / getContractEvents | ✅ |
+| `apps/web/src/pages/ContractsPage.tsx` — 列表、筛选、新建、详情、关闭动作 | ✅ |
+| `packages/domain-model` 扩展 Contract / ContractWithEventCount / ContractType / ContractStatus | ✅ |
+| `migrations/002_seed_data.sql` 补充 contracts.view / contracts.manage 权限行 | ✅ |
+| AppLayout 导航项 / App.tsx 路由 | ✅ |
+
+### Sprint P3-2：员工/工资/社保/公积金（✅ done）
+
+| 项目 | 状态 |
+| --- | --- |
+| `migrations/008_employees_payroll.sql` — employees + payroll_policy + payroll_records 表 | ✅ |
+| `apps/api/src/modules/payroll/routes.ts` — listEmployees / createEmployee / updateEmployee / getPayrollPolicy / updatePayrollPolicy / computePayroll / listPayroll / confirmPayroll / getPayrollPeriods | ✅ |
+| IIT 七级超额累进税率计算引擎（taxableIncome → iitWithheld） | ✅ |
+| 社保/公积金 clamp 计算（base = clamp(gross, min, max)，员工+单位分别计算） | ✅ |
+| `apps/api/src/app.ts` 接入全部工资路由 | ✅ |
+| `packages/domain-model` 扩展 Employee / PayrollPolicy / PayrollRecord / PayrollPeriodSummary / EmployeeStatus / PayrollStatus | ✅ |
+| `apps/web/src/pages/PayrollPage.tsx` — 员工管理/工资计算/参数设置三 Tab | ✅ |
+| `apps/web/src/lib/api.ts` 补充工资 API 函数 | ✅ |
+| `migrations/002_seed_data.sql` 补充 payroll.view / payroll.manage 权限行（chairman+fd+accountant+viewer） | ✅ |
+| AppLayout 导航项 / App.tsx 路由 | ✅ |
+
+### Sprint P3-3 至 P3-6（待启动）
+
+| Sprint | 主题 | 状态 |
+| --- | --- | --- |
+| P3-3 | AI 财税秘书 v1（自然语言入口 + 上下文对话） | not_started |
+| P3-4 | PDF 导出（报表/凭证/工资条/申报底稿） | not_started |
+| P3-5 | 完整审计日志（操作溯源 + 修改记录） | not_started |
+| P3-6 | 老板问答 Agent + 研发深化 | not_started |

@@ -10,6 +10,7 @@ import type {
   ClosingPackageExport,
   CorporateIncomeTaxPreparation,
   DocumentAttachmentRecord,
+  Employee,
   EventDocumentMapping,
   EventTaxMapping,
   EventVoucherDraft,
@@ -17,6 +18,9 @@ import type {
   LedgerEntry,
   LedgerPostingBatch,
   MenuNode,
+  PayrollPeriodSummary,
+  PayrollPolicy,
+  PayrollRecord,
   ProfitStatementReport,
   ReportDiffResult,
   ReportSnapshot,
@@ -808,5 +812,93 @@ export async function closeContract(contractId: string, status: "fulfilled" | "t
   return request<{ contract: Contract }>(`/api/contracts/${contractId}/close`, {
     method: "POST",
     body: JSON.stringify({ status })
+  });
+}
+
+// ─── Payroll ─────────────────────────────────────────────────────────────────
+
+export async function listEmployees() {
+  return request<{ items: Employee[]; total: number }>("/api/employees");
+}
+
+export async function createEmployee(data: {
+  name: string;
+  idCard?: string;
+  position?: string;
+  departmentId?: string;
+  hireDate?: string;
+  baseSalary: number;
+  notes?: string;
+}) {
+  return request<{ employee: Employee }>("/api/employees", {
+    method: "POST",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function updateEmployee(
+  employeeId: string,
+  data: Partial<{
+    name: string;
+    idCard: string;
+    position: string;
+    departmentId: string;
+    hireDate: string;
+    leaveDate: string;
+    baseSalary: number;
+    status: string;
+    notes: string;
+  }>
+) {
+  return request<{ employee: Employee }>(`/api/employees/${employeeId}`, {
+    method: "PUT",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function getPayrollPolicy() {
+  return request<{ policy: PayrollPolicy }>("/api/payroll/policy");
+}
+
+export async function updatePayrollPolicy(
+  data: Partial<{
+    socialSecurityBaseMin: number;
+    socialSecurityBaseMax: number;
+    pensionEmployeeRate: number;
+    pensionEmployerRate: number;
+    medicalEmployeeRate: number;
+    medicalEmployerRate: number;
+    unemploymentEmployeeRate: number;
+    unemploymentEmployerRate: number;
+    housingFundEmployeeRate: number;
+    housingFundEmployerRate: number;
+    iitThreshold: number;
+  }>
+) {
+  return request<{ policy: PayrollPolicy }>("/api/payroll/policy", {
+    method: "PUT",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function getPayrollPeriods() {
+  return request<{ items: PayrollPeriodSummary[]; total: number }>("/api/payroll/periods");
+}
+
+export async function computePayroll(period: string) {
+  return request<{ records: PayrollRecord[]; period: string }>("/api/payroll/compute", {
+    method: "POST",
+    body: JSON.stringify({ period })
+  });
+}
+
+export async function listPayroll(period: string) {
+  return request<{ items: PayrollRecord[]; total: number }>(`/api/payroll?period=${encodeURIComponent(period)}`);
+}
+
+export async function confirmPayroll(recordId: string) {
+  return request<{ record: PayrollRecord }>(`/api/payroll/${recordId}/confirm`, {
+    method: "POST",
+    body: JSON.stringify({})
   });
 }

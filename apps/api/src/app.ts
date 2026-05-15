@@ -94,6 +94,17 @@ import {
   listContracts,
   updateContract
 } from "./modules/contracts/routes.js";
+import {
+  computePayroll,
+  confirmPayroll,
+  createEmployee,
+  getPayrollPeriods,
+  getPayrollPolicy,
+  listEmployees,
+  listPayroll,
+  updateEmployee,
+  updatePayrollPolicy
+} from "./modules/payroll/routes.js";
 import { login, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
@@ -666,6 +677,68 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "PUT") {
       if (!(await requirePermission("ledger.post", req, res))) return;
       return updateVoucher(req, res, voucherDetailId);
+    }
+  }
+
+  if (url.pathname === "/api/employees") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") {
+      if (!(await requirePermission("payroll.view", req, res))) return;
+      return listEmployees(req, res);
+    }
+    if (req.method === "POST") {
+      if (!(await requirePermission("payroll.manage", req, res))) return;
+      return createEmployee(req, res);
+    }
+  }
+
+  const employeeDetailMatch = url.pathname.match(/^\/api\/employees\/([^/]+)$/);
+  const employeeDetailId = employeeDetailMatch?.[1];
+  if (employeeDetailId) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "PUT") {
+      if (!(await requirePermission("payroll.manage", req, res))) return;
+      return updateEmployee(req, res, employeeDetailId);
+    }
+  }
+
+  if (url.pathname === "/api/payroll/policy") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") {
+      if (!(await requirePermission("payroll.view", req, res))) return;
+      return getPayrollPolicy(req, res);
+    }
+    if (req.method === "PUT") {
+      if (!(await requirePermission("payroll.manage", req, res))) return;
+      return updatePayrollPolicy(req, res);
+    }
+  }
+
+  if (url.pathname === "/api/payroll/periods") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.view", req, res))) return;
+    if (req.method === "GET") return getPayrollPeriods(req, res);
+  }
+
+  if (url.pathname === "/api/payroll/compute") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.manage", req, res))) return;
+    if (req.method === "POST") return computePayroll(req, res);
+  }
+
+  if (url.pathname === "/api/payroll") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.view", req, res))) return;
+    if (req.method === "GET") return listPayroll(req, res);
+  }
+
+  const payrollConfirmMatch = url.pathname.match(/^\/api\/payroll\/([^/]+)\/confirm$/);
+  const payrollConfirmId = payrollConfirmMatch?.[1];
+  if (payrollConfirmId) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") {
+      if (!(await requirePermission("payroll.manage", req, res))) return;
+      return confirmPayroll(req, res, payrollConfirmId);
     }
   }
 

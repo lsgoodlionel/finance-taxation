@@ -87,14 +87,23 @@ insert into role_permissions (id, role_id, permission_key, scope) values
   ('rp-fd-18', 'role-finance-director', 'contracts.manage', 'company'),
   -- accountant 合同只读
   ('rp-acc-10', 'role-accountant', 'contracts.view', 'company'),
-  -- viewer（6 权，纯只读）
+  -- chairman 工资权限（P3-2）
+  ('rp-chr-20', 'role-chairman', 'payroll.view',   'company'),
+  ('rp-chr-21', 'role-chairman', 'payroll.manage', 'company'),
+  -- finance-director 工资权限
+  ('rp-fd-19', 'role-finance-director', 'payroll.view',   'company'),
+  ('rp-fd-20', 'role-finance-director', 'payroll.manage', 'company'),
+  -- accountant 工资只读
+  ('rp-acc-11', 'role-accountant', 'payroll.view', 'company'),
+  -- viewer（7 权，纯只读）
   ('rp-vw-01', 'role-viewer', 'dashboard.view',  'company'),
   ('rp-vw-02', 'role-viewer', 'events.view',     'company'),
   ('rp-vw-03', 'role-viewer', 'tasks.view',      'company'),
   ('rp-vw-04', 'role-viewer', 'documents.view',  'company'),
   ('rp-vw-05', 'role-viewer', 'ledger.view',     'company'),
   ('rp-vw-06', 'role-viewer', 'tax.view',        'company'),
-  ('rp-vw-07', 'role-viewer', 'contracts.view',  'company')
+  ('rp-vw-07', 'role-viewer', 'contracts.view',  'company'),
+  ('rp-vw-08', 'role-viewer', 'payroll.view',    'company')
 on conflict (id) do nothing;
 
 -- ─── User Roles ─────────────────────────────────────────────────────────────

@@ -697,6 +697,78 @@ export interface ClosingPackageExport {
   }>;
 }
 
+export type EmployeeStatus = "active" | "on_leave" | "resigned";
+
+export interface Employee {
+  id: string;
+  companyId: string;
+  departmentId: string | null;
+  name: string;
+  idCard: string;
+  position: string;
+  hireDate: string | null;
+  leaveDate: string | null;
+  baseSalary: number;
+  status: EmployeeStatus;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PayrollPolicy {
+  id: string;
+  companyId: string;
+  socialSecurityBaseMin: number;
+  socialSecurityBaseMax: number;
+  pensionEmployeeRate: number;
+  pensionEmployerRate: number;
+  medicalEmployeeRate: number;
+  medicalEmployerRate: number;
+  unemploymentEmployeeRate: number;
+  unemploymentEmployerRate: number;
+  housingFundEmployeeRate: number;
+  housingFundEmployerRate: number;
+  iitThreshold: number;
+  updatedAt: string;
+}
+
+export type PayrollStatus = "draft" | "confirmed";
+
+export interface PayrollRecord {
+  id: string;
+  companyId: string;
+  period: string;
+  employeeId: string;
+  employeeName: string;
+  grossSalary: number;
+  socialSecurityEmployee: number;
+  socialSecurityEmployer: number;
+  housingFundEmployee: number;
+  housingFundEmployer: number;
+  iitWithheld: number;
+  netPay: number;
+  status: PayrollStatus;
+  confirmedAt: string | null;
+  confirmedByUserId: string | null;
+  confirmedByName: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PayrollPeriodSummary {
+  period: string;
+  headcount: number;
+  totalGross: number;
+  totalSocialSecurityEmployee: number;
+  totalSocialSecurityEmployer: number;
+  totalHousingFundEmployee: number;
+  totalHousingFundEmployer: number;
+  totalIit: number;
+  totalNetPay: number;
+  status: "draft" | "confirmed" | "mixed";
+}
+
 export type ContractType = "sales" | "procurement" | "lease" | "service" | "other";
 export type ContractStatus = "draft" | "active" | "fulfilled" | "terminated" | "expired";
 
@@ -744,6 +816,8 @@ export const permissionCatalog = [
   "risk.manage",
   "contracts.view",
   "contracts.manage",
+  "payroll.view",
+  "payroll.manage",
   "settings.manage"
 ] as const;
 
