@@ -289,33 +289,31 @@
 
 ### 当前偏差记录
 
-- **偏差 1：单主分支推进**（已识别）  
-  当前仍在 `main` 连续演进，未切入多分支工作流。待模块迁移 PostgreSQL 阶段再按 workstream 拆分。
+- **偏差 1：单主分支推进**（已识别，Phase 3 起按 workstream 拆分）  
+  Phase 0–2 全程在 `main` 连续演进，未切入多分支工作流。Phase 3 启动后按 workstream 拆分分支。
 
-- **偏差 2：存储层仍为 JSON 文件**（进行中）  
-  DB-MIGRATE 基础设施已就位（schema + pg client + migration runner），但各业务模块仍在读写 JSON 文件。下一步逐模块迁移（DB-MIGRATE-AUTH → EVENTS → TASKS → DOCS → VOUCHERS → TAX）。
+### Phase 2 DB 迁移完成情况（全部 done）
 
-### Phase 2 剩余执行顺序
+| 任务 ID | 描述 | 状态 |
+| --- | --- | --- |
+| DB-MIGRATE-AUTH | auth 模块迁至 pg（users / roles / sessions） | ✅ done |
+| DB-MIGRATE-EVENTS | events 模块迁至 pg | ✅ done |
+| DB-MIGRATE-TASKS | tasks 模块迁至 pg | ✅ done |
+| DB-MIGRATE-VOUCHERS | vouchers + ledger 模块迁至 pg | ✅ done |
+| DB-MIGRATE-DOCS | documents + attachments 迁至 pg | ✅ done |
+| DB-MIGRATE-TAX | tax_items + tax_filing_batches 迁至 pg | ✅ done |
+| TASK-07-02 | 凭证模板与自动分录 | ✅ done |
+| TASK-03-02 | 驾驶舱利润 / 费用概览卡片 | ✅ done |
+| TASK-03-03 | 驾驶舱风险事项可点击列表 | ✅ done |
+| EPIC-08 | 资产负债表 / 利润表 / 现金流量表 | ✅ done |
+| JSON 文件存储全量下线 | 删除 apps/api/src/data/*.v2.json | ✅ done |
 
-| 优先级 | 任务 ID | 描述 | 依赖 |
-| --- | --- | --- | --- |
-| P0 | DB-MIGRATE-AUTH | auth 模块迁至 pg（users / roles / sessions） | DB-MIGRATE schema ✅ |
-| P0 | DB-MIGRATE-EVENTS | events 模块迁至 pg | DB-MIGRATE-AUTH |
-| P1 | DB-MIGRATE-TASKS | tasks 模块迁至 pg | DB-MIGRATE-EVENTS |
-| P1 | DB-MIGRATE-VOUCHERS | vouchers + ledger 模块迁至 pg | DB-MIGRATE-TASKS |
-| P1 | DB-MIGRATE-DOCS | documents + attachments 迁至 pg | DB-MIGRATE-EVENTS |
-| P1 | DB-MIGRATE-TAX | tax_items + tax_filing_batches 迁至 pg | DB-MIGRATE-EVENTS |
-| P1 | TASK-07-02 | 凭证模板与自动分录 | DB-MIGRATE-VOUCHERS |
-| P2 | TASK-03-02 | 驾驶舱利润 / 费用概览卡片 | DB-MIGRATE-VOUCHERS |
-| P2 | TASK-03-03 | 驾驶舱风险事项可点击列表 | DB-MIGRATE-EVENTS |
-| P2 | EPIC-08 | 资产负债表 / 利润表 / 现金流量表 | TASK-07-02 |
+### Sprint 3-4 目标（已全部完成）
 
-### Sprint 3-4 目标（Phase 2 持续）
-
-- 完成全量模块 PostgreSQL 迁移，下线 JSON 文件存储
-- 凭证模板：按事项类型（sales / procurement / payroll 等）预置借贷模板
-- 驾驶舱深化：利润、费用、税负、风险事项
-- 启动 EPIC-08 财务三表生成
+- ✅ 完成全量模块 PostgreSQL 迁移，下线 JSON 文件存储
+- ✅ 凭证模板：按事项类型（sales / procurement / payroll 等）预置借贷模板
+- ✅ 驾驶舱深化：利润、费用、税负、风险事项
+- ✅ EPIC-08 财务三表生成首版落地
 
 ### EPIC-05 任务中心与审批流
 

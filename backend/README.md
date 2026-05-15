@@ -1,4 +1,6 @@
-# Backend Scaffold
+> ⚠️ **归档说明**：本目录为旧版 JS 后端骨架（已归档）。V2 正式实现在 `apps/api/`（Node.js + TypeScript + PostgreSQL）。本目录仅供历史参考，不再维护。
+
+# Backend Scaffold（已归档）
 
 这个目录用于承接从前端高保真原型升级到真实业务系统后的后端实现。
 

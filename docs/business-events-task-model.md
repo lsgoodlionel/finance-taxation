@@ -1,3 +1,5 @@
+> ✅ **已按设计实现**（2026-05-15）：本文档所描述的 `business_events` 与 `tasks` 统一对象模型已在 V2 中完整落地。当前实现位于 `apps/api/src/modules/events/` 和 `apps/api/src/modules/tasks/`，数据库 schema 见 `migrations/001_initial_schema.sql`，共享类型见 `packages/domain-model/src/index.ts`。本文档可作为设计依据继续保留。
+
 # Business Events 与 Tasks 模型设计
 
 ## 1. 目标
