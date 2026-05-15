@@ -106,6 +106,12 @@ import {
   updatePayrollPolicy
 } from "./modules/payroll/routes.js";
 import { chat as assistantChat } from "./modules/assistant/routes.js";
+import {
+  payrollPdf,
+  payrollSlipPdf,
+  reportPdf,
+  voucherPdf
+} from "./modules/pdf/routes.js";
 import { login, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
@@ -785,6 +791,33 @@ async function router(req: ApiRequest, res: ServerResponse) {
       if (!(await requirePermission("contracts.manage", req, res))) return;
       return updateContract(req, res, contractDetailId);
     }
+  }
+
+  // ── PDF Export ──
+  if (url.pathname === "/api/pdf/payroll") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.view", req, res))) return;
+    if (req.method === "GET") return payrollPdf(req, res);
+  }
+
+  if (url.pathname === "/api/pdf/payroll-slip") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.view", req, res))) return;
+    if (req.method === "GET") return payrollSlipPdf(req, res);
+  }
+
+  if (url.pathname === "/api/pdf/report") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.view", req, res))) return;
+    if (req.method === "GET") return reportPdf(req, res);
+  }
+
+  const voucherPdfMatch = url.pathname.match(/^\/api\/pdf\/voucher\/([^/]+)$/);
+  const voucherPdfId = voucherPdfMatch?.[1];
+  if (voucherPdfId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.view", req, res))) return;
+    if (req.method === "GET") return voucherPdf(req, res, voucherPdfId);
   }
 
   // ── Assistant ──

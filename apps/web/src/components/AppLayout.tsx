@@ -6,6 +6,7 @@ const navItems = [
   { to: "/contracts", label: "合同管理" },
   { to: "/payroll", label: "工资管理" },
   { to: "/assistant", label: "AI 财税秘书" },
+  { to: "/pdf-export", label: "PDF 导出" },
   { to: "/tasks", label: "任务中心" },
   { to: "/documents", label: "单据中心" },
   { to: "/vouchers", label: "凭证中心" },

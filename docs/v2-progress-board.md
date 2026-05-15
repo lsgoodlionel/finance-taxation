@@ -4,8 +4,8 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`Phase 3 Sprint P3-4：PDF 导出`
-- 当前里程碑：`Phase 3 - Sprint P3-4`
+- 当前目标：`Phase 3 Sprint P3-5：完整审计日志`
+- 当前里程碑：`Phase 3 - Sprint P3-5`
 - 更新时间：`2026-05-15`
 
 ## 2. 总览
@@ -24,6 +24,7 @@
 | WS3 补全 | 合同管理模块（P3-1） | Codex | main | done | 2026-05-15 | contracts 表、CRUD API、ContractsPage、权限守卫、菜单项均已落地 | 无 |
 | WS-HR | 员工/工资/社保/公积金（P3-2） | Codex | main | done | 2026-05-15 | employees + payroll_policy + payroll_records 表、计算引擎（IIT 七级）、PayrollPage、权限守卫均已落地 | 无 |
 | WS9 | AI 财税秘书 v1（P3-3） | Codex | main | done | 2026-05-15 | @anthropic-ai/sdk 接入、SSE 流式响应、系统 Prompt（含公司上下文 + 近期事项）、AssistantPage 对话界面、建议事项一键创建 | 无 |
+| WS-PDF | PDF 导出（P3-4） | Codex | main | done | 2026-05-15 | 工资汇总/工资条/凭证/报表快照四类 PDF 模板、HTML 打印版、PdfExportPage 三 Tab 下载中心均已落地 | 无 |
 | WS9 | AI Agent 与知识库 | TBD | TBD | not_started | 2026-05-14 | 设计 Agent 协议与 Prompt 版本管理 | 无 |
 | WS10 | DevOps、QA、发布 | Codex | main | done | 2026-05-14 | 依赖已安装，锁文件、PR 模板、Issue 模板和 typecheck 基线已就位 | 无 |
 
@@ -334,11 +335,19 @@
 | AppLayout 导航项 / App.tsx 路由 | ✅ |
 | `docs/v2-progress-board.md` 更新 | ✅ |
 
-### Sprint P3-4 至 P3-6（待启动）
+### Sprint P3-4：PDF 导出（✅ done）
+
+| 项目 | 状态 |
+| --- | --- |
+| `apps/api/src/modules/pdf/template.ts` — `wrapHtml()` HTML 打印模板（A4 页面 + CJK 字体 + 打印按钮） | ✅ |
+| `apps/api/src/modules/pdf/routes.ts` — `payrollPdf / payrollSlipPdf / voucherPdf / reportPdf` 四类 PDF 路由 | ✅ |
+| `apps/api/src/app.ts` 接入全部 PDF 路由（payroll.view / ledger.view 权限守卫） | ✅ |
+| `apps/web/src/pages/PdfExportPage.tsx` — 工资导出 / 报表导出 / 凭证导出三 Tab 下载中心 | ✅ |
+| AppLayout 导航项 / App.tsx 路由 | ✅ |
+
+### Sprint P3-5 至 P3-6（待启动）
 
 | Sprint | 主题 | 状态 |
 | --- | --- | --- |
-| P3-3 | AI 财税秘书 v1（自然语言入口 + 上下文对话） | ✅ done |
-| P3-4 | PDF 导出（报表/凭证/工资条/申报底稿） | not_started |
 | P3-5 | 完整审计日志（操作溯源 + 修改记录） | not_started |
 | P3-6 | 老板问答 Agent + 研发深化 | not_started |
