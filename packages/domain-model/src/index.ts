@@ -797,6 +797,19 @@ export interface ContractWithEventCount extends Contract {
   relatedEventCount: number;
 }
 
+export interface KnowledgeItem {
+  id: string;
+  companyId: string;
+  category: "regulation" | "policy" | "faq" | "template";
+  title: string;
+  content: string;
+  tags: string[];
+  isActive: boolean;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AuditLog {
   id: string;
   companyId: string;
@@ -832,6 +845,8 @@ export const permissionCatalog = [
   "payroll.view",
   "payroll.manage",
   "audit.view",
+  "knowledge.view",
+  "knowledge.manage",
   "settings.manage"
 ] as const;
 

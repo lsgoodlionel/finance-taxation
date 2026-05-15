@@ -16,6 +16,7 @@ const navItems = [
   { to: "/rnd", label: "研发辅助账" },
   { to: "/risk", label: "风险勾稽" },
   { to: "/audit", label: "审计日志" },
+  { to: "/knowledge", label: "制度库" },
   { to: "/boss-qa", label: "老板专线" }
 ];
 

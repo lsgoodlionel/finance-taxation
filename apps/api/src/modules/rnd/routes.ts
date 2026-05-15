@@ -446,11 +446,11 @@ export async function getRndTrend(req: ApiRequest, res: ServerResponse) {
       monthMap[row.month] = { month: row.month, expensed: 0, capitalized: 0, total: 0 };
     }
     const amount = Number(row.total);
-    monthMap[row.month].total += amount;
+    monthMap[row.month]!.total += amount;
     if (row.accounting_treatment === "capitalized") {
-      monthMap[row.month].capitalized += amount;
+      monthMap[row.month]!.capitalized += amount;
     } else {
-      monthMap[row.month].expensed += amount;
+      monthMap[row.month]!.expensed += amount;
     }
   }
 

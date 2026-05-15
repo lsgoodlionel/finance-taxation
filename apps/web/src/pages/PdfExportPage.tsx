@@ -200,7 +200,7 @@ export function PdfExportPage() {
               <tbody>
                 {vouchers.map((v) => (
                   <tr key={v.id}>
-                    <td style={cellStyle()}>{v.voucherNo}</td>
+                    <td style={cellStyle()}>{v.id.slice(-8).toUpperCase()}</td>
                     <td style={cellStyle()}>{v.voucherType}</td>
                     <td style={cellStyle()}>{v.summary}</td>
                     <td style={cellStyle()}>{v.status}</td>

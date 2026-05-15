@@ -107,7 +107,14 @@ insert into role_permissions (id, role_id, permission_key, scope) values
   -- audit.view
   ('rp-chr-22', 'role-chairman',        'audit.view', 'company'),
   ('rp-fd-21',  'role-finance-director','audit.view', 'company'),
-  ('rp-acc-12', 'role-accountant',      'audit.view', 'company')
+  ('rp-acc-12', 'role-accountant',      'audit.view', 'company'),
+  -- knowledge.view / knowledge.manage (Sprint F-1)
+  ('rp-chr-23', 'role-chairman',         'knowledge.view',   'company'),
+  ('rp-chr-24', 'role-chairman',         'knowledge.manage', 'company'),
+  ('rp-fd-22',  'role-finance-director', 'knowledge.view',   'company'),
+  ('rp-fd-23',  'role-finance-director', 'knowledge.manage', 'company'),
+  ('rp-acc-13', 'role-accountant',       'knowledge.view',   'company'),
+  ('rp-vw-09',  'role-viewer',           'knowledge.view',   'company')
 on conflict (id) do nothing;
 
 -- ─── User Roles ─────────────────────────────────────────────────────────────

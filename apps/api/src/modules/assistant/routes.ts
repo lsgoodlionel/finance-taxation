@@ -2,6 +2,7 @@ import type { ServerResponse } from "node:http";
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "../../config/env.js";
 import { query } from "../../db/client.js";
+import { searchKnowledgeForAi } from "../knowledge/routes.js";
 import { json } from "../../utils/http.js";
 import type { ApiRequest } from "../../types.js";
 
@@ -12,6 +13,7 @@ function buildSystemPrompt(ctx: {
   today: string;
   recentEvents: string;
   pendingTasks: string;
+  knowledgeContext: string;
 }): string {
   return `你是「财税秘书」，一个专为中国中小企业设计的 AI 财税助手。你服务于 ${ctx.companyName}。
 
@@ -21,7 +23,7 @@ function buildSystemPrompt(ctx: {
 ${ctx.recentEvents || "暂无数据"}
 
 ## 待处理任务（最多 5 条）
-${ctx.pendingTasks || "暂无数据"}
+${ctx.pendingTasks || "暂无数据"}${ctx.knowledgeContext}
 
 ## 你的职责
 
@@ -108,12 +110,17 @@ export async function chat(req: ApiRequest, res: ServerResponse): Promise<void> 
     return;
   }
 
-  const ctx = await loadContext(req.auth.companyId);
+  const lastUserMessage = messages.filter((m) => m.role === "user").at(-1)?.content ?? "";
+  const [ctx, knowledgeContext] = await Promise.all([
+    loadContext(req.auth.companyId),
+    searchKnowledgeForAi(req.auth.companyId, lastUserMessage).catch(() => "")
+  ]);
   const systemPrompt = buildSystemPrompt({
     companyName: ctx.companyName,
     today: new Date().toLocaleDateString("zh-CN"),
     recentEvents: ctx.recentEvents,
-    pendingTasks: ctx.pendingTasks
+    pendingTasks: ctx.pendingTasks,
+    knowledgeContext
   });
 
   const client = new Anthropic({ apiKey: env.anthropicApiKey });

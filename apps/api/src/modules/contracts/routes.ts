@@ -122,7 +122,7 @@ export async function createContract(req: ApiRequest, res: ServerResponse) {
 
   const id = `contract-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const contractNo = body.contractNo || `CNT-${Date.now()}`;
-  const displayName = req.auth!.displayName || "系统";
+  const displayName = req.auth!.username || "系统";
 
   const row = await queryOne<ContractRow>(
     `
@@ -158,7 +158,7 @@ export async function createContract(req: ApiRequest, res: ServerResponse) {
   writeAudit({
     companyId,
     userId: req.auth!.userId,
-    userName: req.auth!.displayName || req.auth!.username,
+    userName: req.auth!.username || req.auth!.username,
     action: "create",
     resourceType: "contract",
     resourceId: created.id,
@@ -268,7 +268,7 @@ export async function closeContract(req: ApiRequest, res: ServerResponse, contra
   writeAudit({
     companyId,
     userId: req.auth!.userId,
-    userName: req.auth!.displayName || req.auth!.username,
+    userName: req.auth!.username || req.auth!.username,
     action: "close",
     resourceType: "contract",
     resourceId: contractId,

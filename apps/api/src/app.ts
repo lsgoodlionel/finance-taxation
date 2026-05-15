@@ -114,6 +114,12 @@ import {
 } from "./modules/pdf/routes.js";
 import { listAuditLogs } from "./modules/audit/routes.js";
 import { bossChat } from "./modules/boss-qa/routes.js";
+import {
+  createKnowledgeItem,
+  deleteKnowledgeItem,
+  listKnowledgeItems,
+  updateKnowledgeItem
+} from "./modules/knowledge/routes.js";
 import { getRndTrend } from "./modules/rnd/routes.js";
 import { login, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
@@ -863,6 +869,33 @@ async function router(req: ApiRequest, res: ServerResponse) {
       if (!(await requireAuth(req, res))) return;
       if (!(await requirePermission("dashboard.view", req, res))) return;
       return bossChat(req, res);
+    }
+  }
+
+  // ── Knowledge Base ──
+  if (url.pathname === "/api/knowledge") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") {
+      if (!(await requirePermission("knowledge.view", req, res))) return;
+      return listKnowledgeItems(req, res);
+    }
+    if (req.method === "POST") {
+      if (!(await requirePermission("knowledge.manage", req, res))) return;
+      return createKnowledgeItem(req, res);
+    }
+  }
+
+  const knowledgeItemMatch = url.pathname.match(/^\/api\/knowledge\/([^/]+)$/);
+  const knowledgeItemId = knowledgeItemMatch?.[1];
+  if (knowledgeItemId) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "PUT") {
+      if (!(await requirePermission("knowledge.manage", req, res))) return;
+      return updateKnowledgeItem(req, res, knowledgeItemId);
+    }
+    if (req.method === "DELETE") {
+      if (!(await requirePermission("knowledge.manage", req, res))) return;
+      return deleteKnowledgeItem(req, res, knowledgeItemId);
     }
   }
 

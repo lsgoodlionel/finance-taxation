@@ -37,7 +37,7 @@ function parseSuggestedEvent(text: string): SuggestedEvent | null {
   const match = text.match(/```action\s*([\s\S]*?)```/);
   if (!match) return null;
   try {
-    return JSON.parse(match[1].trim()) as SuggestedEvent;
+    return JSON.parse(match[1]!.trim()) as SuggestedEvent;
   } catch {
     return null;
   }

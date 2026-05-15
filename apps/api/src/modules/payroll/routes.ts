@@ -385,7 +385,8 @@ export async function computePayroll(req: ApiRequest, res: ServerResponse) {
 export async function listPayroll(req: ApiRequest, res: ServerResponse) {
   const companyId = req.auth!.companyId;
   const url = new URL(req.url!, "http://x");
-  const period = url.searchParams.get("period") ?? req.body?.period ?? "";
+  const body = req.body as { period?: string } | undefined;
+  const period = url.searchParams.get("period") ?? body?.period ?? "";
 
   const params: unknown[] = [companyId];
   let where = "company_id = $1";
@@ -423,7 +424,7 @@ export async function listPayroll(req: ApiRequest, res: ServerResponse) {
 
 export async function confirmPayroll(req: ApiRequest, res: ServerResponse, payrollId: string) {
   const companyId = req.auth!.companyId;
-  const displayName = req.auth!.displayName || "系统";
+  const displayName = req.auth!.username || "系统";
 
   const row = await queryOne<PayrollRecordRow>(
     `
