@@ -1,7 +1,12 @@
 import type {
+  BalanceSheetReport,
   BusinessEvent,
   BusinessEventActivity,
+  CashFlowReport,
   ChartAccount,
+  ChairmanReportSummary,
+  ClosingPackageExport,
+  CorporateIncomeTaxPreparation,
   DocumentAttachmentRecord,
   EventDocumentMapping,
   EventTaxMapping,
@@ -10,10 +15,27 @@ import type {
   LedgerEntry,
   LedgerPostingBatch,
   MenuNode,
+  ProfitStatementReport,
+  ReportDiffResult,
+  ReportSnapshot,
+  RiskClosureRecord,
+  RiskFinding,
+  RndAccountingPolicyReview,
+  RndPolicyGuidance,
+  RndProject,
+  RndProjectSummary,
+  IndividualIncomeTaxMaterial,
+  StampAndSurtaxSummary,
+  SuperDeductionPackage,
   Task,
   TaxFilingBatch,
+  TaxFilingBatchArchiveRecord,
+  TaxFilingBatchReviewRecord,
   TaxItem,
+  TaxpayerProfile,
+  TaxRuleProfile,
   TaskTreeNode,
+  VatWorkingPaper,
   Voucher
 } from "@finance-taxation/domain-model";
 
@@ -62,6 +84,27 @@ export interface VoucherDetail extends Voucher {
   }>;
 }
 
+export interface RndProjectDetail extends RndProject {
+  costLines: Array<{
+    id: string;
+    costType: string;
+    accountingTreatment: string;
+    amount: string;
+    occurredOn: string;
+    notes: string;
+  }>;
+  timeEntries: Array<{
+    id: string;
+    staffName: string;
+    workDate: string;
+    hours: string;
+    notes: string;
+  }>;
+  summary: RndProjectSummary;
+  policyReview: RndAccountingPolicyReview;
+  guidance: RndPolicyGuidance;
+}
+
 export function getStoredToken() {
   return window.localStorage.getItem(TOKEN_KEY);
 }
@@ -96,6 +139,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+async function requestText(path: string, init?: RequestInit): Promise<string> {
+  const token = getStoredToken();
+  const headers = new Headers(init?.headers);
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers
+  });
+  if (!response.ok) {
+    const payload = (await response.text().catch(() => "")) || `Request failed: ${response.status}`;
+    throw new Error(payload);
+  }
+  return response.text();
 }
 
 async function requestMultipart<T>(path: string, formData: FormData): Promise<T> {
@@ -212,6 +272,29 @@ export async function listVouchers() {
   return request<{ items: Voucher[]; total: number }>("/api/vouchers");
 }
 
+export interface VoucherTemplate {
+  key: string;
+  label: string;
+  description: string;
+  voucherType: Voucher["voucherType"];
+}
+
+export async function listVoucherTemplates() {
+  return request<{ items: VoucherTemplate[]; total: number }>("/api/vouchers/templates");
+}
+
+export async function createVoucherFromTemplate(input: {
+  templateKey: string;
+  amount: string;
+  businessEventId: string;
+  summary?: string;
+}) {
+  return request<Voucher>("/api/vouchers", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
 export async function getVoucherDetail(voucherId: string) {
   return request<VoucherDetail>(`/api/vouchers/${voucherId}`);
 }
@@ -314,8 +397,232 @@ export async function listTaxFilingBatches() {
   return request<{ items: TaxFilingBatch[]; total: number }>("/api/tax-filing-batches");
 }
 
+export async function listTaxpayerProfiles() {
+  return request<{ items: TaxpayerProfile[]; total: number }>("/api/taxpayer-profiles");
+}
+
+export async function createTaxpayerProfile(input: {
+  taxpayerType: "general_vat" | "small_scale" | "general_simplified";
+  effectiveFrom: string;
+  notes?: string;
+}) {
+  return request<TaxpayerProfile>("/api/taxpayer-profiles", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function getVatWorkingPaper(filingPeriod: string) {
+  return request<VatWorkingPaper>(`/api/tax/vat-working-paper?filingPeriod=${filingPeriod}`);
+}
+
+export async function getTaxRuleProfile(taxType: string, occurredOn: string) {
+  return request<TaxRuleProfile & { filingPeriod: string }>(
+    `/api/tax/rules?taxType=${encodeURIComponent(taxType)}&occurredOn=${occurredOn}`
+  );
+}
+
+export async function getCorporateIncomeTaxPreparation(filingPeriod: string) {
+  return request<CorporateIncomeTaxPreparation>(
+    `/api/tax/corporate-income-tax-preparation?filingPeriod=${encodeURIComponent(filingPeriod)}`
+  );
+}
+
+export async function getTaxPrintableHtml(kind: "vat" | "corporate_income_tax", filingPeriod: string) {
+  return requestText(
+    `/api/tax/printable?kind=${encodeURIComponent(kind)}&filingPeriod=${encodeURIComponent(filingPeriod)}`
+  );
+}
+
+export async function getIndividualIncomeTaxMaterials(filingPeriod: string) {
+  return request<IndividualIncomeTaxMaterial>(
+    `/api/tax/individual-income-tax-materials?filingPeriod=${encodeURIComponent(filingPeriod)}`
+  );
+}
+
+export async function getStampAndSurtaxSummary(filingPeriod: string) {
+  return request<StampAndSurtaxSummary>(
+    `/api/tax/stamp-and-surtax-summary?filingPeriod=${encodeURIComponent(filingPeriod)}`
+  );
+}
+
+export async function getBalanceSheetReport(input: {
+  periodType: "month" | "quarter" | "year";
+  year: number;
+  month?: number;
+  quarter?: number;
+}) {
+  const params = new URLSearchParams({
+    periodType: input.periodType,
+    year: String(input.year)
+  });
+  if (input.month) params.set("month", String(input.month));
+  if (input.quarter) params.set("quarter", String(input.quarter));
+  return request<BalanceSheetReport>(`/api/reports/balance-sheet?${params.toString()}`);
+}
+
+export async function getProfitStatementReport(input: {
+  periodType: "month" | "quarter" | "year";
+  year: number;
+  month?: number;
+  quarter?: number;
+}) {
+  const params = new URLSearchParams({
+    periodType: input.periodType,
+    year: String(input.year)
+  });
+  if (input.month) params.set("month", String(input.month));
+  if (input.quarter) params.set("quarter", String(input.quarter));
+  return request<ProfitStatementReport>(`/api/reports/profit-statement?${params.toString()}`);
+}
+
+export async function getCashFlowReport(input: {
+  periodType: "month" | "quarter" | "year";
+  year: number;
+  month?: number;
+  quarter?: number;
+}) {
+  const params = new URLSearchParams({
+    periodType: input.periodType,
+    year: String(input.year)
+  });
+  if (input.month) params.set("month", String(input.month));
+  if (input.quarter) params.set("quarter", String(input.quarter));
+  return request<CashFlowReport>(`/api/reports/cash-flow?${params.toString()}`);
+}
+
+export async function createReportSnapshot(input: {
+  reportType: "balance_sheet" | "profit_statement" | "cash_flow";
+  periodType: "month" | "quarter" | "year";
+  year: number;
+  month?: number;
+  quarter?: number;
+}) {
+  const params = new URLSearchParams({
+    periodType: input.periodType,
+    year: String(input.year)
+  });
+  if (input.month) params.set("month", String(input.month));
+  if (input.quarter) params.set("quarter", String(input.quarter));
+  return request<ReportSnapshot>(`/api/reports/snapshots?${params.toString()}`, {
+    method: "POST",
+    body: JSON.stringify({
+      reportType: input.reportType,
+      periodType: input.periodType
+    })
+  });
+}
+
+export async function listReportSnapshots(reportType?: string) {
+  const path = reportType ? `/api/reports/snapshots?reportType=${reportType}` : "/api/reports/snapshots";
+  return request<{ items: ReportSnapshot[]; total: number }>(path);
+}
+
+export async function getReportDiff(fromSnapshotId: string, toSnapshotId: string) {
+  return request<ReportDiffResult>(
+    `/api/reports/diff?fromSnapshotId=${fromSnapshotId}&toSnapshotId=${toSnapshotId}`
+  );
+}
+
+export async function getChairmanReportSummary(snapshotId: string) {
+  return request<ChairmanReportSummary>(`/api/reports/chairman-summary?snapshotId=${snapshotId}`);
+}
+
+export async function getPrintableReportHtml(snapshotId: string) {
+  return requestText(`/api/reports/printable?snapshotId=${snapshotId}`);
+}
+
+export async function listRndProjects() {
+  return request<{ items: Array<RndProject & { summary: RndProjectSummary }>; total: number }>(
+    "/api/rnd/projects"
+  );
+}
+
+export async function createRndProject(input: {
+  businessEventId?: string | null;
+  code?: string;
+  name: string;
+  capitalizationPolicy?: "expense" | "capitalize" | "mixed";
+  startedOn?: string;
+  notes?: string;
+}) {
+  return request<RndProject>("/api/rnd/projects", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function getRndProjectDetail(projectId: string) {
+  return request<RndProjectDetail>(`/api/rnd/projects/${projectId}`);
+}
+
+export async function getRndSuperDeductionPackage(projectId: string) {
+  return request<SuperDeductionPackage>(`/api/rnd/projects/${projectId}/super-deduction-package`);
+}
+
+export async function createRndCostLine(
+  projectId: string,
+  input: {
+    businessEventId?: string | null;
+    voucherId?: string | null;
+    costType: string;
+    accountingTreatment: "expensed" | "capitalized";
+    amount: string;
+    occurredOn: string;
+    notes?: string;
+  }
+) {
+  return request(`/api/rnd/projects/${projectId}/cost-lines`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function createRndTimeEntry(
+  projectId: string,
+  input: {
+    businessEventId?: string | null;
+    userId?: string | null;
+    staffName: string;
+    workDate: string;
+    hours: string;
+    notes?: string;
+  }
+) {
+  return request(`/api/rnd/projects/${projectId}/time-entries`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function listRiskFindings() {
+  return request<{ items: RiskFinding[]; total: number }>("/api/risk/findings");
+}
+
+export async function closeRiskFinding(findingId: string, resolution: string) {
+  return request<RiskFinding>(`/api/risk/findings/${findingId}/close`, {
+    method: "POST",
+    body: JSON.stringify({ resolution })
+  });
+}
+
+export async function listRiskClosureRecords(findingId: string) {
+  return request<{ items: RiskClosureRecord[]; total: number }>(`/api/risk/findings/${findingId}/closures`);
+}
+
+export async function runEventRiskCheck(eventId: string) {
+  return request<{ items: RiskFinding[]; total: number }>(`/api/events/${eventId}/risk-check`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+}
+
 export async function getTaxFilingBatchDetail(batchId: string) {
-  return request<TaxFilingBatch & { items: TaxItem[] }>(`/api/tax-filing-batches/${batchId}`);
+  return request<TaxFilingBatch & {
+    items: TaxItem[];
+    reviews: TaxFilingBatchReviewRecord[];
+    archives: TaxFilingBatchArchiveRecord[];
+  }>(`/api/tax-filing-batches/${batchId}`);
 }
 
 export async function validateTaxFilingBatch(batchId: string) {
@@ -335,6 +642,40 @@ export async function submitTaxFilingBatch(batchId: string) {
   });
 }
 
+export async function reviewTaxFilingBatch(batchId: string, input: {
+  reviewResult: "approved" | "rejected";
+  reviewNotes: string;
+}) {
+  return request<TaxFilingBatch & {
+    items: TaxItem[];
+    reviews: TaxFilingBatchReviewRecord[];
+    archives: TaxFilingBatchArchiveRecord[];
+  }>(`/api/tax-filing-batches/${batchId}/review`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function archiveTaxFilingBatch(batchId: string, input: {
+  archiveLabel: string;
+  archiveNotes?: string;
+}) {
+  return request<TaxFilingBatch & {
+    items: TaxItem[];
+    reviews: TaxFilingBatchReviewRecord[];
+    archives: TaxFilingBatchArchiveRecord[];
+  }>(`/api/tax-filing-batches/${batchId}/archive`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function getClosingBundleHtml(kind: ClosingPackageExport["kind"], period: string) {
+  return requestText(
+    `/api/packages/closing-bundle?kind=${encodeURIComponent(kind)}&period=${encodeURIComponent(period)}`
+  );
+}
+
 export interface DashboardCard {
   key: string;
   label: string;
@@ -342,9 +683,40 @@ export interface DashboardCard {
   trend: string;
 }
 
+export interface DashboardQueueItem {
+  id: string;
+  title: string;
+  status: string;
+  route: string;
+  severity: "high" | "medium" | "low";
+}
+
 export interface DashboardData {
   cards: DashboardCard[];
   queues: { approvals: number; blockedTasks: number; overdueTasks: number };
+  profitOverview: {
+    revenue: string;
+    cost: string;
+    expense: string;
+    grossProfit: string;
+    netProfit: string;
+    grossMargin: string;
+    netMargin: string;
+  };
+  riskBoard: {
+    approvals: DashboardQueueItem[];
+    blockedTasks: DashboardQueueItem[];
+    overdueTasks: DashboardQueueItem[];
+    riskEvents: DashboardQueueItem[];
+  };
+  aiSummary: {
+    date: string;
+    newEvents: number;
+    postedVouchers: number;
+    pendingTaxBatches: number;
+    highlights: string[];
+  };
+  riskCount: number;
 }
 
 export async function getDashboardChairman() {

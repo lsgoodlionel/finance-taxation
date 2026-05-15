@@ -8,6 +8,7 @@ import {
   listTasks,
   login,
   refreshSession,
+  runEventRiskCheck,
   updateEvent,
   type EventDetail
 } from "../lib/api";
@@ -163,6 +164,18 @@ export function EventsPage() {
     }
   }
 
+  async function handleRiskCheck(eventId: string) {
+    setLoading("updating");
+    try {
+      const result = await runEventRiskCheck(eventId);
+      setMessage(`已完成风险检查，生成 ${result.total} 条风险发现。`);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setLoading("done");
+    }
+  }
+
   const selectedSummary = useMemo(() => {
     if (!detail) return "请选择一条经营事项。";
     return `${detail.title} | ${detail.type} | ${detail.status} | ${detail.amount || "未填金额"} ${detail.currency}`;
@@ -301,6 +314,9 @@ export function EventsPage() {
               </select>
               <button onClick={() => void handleAnalyze(selectedEventId)} disabled={loading === "analyzing"}>
                 触发 AI 任务拆解
+              </button>
+              <button onClick={() => void handleRiskCheck(selectedEventId)} disabled={loading === "updating"}>
+                执行风险检查
               </button>
               <button onClick={() => void handleStatusUpdate(selectedEventId)} disabled={loading === "updating"}>
                 更新状态

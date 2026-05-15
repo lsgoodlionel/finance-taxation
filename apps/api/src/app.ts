@@ -1,5 +1,6 @@
 import { createServer, type ServerResponse } from "node:http";
 import { env } from "./config/env.js";
+import { query } from "./db/client.js";
 import { getMenu } from "./modules/access/routes.js";
 import { listAccounts, getAccountByCode } from "./modules/accounts/routes.js";
 import { handleAuthMeta } from "./modules/auth/routes.js";
@@ -27,20 +28,58 @@ import {
   listLedgerEntries,
   listLedgerPostingBatches
 } from "./modules/ledger/routes.js";
+import {
+  getChairmanReportSummary,
+  createReportSnapshot,
+  getReportDiff,
+  getBalanceSheet,
+  getCashFlow,
+  getPrintableReport,
+  getProfitStatement,
+  listReportSnapshots
+} from "./modules/reports/routes.js";
+import { buildClosingPackageExport, buildClosingPackageHtml } from "./modules/packages/closing-bundle.js";
+import {
+  createRndCostLine,
+  createRndProject,
+  createRndTimeEntry,
+  getRndProjectDetail,
+  getRndSuperDeductionPackage,
+  listRndProjects
+} from "./modules/rnd/routes.js";
+import {
+  closeRiskFinding,
+  listCompanyRiskFindings,
+  listRiskClosureRecords,
+  listRiskFindings,
+  runEventRiskCheck
+} from "./modules/risk/routes.js";
 import { handleTasksMeta, listTasks } from "./modules/tasks/routes.js";
 import {
   createTaxFilingBatch,
+  getCorporateIncomeTaxPreparation,
+  getIndividualIncomeTaxMaterials,
+  getTaxRuleProfile,
+  getStampAndSurtaxSummary,
+  getTaxWorkingPaperPrintable,
+  createTaxpayerProfile,
   getTaxFilingBatchDetail,
   getTaxItemDetail,
+  getVatWorkingPaper,
   listTaxFilingBatches,
   listTaxItems,
+  listTaxpayerProfiles,
+  reviewTaxFilingBatch,
   submitTaxFilingBatch,
   updateTaxItem,
-  validateTaxFilingBatch
+  validateTaxFilingBatch,
+  archiveTaxFilingBatch
 } from "./modules/tax/routes.js";
 import {
   approveVoucher,
+  createVoucherFromTemplate,
   getVoucherDetail,
+  getVoucherTemplates,
   listVouchers,
   listVoucherPostingRecords,
   postVoucher,
@@ -136,6 +175,16 @@ async function router(req: ApiRequest, res: ServerResponse) {
     }
   }
 
+  const eventRiskCheckMatch = url.pathname.match(/^\/api\/events\/([^/]+)\/risk-check$/);
+  const eventRiskCheckId = eventRiskCheckMatch?.[1];
+  if (eventRiskCheckId) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") {
+      if (!(await requirePermission("risk.manage", req, res))) return;
+      return runEventRiskCheck(req, res, eventRiskCheckId);
+    }
+  }
+
   const eventDetailMatch = url.pathname.match(/^\/api\/events\/([^/]+)$/);
   const eventDetailId = eventDetailMatch?.[1];
   if (eventDetailId) {
@@ -194,6 +243,115 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("ledger.view", req, res))) return;
     if (req.method === "GET") return getAccountByCode(req, res, accountCode);
+  }
+
+  if (url.pathname === "/api/reports/balance-sheet") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.view", req, res))) return;
+    if (req.method === "GET") return getBalanceSheet(req, res);
+  }
+
+  if (url.pathname === "/api/reports/profit-statement") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.view", req, res))) return;
+    if (req.method === "GET") return getProfitStatement(req, res);
+  }
+
+  if (url.pathname === "/api/reports/cash-flow") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.view", req, res))) return;
+    if (req.method === "GET") return getCashFlow(req, res);
+  }
+
+  if (url.pathname === "/api/reports/snapshots") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.view", req, res))) return;
+    if (req.method === "GET") return listReportSnapshots(req, res);
+    if (req.method === "POST") return createReportSnapshot(req, res);
+  }
+
+  if (url.pathname === "/api/reports/diff") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.view", req, res))) return;
+    if (req.method === "GET") return getReportDiff(req, res);
+  }
+
+  if (url.pathname === "/api/reports/chairman-summary") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("dashboard.view", req, res))) return;
+    if (req.method === "GET") return getChairmanReportSummary(req, res);
+  }
+
+  if (url.pathname === "/api/reports/printable") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.view", req, res))) return;
+    if (req.method === "GET") return getPrintableReport(req, res);
+  }
+
+  if (url.pathname === "/api/rnd/projects") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") {
+      if (!(await requirePermission("rnd.view", req, res))) return;
+      return listRndProjects(req, res);
+    }
+    if (req.method === "POST") {
+      if (!(await requirePermission("rnd.manage", req, res))) return;
+      return createRndProject(req, res);
+    }
+  }
+
+  const rndProjectDetailMatch = url.pathname.match(/^\/api\/rnd\/projects\/([^/]+)$/);
+  const rndProjectDetailId = rndProjectDetailMatch?.[1];
+  if (rndProjectDetailId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("rnd.view", req, res))) return;
+    if (req.method === "GET") return getRndProjectDetail(req, res, rndProjectDetailId);
+  }
+
+  const rndPackageMatch = url.pathname.match(/^\/api\/rnd\/projects\/([^/]+)\/super-deduction-package$/);
+  const rndPackageProjectId = rndPackageMatch?.[1];
+  if (rndPackageProjectId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("rnd.view", req, res))) return;
+    if (req.method === "GET") return getRndSuperDeductionPackage(req, res, rndPackageProjectId);
+  }
+
+  const rndCostLineMatch = url.pathname.match(/^\/api\/rnd\/projects\/([^/]+)\/cost-lines$/);
+  const rndCostLineProjectId = rndCostLineMatch?.[1];
+  if (rndCostLineProjectId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("rnd.manage", req, res))) return;
+    if (req.method === "POST") return createRndCostLine(req, res, rndCostLineProjectId);
+  }
+
+  const rndTimeEntryMatch = url.pathname.match(/^\/api\/rnd\/projects\/([^/]+)\/time-entries$/);
+  const rndTimeEntryProjectId = rndTimeEntryMatch?.[1];
+  if (rndTimeEntryProjectId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("rnd.manage", req, res))) return;
+    if (req.method === "POST") return createRndTimeEntry(req, res, rndTimeEntryProjectId);
+  }
+
+  if (url.pathname === "/api/risk/findings") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("risk.view", req, res))) return;
+    if (req.method === "GET") return listRiskFindings(req, res);
+  }
+
+  const riskCloseMatch = url.pathname.match(/^\/api\/risk\/findings\/([^/]+)\/close$/);
+  const riskCloseId = riskCloseMatch?.[1];
+  if (riskCloseId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("risk.manage", req, res))) return;
+    if (req.method === "POST") return closeRiskFinding(req, res, riskCloseId);
+  }
+
+  const riskHistoryMatch = url.pathname.match(/^\/api\/risk\/findings\/([^/]+)\/closures$/);
+  const riskHistoryId = riskHistoryMatch?.[1];
+  if (riskHistoryId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("risk.view", req, res))) return;
+    if (req.method === "GET") return listRiskClosureRecords(req, res, riskHistoryId);
   }
 
   if (url.pathname === "/api/documents") {
@@ -272,6 +430,54 @@ async function router(req: ApiRequest, res: ServerResponse) {
     }
   }
 
+  if (url.pathname === "/api/taxpayer-profiles") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") {
+      if (!(await requirePermission("tax.view", req, res))) return;
+      return listTaxpayerProfiles(req, res);
+    }
+    if (req.method === "POST") {
+      if (!(await requirePermission("tax.manage", req, res))) return;
+      return createTaxpayerProfile(req, res);
+    }
+  }
+
+  if (url.pathname === "/api/tax/vat-working-paper") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.view", req, res))) return;
+    if (req.method === "GET") return getVatWorkingPaper(req, res);
+  }
+
+  if (url.pathname === "/api/tax/rules") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.view", req, res))) return;
+    if (req.method === "GET") return getTaxRuleProfile(req, res);
+  }
+
+  if (url.pathname === "/api/tax/individual-income-tax-materials") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.view", req, res))) return;
+    if (req.method === "GET") return getIndividualIncomeTaxMaterials(req, res);
+  }
+
+  if (url.pathname === "/api/tax/stamp-and-surtax-summary") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.view", req, res))) return;
+    if (req.method === "GET") return getStampAndSurtaxSummary(req, res);
+  }
+
+  if (url.pathname === "/api/tax/corporate-income-tax-preparation") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.view", req, res))) return;
+    if (req.method === "GET") return getCorporateIncomeTaxPreparation(req, res);
+  }
+
+  if (url.pathname === "/api/tax/printable") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.view", req, res))) return;
+    if (req.method === "GET") return getTaxWorkingPaperPrintable(req, res);
+  }
+
   const taxFilingBatchValidateMatch = url.pathname.match(/^\/api\/tax-filing-batches\/([^/]+)\/validate$/);
   const taxFilingBatchValidateId = taxFilingBatchValidateMatch?.[1];
   if (taxFilingBatchValidateId) {
@@ -282,6 +488,16 @@ async function router(req: ApiRequest, res: ServerResponse) {
     }
   }
 
+  const taxFilingBatchReviewMatch = url.pathname.match(/^\/api\/tax-filing-batches\/([^/]+)\/review$/);
+  const taxFilingBatchReviewId = taxFilingBatchReviewMatch?.[1];
+  if (taxFilingBatchReviewId) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") {
+      if (!(await requirePermission("tax.manage", req, res))) return;
+      return reviewTaxFilingBatch(req, res, taxFilingBatchReviewId);
+    }
+  }
+
   const taxFilingBatchSubmitMatch = url.pathname.match(/^\/api\/tax-filing-batches\/([^/]+)\/submit$/);
   const taxFilingBatchSubmitId = taxFilingBatchSubmitMatch?.[1];
   if (taxFilingBatchSubmitId) {
@@ -289,6 +505,16 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "POST") {
       if (!(await requirePermission("tax.manage", req, res))) return;
       return submitTaxFilingBatch(req, res, taxFilingBatchSubmitId);
+    }
+  }
+
+  const taxFilingBatchArchiveMatch = url.pathname.match(/^\/api\/tax-filing-batches\/([^/]+)\/archive$/);
+  const taxFilingBatchArchiveId = taxFilingBatchArchiveMatch?.[1];
+  if (taxFilingBatchArchiveId) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") {
+      if (!(await requirePermission("tax.manage", req, res))) return;
+      return archiveTaxFilingBatch(req, res, taxFilingBatchArchiveId);
     }
   }
 
@@ -316,8 +542,73 @@ async function router(req: ApiRequest, res: ServerResponse) {
 
   if (url.pathname === "/api/vouchers") {
     if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") {
+      if (!(await requirePermission("ledger.view", req, res))) return;
+      return listVouchers(req, res);
+    }
+    if (req.method === "POST") {
+      if (!(await requirePermission("ledger.post", req, res))) return;
+      return createVoucherFromTemplate(req, res);
+    }
+  }
+
+  if (url.pathname === "/api/packages/closing-bundle") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("dashboard.view", req, res))) return;
+    if (req.method === "GET") {
+      const kind = (url.searchParams.get("kind") || "month_end") as "month_end" | "audit" | "inspection";
+      const period = url.searchParams.get("period") || "2026-05";
+      const companyId = req.auth!.companyId;
+      const snapshotRows = await query<{ id: string }>(
+        `
+          select id
+          from report_snapshots
+          where company_id = $1 and period_label = $2
+          order by snapshot_date desc, created_at desc
+        `,
+        [companyId, period]
+      );
+      const taxBatchRows = await query<{ id: string }>(
+        `
+          select id
+          from tax_filing_batches
+          where company_id = $1 and filing_period = $2
+          order by created_at desc
+        `,
+        [companyId, period]
+      );
+      const rndRows = await query<{ id: string }>(
+        `
+          select id
+          from rnd_projects
+          where company_id = $1 and (
+            started_on like $2
+            or coalesce(ended_on::text, '') like $2
+          )
+          order by created_at desc
+        `,
+        [companyId, `${period}%`]
+      );
+      const findings = await listCompanyRiskFindings(companyId);
+      const bundle = buildClosingPackageExport(kind, period, {
+        reportSnapshotIds: snapshotRows.map((item) => item.id),
+        taxBatchIds: taxBatchRows.map((item) => item.id),
+        riskFindingIds: findings
+          .filter((item) => item.status === "open" && item.createdAt.startsWith(period.slice(0, 4)))
+          .map((item) => item.id),
+        rndProjectIds: rndRows.map((item) => item.id)
+      });
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.end(buildClosingPackageHtml(bundle));
+      return;
+    }
+  }
+
+  if (url.pathname === "/api/vouchers/templates") {
+    if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return listVouchers(req, res);
+    if (req.method === "GET") return getVoucherTemplates(req, res);
   }
 
   const voucherPostMatch = url.pathname.match(/^\/api\/vouchers\/([^/]+)\/post$/);

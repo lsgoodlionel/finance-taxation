@@ -4,6 +4,9 @@ import { ChairmanDashboardPage } from "./pages/ChairmanDashboardPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { EventsPage } from "./pages/EventsPage";
 import { LedgerPage } from "./pages/LedgerPage";
+import { ReportsPage } from "./pages/ReportsPage";
+import { RiskPage } from "./pages/RiskPage";
+import { RndPage } from "./pages/RndPage";
 import { TaxPage } from "./pages/TaxPage";
 import { TasksPage } from "./pages/TasksPage";
 import { VouchersPage } from "./pages/VouchersPage";
@@ -20,7 +23,10 @@ const router = createBrowserRouter([
       { path: "documents", element: <DocumentsPage /> },
       { path: "vouchers", element: <VouchersPage /> },
       { path: "ledger", element: <LedgerPage /> },
-      { path: "tax", element: <TaxPage /> }
+      { path: "reports", element: <ReportsPage /> },
+      { path: "tax", element: <TaxPage /> },
+      { path: "rnd", element: <RndPage /> },
+      { path: "risk", element: <RiskPage /> }
     ]
   }
 ]);

@@ -7,7 +7,10 @@ const navItems = [
   { to: "/documents", label: "单据中心" },
   { to: "/vouchers", label: "凭证中心" },
   { to: "/ledger", label: "总账中心" },
-  { to: "/tax", label: "税务中心" }
+  { to: "/reports", label: "财务报表" },
+  { to: "/tax", label: "税务中心" },
+  { to: "/rnd", label: "研发辅助账" },
+  { to: "/risk", label: "风险勾稽" }
 ];
 
 export function AppLayout() {
