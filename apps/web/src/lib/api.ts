@@ -263,9 +263,21 @@ export async function analyzeEvent(eventId: string) {
   });
 }
 
-export async function listTasks(businessEventId?: string) {
-  const path = businessEventId ? `/api/tasks?businessEventId=${businessEventId}` : "/api/tasks";
-  return request<{ items: Task[]; tree: TaskTreeNode[]; total: number }>(path);
+export async function listTasks(businessEventId?: string, overdueOnly?: boolean) {
+  const q = new URLSearchParams();
+  if (businessEventId) q.set("businessEventId", businessEventId);
+  if (overdueOnly) q.set("overdueOnly", "true");
+  const qs = q.toString();
+  return request<{ items: (Task & { isOverdue?: boolean })[]; tree: TaskTreeNode[]; total: number }>(
+    `/api/tasks${qs ? "?" + qs : ""}`
+  );
+}
+
+export async function remindTask(taskId: string) {
+  return request<{ ok: boolean; taskId: string; remindedAt: string }>(`/api/tasks/${taskId}/remind`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
 }
 
 export async function listDocuments() {

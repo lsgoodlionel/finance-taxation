@@ -55,7 +55,7 @@ import {
   listRiskFindings,
   runEventRiskCheck
 } from "./modules/risk/routes.js";
-import { handleTasksMeta, listTasks } from "./modules/tasks/routes.js";
+import { handleTasksMeta, listTasks, remindTask } from "./modules/tasks/routes.js";
 import {
   createTaxFilingBatch,
   getCorporateIncomeTaxPreparation,
@@ -240,6 +240,16 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "GET") {
       if (!(await requirePermission("tasks.view", req, res))) return;
       return listTasks(req, res);
+    }
+  }
+
+  const taskRemindMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/remind$/);
+  const taskRemindId = taskRemindMatch?.[1];
+  if (taskRemindId) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") {
+      if (!(await requirePermission("tasks.view", req, res))) return;
+      return remindTask(req, res, taskRemindId);
     }
   }
 
