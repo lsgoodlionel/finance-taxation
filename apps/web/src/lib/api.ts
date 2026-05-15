@@ -904,6 +904,15 @@ export async function confirmPayroll(recordId: string) {
   });
 }
 
+export async function getRndTrend(months?: number) {
+  const q = months ? `?months=${months}` : "";
+  return request<{
+    trend: Array<{ month: string; expensed: number; capitalized: number; total: number }>;
+    months: number;
+    detail: Array<{ month: string; costType: string; accountingTreatment: string; total: number }>;
+  }>(`/api/rnd/trend${q}`);
+}
+
 export async function listAuditLogs(params?: {
   resourceType?: string;
   resourceId?: string;

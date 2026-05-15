@@ -413,3 +413,57 @@ export async function createRndTimeEntry(req: ApiRequest, res: ServerResponse, p
     return json(res, 400, { error: (error as Error).message });
   }
 }
+
+export async function getRndTrend(req: ApiRequest, res: ServerResponse) {
+  const companyId = req.auth!.companyId;
+  const url = new URL(req.url!, "http://x");
+  const months = Math.min(parseInt(url.searchParams.get("months") ?? "12", 10), 24);
+
+  const rows = await query<{
+    month: string;
+    cost_type: string;
+    accounting_treatment: string;
+    total: string;
+  }>(
+    `
+      select
+        to_char(occurred_on, 'YYYY-MM') as month,
+        cost_type,
+        accounting_treatment,
+        sum(amount)::text as total
+      from rnd_cost_lines
+      where company_id = $1
+        and occurred_on >= (current_date - make_interval(months => $2))
+      group by 1, 2, 3
+      order by 1 desc, 2, 3
+    `,
+    [companyId, months]
+  );
+
+  const monthMap: Record<string, { month: string; expensed: number; capitalized: number; total: number }> = {};
+  for (const row of rows) {
+    if (!monthMap[row.month]) {
+      monthMap[row.month] = { month: row.month, expensed: 0, capitalized: 0, total: 0 };
+    }
+    const amount = Number(row.total);
+    monthMap[row.month].total += amount;
+    if (row.accounting_treatment === "capitalized") {
+      monthMap[row.month].capitalized += amount;
+    } else {
+      monthMap[row.month].expensed += amount;
+    }
+  }
+
+  const trend = Object.values(monthMap).sort((a, b) => b.month.localeCompare(a.month));
+
+  return json(res, 200, {
+    trend,
+    months,
+    detail: rows.map((r) => ({
+      month: r.month,
+      costType: r.cost_type,
+      accountingTreatment: r.accounting_treatment,
+      total: Number(r.total)
+    }))
+  });
+}

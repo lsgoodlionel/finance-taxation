@@ -15,6 +15,7 @@ import { TaxPage } from "./pages/TaxPage";
 import { TasksPage } from "./pages/TasksPage";
 import { VouchersPage } from "./pages/VouchersPage";
 import { AuditPage } from "./pages/AuditPage";
+import { BossQAPage } from "./pages/BossQAPage";
 
 const router = createBrowserRouter([
   {
@@ -36,7 +37,8 @@ const router = createBrowserRouter([
       { path: "payroll", element: <PayrollPage /> },
       { path: "assistant", element: <AssistantPage /> },
       { path: "pdf-export", element: <PdfExportPage /> },
-      { path: "audit", element: <AuditPage /> }
+      { path: "audit", element: <AuditPage /> },
+      { path: "boss-qa", element: <BossQAPage /> }
     ]
   }
 ]);

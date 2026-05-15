@@ -4,8 +4,8 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`Phase 3 Sprint P3-6：老板问答 Agent + 研发深化`
-- 当前里程碑：`Phase 3 - Sprint P3-6`
+- 当前目标：`Phase 3 全部 Sprint 已完成，进入持续优化阶段`
+- 当前里程碑：`Phase 3 完成`
 - 更新时间：`2026-05-15`
 
 ## 2. 总览
@@ -26,6 +26,7 @@
 | WS9 | AI 财税秘书 v1（P3-3） | Codex | main | done | 2026-05-15 | @anthropic-ai/sdk 接入、SSE 流式响应、系统 Prompt（含公司上下文 + 近期事项）、AssistantPage 对话界面、建议事项一键创建 | 无 |
 | WS-PDF | PDF 导出（P3-4） | Codex | main | done | 2026-05-15 | 工资汇总/工资条/凭证/报表快照四类 PDF 模板、HTML 打印版、PdfExportPage 三 Tab 下载中心均已落地 | 无 |
 | WS-AUDIT | 审计日志（P3-5） | Codex | main | done | 2026-05-15 | audit_logs 表、writeAudit 服务（fire-and-forget）、接入 event/voucher/contract/payroll 写操作、/api/audit/logs 接口、AuditPage 已落地 | 无 |
+| WS-BOSSQA | 老板专线 + 研发深化（P3-6） | Codex | main | done | 2026-05-15 | boss-qa SSE 接口（实时财务快照注入）、BossQAPage、/api/rnd/trend 月度趋势接口、RndPage 趋势表格均已落地 | 无 |
 | WS9 | AI Agent 与知识库 | TBD | TBD | not_started | 2026-05-14 | 设计 Agent 协议与 Prompt 版本管理 | 无 |
 | WS10 | DevOps、QA、发布 | Codex | main | done | 2026-05-14 | 依赖已安装，锁文件、PR 模板、Issue 模板和 typecheck 基线已就位 | 无 |
 
@@ -363,8 +364,14 @@
 | `apps/web/src/pages/AuditPage.tsx` — 日志列表、类型/时间过滤、变更详情展开、分页 | ✅ |
 | AppLayout 导航项 / App.tsx 路由 | ✅ |
 
-### Sprint P3-6（待启动）
+### Sprint P3-6：老板专线 + 研发深化（✅ done）
 
-| Sprint | 主题 | 状态 |
-| --- | --- | --- |
-| P3-6 | 老板问答 Agent + 研发深化 | not_started |
+| 项目 | 状态 |
+| --- | --- |
+| `apps/api/src/modules/boss-qa/routes.ts` — POST /api/boss-qa/chat（实时财务快照 + SSE 流式响应） | ✅ |
+| 系统 Prompt：现金、应收、税负、本月收支、利润估算、风险事项、近期经营事项全量注入 | ✅ |
+| `apps/api/src/app.ts` 接入 boss-qa 路由（dashboard.view 权限守卫） | ✅ |
+| `apps/api/src/modules/rnd/routes.ts` 新增 `getRndTrend` — GET /api/rnd/trend 月度成本聚合 | ✅ |
+| `apps/web/src/pages/BossQAPage.tsx` — 老板专线对话界面（实时快照提示 + 6 个常见问题 + SSE 流式渲染） | ✅ |
+| `apps/web/src/pages/RndPage.tsx` 补充月度研发支出趋势表（费用化/资本化/合计） | ✅ |
+| AppLayout 导航项（老板专线）/ App.tsx 路由 | ✅ |

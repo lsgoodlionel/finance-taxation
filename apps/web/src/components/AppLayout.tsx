@@ -15,7 +15,8 @@ const navItems = [
   { to: "/tax", label: "税务中心" },
   { to: "/rnd", label: "研发辅助账" },
   { to: "/risk", label: "风险勾稽" },
-  { to: "/audit", label: "审计日志" }
+  { to: "/audit", label: "审计日志" },
+  { to: "/boss-qa", label: "老板专线" }
 ];
 
 export function AppLayout() {

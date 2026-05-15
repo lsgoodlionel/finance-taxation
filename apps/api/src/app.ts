@@ -113,6 +113,8 @@ import {
   voucherPdf
 } from "./modules/pdf/routes.js";
 import { listAuditLogs } from "./modules/audit/routes.js";
+import { bossChat } from "./modules/boss-qa/routes.js";
+import { getRndTrend } from "./modules/rnd/routes.js";
 import { login, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
@@ -313,6 +315,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("ledger.view", req, res))) return;
     if (req.method === "GET") return getPrintableReport(req, res);
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/rnd/trend") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("rnd.view", req, res))) return;
+    return getRndTrend(req, res);
   }
 
   if (url.pathname === "/api/rnd/projects") {
@@ -839,6 +847,23 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("audit.view", req, res))) return;
     return listAuditLogs(req, res);
+  }
+
+  if (url.pathname === "/api/boss-qa/chat") {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization"
+      });
+      res.end();
+      return;
+    }
+    if (req.method === "POST") {
+      if (!(await requireAuth(req, res))) return;
+      if (!(await requirePermission("dashboard.view", req, res))) return;
+      return bossChat(req, res);
+    }
   }
 
   return json(res, 404, { error: "Not Found" });

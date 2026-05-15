@@ -6,6 +6,7 @@ import {
   createRndTimeEntry,
   getRndProjectDetail,
   getRndSuperDeductionPackage,
+  getRndTrend,
   listRndProjects,
   login,
   refreshSession,
@@ -53,6 +54,7 @@ export function RndPage() {
     hours: "",
     notes: ""
   });
+  const [trend, setTrend] = useState<Array<{ month: string; expensed: number; capitalized: number; total: number }>>([]);
 
   useEffect(() => {
     async function bootstrap() {
@@ -68,13 +70,17 @@ export function RndPage() {
   }, []);
 
   async function refreshProjects(projectId?: string) {
-    const payload = await listRndProjects();
-    setProjects(payload.items);
-    const target = projectId || payload.items[0]?.id;
+    const [projectsPayload, trendPayload] = await Promise.all([
+      listRndProjects(),
+      getRndTrend(12).catch(() => ({ trend: [] }))
+    ]);
+    setProjects(projectsPayload.items);
+    setTrend(trendPayload.trend);
+    const target = projectId || projectsPayload.items[0]?.id;
     if (target) {
       setSelectedProject(await getRndProjectDetail(target));
     }
-    setMessage(`已加载 ${payload.total} 个研发项目。`);
+    setMessage(`已加载 ${projectsPayload.total} 个研发项目。`);
   }
 
   return (
@@ -353,6 +359,38 @@ export function RndPage() {
           )}
         </article>
       </section>
+
+      {/* 月度研发支出趋势 */}
+      {trend.length > 0 && (
+        <article style={panelStyle()}>
+          <h3 style={{ marginTop: 0, marginBottom: "16px", fontSize: "15px" }}>月度研发支出趋势（近 12 个月）</h3>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+            <thead>
+              <tr style={{ color: "#6c7a89" }}>
+                {["月份", "费用化", "资本化", "合计"].map((h) => (
+                  <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {trend.map((row) => (
+                <tr key={row.month}>
+                  <td style={cellStyle()}>{row.month}</td>
+                  <td style={cellStyle()}>¥ {row.expensed.toLocaleString("zh-CN", { minimumFractionDigits: 2 })}</td>
+                  <td style={cellStyle()}>¥ {row.capitalized.toLocaleString("zh-CN", { minimumFractionDigits: 2 })}</td>
+                  <td style={{ ...cellStyle(), fontWeight: 500 }}>¥ {row.total.toLocaleString("zh-CN", { minimumFractionDigits: 2 })}</td>
+                </tr>
+              ))}
+              <tr style={{ background: "rgba(20,40,60,0.03)" }}>
+                <td style={{ ...cellStyle(), fontWeight: 500 }}>合计</td>
+                <td style={{ ...cellStyle(), fontWeight: 500 }}>¥ {trend.reduce((s, r) => s + r.expensed, 0).toLocaleString("zh-CN", { minimumFractionDigits: 2 })}</td>
+                <td style={{ ...cellStyle(), fontWeight: 500 }}>¥ {trend.reduce((s, r) => s + r.capitalized, 0).toLocaleString("zh-CN", { minimumFractionDigits: 2 })}</td>
+                <td style={{ ...cellStyle(), fontWeight: 600 }}>¥ {trend.reduce((s, r) => s + r.total, 0).toLocaleString("zh-CN", { minimumFractionDigits: 2 })}</td>
+              </tr>
+            </tbody>
+          </table>
+        </article>
+      )}
     </section>
   );
 }
