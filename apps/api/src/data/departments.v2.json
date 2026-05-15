@@ -1,0 +1,16 @@
+[
+  {
+    "id": "dept-board",
+    "companyId": "cmp-tech-001",
+    "parentDepartmentId": null,
+    "name": "董事会",
+    "leaderUserId": "usr-chairman-001"
+  },
+  {
+    "id": "dept-finance",
+    "companyId": "cmp-tech-001",
+    "parentDepartmentId": null,
+    "name": "财务部",
+    "leaderUserId": "usr-fin-001"
+  }
+]

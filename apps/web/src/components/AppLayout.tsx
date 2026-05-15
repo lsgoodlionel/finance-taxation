@@ -3,7 +3,11 @@ import { NavLink, Outlet } from "react-router-dom";
 const navItems = [
   { to: "/dashboard/chairman", label: "董事长驾驶舱" },
   { to: "/events", label: "经营事项总线" },
-  { to: "/tasks", label: "任务中心" }
+  { to: "/tasks", label: "任务中心" },
+  { to: "/documents", label: "单据中心" },
+  { to: "/vouchers", label: "凭证中心" },
+  { to: "/ledger", label: "总账中心" },
+  { to: "/tax", label: "税务中心" }
 ];
 
 export function AppLayout() {

@@ -1,7 +1,8 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { ServerResponse } from "node:http";
 import { json } from "../../utils/http.js";
+import type { ApiRequest } from "../../types.js";
 
-export function handleAuthMeta(_req: IncomingMessage, res: ServerResponse) {
+export function handleAuthMeta(_req: ApiRequest, res: ServerResponse) {
   return json(res, 200, {
     module: "auth",
     plannedEndpoints: [

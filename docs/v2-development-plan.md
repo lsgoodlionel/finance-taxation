@@ -258,6 +258,65 @@
 - `TASK-04-05` 分析结果锁定生成
 - `TASK-04-06` 可展示过程摘要与依据面板
 
+## 6. 当前实施对照（2026-05-15）
+
+### Phase 0 + Phase 1 完成情况（已收口）
+
+| 任务 | 实际状态 | 备注 |
+| --- | --- | --- |
+| TASK-00-01 ~ 00-06 工程底座 | done | monorepo / TS 工程 / env / migration 目录 |
+| TASK-01-02 JWT + refresh token | done | access + refresh 最小闭环 |
+| TASK-01-03 企业 + 部门隔离 | done | 公司与部门两级数据边界 |
+| TASK-02-02 经营事项 CRUD + 状态流 | done | 创建、编辑、状态更新、分析 |
+| TASK-02-04 经营事项列表 + 时间轴 | done | 列表、详情、时间轴、任务树 |
+| TASK-02-05 AI 任务拆解 | done | 幂等替换已具备 |
+| TASK-02-06 事项→映射→正式对象 | done | documents / vouchers / tax_items 全链路 |
+| TASK-04-02 单据详情与状态流 | done | 附件绑定、归档动作 |
+| TASK-05-02 凭证详情与过账前状态流 | done | 校验、审核、过账、过账记录 |
+| TASK-05-03 总账分录与过账批次 | done | 分录列表、汇总、科目余额 |
+| TASK-06-01 税务事项详情与状态流 | done | 税务事项详情、申报批次、校验、提交 |
+
+### Phase 2 Sprint 1 完成情况（2026-05-14 ~ 2026-05-15）
+
+| 任务 | 状态 | 关键产物 |
+| --- | --- | --- |
+| TASK-01-04 菜单权限控制 | done | `getMenu` 按角色过滤 7 个菜单项 |
+| TASK-01-05 数据域权限控制 | done | 全量 `requirePermission` 守卫；所有写操作 + view 分组 |
+| TASK-03-01 驾驶舱真实数据 | done | 从 ledger / events / tasks / vouchers 实时计算 4 张卡 + 3 队列 |
+| TASK-07-01 科目主数据 | done | 小企业会计准则 60+ 科目；`GET /api/accounts`；`ChartAccount` 加入 domain-model |
+| TASK-06-02 multipart 文件上传 | done | busboy + `POST /api/documents/:id/upload` + 落盘 `data/uploads/` |
+| DB-MIGRATE schema + seed | done | 25 张表；`migrations/001_initial_schema.sql` + `002_seed_data.sql`；pg 连接池；migration runner |
+
+### 当前偏差记录
+
+- **偏差 1：单主分支推进**（已识别）  
+  当前仍在 `main` 连续演进，未切入多分支工作流。待模块迁移 PostgreSQL 阶段再按 workstream 拆分。
+
+- **偏差 2：存储层仍为 JSON 文件**（进行中）  
+  DB-MIGRATE 基础设施已就位（schema + pg client + migration runner），但各业务模块仍在读写 JSON 文件。下一步逐模块迁移（DB-MIGRATE-AUTH → EVENTS → TASKS → DOCS → VOUCHERS → TAX）。
+
+### Phase 2 剩余执行顺序
+
+| 优先级 | 任务 ID | 描述 | 依赖 |
+| --- | --- | --- | --- |
+| P0 | DB-MIGRATE-AUTH | auth 模块迁至 pg（users / roles / sessions） | DB-MIGRATE schema ✅ |
+| P0 | DB-MIGRATE-EVENTS | events 模块迁至 pg | DB-MIGRATE-AUTH |
+| P1 | DB-MIGRATE-TASKS | tasks 模块迁至 pg | DB-MIGRATE-EVENTS |
+| P1 | DB-MIGRATE-VOUCHERS | vouchers + ledger 模块迁至 pg | DB-MIGRATE-TASKS |
+| P1 | DB-MIGRATE-DOCS | documents + attachments 迁至 pg | DB-MIGRATE-EVENTS |
+| P1 | DB-MIGRATE-TAX | tax_items + tax_filing_batches 迁至 pg | DB-MIGRATE-EVENTS |
+| P1 | TASK-07-02 | 凭证模板与自动分录 | DB-MIGRATE-VOUCHERS |
+| P2 | TASK-03-02 | 驾驶舱利润 / 费用概览卡片 | DB-MIGRATE-VOUCHERS |
+| P2 | TASK-03-03 | 驾驶舱风险事项可点击列表 | DB-MIGRATE-EVENTS |
+| P2 | EPIC-08 | 资产负债表 / 利润表 / 现金流量表 | TASK-07-02 |
+
+### Sprint 3-4 目标（Phase 2 持续）
+
+- 完成全量模块 PostgreSQL 迁移，下线 JSON 文件存储
+- 凭证模板：按事项类型（sales / procurement / payroll 等）预置借贷模板
+- 驾驶舱深化：利润、费用、税负、风险事项
+- 启动 EPIC-08 财务三表生成
+
 ### EPIC-05 任务中心与审批流
 
 - `TASK-05-01` 任务模型

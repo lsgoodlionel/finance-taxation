@@ -1,0 +1,22 @@
+[
+  {
+    "id": "act-evt-001-001",
+    "companyId": "cmp-tech-001",
+    "businessEventId": "evt-001",
+    "activityType": "created",
+    "actorUserId": "usr-chairman-001",
+    "actorName": "创始人董事长",
+    "summary": "创建经营事项：SaaS 年度订阅合同签约",
+    "createdAt": "2026-05-10T09:00:00.000Z"
+  },
+  {
+    "id": "act-evt-001-002",
+    "companyId": "cmp-tech-001",
+    "businessEventId": "evt-001",
+    "activityType": "analyzed",
+    "actorUserId": "usr-chairman-001",
+    "actorName": "创始人董事长",
+    "summary": "完成初步分析并生成首批任务。",
+    "createdAt": "2026-05-10T09:35:00.000Z"
+  }
+]

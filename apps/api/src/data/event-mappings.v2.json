@@ -1,0 +1,96 @@
+[
+  {
+    "businessEventId": "evt-001",
+    "generatedAt": "2026-05-10T09:35:00.000Z",
+    "documentMappings": [
+      {
+        "id": "doc-map-evt-001-001",
+        "companyId": "cmp-tech-001",
+        "businessEventId": "evt-001",
+        "documentType": "contract",
+        "title": "SaaS 服务合同归档",
+        "status": "generated",
+        "ownerDepartment": "销售部",
+        "notes": "已签署的主合同应作为收入确认与开票依据。"
+      },
+      {
+        "id": "doc-map-evt-001-002",
+        "companyId": "cmp-tech-001",
+        "businessEventId": "evt-001",
+        "documentType": "invoice_application",
+        "title": "开票申请单",
+        "status": "required",
+        "ownerDepartment": "财务部",
+        "notes": "需补齐开票节点、税率、客户抬头和纳税识别号。"
+      },
+      {
+        "id": "doc-map-evt-001-003",
+        "companyId": "cmp-tech-001",
+        "businessEventId": "evt-001",
+        "documentType": "collection_schedule",
+        "title": "回款计划与对账单",
+        "status": "suggested",
+        "ownerDepartment": "销售部",
+        "notes": "用于合同、开票、回款与收入确认勾稽。"
+      }
+    ],
+    "taxMappings": [
+      {
+        "id": "tax-map-evt-001-001",
+        "companyId": "cmp-tech-001",
+        "businessEventId": "evt-001",
+        "taxType": "增值税",
+        "treatment": "按 SaaS 服务适用销项税规则安排开票与申报。",
+        "status": "pending",
+        "basis": "需先确认开票时点、税率与收款条件。",
+        "filingPeriod": "2026-05"
+      },
+      {
+        "id": "tax-map-evt-001-002",
+        "companyId": "cmp-tech-001",
+        "businessEventId": "evt-001",
+        "taxType": "印花税",
+        "treatment": "将合同金额纳入应税合同台账复核。",
+        "status": "attention",
+        "basis": "合同已签署，需复核合同税目与计税依据。",
+        "filingPeriod": "2026-Q2"
+      }
+    ],
+    "voucherDrafts": [
+      {
+        "id": "vou-map-evt-001-001",
+        "companyId": "cmp-tech-001",
+        "businessEventId": "evt-001",
+        "voucherType": "accrual",
+        "status": "review_required",
+        "summary": "SaaS 年度订阅合同收入确认草稿",
+        "lines": [
+          {
+            "id": "vou-line-evt-001-001",
+            "summary": "确认 SaaS 收入",
+            "accountCode": "1122",
+            "accountName": "应收账款",
+            "debit": "480000.00",
+            "credit": "0.00"
+          },
+          {
+            "id": "vou-line-evt-001-002",
+            "summary": "确认 SaaS 收入",
+            "accountCode": "6001",
+            "accountName": "主营业务收入",
+            "debit": "0.00",
+            "credit": "424778.76"
+          },
+          {
+            "id": "vou-line-evt-001-003",
+            "summary": "确认销项税额",
+            "accountCode": "222101",
+            "accountName": "应交税费-应交增值税（销项税额）",
+            "debit": "0.00",
+            "credit": "55221.24"
+          }
+        ]
+      }
+    ]
+  }
+]

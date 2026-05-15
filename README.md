@@ -151,13 +151,19 @@
 
 当前项目主要包含：
 
-- `index.html`
-- `src/`
-- `apps/web/`
-- `apps/api/`
-- `packages/domain-model/`
-- `backend/`
-- `docs/`
+- `index.html` / `src/` — 旧版单页原型（保留供参考）
+- `apps/web/` — V2 前端（React + TypeScript + Vite）
+  - `src/pages/` — 7 个业务页面（驾驶舱 / 事项 / 任务 / 单据 / 凭证 / 总账 / 税务）
+  - `src/lib/api.ts` — 统一 API 客户端
+  - `src/components/AppLayout.tsx` — 主导航布局
+- `apps/api/` — V2 后端（Node.js + TypeScript）
+  - `src/modules/` — 模块化路由（auth / access / events / tasks / documents / vouchers / tax / ledger）
+  - `src/middleware/auth.ts` — JWT 认证中间件
+  - `src/services/jsonStore.ts` — JSON 文件存储层（Phase 1 临时存储）
+  - `src/data/` — Phase 1 运行时数据目录
+- `packages/domain-model/` — 共享领域类型包（BusinessEvent / Task / Voucher / TaxItem 等）
+- `backend/` — 旧版 JS 后端（保留供迁移参考）
+- `docs/` — V2 设计文档与进度板
 - `README.md`
 - `STARTUP_YEAR1_SIMULATION.md`
 - `STARTUP_YEAR1_VALIDATION.md`
@@ -227,8 +233,141 @@ npm run typecheck:v2
 - `apps/web` 的正式路由与 layout 基线
 - `apps/api` 的模块化路由占位结构
 - `apps/api/src/db/entities.sql` 数据实体草案
-- `apps/api/.env.example` 与 `apps/web/.env.example` 配置基线
-- 已安装 workspace 依赖并生成 `package-lock.json`
+
+## Phase 1 当前进展
+
+仓库已经开始进入 `Phase 1`，当前第一批实现已打通一条最小链路：
+
+- 登录拿取 access token
+- refresh token 续期
+- 按企业维度访问菜单和数据
+- 按部门维度收缩非公司级事项与任务视图
+- 创建经营事项
+- 查看经营事项列表、详情、活动时间轴
+- 更新经营事项状态
+- 触发经营事项的最小 AI 任务拆解
+- 查看任务列表与任务树
+- 在事项详情中查看单据映射、税务处理映射、凭证草稿
+- 将分析结果同步落为正式 `documents`、`tax_items`、`vouchers` 对象
+- 同一事项重复分析时替换既有 AI 任务和映射产物，避免无限叠加
+- `documents` 已支持附件绑定与归档动作
+- `vouchers` 已支持校验、审核和过账前检查
+- `tax_items` 已支持按税种/期间生成申报批次草稿
+- `documents` 已具备附件记录查询接口
+- `vouchers` 已具备过账记录查询接口
+- `tax_filing_batches` 已具备详情、批次校验、提交动作
+- `vouchers` 过账时会同步生成总账分录与过账批次
+- V2 前端已增加 `ledger` 占位页承接总账查询
+- V2 前端已增加 `documents` 占位页承接单据对象查询
+- V2 前端已增加 `tax` 占位页承接税务事项和申报批次查询
+- `documents` 前端已支持单据详情、附件绑定和归档动作承接
+- `tax` 前端已支持批次详情、校验和提交动作承接
+- `ledger` 前端已支持按凭证编号过滤钻取
+- `vouchers` 前端已支持凭证详情、校验、审核、过账动作承接
+- `ledger` 前端已支持按事项编号进一步过滤钻取
+- `vouchers` 前端已支持修改凭证摘要
+- `ledger` 前端已增加科目余额视图
+
+当前已接入的 V2 接口（38 个）：
+
+**认证与权限**
+
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `GET /api/access/me`
+- `GET /api/access/menu`（按角色过滤可见菜单项）
+
+**经营事项与任务**
+
+- `GET /api/events`
+- `POST /api/events`（需 `events.create` 权限）
+- `GET /api/events/:id`
+- `PUT /api/events/:id`（需 `events.create` 权限）
+- `POST /api/events/:id/analyze`（需 `events.create` 权限）
+- `GET /api/tasks`
+
+**单据**
+
+- `GET /api/documents`
+- `GET /api/documents/:id`
+- `PUT /api/documents/:id`（需 `documents.manage` 权限）
+- `POST /api/documents/:id/attach`（需 `documents.manage` 权限）
+- `POST /api/documents/:id/upload`（multipart 文件上传，需 `documents.manage` 权限）
+- `POST /api/documents/:id/archive`（需 `documents.manage` 权限）
+- `GET /api/documents/:id/attachments`
+
+**凭证**
+
+- `GET /api/vouchers`
+- `GET /api/vouchers/:id`
+- `PUT /api/vouchers/:id`（需 `ledger.post` 权限）
+- `GET /api/vouchers/:id/validate`
+- `POST /api/vouchers/:id/approve`（需 `ledger.post` 权限）
+- `POST /api/vouchers/:id/post`（需 `ledger.post` 权限）
+- `GET /api/vouchers/:id/posting-records`
+
+**税务**
+
+- `GET /api/tax-items`
+- `GET /api/tax-items/:id`
+- `PUT /api/tax-items/:id`（需 `tax.manage` 权限）
+- `GET /api/tax-filing-batches`
+- `POST /api/tax-filing-batches`（需 `tax.manage` 权限）
+- `GET /api/tax-filing-batches/:id`
+- `POST /api/tax-filing-batches/:id/validate`（需 `tax.manage` 权限）
+- `POST /api/tax-filing-batches/:id/submit`（需 `tax.manage` 权限）
+
+**总账**
+
+- `GET /api/ledger/entries`
+- `GET /api/ledger/posting-batches`
+- `GET /api/ledger/summary`
+- `GET /api/ledger/balances`
+
+**科目主数据**
+
+- `GET /api/accounts`（支持 `category` / `q` / `leafOnly` 过滤）
+- `GET /api/accounts/:code`
+
+当前已接入的 V2 页面（7 个）：
+
+- 董事长驾驶舱（`/dashboard/chairman`）— 真实数据：银行余额 / 应收 / 税负 / 风险事项
+- 经营事项总线（`/events`）
+- 任务中心（`/tasks`）
+- 单据中心（`/documents`）— 支持 multipart 文件上传
+- 凭证中心（`/vouchers`）
+- 总账中心（`/ledger`）
+- 税务中心（`/tax`）
+
+## Phase 2 Sprint 1 完成项（2026-05-14）
+
+在 Phase 1 基础上，Phase 2 Sprint 1 已完成以下内容：
+
+- **TASK-01-04** 菜单权限过滤：`GET /api/access/menu` 按用户角色返回可见菜单项
+- **TASK-01-05** 全量 API 权限守卫：所有写操作加 `requirePermission`，视图操作加 view 权限
+- **TASK-03-01** 驾驶舱真实数据：从 ledger / events / tasks / vouchers JSON 实时计算 4 张指标卡
+- **TASK-07-01** 科目主数据：小企业会计准则 60+ 科目 + `GET /api/accounts`；`ChartAccount` 已加入 domain-model
+- **TASK-06-02** 文件 multipart 上传：busboy 解析落盘 + `POST /api/documents/:id/upload`
+- **DB-MIGRATE** PostgreSQL 基础设施：25 张表完整 schema（`migrations/001_initial_schema.sql`）+ 种子数据（`migrations/002_seed_data.sql`）+ pg 连接池（`src/db/client.ts`）+ migration runner（`src/db/migrate.ts`）
+
+### 运行数据库迁移
+
+```bash
+# 配置 .env
+DATABASE_URL=postgres://user:pass@127.0.0.1:5432/finance_taxation_v2
+
+# 执行迁移（跳过已应用版本，幂等）
+npm run -w @finance-taxation/api db:migrate
+```
+
+## Phase 2 后续计划
+
+按优先级：
+
+1. **DB-MIGRATE-AUTH / EVENTS / TASKS**：将各业务模块从 JSON 文件存储迁移至 PostgreSQL（P0）
+2. **TASK-07-02**：凭证模板与自动分录（P1）
+3. **TASK-03-02 / 03 / 04**：驾驶舱深化——利润概览 / 风险卡片 / AI 摘要（P2）
+4. **EPIC-08**：资产负债表、利润表、现金流量表生成（P2）
 
 ## GitHub Actions
 

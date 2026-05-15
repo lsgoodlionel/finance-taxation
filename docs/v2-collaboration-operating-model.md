@@ -258,6 +258,43 @@ PR 标题建议：
 
 第一轮并行时，最多同时启动 6 个工作流：
 
+## 15. 当前执行偏差说明（2026-05-14）
+
+### 已识别的偏差
+
+- **偏差 1：单流推进**  
+  Phase 1 全程在 `main` 单线连续推进，未启用 `integration/*` + `feat/*` 多分支模式。  
+  原因：Phase 1 属于基础对象层，多分支会带来不必要的合并开销。
+
+- **偏差 2：协同密度不足**  
+  进度板已作为单一事实来源，但 `Owner / Branch / Blocker` 反映的是单执行者状态，尚未进入多角色协同密度。
+
+### Phase 2 切换时机（目标：Phase 2 启动时）
+
+Phase 1 已收口，Phase 2 启动时须严格切换到以下机制：
+
+1. **分支策略**：每个 Workstream 使用 `feat/ws{n}-*` 前缀分支，高风险模块（权限、账务内核、申报批次）先进 `integration/*` 集成分支再合并 `main`
+2. **目录所有权**：严格按本文件第 4 节定义，同一时间避免两个分支同时写同一核心文件
+3. **集成窗口**：每天固定 2 次集成窗口，权限 / 账务 / 税务类变更禁止直接推 `main`
+4. **进度板同步**：每次开发前、提交前、出现阻塞时必须更新进度板
+
+### Phase 2 建议第一批分支
+
+| 分支 | Workstream | 负责内容 |
+| --- | --- | --- |
+| `feat/ws0-db-migration` | WS0 | PostgreSQL schema + migration |
+| `feat/ws2-rbac-middleware` | WS2 | 权限中间件 + 数据域隔离 |
+| `feat/ws1-chairman-dashboard` | WS1 | 驾驶舱真实数据卡片 |
+| `feat/ws5-account-system` | WS5 | 科目体系与辅助核算 |
+| `feat/ws4-multipart-upload` | WS4 | 附件 multipart 上传 |
+
+### 不调整的部分
+
+- 任务编号体系（`TASK-xx-yy`）
+- 单一事实来源为 `docs/v2-progress-board.md`
+- 提交前必须同步文档与进度板
+- AI 参与的任务同样必须绑定 `Task ID`
+
 - WS0 工程底座
 - WS1 前端骨架
 - WS2 权限认证

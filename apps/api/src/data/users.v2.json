@@ -1,0 +1,30 @@
+[
+  {
+    "id": "usr-chairman-001",
+    "companyId": "cmp-tech-001",
+    "departmentId": "dept-board",
+    "username": "chairman",
+    "displayName": "创始人董事长",
+    "email": "chairman@example.com",
+    "phone": "13800000000",
+    "status": "active",
+    "roleIds": [
+      "role-chairman"
+    ],
+    "password": "123456"
+  },
+  {
+    "id": "usr-fin-001",
+    "companyId": "cmp-tech-001",
+    "departmentId": "dept-finance",
+    "username": "finance",
+    "displayName": "财务负责人",
+    "email": "finance@example.com",
+    "phone": "13900000000",
+    "status": "active",
+    "roleIds": [
+      "role-finance-director"
+    ],
+    "password": "123456"
+  }
+]
