@@ -1,7 +1,7 @@
 import type { ServerResponse } from "node:http";
 import type {
-  BusinessEventActivity,
   BusinessEvent,
+  BusinessEventActivity,
   BusinessEventMappingBundle,
   BusinessEventRelation,
   CreateBusinessEventInput,
@@ -10,198 +10,262 @@ import type {
   EventVoucherDraft,
   GeneratedDocument,
   Task,
-  TaxItem,
   TaskTreeNode,
-  Voucher
+  TaxItem,
+  Voucher,
+  VoucherDraftLine
 } from "@finance-taxation/domain-model";
-import { json } from "../../utils/http.js";
 import type { ApiRequest } from "../../types.js";
-import { readJson, writeJson } from "../../services/jsonStore.js";
+import { query, withTransaction } from "../../db/client.js";
+import { listCompanyDocuments } from "../documents/routes.js";
+import { listCompanyTaxItems } from "../tax/routes.js";
+import { listCompanyVouchers } from "../vouchers/routes.js";
+import { json } from "../../utils/http.js";
 
-const eventsFile = new URL("../../data/business-events.v2.json", import.meta.url);
-const relationsFile = new URL("../../data/business-event-relations.v2.json", import.meta.url);
-const tasksFile = new URL("../../data/tasks.v2.json", import.meta.url);
-const activitiesFile = new URL("../../data/business-event-activities.v2.json", import.meta.url);
-const mappingsFile = new URL("../../data/event-mappings.v2.json", import.meta.url);
-const documentsFile = new URL("../../data/documents.v2.json", import.meta.url);
-const taxItemsFile = new URL("../../data/tax-items.v2.json", import.meta.url);
-const vouchersFile = new URL("../../data/vouchers.v2.json", import.meta.url);
-
-const seedEvents: BusinessEvent[] = [
-  {
-    id: "evt-001",
-    companyId: "cmp-tech-001",
-    type: "sales",
-    title: "SaaS 年度订阅合同签约",
-    description: "与华东客户签署年度 SaaS 服务合同，合同金额 48 万。",
-    department: "销售部",
-    ownerId: "usr-chairman-001",
-    occurredOn: "2026-05-10",
-    amount: "480000.00",
-    currency: "CNY",
-    status: "analyzed",
-    source: "manual",
-    counterpartyId: "cp-001",
-    projectId: null,
-    createdAt: "2026-05-10T09:00:00.000Z",
-    updatedAt: "2026-05-10T09:30:00.000Z"
-  }
-];
-
-const seedRelations: BusinessEventRelation[] = [];
-const seedActivities: BusinessEventActivity[] = [
-  {
-    id: "act-evt-001-001",
-    companyId: "cmp-tech-001",
-    businessEventId: "evt-001",
-    activityType: "created",
-    actorUserId: "usr-chairman-001",
-    actorName: "创始人董事长",
-    summary: "创建经营事项：SaaS 年度订阅合同签约",
-    createdAt: "2026-05-10T09:00:00.000Z"
-  },
-  {
-    id: "act-evt-001-002",
-    companyId: "cmp-tech-001",
-    businessEventId: "evt-001",
-    activityType: "analyzed",
-    actorUserId: "usr-chairman-001",
-    actorName: "创始人董事长",
-    summary: "完成初步分析并生成首批任务。",
-    createdAt: "2026-05-10T09:35:00.000Z"
-  }
-];
-const seedTasks: Task[] = [
-  {
-    id: "task-evt-001-001",
-    companyId: "cmp-tech-001",
-    businessEventId: "evt-001",
-    parentTaskId: null,
-    title: "确认开票计划",
-    description: "核对合同约定的开票节点、税率和收款条件。",
-    status: "not_started",
-    priority: "high",
-    ownerId: "usr-fin-001",
-    dueAt: "2026-05-16T18:00:00.000Z",
-    assigneeDepartment: "财务部",
-    source: "workflow",
-    createdAt: "2026-05-10T09:35:00.000Z",
-    updatedAt: "2026-05-10T09:35:00.000Z"
-  }
-];
-const seedMappings: BusinessEventMappingBundle[] = [
-  {
-    businessEventId: "evt-001",
-    generatedAt: "2026-05-10T09:35:00.000Z",
-    documentMappings: [
-      {
-        id: "doc-map-evt-001-001",
-        companyId: "cmp-tech-001",
-        businessEventId: "evt-001",
-        documentType: "contract",
-        title: "SaaS 服务合同归档",
-        status: "generated",
-        ownerDepartment: "销售部",
-        notes: "已签署的主合同应作为收入确认与开票依据。"
-      },
-      {
-        id: "doc-map-evt-001-002",
-        companyId: "cmp-tech-001",
-        businessEventId: "evt-001",
-        documentType: "invoice_application",
-        title: "开票申请单",
-        status: "required",
-        ownerDepartment: "财务部",
-        notes: "需补齐开票节点、税率、客户抬头和纳税识别号。"
-      }
-    ],
-    taxMappings: [
-      {
-        id: "tax-map-evt-001-001",
-        companyId: "cmp-tech-001",
-        businessEventId: "evt-001",
-        taxType: "增值税",
-        treatment: "按 SaaS 服务适用销项税规则安排开票与申报。",
-        status: "pending",
-        basis: "需先确认开票时点、税率与收款条件。",
-        filingPeriod: "2026-05"
-      }
-    ],
-    voucherDrafts: [
-      {
-        id: "vou-map-evt-001-001",
-        companyId: "cmp-tech-001",
-        businessEventId: "evt-001",
-        voucherType: "accrual",
-        status: "review_required",
-        summary: "SaaS 年度订阅合同收入确认草稿",
-        lines: [
-          {
-            id: "vou-line-evt-001-001",
-            summary: "确认 SaaS 收入",
-            accountCode: "1122",
-            accountName: "应收账款",
-            debit: "480000.00",
-            credit: "0.00"
-          },
-          {
-            id: "vou-line-evt-001-002",
-            summary: "确认 SaaS 收入",
-            accountCode: "6001",
-            accountName: "主营业务收入",
-            debit: "0.00",
-            credit: "424778.76"
-          },
-          {
-            id: "vou-line-evt-001-003",
-            summary: "确认销项税额",
-            accountCode: "222101",
-            accountName: "应交税费-应交增值税（销项税额）",
-            debit: "0.00",
-            credit: "55221.24"
-          }
-        ]
-      }
-    ]
-  }
-];
-const seedDocuments: GeneratedDocument[] = [];
-const seedTaxItems: TaxItem[] = [];
-const seedVouchers: Voucher[] = [];
-
-export function handleEventsMeta(_req: ApiRequest, res: ServerResponse) {
-  return json(res, 200, {
-    module: "events",
-    plannedEndpoints: [
-      "GET /api/events",
-      "POST /api/events",
-      "GET /api/events/:id",
-      "PUT /api/events/:id",
-      "POST /api/events/:id/analyze",
-      "POST /api/events/:id/relations"
-    ]
-  });
+interface BusinessEventRow {
+  id: string;
+  company_id: string;
+  type: BusinessEvent["type"];
+  title: string;
+  description: string;
+  department: string;
+  owner_id: string | null;
+  occurred_on: string | Date;
+  amount: string | number | null;
+  currency: string;
+  status: BusinessEvent["status"];
+  source: BusinessEvent["source"];
+  counterparty_id: string | null;
+  project_id: string | null;
+  created_at: string | Date;
+  updated_at: string | Date;
 }
 
-function companyScope<T extends { companyId: string }>(rows: T[], companyId: string) {
-  return rows.filter((row) => row.companyId === companyId);
+interface BusinessEventRelationRow {
+  id: string;
+  company_id: string;
+  business_event_id: string;
+  relation_type: BusinessEventRelation["relationType"];
+  target_id: string;
+  label: string;
+  created_at: string | Date;
 }
 
-function hasCompanyWideAccess(roleCodes: string[]) {
+interface BusinessEventActivityRow {
+  id: string;
+  company_id: string;
+  business_event_id: string;
+  activity_type: BusinessEventActivity["activityType"];
+  actor_user_id: string | null;
+  actor_name: string;
+  summary: string;
+  created_at: string | Date;
+}
+
+interface TaskRow {
+  id: string;
+  company_id: string;
+  business_event_id: string | null;
+  parent_task_id: string | null;
+  title: string;
+  description: string;
+  status: Task["status"];
+  priority: Task["priority"];
+  owner_id: string | null;
+  due_at: string | Date | null;
+  assignee_department: string | null;
+  source: Task["source"];
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+interface EventDocumentMappingRow {
+  id: string;
+  company_id: string;
+  business_event_id: string;
+  document_type: string;
+  title: string;
+  status: EventDocumentMapping["status"];
+  owner_department: string;
+  notes: string;
+  created_at: string | Date;
+}
+
+interface EventTaxMappingRow {
+  id: string;
+  company_id: string;
+  business_event_id: string;
+  tax_type: string;
+  treatment: string;
+  status: EventTaxMapping["status"] | "required";
+  basis: string;
+  filing_period: string;
+  created_at: string | Date;
+}
+
+interface EventVoucherDraftRow {
+  id: string;
+  company_id: string;
+  business_event_id: string;
+  voucher_type: EventVoucherDraft["voucherType"];
+  status: EventVoucherDraft["status"];
+  summary: string;
+  created_at: string | Date;
+}
+
+interface VoucherDraftLineRow {
+  id: string;
+  draft_id: string;
+  summary: string;
+  account_code: string;
+  account_name: string;
+  debit: string | number;
+  credit: string | number;
+  sort_order: number;
+}
+
+interface DbExecutor {
+  query<T extends object = Record<string, unknown>>(
+    sql: string,
+    params?: unknown[]
+  ): Promise<{ rows: T[] }>;
+}
+
+function toIsoString(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function toAmountString(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  return typeof value === "number" ? value.toFixed(2) : String(value);
+}
+
+function mapEventRow(row: BusinessEventRow): BusinessEvent {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    type: row.type,
+    title: row.title,
+    description: row.description,
+    department: row.department,
+    ownerId: row.owner_id,
+    occurredOn: toIsoString(row.occurred_on)?.slice(0, 10) || "",
+    amount: toAmountString(row.amount),
+    currency: row.currency,
+    status: row.status,
+    source: row.source,
+    counterpartyId: row.counterparty_id,
+    projectId: row.project_id,
+    createdAt: toIsoString(row.created_at) || undefined,
+    updatedAt: toIsoString(row.updated_at) || undefined
+  };
+}
+
+function mapRelationRow(row: BusinessEventRelationRow): BusinessEventRelation {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    businessEventId: row.business_event_id,
+    relationType: row.relation_type,
+    targetId: row.target_id,
+    label: row.label,
+    createdAt: toIsoString(row.created_at) || new Date().toISOString()
+  };
+}
+
+function mapActivityRow(row: BusinessEventActivityRow): BusinessEventActivity {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    businessEventId: row.business_event_id,
+    activityType: row.activity_type,
+    actorUserId: row.actor_user_id,
+    actorName: row.actor_name,
+    summary: row.summary,
+    createdAt: toIsoString(row.created_at) || new Date().toISOString()
+  };
+}
+
+function mapTaskRow(row: TaskRow): Task {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    businessEventId: row.business_event_id,
+    parentTaskId: row.parent_task_id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    priority: row.priority,
+    ownerId: row.owner_id,
+    dueAt: toIsoString(row.due_at),
+    assigneeDepartment: row.assignee_department,
+    source: row.source,
+    createdAt: toIsoString(row.created_at) || undefined,
+    updatedAt: toIsoString(row.updated_at) || undefined
+  };
+}
+
+function mapDocumentMappingRow(row: EventDocumentMappingRow): EventDocumentMapping {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    businessEventId: row.business_event_id,
+    documentType: row.document_type,
+    title: row.title,
+    status: row.status,
+    ownerDepartment: row.owner_department,
+    notes: row.notes
+  };
+}
+
+function mapTaxMappingRow(row: EventTaxMappingRow): EventTaxMapping {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    businessEventId: row.business_event_id,
+    taxType: row.tax_type,
+    treatment: row.treatment,
+    status: row.status === "required" ? "attention" : row.status,
+    basis: row.basis,
+    filingPeriod: row.filing_period
+  };
+}
+
+function mapVoucherLineRow(row: VoucherDraftLineRow): VoucherDraftLine {
+  return {
+    id: row.id,
+    summary: row.summary,
+    accountCode: row.account_code,
+    accountName: row.account_name,
+    debit: toAmountString(row.debit) || "0.00",
+    credit: toAmountString(row.credit) || "0.00"
+  };
+}
+
+function buildVoucherDrafts(
+  rows: EventVoucherDraftRow[],
+  lineRows: VoucherDraftLineRow[]
+): EventVoucherDraft[] {
+  return rows.map((row) => ({
+    id: row.id,
+    companyId: row.company_id,
+    businessEventId: row.business_event_id,
+    voucherType: row.voucher_type,
+    status: row.status,
+    summary: row.summary,
+    lines: lineRows
+      .filter((line) => line.draft_id === row.id)
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(mapVoucherLineRow)
+  }));
+}
+
+export function hasCompanyWideAccess(roleCodes: string[]) {
   return roleCodes.some((role) => ["role-chairman", "role-finance-director"].includes(role));
 }
 
-function scopeEvents(rows: BusinessEvent[], req: ApiRequest) {
-  const companyRows = companyScope(rows, req.auth!.companyId);
-  if (hasCompanyWideAccess(req.auth!.roleCodes)) {
-    return companyRows;
-  }
-  return companyRows.filter(
-    (row) => row.ownerId === req.auth!.userId || row.department === req.auth!.departmentName
-  );
-}
-
-function buildTaskTree(tasks: Task[]): TaskTreeNode[] {
+export function buildTaskTree(tasks: Task[]): TaskTreeNode[] {
   const nodeMap = new Map<string, TaskTreeNode>();
   for (const task of tasks) {
     nodeMap.set(task.id, { ...task, children: [] });
@@ -218,6 +282,16 @@ function buildTaskTree(tasks: Task[]): TaskTreeNode[] {
     roots.push(node);
   }
   return roots;
+}
+
+function scopeEvents(rows: BusinessEvent[], req: ApiRequest) {
+  const companyRows = rows.filter((row) => row.companyId === req.auth!.companyId);
+  if (hasCompanyWideAccess(req.auth!.roleCodes)) {
+    return companyRows;
+  }
+  return companyRows.filter(
+    (row) => row.ownerId === req.auth!.userId || row.department === req.auth!.departmentName
+  );
 }
 
 function buildActivity(
@@ -725,16 +799,400 @@ function toVouchers(bundle: BusinessEventMappingBundle, generatedAt: string): Vo
   }));
 }
 
+export async function listCompanyEvents(companyId: string): Promise<BusinessEvent[]> {
+  const rows = await query<BusinessEventRow>(
+    `
+      select
+        id,
+        company_id,
+        type,
+        title,
+        description,
+        department,
+        owner_id,
+        occurred_on,
+        amount,
+        currency,
+        status,
+        source,
+        counterparty_id,
+        project_id,
+        created_at,
+        updated_at
+      from business_events
+      where company_id = $1
+      order by occurred_on desc, created_at desc
+    `,
+    [companyId]
+  );
+  return rows.map(mapEventRow);
+}
+
+export async function listCompanyTasks(companyId: string): Promise<Task[]> {
+  const rows = await query<TaskRow>(
+    `
+      select
+        id,
+        company_id,
+        business_event_id,
+        parent_task_id,
+        title,
+        description,
+        status,
+        priority,
+        owner_id,
+        due_at,
+        assignee_department,
+        source,
+        created_at,
+        updated_at
+      from tasks
+      where company_id = $1
+      order by created_at desc
+    `,
+    [companyId]
+  );
+  return rows.map(mapTaskRow);
+}
+
+async function insertActivities(executor: DbExecutor, activities: BusinessEventActivity[]) {
+  for (const activity of activities) {
+    await executor.query(
+      `
+        insert into business_event_activities (
+          id,
+          company_id,
+          business_event_id,
+          activity_type,
+          actor_user_id,
+          actor_name,
+          summary,
+          created_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz)
+      `,
+      [
+        activity.id,
+        activity.companyId,
+        activity.businessEventId,
+        activity.activityType,
+        activity.actorUserId,
+        activity.actorName,
+        activity.summary,
+        activity.createdAt
+      ]
+    );
+  }
+}
+
+async function insertTasks(executor: DbExecutor, tasks: Task[]) {
+  for (const task of tasks) {
+    await executor.query(
+      `
+        insert into tasks (
+          id,
+          company_id,
+          business_event_id,
+          parent_task_id,
+          title,
+          description,
+          status,
+          priority,
+          owner_id,
+          due_at,
+          assignee_department,
+          source,
+          created_at,
+          updated_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz, $11, $12, $13::timestamptz, $14::timestamptz)
+      `,
+      [
+        task.id,
+        task.companyId,
+        task.businessEventId,
+        task.parentTaskId,
+        task.title,
+        task.description,
+        task.status,
+        task.priority,
+        task.ownerId,
+        task.dueAt,
+        task.assigneeDepartment,
+        task.source,
+        task.createdAt,
+        task.updatedAt
+      ]
+    );
+  }
+}
+
+async function insertDocumentMappings(executor: DbExecutor, rows: EventDocumentMapping[]) {
+  for (const row of rows) {
+    await executor.query(
+      `
+        insert into event_document_mappings (
+          id,
+          company_id,
+          business_event_id,
+          document_type,
+          title,
+          status,
+          owner_department,
+          notes
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+      `,
+      [
+        row.id,
+        row.companyId,
+        row.businessEventId,
+        row.documentType,
+        row.title,
+        row.status,
+        row.ownerDepartment,
+        row.notes
+      ]
+    );
+  }
+}
+
+async function insertTaxMappings(executor: DbExecutor, rows: EventTaxMapping[]) {
+  for (const row of rows) {
+    await executor.query(
+      `
+        insert into event_tax_mappings (
+          id,
+          company_id,
+          business_event_id,
+          tax_type,
+          treatment,
+          status,
+          basis,
+          filing_period
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+      `,
+      [
+        row.id,
+        row.companyId,
+        row.businessEventId,
+        row.taxType,
+        row.treatment,
+        row.status,
+        row.basis,
+        row.filingPeriod
+      ]
+    );
+  }
+}
+
+async function insertVoucherDrafts(executor: DbExecutor, rows: EventVoucherDraft[]) {
+  for (const row of rows) {
+    await executor.query(
+      `
+        insert into event_voucher_drafts (
+          id,
+          company_id,
+          business_event_id,
+          voucher_type,
+          status,
+          summary
+        ) values ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        row.id,
+        row.companyId,
+        row.businessEventId,
+        row.voucherType,
+        row.status,
+        row.summary
+      ]
+    );
+    for (const [index, line] of row.lines.entries()) {
+      await executor.query(
+        `
+          insert into voucher_draft_lines (
+            id,
+            draft_id,
+            summary,
+            account_code,
+            account_name,
+            debit,
+            credit,
+            sort_order
+          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8)
+        `,
+        [
+          line.id,
+          row.id,
+          line.summary,
+          line.accountCode,
+          line.accountName,
+          line.debit,
+          line.credit,
+          index
+        ]
+      );
+    }
+  }
+}
+
+async function insertGeneratedDocuments(executor: DbExecutor, rows: GeneratedDocument[]) {
+  for (const row of rows) {
+    await executor.query(
+      `
+        insert into generated_documents (
+          id,
+          company_id,
+          business_event_id,
+          mapping_id,
+          document_type,
+          title,
+          owner_department,
+          status,
+          source,
+          archived_at,
+          created_at,
+          updated_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz, $11::timestamptz, $12::timestamptz)
+      `,
+      [
+        row.id,
+        row.companyId,
+        row.businessEventId,
+        row.mappingId,
+        row.documentType,
+        row.title,
+        row.ownerDepartment,
+        row.status,
+        row.source,
+        row.archivedAt,
+        row.createdAt,
+        row.updatedAt
+      ]
+    );
+  }
+}
+
+async function insertTaxItems(executor: DbExecutor, rows: TaxItem[]) {
+  for (const row of rows) {
+    await executor.query(
+      `
+        insert into tax_items (
+          id,
+          company_id,
+          business_event_id,
+          mapping_id,
+          tax_type,
+          treatment,
+          basis,
+          filing_period,
+          status,
+          source,
+          created_at,
+          updated_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::timestamptz, $12::timestamptz)
+      `,
+      [
+        row.id,
+        row.companyId,
+        row.businessEventId,
+        row.mappingId,
+        row.taxType,
+        row.treatment,
+        row.basis,
+        row.filingPeriod,
+        row.status,
+        row.source,
+        row.createdAt,
+        row.updatedAt
+      ]
+    );
+  }
+}
+
+async function insertVouchers(executor: DbExecutor, rows: Voucher[]) {
+  for (const row of rows) {
+    await executor.query(
+      `
+        insert into vouchers (
+          id,
+          company_id,
+          business_event_id,
+          mapping_id,
+          voucher_type,
+          summary,
+          status,
+          source,
+          approved_at,
+          posted_at,
+          created_at,
+          updated_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, $10::timestamptz, $11::timestamptz, $12::timestamptz)
+      `,
+      [
+        row.id,
+        row.companyId,
+        row.businessEventId,
+        row.mappingId,
+        row.voucherType,
+        row.summary,
+        row.status,
+        row.source,
+        row.approvedAt,
+        row.postedAt,
+        row.createdAt,
+        row.updatedAt
+      ]
+    );
+    for (const [index, line] of row.lines.entries()) {
+      await executor.query(
+        `
+          insert into voucher_lines (
+            id,
+            voucher_id,
+            summary,
+            account_code,
+            account_name,
+            debit,
+            credit,
+            sort_order
+          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8)
+        `,
+        [
+          line.id,
+          row.id,
+          line.summary,
+          line.accountCode,
+          line.accountName,
+          line.debit,
+          line.credit,
+          index
+        ]
+      );
+    }
+  }
+}
+
+export function handleEventsMeta(_req: ApiRequest, res: ServerResponse) {
+  return json(res, 200, {
+    module: "events",
+    plannedEndpoints: [
+      "GET /api/events",
+      "POST /api/events",
+      "GET /api/events/:id",
+      "PUT /api/events/:id",
+      "POST /api/events/:id/analyze",
+      "POST /api/events/:id/relations"
+    ]
+  });
+}
+
 export async function listEvents(req: ApiRequest, res: ServerResponse) {
-  const rows = await readJson(eventsFile, seedEvents);
+  const rows = await listCompanyEvents(req.auth!.companyId);
   const scoped = scopeEvents(rows, req);
   return json(res, 200, { items: scoped, total: scoped.length });
 }
 
 export async function createEvent(req: ApiRequest, res: ServerResponse) {
   const body = req.body as CreateBusinessEventInput;
-  const rows = await readJson(eventsFile, seedEvents);
-  const activities = await readJson(activitiesFile, seedActivities);
   const now = new Date().toISOString();
   const next: BusinessEvent = {
     id: `evt-${Date.now()}`,
@@ -754,75 +1212,175 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
     createdAt: now,
     updatedAt: now
   };
-  rows.unshift(next);
-  await writeJson(eventsFile, rows);
-  activities.unshift(
-    buildActivity(req, next.id, "created", `创建经营事项：${next.title}`)
-  );
-  await writeJson(activitiesFile, activities);
+  const activity = buildActivity(req, next.id, "created", `创建经营事项：${next.title}`);
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `
+        insert into business_events (
+          id,
+          company_id,
+          type,
+          title,
+          description,
+          department,
+          owner_id,
+          occurred_on,
+          amount,
+          currency,
+          status,
+          source,
+          counterparty_id,
+          project_id,
+          created_at,
+          updated_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8::date, $9::numeric, $10, $11, $12, $13, $14, $15::timestamptz, $16::timestamptz)
+      `,
+      [
+        next.id,
+        next.companyId,
+        next.type,
+        next.title,
+        next.description,
+        next.department,
+        next.ownerId,
+        next.occurredOn,
+        next.amount,
+        next.currency,
+        next.status,
+        next.source,
+        next.counterpartyId,
+        next.projectId,
+        next.createdAt,
+        next.updatedAt
+      ]
+    );
+    await insertActivities(client, [activity]);
+  });
+
   return json(res, 201, next);
 }
 
 export async function getEventDetail(req: ApiRequest, res: ServerResponse, eventId: string) {
-  const rows = await readJson(eventsFile, seedEvents);
-  const relations = await readJson(relationsFile, seedRelations);
-  const tasks = await readJson(tasksFile, seedTasks);
-  const activities = await readJson(activitiesFile, seedActivities);
-  const mappings = await readJson(mappingsFile, seedMappings);
-  const documents = await readJson(documentsFile, seedDocuments);
-  const taxItems = await readJson(taxItemsFile, seedTaxItems);
-  const vouchers = await readJson(vouchersFile, seedVouchers);
-  const event = scopeEvents(rows, req).find((row) => row.id === eventId);
+  const companyEvents = await listCompanyEvents(req.auth!.companyId);
+  const event = scopeEvents(companyEvents, req).find((row) => row.id === eventId);
   if (!event) {
     return json(res, 404, { error: "Event not found" });
   }
-  const mappingBundle = mappings.find((item) => item.businessEventId === event.id) || {
-    businessEventId: event.id,
-    documentMappings: [],
-    taxMappings: [],
-    voucherDrafts: [],
-    generatedAt: ""
-  };
+
+  const [relationRows, taskRows, activityRows, documentMappingRows, taxMappingRows, voucherDraftRows, voucherLineRows, documents, taxItems, vouchers] =
+    await Promise.all([
+      query<BusinessEventRelationRow>(
+        `
+          select id, company_id, business_event_id, relation_type, target_id, label, created_at
+          from business_event_relations
+          where company_id = $1 and business_event_id = $2
+          order by created_at desc
+        `,
+        [req.auth!.companyId, event.id]
+      ),
+      query<TaskRow>(
+        `
+          select
+            id, company_id, business_event_id, parent_task_id, title, description,
+            status, priority, owner_id, due_at, assignee_department, source, created_at, updated_at
+          from tasks
+          where company_id = $1 and business_event_id = $2
+          order by created_at desc
+        `,
+        [req.auth!.companyId, event.id]
+      ),
+      query<BusinessEventActivityRow>(
+        `
+          select
+            id, company_id, business_event_id, activity_type, actor_user_id, actor_name, summary, created_at
+          from business_event_activities
+          where company_id = $1 and business_event_id = $2
+          order by created_at desc
+        `,
+        [req.auth!.companyId, event.id]
+      ),
+      query<EventDocumentMappingRow>(
+        `
+          select
+            id, company_id, business_event_id, document_type, title, status, owner_department, notes, created_at
+          from event_document_mappings
+          where company_id = $1 and business_event_id = $2
+          order by created_at desc
+        `,
+        [req.auth!.companyId, event.id]
+      ),
+      query<EventTaxMappingRow>(
+        `
+          select
+            id, company_id, business_event_id, tax_type, treatment, status, basis, filing_period, created_at
+          from event_tax_mappings
+          where company_id = $1 and business_event_id = $2
+          order by created_at desc
+        `,
+        [req.auth!.companyId, event.id]
+      ),
+      query<EventVoucherDraftRow>(
+        `
+          select
+            id, company_id, business_event_id, voucher_type, status, summary, created_at
+          from event_voucher_drafts
+          where company_id = $1 and business_event_id = $2
+          order by created_at desc
+        `,
+        [req.auth!.companyId, event.id]
+      ),
+      query<VoucherDraftLineRow>(
+        `
+          select
+            l.id, l.draft_id, l.summary, l.account_code, l.account_name, l.debit, l.credit, l.sort_order
+          from voucher_draft_lines l
+          join event_voucher_drafts d on d.id = l.draft_id
+          where d.company_id = $1 and d.business_event_id = $2
+          order by l.sort_order asc
+        `,
+        [req.auth!.companyId, event.id]
+      ),
+      listCompanyDocuments(req.auth!.companyId, { businessEventId: event.id }),
+      listCompanyTaxItems(req.auth!.companyId, { businessEventId: event.id }),
+      listCompanyVouchers(req.auth!.companyId, { businessEventId: event.id })
+    ]);
+
+  const tasks = taskRows.map(mapTaskRow);
+  const documentMappings = documentMappingRows.map(mapDocumentMappingRow);
+  const taxMappings = taxMappingRows.map(mapTaxMappingRow);
+  const voucherDrafts = buildVoucherDrafts(voucherDraftRows, voucherLineRows);
+  const mappingTimes = [
+    ...documentMappingRows.map((row) => toIsoString(row.created_at)),
+    ...taxMappingRows.map((row) => toIsoString(row.created_at)),
+    ...voucherDraftRows.map((row) => toIsoString(row.created_at))
+  ].filter(Boolean) as string[];
+  const mappingGeneratedAt = mappingTimes.sort().at(-1) || "";
+
   return json(res, 200, {
     ...event,
-    relations: relations.filter(
-      (item) => item.businessEventId === event.id && item.companyId === req.auth!.companyId
-    ),
-    tasks: tasks.filter((item) => item.businessEventId === event.id && item.companyId === req.auth!.companyId),
-    taskTree: buildTaskTree(
-      tasks.filter((item) => item.businessEventId === event.id && item.companyId === req.auth!.companyId)
-    ),
-    documentMappings: mappingBundle.documentMappings.filter(
-      (item) => item.companyId === req.auth!.companyId
-    ),
-    taxMappings: mappingBundle.taxMappings.filter((item) => item.companyId === req.auth!.companyId),
-    voucherDrafts: mappingBundle.voucherDrafts.filter((item) => item.companyId === req.auth!.companyId),
-    generatedDocuments: documents.filter(
-      (item) => item.businessEventId === event.id && item.companyId === req.auth!.companyId
-    ),
-    taxItems: taxItems.filter(
-      (item) => item.businessEventId === event.id && item.companyId === req.auth!.companyId
-    ),
-    vouchers: vouchers.filter(
-      (item) => item.businessEventId === event.id && item.companyId === req.auth!.companyId
-    ),
-    mappingGeneratedAt: mappingBundle.generatedAt,
-    activities: activities.filter(
-      (item) => item.businessEventId === event.id && item.companyId === req.auth!.companyId
-    )
+    relations: relationRows.map(mapRelationRow),
+    tasks,
+    taskTree: buildTaskTree(tasks),
+    documentMappings,
+    taxMappings,
+    voucherDrafts,
+    generatedDocuments: documents,
+    taxItems,
+    vouchers,
+    mappingGeneratedAt,
+    activities: activityRows.map(mapActivityRow)
   });
 }
 
 export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId: string) {
-  const rows = await readJson(eventsFile, seedEvents);
-  const activities = await readJson(activitiesFile, seedActivities);
-  const body = (req.body || {}) as Partial<BusinessEvent>;
-  const existing = rows.find((row) => row.id === eventId && row.companyId === req.auth!.companyId);
-  let oldStatus: BusinessEvent["status"] | null = null;
+  const companyEvents = await listCompanyEvents(req.auth!.companyId);
+  const existing = scopeEvents(companyEvents, req).find((row) => row.id === eventId);
   if (!existing) {
     return json(res, 404, { error: "Event not found" });
   }
-  oldStatus = existing.status;
+
+  const body = (req.body || {}) as Partial<BusinessEvent>;
   const updated: BusinessEvent = {
     ...existing,
     title: body.title ?? existing.title,
@@ -833,37 +1391,56 @@ export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId:
     occurredOn: body.occurredOn ?? existing.occurredOn,
     updatedAt: new Date().toISOString()
   };
-  const nextRows = rows.map((row) => {
-    if (row.id !== eventId || row.companyId !== req.auth!.companyId) return row;
-    return updated;
-  });
-  await writeJson(eventsFile, nextRows);
-  activities.unshift(
+
+  const activities = [
     buildActivity(req, updated.id, "updated", `更新经营事项：${updated.title}`)
-  );
-  if (oldStatus && oldStatus !== updated.status) {
+  ];
+  if (existing.status !== updated.status) {
     activities.unshift(
       buildActivity(
         req,
         updated.id,
         "status_changed",
-        `状态变更：${oldStatus} -> ${updated.status}`
+        `状态变更：${existing.status} -> ${updated.status}`
       )
     );
   }
-  await writeJson(activitiesFile, activities);
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `
+        update business_events
+        set
+          title = $1,
+          description = $2,
+          department = $3,
+          status = $4,
+          amount = $5::numeric,
+          occurred_on = $6::date,
+          updated_at = $7::timestamptz
+        where id = $8 and company_id = $9
+      `,
+      [
+        updated.title,
+        updated.description,
+        updated.department,
+        updated.status,
+        updated.amount,
+        updated.occurredOn,
+        updated.updatedAt,
+        updated.id,
+        updated.companyId
+      ]
+    );
+    await insertActivities(client, activities);
+  });
+
   return json(res, 200, updated);
 }
 
 export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId: string) {
-  const events = await readJson(eventsFile, seedEvents);
-  const tasks = await readJson(tasksFile, seedTasks);
-  const activities = await readJson(activitiesFile, seedActivities);
-  const mappings = await readJson(mappingsFile, seedMappings);
-  const documents = await readJson(documentsFile, seedDocuments);
-  const taxItems = await readJson(taxItemsFile, seedTaxItems);
-  const vouchers = await readJson(vouchersFile, seedVouchers);
-  const target = scopeEvents(events, req).find((row) => row.id === eventId);
+  const companyEvents = await listCompanyEvents(req.auth!.companyId);
+  const target = scopeEvents(companyEvents, req).find((row) => row.id === eventId);
   if (!target) {
     return json(res, 404, { error: "Event not found" });
   }
@@ -921,48 +1498,174 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
     }
   ];
 
-  const nextEvents = events.map((row) =>
-    row.id === eventId ? { ...row, status: "analyzed", updatedAt: now } : row
-  );
-  const bundle = buildEventMappings({ ...target, status: "analyzed", updatedAt: now });
-  const nextMappings = [
-    bundle,
-    ...mappings.filter((item) => item.businessEventId !== target.id)
-  ];
+  const analyzedEvent: BusinessEvent = {
+    ...target,
+    status: "analyzed",
+    updatedAt: now
+  };
+  const bundle = buildEventMappings(analyzedEvent);
+
   const nextDocuments = [
-    ...toGeneratedDocuments(bundle, now),
-    ...documents.filter((item) => item.businessEventId !== target.id)
+    ...toGeneratedDocuments(bundle, now)
   ];
   const nextTaxItems = [
-    ...toTaxItems(bundle, now),
-    ...taxItems.filter((item) => item.businessEventId !== target.id)
+    ...toTaxItems(bundle, now)
   ];
   const nextVouchers = [
-    ...toVouchers(bundle, now),
-    ...vouchers.filter((item) => item.businessEventId !== target.id)
+    ...toVouchers(bundle, now)
   ];
-  const remainingTasks = tasks.filter(
-    (item) => !(item.businessEventId === target.id && item.source === "ai")
-  );
 
-  await writeJson(eventsFile, nextEvents);
-  await writeJson(tasksFile, [...generatedTasks, ...remainingTasks]);
-  await writeJson(mappingsFile, nextMappings);
-  await writeJson(documentsFile, nextDocuments);
-  await writeJson(taxItemsFile, nextTaxItems);
-  await writeJson(vouchersFile, nextVouchers);
-  activities.unshift(
+  const analysisActivities = [
     buildActivity(
       req,
       eventId,
       "task_generated",
       `自动生成 ${generatedTasks.length} 个任务，并同步 ${nextDocuments.length} 份单据、${nextTaxItems.length} 条税务事项、${nextVouchers.length} 张凭证草稿。`
-    )
-  );
-  activities.unshift(
+    ),
     buildActivity(req, eventId, "analyzed", "完成事项分析并输出执行建议。")
-  );
-  await writeJson(activitiesFile, activities);
+  ];
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `
+        update business_events
+        set status = 'analyzed', updated_at = $1::timestamptz
+        where id = $2 and company_id = $3
+      `,
+      [now, target.id, target.companyId]
+    );
+
+    await client.query(
+      `
+        delete from tasks
+        where company_id = $1 and business_event_id = $2 and source = 'ai'
+      `,
+      [target.companyId, target.id]
+    );
+    await insertTasks(client, generatedTasks);
+
+    await client.query(
+      `
+        delete from voucher_draft_lines
+        where draft_id in (
+          select id from event_voucher_drafts
+          where company_id = $1 and business_event_id = $2
+        )
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from event_voucher_drafts
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from event_document_mappings
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from event_tax_mappings
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from document_attachment_records
+        where document_id in (
+          select id from generated_documents
+          where company_id = $1 and business_event_id = $2
+        )
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from generated_documents
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from tax_filing_batch_items
+        where tax_item_id in (
+          select id from tax_items
+          where company_id = $1 and business_event_id = $2
+        )
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from tax_items
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from ledger_posting_batch_entries
+        where batch_id in (
+          select id from ledger_posting_batches
+          where company_id = $1 and business_event_id = $2
+        )
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from ledger_posting_batches
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from ledger_entries
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from voucher_posting_records
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from voucher_lines
+        where voucher_id in (
+          select id from vouchers
+          where company_id = $1 and business_event_id = $2
+        )
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from vouchers
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+
+    await insertDocumentMappings(client, bundle.documentMappings);
+    await insertTaxMappings(client, bundle.taxMappings);
+    await insertVoucherDrafts(client, bundle.voucherDrafts);
+    await insertGeneratedDocuments(client, nextDocuments);
+    await insertTaxItems(client, nextTaxItems);
+    await insertVouchers(client, nextVouchers);
+    await insertActivities(client, analysisActivities);
+  });
 
   return json(res, 200, {
     eventId,

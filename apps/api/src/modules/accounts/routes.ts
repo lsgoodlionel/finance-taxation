@@ -22,7 +22,7 @@ export interface ChartAccount {
   isLeaf: boolean;
 }
 
-const CHART_OF_ACCOUNTS: ChartAccount[] = [
+export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   // ─── 资产 ───────────────────────────────────────────────
   { code: "1001",    name: "库存现金",                  category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "1002",    name: "银行存款",                  category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },

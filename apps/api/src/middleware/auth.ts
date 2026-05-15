@@ -1,10 +1,10 @@
 import type { ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
-import type { Department, PermissionKey, UserProfile } from "@finance-taxation/domain-model";
+import type { PermissionKey, UserProfile } from "@finance-taxation/domain-model";
 import type { ApiRequest, AuthContext } from "../types.js";
-import { json } from "../utils/http.js";
-import { readJson, writeJson } from "../services/jsonStore.js";
 import { env } from "../config/env.js";
+import { queryOne, withTransaction } from "../db/client.js";
+import { json } from "../utils/http.js";
 
 const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
   "role-chairman": [
@@ -30,6 +30,214 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
   ]
 };
 
+interface AuthUserRow {
+  id: string;
+  company_id: string;
+  department_id: string | null;
+  username: string;
+  display_name: string;
+  email: string | null;
+  phone: string | null;
+  status: UserProfile["status"];
+  password_hash: string;
+  role_codes: string[] | null;
+}
+
+interface SessionRow {
+  id: string;
+  company_id: string;
+  user_id: string;
+  username: string;
+  department_id: string | null;
+  role_codes: string[] | null;
+  access_token: string;
+  refresh_token: string;
+  created_at: string | Date;
+  access_expires_at: string | Date;
+  refresh_expires_at: string | Date;
+  status: "active" | "revoked";
+}
+
+interface SessionWithDepartmentRow extends SessionRow {
+  department_name: string | null;
+}
+
+interface SessionRecord {
+  id: string;
+  companyId: string;
+  userId: string;
+  username: string;
+  departmentId: string | null;
+  roleCodes: string[];
+  accessToken: string;
+  refreshToken: string;
+  createdAt: string;
+  accessExpiresAt: string;
+  refreshExpiresAt: string;
+  status: "active" | "revoked";
+}
+
+function normalizeRoleCodes(roleCodes: string[] | null | undefined): string[] {
+  return Array.isArray(roleCodes) ? roleCodes.filter(Boolean) : [];
+}
+
+function toIsoString(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function mapUserProfile(row: AuthUserRow): UserProfile {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    departmentId: row.department_id,
+    username: row.username,
+    displayName: row.display_name,
+    email: row.email,
+    phone: row.phone,
+    status: row.status,
+    roleIds: normalizeRoleCodes(row.role_codes)
+  };
+}
+
+function mapSessionRecord(row: SessionRow): SessionRecord {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    userId: row.user_id,
+    username: row.username,
+    departmentId: row.department_id,
+    roleCodes: normalizeRoleCodes(row.role_codes),
+    accessToken: row.access_token,
+    refreshToken: row.refresh_token,
+    createdAt: toIsoString(row.created_at),
+    accessExpiresAt: toIsoString(row.access_expires_at),
+    refreshExpiresAt: toIsoString(row.refresh_expires_at),
+    status: row.status
+  };
+}
+
+function buildSession(user: UserProfile): SessionRecord {
+  const now = Date.now();
+  return {
+    id: `sess-${now}`,
+    companyId: user.companyId,
+    userId: user.id,
+    username: user.username,
+    departmentId: user.departmentId,
+    roleCodes: user.roleIds,
+    accessToken: randomBytes(24).toString("hex"),
+    refreshToken: randomBytes(32).toString("hex"),
+    createdAt: new Date(now).toISOString(),
+    accessExpiresAt: new Date(now + env.accessTokenTtlMs).toISOString(),
+    refreshExpiresAt: new Date(now + env.refreshTokenTtlMs).toISOString(),
+    status: "active"
+  };
+}
+
+async function loadUserByUsername(username: string): Promise<AuthUserRow | null> {
+  return queryOne<AuthUserRow>(
+    `
+      select
+        u.id,
+        u.company_id,
+        u.department_id,
+        u.username,
+        u.display_name,
+        u.email,
+        u.phone,
+        u.status,
+        up.password_hash,
+        coalesce(array_agg(r.code order by r.code) filter (where r.code is not null), '{}') as role_codes
+      from users u
+      join user_passwords up on up.user_id = u.id
+      left join user_roles ur on ur.user_id = u.id
+      left join roles r on r.id = ur.role_id
+      where u.username = $1
+      group by
+        u.id,
+        u.company_id,
+        u.department_id,
+        u.username,
+        u.display_name,
+        u.email,
+        u.phone,
+        u.status,
+        up.password_hash
+    `,
+    [username]
+  );
+}
+
+async function loadUserById(userId: string): Promise<AuthUserRow | null> {
+  return queryOne<AuthUserRow>(
+    `
+      select
+        u.id,
+        u.company_id,
+        u.department_id,
+        u.username,
+        u.display_name,
+        u.email,
+        u.phone,
+        u.status,
+        up.password_hash,
+        coalesce(array_agg(r.code order by r.code) filter (where r.code is not null), '{}') as role_codes
+      from users u
+      join user_passwords up on up.user_id = u.id
+      left join user_roles ur on ur.user_id = u.id
+      left join roles r on r.id = ur.role_id
+      where u.id = $1
+      group by
+        u.id,
+        u.company_id,
+        u.department_id,
+        u.username,
+        u.display_name,
+        u.email,
+        u.phone,
+        u.status,
+        up.password_hash
+    `,
+    [userId]
+  );
+}
+
+async function insertSession(session: SessionRecord) {
+  await queryOne(
+    `
+      insert into sessions (
+        id,
+        company_id,
+        user_id,
+        username,
+        department_id,
+        role_codes,
+        access_token,
+        refresh_token,
+        status,
+        created_at,
+        access_expires_at,
+        refresh_expires_at
+      ) values ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10::timestamptz, $11::timestamptz, $12::timestamptz)
+      returning id
+    `,
+    [
+      session.id,
+      session.companyId,
+      session.userId,
+      session.username,
+      session.departmentId,
+      session.roleCodes,
+      session.accessToken,
+      session.refreshToken,
+      session.status,
+      session.createdAt,
+      session.accessExpiresAt,
+      session.refreshExpiresAt
+    ]
+  );
+}
+
 export function hasPermission(roleCodes: string[], permissionKey: PermissionKey): boolean {
   return roleCodes.some((code) => ROLE_PERMISSIONS[code]?.includes(permissionKey) ?? false);
 }
@@ -50,110 +258,20 @@ export async function requirePermission(
   return true;
 }
 
-interface UserRecord extends UserProfile {
-  password: string;
-}
-
-interface SessionRecord {
-  id: string;
-  companyId: string;
-  userId: string;
-  username: string;
-  departmentId: string | null;
-  roleCodes: string[];
-  accessToken: string;
-  refreshToken: string;
-  createdAt: string;
-  accessExpiresAt: string;
-  refreshExpiresAt: string;
-  status: "active" | "revoked";
-}
-
-const usersFile = new URL("../data/users.v2.json", import.meta.url);
-const sessionsFile = new URL("../data/sessions.v2.json", import.meta.url);
-const departmentsFile = new URL("../data/departments.v2.json", import.meta.url);
-
-const seedUsers: UserRecord[] = [
-  {
-    id: "usr-chairman-001",
-    companyId: "cmp-tech-001",
-    departmentId: "dept-board",
-    username: "chairman",
-    displayName: "创始人董事长",
-    email: "chairman@example.com",
-    phone: "13800000000",
-    status: "active",
-    roleIds: ["role-chairman"],
-    password: "123456"
-  },
-  {
-    id: "usr-fin-001",
-    companyId: "cmp-tech-001",
-    departmentId: "dept-finance",
-    username: "finance",
-    displayName: "财务负责人",
-    email: "finance@example.com",
-    phone: "13900000000",
-    status: "active",
-    roleIds: ["role-finance-director"],
-    password: "123456"
-  }
-];
-
-const seedSessions: SessionRecord[] = [];
-const seedDepartments: Department[] = [
-  {
-    id: "dept-board",
-    companyId: "cmp-tech-001",
-    parentDepartmentId: null,
-    name: "董事会",
-    leaderUserId: "usr-chairman-001"
-  },
-  {
-    id: "dept-finance",
-    companyId: "cmp-tech-001",
-    parentDepartmentId: null,
-    name: "财务部",
-    leaderUserId: "usr-fin-001"
-  }
-];
-
-function buildSession(user: UserRecord): SessionRecord {
-  const now = Date.now();
-  return {
-    id: `sess-${now}`,
-    companyId: user.companyId,
-    userId: user.id,
-    username: user.username,
-    departmentId: user.departmentId,
-    roleCodes: user.roleIds,
-    accessToken: randomBytes(24).toString("hex"),
-    refreshToken: randomBytes(32).toString("hex"),
-    createdAt: new Date(now).toISOString(),
-    accessExpiresAt: new Date(now + env.accessTokenTtlMs).toISOString(),
-    refreshExpiresAt: new Date(now + env.refreshTokenTtlMs).toISOString(),
-    status: "active"
-  };
-}
-
 export async function login(req: ApiRequest, res: ServerResponse) {
   const body = (req.body || {}) as { username?: string; password?: string };
-  const users = await readJson(usersFile, seedUsers);
-  const user = users.find(
-    (item) =>
-      item.username === body.username &&
-      item.password === body.password &&
-      item.status === "active"
-  );
+  if (!body.username || !body.password) {
+    return json(res, 400, { error: "username and password are required" });
+  }
 
-  if (!user) {
+  const userRow = await loadUserByUsername(body.username);
+  if (!userRow || userRow.status !== "active" || userRow.password_hash !== body.password) {
     return json(res, 401, { error: "Invalid credentials" });
   }
 
-  const sessions = await readJson(sessionsFile, seedSessions);
+  const user = mapUserProfile(userRow);
   const session = buildSession(user);
-  sessions.unshift(session);
-  await writeJson(sessionsFile, sessions.slice(0, 200));
+  await insertSession(session);
 
   return json(res, 200, {
     accessToken: session.accessToken,
@@ -174,34 +292,128 @@ export async function refresh(req: ApiRequest, res: ServerResponse) {
     return json(res, 400, { error: "refreshToken is required" });
   }
 
-  const sessions = await readJson(sessionsFile, seedSessions);
-  const current = sessions.find(
-    (item) => item.refreshToken === body.refreshToken && item.status === "active"
-  );
-  if (!current) {
-    return json(res, 401, { error: "Invalid refresh token" });
-  }
+  const result = await withTransaction(async (client) => {
+    const sessionResult = await client.query<SessionRow>(
+      `
+        select
+          id,
+          company_id,
+          user_id,
+          username,
+          department_id,
+          role_codes,
+          access_token,
+          refresh_token,
+          created_at,
+          access_expires_at,
+          refresh_expires_at,
+          status
+        from sessions
+        where refresh_token = $1 and status = 'active'
+        for update
+      `,
+      [body.refreshToken]
+    );
+    const current = sessionResult.rows[0];
+    if (!current) {
+      return { error: "Invalid refresh token" as const };
+    }
 
-  if (new Date(current.refreshExpiresAt).getTime() <= Date.now()) {
-    return json(res, 401, { error: "Refresh token expired" });
-  }
+    const currentSession = mapSessionRecord(current);
+    if (new Date(currentSession.refreshExpiresAt).getTime() <= Date.now()) {
+      return { error: "Refresh token expired" as const };
+    }
 
-  const users = await readJson(usersFile, seedUsers);
-  const user = users.find((item) => item.id === current.userId && item.status === "active");
-  if (!user) {
-    return json(res, 401, { error: "User not found" });
-  }
+    const userResult = await client.query<AuthUserRow>(
+      `
+        select
+          u.id,
+          u.company_id,
+          u.department_id,
+          u.username,
+          u.display_name,
+          u.email,
+          u.phone,
+          u.status,
+          up.password_hash,
+          coalesce(array_agg(r.code order by r.code) filter (where r.code is not null), '{}') as role_codes
+        from users u
+        join user_passwords up on up.user_id = u.id
+        left join user_roles ur on ur.user_id = u.id
+        left join roles r on r.id = ur.role_id
+        where u.id = $1
+        group by
+          u.id,
+          u.company_id,
+          u.department_id,
+          u.username,
+          u.display_name,
+          u.email,
+          u.phone,
+          u.status,
+          up.password_hash
+      `,
+      [current.user_id]
+    );
+    const userRow = userResult.rows[0];
+    if (!userRow || userRow.status !== "active") {
+      return { error: "User not found" as const };
+    }
 
-  const nextSession = buildSession(user);
-  const nextSessions = sessions.map((item) =>
-    item.id === current.id ? { ...item, status: "revoked" as const } : item
-  );
-  nextSessions.unshift(nextSession);
-  await writeJson(sessionsFile, nextSessions.slice(0, 200));
+    const nextSession = buildSession(mapUserProfile(userRow));
+
+    await client.query(
+      `
+        update sessions
+        set status = 'revoked'
+        where id = $1
+      `,
+      [current.id]
+    );
+
+    await client.query(
+      `
+        insert into sessions (
+          id,
+          company_id,
+          user_id,
+          username,
+          department_id,
+          role_codes,
+          access_token,
+          refresh_token,
+          status,
+          created_at,
+          access_expires_at,
+          refresh_expires_at
+        ) values ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10::timestamptz, $11::timestamptz, $12::timestamptz)
+      `,
+      [
+        nextSession.id,
+        nextSession.companyId,
+        nextSession.userId,
+        nextSession.username,
+        nextSession.departmentId,
+        nextSession.roleCodes,
+        nextSession.accessToken,
+        nextSession.refreshToken,
+        nextSession.status,
+        nextSession.createdAt,
+        nextSession.accessExpiresAt,
+        nextSession.refreshExpiresAt
+      ]
+    );
+
+    return { session: nextSession };
+  });
+
+  if ("error" in result) {
+    return json(res, 401, { error: result.error });
+  }
 
   return json(res, 200, {
-    accessToken: nextSession.accessToken,
-    refreshToken: nextSession.refreshToken
+    accessToken: result.session.accessToken,
+    refreshToken: result.session.refreshToken
   });
 }
 
@@ -213,29 +425,49 @@ export async function requireAuth(req: ApiRequest, res: ServerResponse) {
   }
 
   const token = auth.slice(7).trim();
-  const sessions = await readJson(sessionsFile, seedSessions);
-  const session = sessions.find((item) => item.accessToken === token && item.status === "active");
-  if (!session) {
+  const sessionRow = await queryOne<SessionWithDepartmentRow>(
+    `
+      select
+        s.id,
+        s.company_id,
+        s.user_id,
+        s.username,
+        s.department_id,
+        s.role_codes,
+        s.access_token,
+        s.refresh_token,
+        s.created_at,
+        s.access_expires_at,
+        s.refresh_expires_at,
+        s.status,
+        d.name as department_name
+      from sessions s
+      left join departments d
+        on d.id = s.department_id
+       and d.company_id = s.company_id
+      where s.access_token = $1
+        and s.status = 'active'
+    `,
+    [token]
+  );
+
+  if (!sessionRow) {
     json(res, 401, { error: "Invalid session" });
     return false;
   }
 
+  const session = mapSessionRecord(sessionRow);
   if (new Date(session.accessExpiresAt).getTime() <= Date.now()) {
     json(res, 401, { error: "Session expired" });
     return false;
   }
-
-  const departments = await readJson(departmentsFile, seedDepartments);
-  const departmentName =
-    departments.find((item) => item.id === session.departmentId && item.companyId === session.companyId)
-      ?.name || null;
 
   const authContext: AuthContext = {
     companyId: session.companyId,
     userId: session.userId,
     username: session.username,
     departmentId: session.departmentId,
-    departmentName,
+    departmentName: sessionRow.department_name,
     roleCodes: session.roleCodes,
     token
   };
@@ -247,11 +479,13 @@ export async function me(req: ApiRequest, res: ServerResponse) {
   if (!req.auth) {
     return json(res, 401, { error: "Unauthorized" });
   }
-  const users = await readJson(usersFile, seedUsers);
-  const user = users.find((item) => item.id === req.auth?.userId);
-  if (!user) {
+
+  const userRow = await loadUserById(req.auth.userId);
+  if (!userRow || userRow.status !== "active") {
     return json(res, 404, { error: "User not found" });
   }
+
+  const user = mapUserProfile(userRow);
   return json(res, 200, {
     id: user.id,
     companyId: user.companyId,
