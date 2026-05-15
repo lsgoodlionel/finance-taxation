@@ -105,6 +105,7 @@ import {
   updateEmployee,
   updatePayrollPolicy
 } from "./modules/payroll/routes.js";
+import { chat as assistantChat } from "./modules/assistant/routes.js";
 import { login, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
@@ -784,6 +785,20 @@ async function router(req: ApiRequest, res: ServerResponse) {
       if (!(await requirePermission("contracts.manage", req, res))) return;
       return updateContract(req, res, contractDetailId);
     }
+  }
+
+  // ── Assistant ──
+  if (url.pathname === "/api/assistant/chat") {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization"
+      });
+      res.end();
+      return;
+    }
+    if (req.method === "POST") return assistantChat(req, res);
   }
 
   return json(res, 404, { error: "Not Found" });

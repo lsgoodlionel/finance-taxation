@@ -1,6 +1,7 @@
 import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { ChairmanDashboardPage } from "./pages/ChairmanDashboardPage";
+import { AssistantPage } from "./pages/AssistantPage";
 import { ContractsPage } from "./pages/ContractsPage";
 import { PayrollPage } from "./pages/PayrollPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
@@ -30,7 +31,8 @@ const router = createBrowserRouter([
       { path: "rnd", element: <RndPage /> },
       { path: "risk", element: <RiskPage /> },
       { path: "contracts", element: <ContractsPage /> },
-      { path: "payroll", element: <PayrollPage /> }
+      { path: "payroll", element: <PayrollPage /> },
+      { path: "assistant", element: <AssistantPage /> }
     ]
   }
 ]);

@@ -11,6 +11,7 @@
     "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.96.0",
     "busboy": "^1.6.0",
     "pg": "^8.13.3"
   },

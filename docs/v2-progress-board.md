@@ -4,8 +4,8 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`Phase 3 Sprint P3-3：AI 财税秘书 v1`
-- 当前里程碑：`Phase 3 - Sprint P3-3`
+- 当前目标：`Phase 3 Sprint P3-4：PDF 导出`
+- 当前里程碑：`Phase 3 - Sprint P3-4`
 - 更新时间：`2026-05-15`
 
 ## 2. 总览
@@ -23,6 +23,7 @@
 | WS8 | 风险勾稽与审计 | Codex | main | in_progress | 2026-05-15 | risk_findings、评分模型、异常关闭与复盘记录已落地，收入/采购/税务/研发勾稽规则已深化 | 本机 DATABASE_URL 未配置，未做迁移实测 |
 | WS3 补全 | 合同管理模块（P3-1） | Codex | main | done | 2026-05-15 | contracts 表、CRUD API、ContractsPage、权限守卫、菜单项均已落地 | 无 |
 | WS-HR | 员工/工资/社保/公积金（P3-2） | Codex | main | done | 2026-05-15 | employees + payroll_policy + payroll_records 表、计算引擎（IIT 七级）、PayrollPage、权限守卫均已落地 | 无 |
+| WS9 | AI 财税秘书 v1（P3-3） | Codex | main | done | 2026-05-15 | @anthropic-ai/sdk 接入、SSE 流式响应、系统 Prompt（含公司上下文 + 近期事项）、AssistantPage 对话界面、建议事项一键创建 | 无 |
 | WS9 | AI Agent 与知识库 | TBD | TBD | not_started | 2026-05-14 | 设计 Agent 协议与 Prompt 版本管理 | 无 |
 | WS10 | DevOps、QA、发布 | Codex | main | done | 2026-05-14 | 依赖已安装，锁文件、PR 模板、Issue 模板和 typecheck 基线已就位 | 无 |
 
@@ -320,11 +321,24 @@
 | `migrations/002_seed_data.sql` 补充 payroll.view / payroll.manage 权限行（chairman+fd+accountant+viewer） | ✅ |
 | AppLayout 导航项 / App.tsx 路由 | ✅ |
 
-### Sprint P3-3 至 P3-6（待启动）
+### Sprint P3-3：AI 财税秘书 v1（✅ done）
+
+| 项目 | 状态 |
+| --- | --- |
+| `@anthropic-ai/sdk` 安装至 apps/api | ✅ |
+| `env.ts` + `.env.example` 新增 `ANTHROPIC_API_KEY` | ✅ |
+| `apps/api/src/modules/assistant/routes.ts` — POST /api/assistant/chat（SSE 流式响应） | ✅ |
+| 系统 Prompt：公司名称 + 今日日期 + 最近 5 条经营事项 + 最近 5 个待办任务 | ✅ |
+| 识别 action 块，结构化输出建议经营事项 | ✅ |
+| `apps/web/src/pages/AssistantPage.tsx` — 对话界面（快捷提示 / 流式渲染 / 一键创建事项） | ✅ |
+| AppLayout 导航项 / App.tsx 路由 | ✅ |
+| `docs/v2-progress-board.md` 更新 | ✅ |
+
+### Sprint P3-4 至 P3-6（待启动）
 
 | Sprint | 主题 | 状态 |
 | --- | --- | --- |
-| P3-3 | AI 财税秘书 v1（自然语言入口 + 上下文对话） | not_started |
+| P3-3 | AI 财税秘书 v1（自然语言入口 + 上下文对话） | ✅ done |
 | P3-4 | PDF 导出（报表/凭证/工资条/申报底稿） | not_started |
 | P3-5 | 完整审计日志（操作溯源 + 修改记录） | not_started |
 | P3-6 | 老板问答 Agent + 研发深化 | not_started |
