@@ -86,6 +86,14 @@ import {
   validateVoucher,
   updateVoucher
 } from "./modules/vouchers/routes.js";
+import {
+  closeContract,
+  createContract,
+  getContractDetail,
+  getContractEvents,
+  listContracts,
+  updateContract
+} from "./modules/contracts/routes.js";
 import { login, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
@@ -658,6 +666,50 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "PUT") {
       if (!(await requirePermission("ledger.post", req, res))) return;
       return updateVoucher(req, res, voucherDetailId);
+    }
+  }
+
+  if (url.pathname === "/api/contracts") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") {
+      if (!(await requirePermission("contracts.view", req, res))) return;
+      return listContracts(req, res);
+    }
+    if (req.method === "POST") {
+      if (!(await requirePermission("contracts.manage", req, res))) return;
+      return createContract(req, res);
+    }
+  }
+
+  const contractCloseMatch = url.pathname.match(/^\/api\/contracts\/([^/]+)\/close$/);
+  const contractCloseId = contractCloseMatch?.[1];
+  if (contractCloseId) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") {
+      if (!(await requirePermission("contracts.manage", req, res))) return;
+      return closeContract(req, res, contractCloseId);
+    }
+  }
+
+  const contractEventsMatch = url.pathname.match(/^\/api\/contracts\/([^/]+)\/events$/);
+  const contractEventsId = contractEventsMatch?.[1];
+  if (contractEventsId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("contracts.view", req, res))) return;
+    if (req.method === "GET") return getContractEvents(req, res, contractEventsId);
+  }
+
+  const contractDetailMatch = url.pathname.match(/^\/api\/contracts\/([^/]+)$/);
+  const contractDetailId = contractDetailMatch?.[1];
+  if (contractDetailId) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") {
+      if (!(await requirePermission("contracts.view", req, res))) return;
+      return getContractDetail(req, res, contractDetailId);
+    }
+    if (req.method === "PUT") {
+      if (!(await requirePermission("contracts.manage", req, res))) return;
+      return updateContract(req, res, contractDetailId);
     }
   }
 

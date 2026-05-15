@@ -697,6 +697,34 @@ export interface ClosingPackageExport {
   }>;
 }
 
+export type ContractType = "sales" | "procurement" | "lease" | "service" | "other";
+export type ContractStatus = "draft" | "active" | "fulfilled" | "terminated" | "expired";
+
+export interface Contract {
+  id: string;
+  companyId: string;
+  contractNo: string;
+  contractType: ContractType;
+  title: string;
+  counterpartyName: string;
+  counterpartyType: string;
+  amount: number;
+  currency: string;
+  signedDate: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  status: ContractStatus;
+  notes: string;
+  createdByUserId: string | null;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContractWithEventCount extends Contract {
+  relatedEventCount: number;
+}
+
 export const permissionCatalog = [
   "dashboard.view",
   "events.view",
@@ -714,6 +742,8 @@ export const permissionCatalog = [
   "rnd.manage",
   "risk.view",
   "risk.manage",
+  "contracts.view",
+  "contracts.manage",
   "settings.manage"
 ] as const;
 

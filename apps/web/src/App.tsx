@@ -1,6 +1,7 @@
 import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { ChairmanDashboardPage } from "./pages/ChairmanDashboardPage";
+import { ContractsPage } from "./pages/ContractsPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { EventsPage } from "./pages/EventsPage";
 import { LedgerPage } from "./pages/LedgerPage";
@@ -26,7 +27,8 @@ const router = createBrowserRouter([
       { path: "reports", element: <ReportsPage /> },
       { path: "tax", element: <TaxPage /> },
       { path: "rnd", element: <RndPage /> },
-      { path: "risk", element: <RiskPage /> }
+      { path: "risk", element: <RiskPage /> },
+      { path: "contracts", element: <ContractsPage /> }
     ]
   }
 ]);

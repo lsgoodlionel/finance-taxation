@@ -4,8 +4,8 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`Phase 2 报表中心、研发辅助账、风险勾稽首版`
-- 当前里程碑：`Phase 2 - Sprint 3`
+- 当前目标：`Phase 3 Sprint P3-1：合同管理模块`
+- 当前里程碑：`Phase 3 - Sprint P3-1`
 - 更新时间：`2026-05-15`
 
 ## 2. 总览
@@ -21,6 +21,7 @@
 | WS6 | 税务与申报准备 | Codex | main | in_progress | 2026-05-15 | tax_items、tax_filing_batches、taxpayer_profiles、税率规则、增值税底稿、企业所得税准备、个税资料、印花税与附加税、批次复核留档首版已落地 | 无 |
 | WS7 | 研发财税 | Codex | main | in_progress | 2026-05-15 | rnd_projects / rnd_cost_lines / rnd_time_entries 已建模并接入首版辅助账，已补加计扣除资料包、资本化/费用化复核和政策补贴提示 | 本机 DATABASE_URL 未配置，未做迁移实测 |
 | WS8 | 风险勾稽与审计 | Codex | main | in_progress | 2026-05-15 | risk_findings、评分模型、异常关闭与复盘记录已落地，收入/采购/税务/研发勾稽规则已深化 | 本机 DATABASE_URL 未配置，未做迁移实测 |
+| WS3 补全 | 合同管理模块（P3-1） | Codex | main | done | 2026-05-15 | contracts 表、CRUD API、ContractsPage、权限守卫、菜单项均已落地 | 无 |
 | WS9 | AI Agent 与知识库 | TBD | TBD | not_started | 2026-05-14 | 设计 Agent 协议与 Prompt 版本管理 | 无 |
 | WS10 | DevOps、QA、发布 | Codex | main | done | 2026-05-14 | 依赖已安装，锁文件、PR 模板、Issue 模板和 typecheck 基线已就位 | 无 |
 

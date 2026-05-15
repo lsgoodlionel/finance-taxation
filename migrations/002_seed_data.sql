@@ -79,13 +79,22 @@ insert into role_permissions (id, role_id, permission_key, scope) values
   ('rp-acc-07', 'role-accountant', 'ledger.post',      'company'),
   ('rp-acc-08', 'role-accountant', 'tax.view',         'company'),
   ('rp-acc-09', 'role-accountant', 'tax.manage',       'company'),
+  -- chairman 合同权限（补充 P3-1）
+  ('rp-chr-18', 'role-chairman', 'contracts.view',   'company'),
+  ('rp-chr-19', 'role-chairman', 'contracts.manage', 'company'),
+  -- finance-director 合同权限
+  ('rp-fd-17', 'role-finance-director', 'contracts.view',   'company'),
+  ('rp-fd-18', 'role-finance-director', 'contracts.manage', 'company'),
+  -- accountant 合同只读
+  ('rp-acc-10', 'role-accountant', 'contracts.view', 'company'),
   -- viewer（6 权，纯只读）
-  ('rp-vw-01', 'role-viewer', 'dashboard.view', 'company'),
-  ('rp-vw-02', 'role-viewer', 'events.view',    'company'),
-  ('rp-vw-03', 'role-viewer', 'tasks.view',     'company'),
-  ('rp-vw-04', 'role-viewer', 'documents.view', 'company'),
-  ('rp-vw-05', 'role-viewer', 'ledger.view',    'company'),
-  ('rp-vw-06', 'role-viewer', 'tax.view',       'company')
+  ('rp-vw-01', 'role-viewer', 'dashboard.view',  'company'),
+  ('rp-vw-02', 'role-viewer', 'events.view',     'company'),
+  ('rp-vw-03', 'role-viewer', 'tasks.view',      'company'),
+  ('rp-vw-04', 'role-viewer', 'documents.view',  'company'),
+  ('rp-vw-05', 'role-viewer', 'ledger.view',     'company'),
+  ('rp-vw-06', 'role-viewer', 'tax.view',        'company'),
+  ('rp-vw-07', 'role-viewer', 'contracts.view',  'company')
 on conflict (id) do nothing;
 
 -- ─── User Roles ─────────────────────────────────────────────────────────────

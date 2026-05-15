@@ -3,6 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 const navItems = [
   { to: "/dashboard/chairman", label: "董事长驾驶舱" },
   { to: "/events", label: "经营事项总线" },
+  { to: "/contracts", label: "合同管理" },
   { to: "/tasks", label: "任务中心" },
   { to: "/documents", label: "单据中心" },
   { to: "/vouchers", label: "凭证中心" },
@@ -40,7 +41,7 @@ export function AppLayout() {
         >
           <div>
             <div style={{ color: "#6c7a89", letterSpacing: "0.08em", fontSize: "12px" }}>
-              SPRINT 0 V2 FOUNDATION
+              PHASE 3 · AI 财税工作台
             </div>
             <h1 style={{ margin: "8px 0 0", fontSize: "28px" }}>
               Finance Taxation V2 Workspace
