@@ -21,6 +21,7 @@ import { listCompanyDocuments } from "../documents/routes.js";
 import { listCompanyTaxItems } from "../tax/routes.js";
 import { listCompanyVouchers } from "../vouchers/routes.js";
 import { json } from "../../utils/http.js";
+import { writeAudit } from "../../services/audit.js";
 
 interface BusinessEventRow {
   id: string;
@@ -1258,6 +1259,17 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
     await insertActivities(client, [activity]);
   });
 
+  writeAudit({
+    companyId: next.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: "create",
+    resourceType: "business_event",
+    resourceId: next.id,
+    resourceLabel: next.title,
+    changes: { data: { type: next.type, status: next.status, amount: next.amount } }
+  });
+
   return json(res, 201, next);
 }
 
@@ -1433,6 +1445,20 @@ export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId:
       ]
     );
     await insertActivities(client, activities);
+  });
+
+  writeAudit({
+    companyId: updated.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: existing.status !== updated.status ? "update_status" : "update",
+    resourceType: "business_event",
+    resourceId: updated.id,
+    resourceLabel: updated.title,
+    changes: {
+      before: { status: existing.status, title: existing.title },
+      after: { status: updated.status, title: updated.title }
+    }
   });
 
   return json(res, 200, updated);

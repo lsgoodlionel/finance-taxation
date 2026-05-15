@@ -8,6 +8,7 @@ import type {
 import { query, queryOne } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
+import { writeAudit } from "../../services/audit.js";
 
 interface EmployeeRow {
   id: string;
@@ -368,6 +369,16 @@ export async function computePayroll(req: ApiRequest, res: ServerResponse) {
     );
   }
 
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: "compute",
+    resourceType: "payroll",
+    resourceId: body.period,
+    resourceLabel: `工资计算 ${body.period}`,
+    changes: { data: { period: body.period, employeeCount: employees.length } }
+  });
   return listPayroll(req, res);
 }
 
@@ -429,7 +440,18 @@ export async function confirmPayroll(req: ApiRequest, res: ServerResponse, payro
   );
   if (!row) return json(res, 404, { error: "Payroll record not found or already confirmed" });
 
-  return json(res, 200, { record: mapRecord(row) });
+  const confirmed = mapRecord(row);
+  writeAudit({
+    companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: "confirm",
+    resourceType: "payroll",
+    resourceId: payrollId,
+    resourceLabel: `工资确认 ${confirmed.period} - ${confirmed.employeeName}`,
+    changes: { after: { status: "confirmed" } }
+  });
+  return json(res, 200, { record: confirmed });
 }
 
 export async function getPayrollPeriods(req: ApiRequest, res: ServerResponse) {

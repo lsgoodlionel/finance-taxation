@@ -14,6 +14,7 @@ import { RndPage } from "./pages/RndPage";
 import { TaxPage } from "./pages/TaxPage";
 import { TasksPage } from "./pages/TasksPage";
 import { VouchersPage } from "./pages/VouchersPage";
+import { AuditPage } from "./pages/AuditPage";
 
 const router = createBrowserRouter([
   {
@@ -34,7 +35,8 @@ const router = createBrowserRouter([
       { path: "contracts", element: <ContractsPage /> },
       { path: "payroll", element: <PayrollPage /> },
       { path: "assistant", element: <AssistantPage /> },
-      { path: "pdf-export", element: <PdfExportPage /> }
+      { path: "pdf-export", element: <PdfExportPage /> },
+      { path: "audit", element: <AuditPage /> }
     ]
   }
 ]);

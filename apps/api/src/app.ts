@@ -112,6 +112,7 @@ import {
   reportPdf,
   voucherPdf
 } from "./modules/pdf/routes.js";
+import { listAuditLogs } from "./modules/audit/routes.js";
 import { login, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
@@ -832,6 +833,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
       return;
     }
     if (req.method === "POST") return assistantChat(req, res);
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/audit/logs") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("audit.view", req, res))) return;
+    return listAuditLogs(req, res);
   }
 
   return json(res, 404, { error: "Not Found" });

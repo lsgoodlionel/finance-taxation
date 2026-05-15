@@ -103,7 +103,11 @@ insert into role_permissions (id, role_id, permission_key, scope) values
   ('rp-vw-05', 'role-viewer', 'ledger.view',     'company'),
   ('rp-vw-06', 'role-viewer', 'tax.view',        'company'),
   ('rp-vw-07', 'role-viewer', 'contracts.view',  'company'),
-  ('rp-vw-08', 'role-viewer', 'payroll.view',    'company')
+  ('rp-vw-08', 'role-viewer', 'payroll.view',    'company'),
+  -- audit.view
+  ('rp-chr-22', 'role-chairman',        'audit.view', 'company'),
+  ('rp-fd-21',  'role-finance-director','audit.view', 'company'),
+  ('rp-acc-12', 'role-accountant',      'audit.view', 'company')
 on conflict (id) do nothing;
 
 -- ─── User Roles ─────────────────────────────────────────────────────────────

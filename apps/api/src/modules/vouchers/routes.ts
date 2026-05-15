@@ -13,6 +13,7 @@ import {
   buildVoucherTemplateDraft,
   listVoucherTemplates
 } from "./templates.js";
+import { writeAudit } from "../../services/audit.js";
 
 interface VoucherRow {
   id: string;
@@ -563,6 +564,16 @@ export async function approveVoucher(req: ApiRequest, res: ServerResponse, vouch
     [now, voucherId, req.auth!.companyId]
   );
   const updated = await getVoucherForCompany(req.auth!.companyId, voucherId);
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: "approve",
+    resourceType: "voucher",
+    resourceId: voucherId,
+    resourceLabel: target.summary,
+    changes: { before: { status: target.status }, after: { status: "review_required" } }
+  });
   return json(res, 200, updated);
 }
 
@@ -761,6 +772,16 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
   });
 
   const updated = await getVoucherForCompany(req.auth!.companyId, voucherId);
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: "post",
+    resourceType: "voucher",
+    resourceId: voucherId,
+    resourceLabel: target.summary,
+    changes: { data: { postedAt, entryCount: createdLedgerEntries.length } }
+  });
   return json(res, 200, {
     ...updated,
     postingRecords: [postingRecord],

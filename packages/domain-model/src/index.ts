@@ -797,6 +797,19 @@ export interface ContractWithEventCount extends Contract {
   relatedEventCount: number;
 }
 
+export interface AuditLog {
+  id: string;
+  companyId: string;
+  userId: string | null;
+  userName: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  resourceLabel: string | null;
+  changes: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 export const permissionCatalog = [
   "dashboard.view",
   "events.view",
@@ -818,6 +831,7 @@ export const permissionCatalog = [
   "contracts.manage",
   "payroll.view",
   "payroll.manage",
+  "audit.view",
   "settings.manage"
 ] as const;
 

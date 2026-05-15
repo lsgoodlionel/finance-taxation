@@ -1,4 +1,5 @@
 import type {
+  AuditLog,
   BalanceSheetReport,
   BusinessEvent,
   Contract,
@@ -901,4 +902,27 @@ export async function confirmPayroll(recordId: string) {
     method: "POST",
     body: JSON.stringify({})
   });
+}
+
+export async function listAuditLogs(params?: {
+  resourceType?: string;
+  resourceId?: string;
+  userId?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params?.resourceType) q.set("resourceType", params.resourceType);
+  if (params?.resourceId) q.set("resourceId", params.resourceId);
+  if (params?.userId) q.set("userId", params.userId);
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  if (params?.offset != null) q.set("offset", String(params.offset));
+  const qs = q.toString();
+  return request<{ items: AuditLog[]; total: number; limit: number; offset: number }>(
+    `/api/audit/logs${qs ? "?" + qs : ""}`
+  );
 }

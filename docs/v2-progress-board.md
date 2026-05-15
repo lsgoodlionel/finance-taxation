@@ -4,8 +4,8 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`Phase 3 Sprint P3-5：完整审计日志`
-- 当前里程碑：`Phase 3 - Sprint P3-5`
+- 当前目标：`Phase 3 Sprint P3-6：老板问答 Agent + 研发深化`
+- 当前里程碑：`Phase 3 - Sprint P3-6`
 - 更新时间：`2026-05-15`
 
 ## 2. 总览
@@ -25,6 +25,7 @@
 | WS-HR | 员工/工资/社保/公积金（P3-2） | Codex | main | done | 2026-05-15 | employees + payroll_policy + payroll_records 表、计算引擎（IIT 七级）、PayrollPage、权限守卫均已落地 | 无 |
 | WS9 | AI 财税秘书 v1（P3-3） | Codex | main | done | 2026-05-15 | @anthropic-ai/sdk 接入、SSE 流式响应、系统 Prompt（含公司上下文 + 近期事项）、AssistantPage 对话界面、建议事项一键创建 | 无 |
 | WS-PDF | PDF 导出（P3-4） | Codex | main | done | 2026-05-15 | 工资汇总/工资条/凭证/报表快照四类 PDF 模板、HTML 打印版、PdfExportPage 三 Tab 下载中心均已落地 | 无 |
+| WS-AUDIT | 审计日志（P3-5） | Codex | main | done | 2026-05-15 | audit_logs 表、writeAudit 服务（fire-and-forget）、接入 event/voucher/contract/payroll 写操作、/api/audit/logs 接口、AuditPage 已落地 | 无 |
 | WS9 | AI Agent 与知识库 | TBD | TBD | not_started | 2026-05-14 | 设计 Agent 协议与 Prompt 版本管理 | 无 |
 | WS10 | DevOps、QA、发布 | Codex | main | done | 2026-05-14 | 依赖已安装，锁文件、PR 模板、Issue 模板和 typecheck 基线已就位 | 无 |
 
@@ -345,9 +346,25 @@
 | `apps/web/src/pages/PdfExportPage.tsx` — 工资导出 / 报表导出 / 凭证导出三 Tab 下载中心 | ✅ |
 | AppLayout 导航项 / App.tsx 路由 | ✅ |
 
-### Sprint P3-5 至 P3-6（待启动）
+### Sprint P3-5：完整审计日志（✅ done）
+
+| 项目 | 状态 |
+| --- | --- |
+| `migrations/009_audit_log.sql` — audit_logs 表 + 三个索引 | ✅ |
+| `apps/api/src/services/audit.ts` — `writeAudit()` fire-and-forget 服务 | ✅ |
+| `apps/api/src/modules/audit/routes.ts` — `GET /api/audit/logs`（分页 + 多维过滤） | ✅ |
+| `apps/api/src/app.ts` 接入 audit 路由（audit.view 权限守卫） | ✅ |
+| `migrations/002_seed_data.sql` 补充 audit.view 权限（chairman + fd + accountant） | ✅ |
+| events/routes.ts：createEvent + updateEvent 写入审计 | ✅ |
+| vouchers/routes.ts：approveVoucher + postVoucher 写入审计 | ✅ |
+| contracts/routes.ts：createContract + closeContract 写入审计 | ✅ |
+| payroll/routes.ts：computePayroll + confirmPayroll 写入审计 | ✅ |
+| `packages/domain-model` 新增 AuditLog 类型 + audit.view 权限 | ✅ |
+| `apps/web/src/pages/AuditPage.tsx` — 日志列表、类型/时间过滤、变更详情展开、分页 | ✅ |
+| AppLayout 导航项 / App.tsx 路由 | ✅ |
+
+### Sprint P3-6（待启动）
 
 | Sprint | 主题 | 状态 |
 | --- | --- | --- |
-| P3-5 | 完整审计日志（操作溯源 + 修改记录） | not_started |
 | P3-6 | 老板问答 Agent + 研发深化 | not_started |

@@ -3,6 +3,7 @@ import type { Contract, ContractWithEventCount } from "@finance-taxation/domain-
 import { query, queryOne } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
+import { writeAudit } from "../../services/audit.js";
 
 interface ContractRow {
   id: string;
@@ -153,7 +154,18 @@ export async function createContract(req: ApiRequest, res: ServerResponse) {
     ]
   );
 
-  return json(res, 201, { contract: mapRow(row!) });
+  const created = mapRow(row!);
+  writeAudit({
+    companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.displayName || req.auth!.username,
+    action: "create",
+    resourceType: "contract",
+    resourceId: created.id,
+    resourceLabel: created.title,
+    changes: { data: { contractType: created.contractType, amount: created.amount } }
+  });
+  return json(res, 201, { contract: created });
 }
 
 export async function getContractDetail(req: ApiRequest, res: ServerResponse, contractId: string) {
@@ -252,7 +264,18 @@ export async function closeContract(req: ApiRequest, res: ServerResponse, contra
   );
   if (!row) return json(res, 404, { error: "Contract not found" });
 
-  return json(res, 200, { contract: mapRow(row) });
+  const closed = mapRow(row);
+  writeAudit({
+    companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.displayName || req.auth!.username,
+    action: "close",
+    resourceType: "contract",
+    resourceId: contractId,
+    resourceLabel: closed.title,
+    changes: { after: { status: newStatus } }
+  });
+  return json(res, 200, { contract: closed });
 }
 
 export async function getContractEvents(req: ApiRequest, res: ServerResponse, contractId: string) {
