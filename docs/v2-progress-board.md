@@ -4,9 +4,9 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`Phase 3 全部 Sprint 已完成，进入持续优化阶段`
-- 当前里程碑：`Phase 3 完成`
-- 更新时间：`2026-05-15`
+- 当前目标：`全部收尾 Sprint（F-1~F-4）已完成，系统进入稳定运营状态`
+- 当前里程碑：`最终收尾完成 ✅`
+- 更新时间：`2026-05-16`
 
 ## 2. 总览
 
@@ -27,8 +27,12 @@
 | WS-PDF | PDF 导出（P3-4） | Codex | main | ✅ done | 2026-05-15 | 工资汇总/工资条/凭证/报表快照四类 PDF 模板、HTML 打印版、PdfExportPage 三 Tab 下载中心均已落地 | 无 |
 | WS-AUDIT | 审计日志（P3-5） | Codex | main | ✅ done | 2026-05-15 | audit_logs 表、writeAudit 服务（fire-and-forget）、接入 event/voucher/contract/payroll 写操作、/api/audit/logs 接口、AuditPage 已落地 | 无 |
 | WS-BOSSQA | 老板专线 + 研发深化（P3-6） | Codex | main | ✅ done | 2026-05-15 | boss-qa SSE 接口（实时财务快照注入）、BossQAPage、/api/rnd/trend 月度趋势接口、RndPage 趋势表格均已落地 | 无 |
-| WS9 | AI Agent 与知识库 | TBD | TBD | ❌ not_started | 2026-05-15 | 企业制度库、Prompt 版本管理、知识检索、Agent 协议均未启动，是后续核心迭代目标 | 无 |
-| WS10 | DevOps、QA、发布 | Codex | main | ⚠️ 部分完成 | 2026-05-15 | CI/CD 基础、PR 模板、typecheck 基线已就位；E2E 测试套件、单元测试覆盖率（80%+）尚未建立 | 无 |
+| WS9 | AI Agent 与知识库 | Codex | main | ✅ done | 2026-05-16 | 企业制度库（company_knowledge_items）、CRUD API、KnowledgePage、AI Prompt 关键词注入全部落地（Sprint F-1） | 无 |
+| WS10 | DevOps、QA、发布 | Codex | main | ✅ done | 2026-05-16 | 单元测试基线（44 passes）、根 npm run test、任务逾期纯函数提取并测试覆盖（Sprint F-4） | 无 |
+| WS-FINAL-F1 | 制度库 + AI 知识注入 | Codex | main | ✅ done | 2026-05-16 | migration 010、knowledge routes、KnowledgePage、AI Prompt 注入、domain model 扩展 | 无 |
+| WS-FINAL-F2 | 日记账 Tab + 事项跨页导航 | Codex | main | ✅ done | 2026-05-16 | getCashJournal API、LedgerPage Tab 重构（科目汇总/余额/日记账/总账分录）、EventsPage 凭证/单据跨页链接 | 无 |
+| WS-FINAL-F3 | 任务逾期 + 催办机制 | Codex | main | ✅ done | 2026-05-16 | isTaskOverdue、remindTask API、TasksPage 逾期高亮+催办按钮+逾期计数徽章 | 无 |
+| WS-FINAL-F4 | 单元测试基线 | Codex | main | ✅ done | 2026-05-16 | 纯函数提取（overdue.ts）、6 条任务逾期单元测试、根 npm run test 脚本、总计 44 passes | 无 |
 
 ## 3. 当前优先任务
 
