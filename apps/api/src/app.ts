@@ -23,6 +23,7 @@ import {
   updateEvent
 } from "./modules/events/routes.js";
 import {
+  getCashJournal,
   getLedgerBalances,
   getLedgerSummary,
   listLedgerEntries,
@@ -264,6 +265,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("ledger.view", req, res))) return;
     if (req.method === "GET") return getLedgerBalances(req, res);
+  }
+
+  if (url.pathname === "/api/ledger/cash-journal") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.view", req, res))) return;
+    if (req.method === "GET") return getCashJournal(req, res);
   }
 
   if (url.pathname === "/api/accounts") {

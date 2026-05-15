@@ -1,5 +1,6 @@
 import type { ServerResponse } from "node:http";
 import type { ApiRequest } from "../../types.js";
+import { query } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import {
   listCompanyLedgerEntries,
@@ -83,4 +84,65 @@ export async function getLedgerBalances(req: ApiRequest, res: ServerResponse) {
     })),
     total: balances.size
   });
+}
+
+export async function getCashJournal(req: ApiRequest, res: ServerResponse) {
+  const url = new URL(req.url || "/", "http://localhost");
+  const journalType = url.searchParams.get("type") || "cash";
+  const from = url.searchParams.get("from") || "";
+  const to = url.searchParams.get("to") || "";
+  const companyId = req.auth!.companyId;
+
+  // cash = 1001 (库存现金), bank = 1002 (银行存款)
+  const prefix = journalType === "bank" ? "1002" : "1001";
+
+  const conditions: string[] = [
+    "le.company_id = $1",
+    "le.account_code like $2"
+  ];
+  const params: unknown[] = [companyId, `${prefix}%`];
+  let idx = 3;
+
+  if (from) { conditions.push(`le.posted_at >= $${idx++}`); params.push(from); }
+  if (to) { conditions.push(`le.posted_at <= $${idx++}`); params.push(to); }
+
+  const rows = await query<{
+    id: string;
+    account_code: string;
+    account_name: string;
+    summary: string;
+    debit: string;
+    credit: string;
+    posted_at: string;
+    voucher_id: string;
+  }>(
+    `select le.id, le.account_code, le.account_name, le.summary,
+            le.debit::text, le.credit::text,
+            le.posted_at::text,
+            le.voucher_id
+     from ledger_entries le
+     where ${conditions.join(" and ")}
+     order by le.posted_at asc`,
+    params
+  );
+
+  let runningBalance = 0;
+  const entries = rows.map((r) => {
+    const debit = Number(r.debit ?? 0);
+    const credit = Number(r.credit ?? 0);
+    runningBalance += debit - credit;
+    return {
+      id: r.id,
+      accountCode: r.account_code,
+      accountName: r.account_name,
+      summary: r.summary,
+      debit: debit.toFixed(2),
+      credit: credit.toFixed(2),
+      balance: runningBalance.toFixed(2),
+      postedAt: r.posted_at,
+      voucherId: r.voucher_id
+    };
+  });
+
+  json(res, 200, { items: entries, total: entries.length, journalType, prefix });
 }

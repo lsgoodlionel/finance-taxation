@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { BusinessEvent, BusinessEventStatus } from "@finance-taxation/domain-model";
 import {
   analyzeEvent,
@@ -67,7 +68,19 @@ function cellStyle() {
   };
 }
 
+function navLinkStyle() {
+  return {
+    display: "inline-block",
+    marginTop: "8px",
+    fontSize: "13px",
+    color: "#1e6fcc",
+    cursor: "pointer",
+    textDecoration: "underline" as const
+  };
+}
+
 export function EventsPage() {
+  const navigate = useNavigate();
   const [events, setEvents] = useState<BusinessEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [detail, setDetail] = useState<EventDetail | null>(null);
@@ -394,6 +407,9 @@ export function EventsPage() {
               ) : (
                 <p>当前还没有正式单据对象。</p>
               )}
+              <span style={navLinkStyle()} onClick={() => navigate("/documents")}>
+                → 前往单据中心查看全部
+              </span>
               <h4 style={{ marginTop: "18px" }}>税务处理映射</h4>
               {detail.taxMappings.length ? (
                 <table style={tableStyle()}>
@@ -519,6 +535,9 @@ export function EventsPage() {
               ) : (
                 <p>当前还没有正式凭证对象。</p>
               )}
+              <span style={navLinkStyle()} onClick={() => navigate("/vouchers")}>
+                → 前往凭证中心查看全部
+              </span>
               {detail.mappingGeneratedAt ? (
                 <p style={{ color: "#4d5d6c", marginTop: "10px" }}>
                   映射生成时间：{detail.mappingGeneratedAt}

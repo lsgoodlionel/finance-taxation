@@ -401,6 +401,34 @@ export async function getLedgerBalances() {
   }>("/api/ledger/balances");
 }
 
+export async function getCashJournal(params?: {
+  type?: "cash" | "bank";
+  from?: string;
+  to?: string;
+}) {
+  const q = new URLSearchParams();
+  if (params?.type) q.set("type", params.type);
+  if (params?.from) q.set("from", params.from);
+  if (params?.to) q.set("to", params.to);
+  const qs = q.toString();
+  return request<{
+    items: Array<{
+      id: string;
+      accountCode: string;
+      accountName: string;
+      summary: string;
+      debit: string;
+      credit: string;
+      balance: string;
+      postedAt: string;
+      voucherId: string;
+    }>;
+    total: number;
+    journalType: string;
+    prefix: string;
+  }>(`/api/ledger/cash-journal${qs ? "?" + qs : ""}`);
+}
+
 export async function listTaxFilingBatches() {
   return request<{ items: TaxFilingBatch[]; total: number }>("/api/tax-filing-batches");
 }
