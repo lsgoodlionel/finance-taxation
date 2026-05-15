@@ -12,23 +12,23 @@
 
 | Workstream | Scope | Owner | Branch | Status | Last Update | Next Action | Blocker |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| WS0 | 工程与架构底座 | Codex | main | done | 2026-05-14 | Sprint 0 底座已闭环，下一步进入 Phase 1 数据与业务实现 | 无 |
-| WS1 | 前端应用骨架 | Codex | main | in_progress | 2026-05-15 | 已接入事项、任务、单据、凭证、总账、报表、税务、研发、风险页，下一步补对象间联动与钻取 | 无 |
-| WS2 | 认证、权限、组织 | Codex | main | done | 2026-05-15 | auth / sessions 已迁至 PostgreSQL，全量 requirePermission 守卫已就位，菜单权限过滤已完成 | 无 |
-| WS3 | 经营事项总线 | Codex | main | done | 2026-05-15 | events / tasks / relations / activities / mappings 已全迁至 PostgreSQL；风险检查入口已接入 events 详情 | 无 |
-| WS4 | 单据、附件、归档 | Codex | main | in_progress | 2026-05-15 | documents 与附件元数据已迁至 PostgreSQL，保留文件落盘；下一步接打印/PDF与版本能力 | 无 |
-| WS5 | 账务内核 | Codex | main | in_progress | 2026-05-15 | vouchers、ledger、三大报表、快照、差异分析、老板摘要、打印版与月结/审计/稽核资料包首版已落地，下一步补打印导出深化 | 无 |
-| WS6 | 税务与申报准备 | Codex | main | in_progress | 2026-05-15 | tax_items、tax_filing_batches、taxpayer_profiles、税率规则、增值税底稿、企业所得税准备、个税资料、印花税与附加税、批次复核留档首版已落地 | 无 |
-| WS7 | 研发财税 | Codex | main | in_progress | 2026-05-15 | rnd_projects / rnd_cost_lines / rnd_time_entries 已建模并接入首版辅助账，已补加计扣除资料包、资本化/费用化复核和政策补贴提示 | 本机 DATABASE_URL 未配置，未做迁移实测 |
-| WS8 | 风险勾稽与审计 | Codex | main | in_progress | 2026-05-15 | risk_findings、评分模型、异常关闭与复盘记录已落地，收入/采购/税务/研发勾稽规则已深化 | 本机 DATABASE_URL 未配置，未做迁移实测 |
-| WS3 补全 | 合同管理模块（P3-1） | Codex | main | done | 2026-05-15 | contracts 表、CRUD API、ContractsPage、权限守卫、菜单项均已落地 | 无 |
-| WS-HR | 员工/工资/社保/公积金（P3-2） | Codex | main | done | 2026-05-15 | employees + payroll_policy + payroll_records 表、计算引擎（IIT 七级）、PayrollPage、权限守卫均已落地 | 无 |
-| WS9 | AI 财税秘书 v1（P3-3） | Codex | main | done | 2026-05-15 | @anthropic-ai/sdk 接入、SSE 流式响应、系统 Prompt（含公司上下文 + 近期事项）、AssistantPage 对话界面、建议事项一键创建 | 无 |
-| WS-PDF | PDF 导出（P3-4） | Codex | main | done | 2026-05-15 | 工资汇总/工资条/凭证/报表快照四类 PDF 模板、HTML 打印版、PdfExportPage 三 Tab 下载中心均已落地 | 无 |
-| WS-AUDIT | 审计日志（P3-5） | Codex | main | done | 2026-05-15 | audit_logs 表、writeAudit 服务（fire-and-forget）、接入 event/voucher/contract/payroll 写操作、/api/audit/logs 接口、AuditPage 已落地 | 无 |
-| WS-BOSSQA | 老板专线 + 研发深化（P3-6） | Codex | main | done | 2026-05-15 | boss-qa SSE 接口（实时财务快照注入）、BossQAPage、/api/rnd/trend 月度趋势接口、RndPage 趋势表格均已落地 | 无 |
-| WS9 | AI Agent 与知识库 | TBD | TBD | not_started | 2026-05-14 | 设计 Agent 协议与 Prompt 版本管理 | 无 |
-| WS10 | DevOps、QA、发布 | Codex | main | done | 2026-05-14 | 依赖已安装，锁文件、PR 模板、Issue 模板和 typecheck 基线已就位 | 无 |
+| WS0 | 工程与架构底座 | Codex | main | ✅ done | 2026-05-15 | Sprint 0 底座完全落地：工程目录、共享类型包、migrations 体系、env 规范均已就位 | 无 |
+| WS1 | 前端应用骨架 | Codex | main | ⚠️ 部分完成 | 2026-05-15 | 16 个业务页面全部接入；对象间跨页钻取联动、知识库入口、AI 搜索等高阶交互尚未实现 | 无 |
+| WS2 | 认证、权限、组织 | Codex | main | ✅ done | 2026-05-15 | auth / sessions 已迁至 PostgreSQL，全量 requirePermission 守卫已就位，菜单权限过滤已完成 | 无 |
+| WS3 | 经营事项总线 | Codex | main | ✅ done | 2026-05-15 | events / tasks / relations / activities / mappings 已全迁至 PostgreSQL；合同关联、风险检查入口均已接入 | 无 |
+| WS4 | 单据、附件、归档 | Codex | main | ⚠️ 部分完成 | 2026-05-15 | documents + 附件元数据已迁至 PostgreSQL，multipart 上传落盘；文件版本控制尚未实现 | 无 |
+| WS5 | 账务内核 | Codex | main | ✅ done | 2026-05-15 | vouchers、ledger、三大报表、快照、差异分析、老板摘要、打印版、月结/审计/稽核资料包、PDF 导出全部落地 | 无 |
+| WS6 | 税务与申报准备 | Codex | main | ✅ done | 2026-05-15 | tax_items、tax_filing_batches、taxpayer_profiles、税率规则、增值税底稿、企业所得税、个税、印花税、附加税、批次复核留档全部落地 | 无 |
+| WS7 | 研发财税 | Codex | main | ✅ done | 2026-05-15 | 研发辅助账、成本归集、工时录入、加计扣除资料包、资本化/费用化复核、政策提示、月度趋势全部落地 | 无 |
+| WS8 | 风险勾稽与审计 | Codex | main | ✅ done | 2026-05-15 | 风险勾稽引擎、评分模型、复盘记录、收入/采购/税务/研发规则深化、审计日志（audit_logs）全部落地 | 无 |
+| WS3 补全 | 合同管理模块（P3-1） | Codex | main | ✅ done | 2026-05-15 | contracts 表、CRUD API、ContractsPage、权限守卫、菜单项均已落地 | 无 |
+| WS-HR | 员工/工资/社保/公积金（P3-2） | Codex | main | ✅ done | 2026-05-15 | employees + payroll_policy + payroll_records 表、IIT 七级计算引擎、PayrollPage、权限守卫均已落地 | 无 |
+| WS9 | AI 财税秘书 v1（P3-3） | Codex | main | ✅ done | 2026-05-15 | @anthropic-ai/sdk 接入、SSE 流式响应、系统 Prompt（含公司上下文 + 近期事项）、AssistantPage 对话界面、建议事项一键创建 | 无 |
+| WS-PDF | PDF 导出（P3-4） | Codex | main | ✅ done | 2026-05-15 | 工资汇总/工资条/凭证/报表快照四类 PDF 模板、HTML 打印版、PdfExportPage 三 Tab 下载中心均已落地 | 无 |
+| WS-AUDIT | 审计日志（P3-5） | Codex | main | ✅ done | 2026-05-15 | audit_logs 表、writeAudit 服务（fire-and-forget）、接入 event/voucher/contract/payroll 写操作、/api/audit/logs 接口、AuditPage 已落地 | 无 |
+| WS-BOSSQA | 老板专线 + 研发深化（P3-6） | Codex | main | ✅ done | 2026-05-15 | boss-qa SSE 接口（实时财务快照注入）、BossQAPage、/api/rnd/trend 月度趋势接口、RndPage 趋势表格均已落地 | 无 |
+| WS9 | AI Agent 与知识库 | TBD | TBD | ❌ not_started | 2026-05-15 | 企业制度库、Prompt 版本管理、知识检索、Agent 协议均未启动，是后续核心迭代目标 | 无 |
+| WS10 | DevOps、QA、发布 | Codex | main | ⚠️ 部分完成 | 2026-05-15 | CI/CD 基础、PR 模板、typecheck 基线已就位；E2E 测试套件、单元测试覆盖率（80%+）尚未建立 | 无 |
 
 ## 3. 当前优先任务
 
