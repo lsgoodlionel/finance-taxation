@@ -273,7 +273,8 @@ export type TaxFilingBatchStatus =
   | "draft"
   | "review_required"
   | "ready"
-  | "submitted";
+  | "submitted"
+  | "archived";
 
 export interface TaxFilingBatch {
   id: string;
@@ -284,6 +285,101 @@ export interface TaxFilingBatch {
   itemIds: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface IndividualIncomeTaxMaterial {
+  companyId: string;
+  filingPeriod: string;
+  payrollEventCount: number;
+  withholdingItemCount: number;
+  totalPayrollAmount: string;
+  checklist: string[];
+}
+
+export interface StampAndSurtaxSummary {
+  companyId: string;
+  filingPeriod: string;
+  stampDutyItems: TaxItem[];
+  surtaxItems: TaxItem[];
+  notes: string[];
+}
+
+export interface TaxFilingBatchReviewRecord {
+  id: string;
+  companyId: string;
+  batchId: string;
+  reviewedByUserId: string | null;
+  reviewedByName: string;
+  reviewResult: "approved" | "rejected";
+  reviewNotes: string;
+  reviewedAt: string;
+}
+
+export interface TaxFilingBatchArchiveRecord {
+  id: string;
+  companyId: string;
+  batchId: string;
+  archivedByUserId: string | null;
+  archivedByName: string;
+  archiveLabel: string;
+  archiveNotes: string;
+  archivedAt: string;
+}
+
+export type TaxpayerType =
+  | "general_vat"
+  | "small_scale"
+  | "general_simplified";
+
+export interface TaxpayerProfile {
+  id: string;
+  companyId: string;
+  taxpayerType: TaxpayerType;
+  effectiveFrom: string;
+  status: "active" | "inactive";
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaxRuleProfile {
+  taxType: string;
+  taxpayerType: TaxpayerType;
+  filingFrequency: "monthly" | "quarterly" | "yearly";
+  defaultRate: string;
+}
+
+export interface VatWorkingPaperLine {
+  id: string;
+  sourceType: "output" | "input" | "adjustment";
+  businessEventId: string | null;
+  taxItemId: string | null;
+  description: string;
+  taxRate: string;
+  taxableAmount: string;
+  taxAmount: string;
+}
+
+export interface VatWorkingPaper {
+  companyId: string;
+  filingPeriod: string;
+  taxpayerType: TaxpayerType;
+  outputTaxAmount: string;
+  inputTaxAmount: string;
+  simplifiedTaxAmount: string;
+  payableVatAmount: string;
+  lines: VatWorkingPaperLine[];
+}
+
+export interface CorporateIncomeTaxPreparation {
+  companyId: string;
+  filingPeriod: string;
+  accountingProfit: string;
+  taxableIncomeEstimate: string;
+  incomeTaxRate: string;
+  prepaymentTaxEstimate: string;
+  adjustmentHints: string[];
+  checklist: string[];
 }
 
 export type VoucherStatus = "draft" | "review_required" | "posted";
@@ -384,6 +480,221 @@ export interface ChartAccount {
   level: 1 | 2 | 3;
   parentCode: string | null;
   isLeaf: boolean;
+}
+
+export interface FinancialReportLine {
+  code: string;
+  label: string;
+  amount: string;
+}
+
+export interface BalanceSheetReport {
+  periodLabel: string;
+  asOfDate: string;
+  assets: FinancialReportLine[];
+  liabilities: FinancialReportLine[];
+  equity: FinancialReportLine[];
+  totals: {
+    assets: string;
+    liabilities: string;
+    equity: string;
+    liabilitiesAndEquity: string;
+  };
+}
+
+export interface ProfitStatementReport {
+  periodLabel: string;
+  revenues: FinancialReportLine[];
+  costsAndExpenses: FinancialReportLine[];
+  totals: {
+    revenue: string;
+    cost: string;
+    grossProfit: string;
+    expenses: string;
+    totalProfit: string;
+    netProfit: string;
+  };
+}
+
+export interface CashFlowReport {
+  periodLabel: string;
+  sections: {
+    operating: FinancialReportLine[];
+    investing: FinancialReportLine[];
+    financing: FinancialReportLine[];
+  };
+  totals: {
+    operatingNetCash: string;
+    investingNetCash: string;
+    financingNetCash: string;
+    netCashChange: string;
+  };
+}
+
+export type ReportType = "balance_sheet" | "profit_statement" | "cash_flow";
+export type ReportPeriodType = "month" | "quarter" | "year";
+
+export interface ReportSnapshot {
+  id: string;
+  companyId: string;
+  reportType: ReportType;
+  periodType: ReportPeriodType;
+  periodLabel: string;
+  snapshotDate: string;
+  payload: BalanceSheetReport | ProfitStatementReport | CashFlowReport;
+  createdAt: string;
+}
+
+export interface ReportDiffLine {
+  code: string;
+  label: string;
+  fromAmount: string;
+  toAmount: string;
+  delta: string;
+}
+
+export interface ReportDiffResult {
+  reportType: ReportType;
+  fromSnapshotId: string;
+  toSnapshotId: string;
+  lines: ReportDiffLine[];
+}
+
+export interface ChairmanReportSummary {
+  reportType: ReportType;
+  periodLabel: string;
+  headline: string;
+  highlights: string[];
+  risks: string[];
+}
+
+export type RndProjectStatus = "planning" | "active" | "closed";
+export type RndCapitalizationPolicy = "expense" | "capitalize" | "mixed";
+
+export interface RndProject {
+  id: string;
+  companyId: string;
+  businessEventId: string | null;
+  code: string;
+  name: string;
+  status: RndProjectStatus;
+  capitalizationPolicy: RndCapitalizationPolicy;
+  startedOn: string;
+  endedOn: string | null;
+  ownerId: string | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type RndCostLineType =
+  | "payroll"
+  | "materials"
+  | "service"
+  | "software"
+  | "equipment"
+  | "other";
+
+export type RndAccountingTreatment = "expensed" | "capitalized";
+
+export interface RndCostLine {
+  id: string;
+  companyId: string;
+  projectId: string;
+  businessEventId: string | null;
+  voucherId: string | null;
+  costType: RndCostLineType;
+  accountingTreatment: RndAccountingTreatment;
+  amount: string;
+  occurredOn: string;
+  notes: string;
+  createdAt: string;
+}
+
+export interface RndTimeEntry {
+  id: string;
+  companyId: string;
+  projectId: string;
+  businessEventId: string | null;
+  userId: string | null;
+  staffName: string;
+  workDate: string;
+  hours: string;
+  notes: string;
+  createdAt: string;
+}
+
+export interface RndProjectSummary {
+  projectId: string;
+  expenseAmount: string;
+  capitalizedAmount: string;
+  totalHours: string;
+  superDeductionEligibleBase: string;
+}
+
+export interface RndAccountingPolicyReview {
+  projectId: string;
+  projectName: string;
+  recommendedPolicy: RndCapitalizationPolicy;
+  conflicts: string[];
+  guidance: string[];
+}
+
+export interface RndPolicyGuidance {
+  projectId: string;
+  projectName: string;
+  subsidyHints: string[];
+  policyHints: string[];
+  riskHints: string[];
+}
+
+export type RiskSeverity = "low" | "medium" | "high";
+export type RiskFindingStatus = "open" | "resolved" | "dismissed";
+
+export interface RiskFinding {
+  id: string;
+  companyId: string;
+  businessEventId: string | null;
+  ruleCode: string;
+  severity: RiskSeverity;
+  score?: number;
+  priority?: "P1" | "P2" | "P3";
+  status: RiskFindingStatus;
+  title: string;
+  detail: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RiskClosureRecord {
+  id: string;
+  companyId: string;
+  findingId: string;
+  closedByUserId: string | null;
+  closedByName: string;
+  resolution: string;
+  reviewedAt: string;
+}
+
+export interface SuperDeductionPackage {
+  projectId: string;
+  projectName: string;
+  expenseAmount: string;
+  capitalizedAmount: string;
+  eligibleBase: string;
+  suggestedDeductionAmount: string;
+  checklist: string[];
+  generatedAt: string;
+}
+
+export interface ClosingPackageExport {
+  kind: "month_end" | "audit" | "inspection";
+  period: string;
+  title: string;
+  sections: Array<{
+    heading: string;
+    items: string[];
+  }>;
 }
 
 export const permissionCatalog = [
