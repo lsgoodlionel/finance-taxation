@@ -5,6 +5,7 @@ import { json } from "../../utils/http.js";
 import type { ApiRequest } from "../../types.js";
 import { buildTaskTree, hasCompanyWideAccess, listCompanyTasks } from "../events/routes.js";
 import { writeAudit } from "../../services/audit.js";
+import { isTaskOverdue } from "./overdue.js";
 
 function scopeTasks(rows: Task[], req: ApiRequest) {
   const companyRows = rows.filter((row) => row.companyId === req.auth!.companyId);
@@ -29,13 +30,6 @@ export function handleTasksMeta(_req: ApiRequest, res: ServerResponse) {
       "POST /api/tasks/:id/block"
     ]
   });
-}
-
-const TERMINAL_STATUSES = new Set(["completed", "cancelled", "closed", "archived"]);
-
-function isTaskOverdue(task: Task): boolean {
-  if (!task.dueAt || TERMINAL_STATUSES.has(task.status)) return false;
-  return new Date(task.dueAt) < new Date();
 }
 
 export async function listTasks(req: ApiRequest, res: ServerResponse) {
