@@ -8,6 +8,7 @@ import { handleChairmanDashboard } from "./modules/dashboard/routes.js";
 import {
   attachDocumentFile,
   archiveDocument,
+  downloadAttachment,
   getDocumentDetail,
   listDocumentAttachments,
   listDocuments,
@@ -131,7 +132,7 @@ import {
   getUserList,
   updateCompanySettings
 } from "./modules/settings/routes.js";
-import { login, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
+import { login, logout, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
 import { readJsonBody } from "./utils/body.js";
@@ -196,6 +197,11 @@ async function router(req: ApiRequest, res: ServerResponse) {
 
   if (req.method === "POST" && url.pathname === "/api/auth/refresh") {
     return refresh(req, res);
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/logout") {
+    if (!(await requireAuth(req, res))) return;
+    return logout(req, res);
   }
 
   if (req.method === "GET" && url.pathname === "/api/access/me") {
@@ -495,6 +501,14 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("documents.view", req, res))) return;
     if (req.method === "GET") return listDocumentAttachments(req, res, documentAttachmentsId);
+  }
+
+  const attachmentDownloadMatch = url.pathname.match(/^\/api\/attachments\/([^/]+)\/download$/);
+  const attachmentDownloadId = attachmentDownloadMatch?.[1];
+  if (attachmentDownloadId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("documents.view", req, res))) return;
+    if (req.method === "GET") return downloadAttachment(req, res, attachmentDownloadId);
   }
 
   const documentDetailMatch = url.pathname.match(/^\/api\/documents\/([^/]+)$/);

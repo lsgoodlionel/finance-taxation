@@ -9,6 +9,10 @@ interface CompanyRow {
   registered_address: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  credit_code: string | null;
+  legal_representative: string | null;
+  bank_name: string | null;
+  bank_account: string | null;
   updated_at: string;
 }
 
@@ -19,18 +23,24 @@ function rowToProfile(r: CompanyRow) {
     registeredAddress: r.registered_address ?? "",
     contactEmail: r.contact_email ?? "",
     contactPhone: r.contact_phone ?? "",
+    creditCode: r.credit_code ?? "",
+    legalRepresentative: r.legal_representative ?? "",
+    bankName: r.bank_name ?? "",
+    bankAccount: r.bank_account ?? "",
     updatedAt: r.updated_at
   };
 }
 
+const SELECT_COMPANY = `
+  select id, name,
+    registered_address, contact_email, contact_phone,
+    credit_code, legal_representative, bank_name, bank_account,
+    updated_at::text
+  from companies where id = $1
+`;
+
 export async function getCompanySettings(req: ApiRequest, res: ServerResponse): Promise<void> {
-  const row = await queryOne<CompanyRow>(
-    `select id, name,
-            registered_address, contact_email, contact_phone,
-            updated_at::text
-     from companies where id = $1`,
-    [req.auth!.companyId]
-  );
+  const row = await queryOne<CompanyRow>(SELECT_COMPANY, [req.auth!.companyId]);
   if (!row) {
     json(res, 404, { error: "Company not found" });
     return;
@@ -44,16 +54,33 @@ export async function updateCompanySettings(req: ApiRequest, res: ServerResponse
     registeredAddress?: string;
     contactEmail?: string;
     contactPhone?: string;
+    creditCode?: string;
+    legalRepresentative?: string;
+    bankName?: string;
+    bankAccount?: string;
   };
 
   const sets: string[] = [];
   const params: unknown[] = [];
   let idx = 1;
 
-  if (body.name !== undefined) { sets.push(`name = $${idx++}`); params.push(body.name); }
-  if (body.registeredAddress !== undefined) { sets.push(`registered_address = $${idx++}`); params.push(body.registeredAddress); }
-  if (body.contactEmail !== undefined) { sets.push(`contact_email = $${idx++}`); params.push(body.contactEmail); }
-  if (body.contactPhone !== undefined) { sets.push(`contact_phone = $${idx++}`); params.push(body.contactPhone); }
+  const fieldMap: [keyof typeof body, string][] = [
+    ["name", "name"],
+    ["registeredAddress", "registered_address"],
+    ["contactEmail", "contact_email"],
+    ["contactPhone", "contact_phone"],
+    ["creditCode", "credit_code"],
+    ["legalRepresentative", "legal_representative"],
+    ["bankName", "bank_name"],
+    ["bankAccount", "bank_account"]
+  ];
+
+  for (const [jsKey, dbCol] of fieldMap) {
+    if (body[jsKey] !== undefined) {
+      sets.push(`${dbCol} = $${idx++}`);
+      params.push(body[jsKey]);
+    }
+  }
 
   if (sets.length === 0) {
     json(res, 400, { error: "没有要更新的字段" });
@@ -65,7 +92,9 @@ export async function updateCompanySettings(req: ApiRequest, res: ServerResponse
 
   const updated = await queryOne<CompanyRow>(
     `update companies set ${sets.join(", ")} where id = $${idx}
-     returning id, name, registered_address, contact_email, contact_phone, updated_at::text`,
+     returning id, name, registered_address, contact_email, contact_phone,
+               credit_code, legal_representative, bank_name, bank_account,
+               updated_at::text`,
     params
   );
 

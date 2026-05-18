@@ -1,6 +1,6 @@
 import { type FormEvent, useState, useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { getStoredToken, getCurrentUser, login } from "../lib/api";
+import { getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
 
 interface User {
   id: string;
@@ -160,9 +160,13 @@ export function AppLayout() {
       .finally(() => setChecking(false));
   }, []);
 
-  function handleLogout() {
-    localStorage.removeItem("finance-taxation-v2-token");
-    localStorage.removeItem("finance-taxation-v2-refresh-token");
+  async function handleLogout() {
+    try {
+      await logoutSession();
+    } catch {
+      localStorage.removeItem("finance-taxation-v2-token");
+      localStorage.removeItem("finance-taxation-v2-refresh-token");
+    }
     setUser(null);
     navigate("/");
   }

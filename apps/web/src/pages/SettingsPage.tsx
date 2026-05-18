@@ -41,13 +41,25 @@ function tabBtn(active: boolean, onClick: () => void, label: string) {
   );
 }
 
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: "12px", fontWeight: 700, color: "#9aa5b4", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "14px", marginTop: "4px" }}>
+      {children}
+    </div>
+  );
+}
+
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: "12px", alignItems: "center", marginBottom: "16px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: "12px", alignItems: "center", marginBottom: "14px" }}>
       <label style={{ color: "#4d5d6c", fontSize: "13px", fontWeight: 600 }}>{label}</label>
       {children}
     </div>
   );
+}
+
+function inputStyle(): React.CSSProperties {
+  return { width: "100%", maxWidth: "360px" };
 }
 
 export function SettingsPage() {
@@ -68,15 +80,24 @@ export function SettingsPage() {
       .catch((e: Error) => setMessage(e.message));
   }, []);
 
+  function updateField(key: keyof CompanyProfile, value: string) {
+    setEditProfile((prev) => ({ ...prev, [key]: value }));
+  }
+
   async function saveProfile() {
     if (!profile) return;
     setSaving(true);
+    setMessage("");
     try {
       const updated = await updateCompanyProfile({
         name: editProfile.name,
         registeredAddress: editProfile.registeredAddress,
         contactEmail: editProfile.contactEmail,
-        contactPhone: editProfile.contactPhone
+        contactPhone: editProfile.contactPhone,
+        creditCode: editProfile.creditCode,
+        legalRepresentative: editProfile.legalRepresentative,
+        bankName: editProfile.bankName,
+        bankAccount: editProfile.bankAccount
       });
       setProfile(updated);
       setEditProfile(updated);
@@ -98,7 +119,9 @@ export function SettingsPage() {
       </div>
 
       {message && (
-        <div className="alert alert-info">{message}</div>
+        <div className={`alert ${message.includes("失败") || message.includes("错误") ? "alert-error" : "alert-info"}`}>
+          {message}
+        </div>
       )}
 
       {/* Tab bar */}
@@ -123,42 +146,82 @@ export function SettingsPage() {
           <h3 style={{ marginTop: 0, marginBottom: "24px" }}>公司基本信息</h3>
           {profile ? (
             <>
+              <SectionHeader>基础信息</SectionHeader>
               <FieldRow label="公司 ID">
                 <span style={{ color: "#4d5d6c", fontFamily: "monospace", fontSize: "13px" }}>{profile.id}</span>
               </FieldRow>
               <FieldRow label="公司名称">
                 <input
                   value={editProfile.name ?? ""}
-                  onChange={(e) => setEditProfile({ ...editProfile, name: e.target.value })}
-                  style={{ width: "100%", maxWidth: "360px" }}
+                  onChange={(e) => updateField("name", e.target.value)}
+                  style={inputStyle()}
+                />
+              </FieldRow>
+              <FieldRow label="统一社会信用代码">
+                <input
+                  value={editProfile.creditCode ?? ""}
+                  onChange={(e) => updateField("creditCode", e.target.value)}
+                  placeholder="18 位统一社会信用代码"
+                  style={inputStyle()}
+                />
+              </FieldRow>
+              <FieldRow label="法定代表人">
+                <input
+                  value={editProfile.legalRepresentative ?? ""}
+                  onChange={(e) => updateField("legalRepresentative", e.target.value)}
+                  placeholder="法定代表人姓名"
+                  style={inputStyle()}
                 />
               </FieldRow>
               <FieldRow label="注册地址">
                 <input
                   value={editProfile.registeredAddress ?? ""}
-                  onChange={(e) => setEditProfile({ ...editProfile, registeredAddress: e.target.value })}
+                  onChange={(e) => updateField("registeredAddress", e.target.value)}
                   placeholder="选填"
-                  style={{ width: "100%", maxWidth: "360px" }}
+                  style={inputStyle()}
                 />
               </FieldRow>
+
+              <div style={{ height: "20px" }} />
+              <SectionHeader>联系方式</SectionHeader>
               <FieldRow label="联系邮箱">
                 <input
                   type="email"
                   value={editProfile.contactEmail ?? ""}
-                  onChange={(e) => setEditProfile({ ...editProfile, contactEmail: e.target.value })}
+                  onChange={(e) => updateField("contactEmail", e.target.value)}
                   placeholder="选填"
-                  style={{ width: "100%", maxWidth: "360px" }}
+                  style={inputStyle()}
                 />
               </FieldRow>
               <FieldRow label="联系电话">
                 <input
                   value={editProfile.contactPhone ?? ""}
-                  onChange={(e) => setEditProfile({ ...editProfile, contactPhone: e.target.value })}
+                  onChange={(e) => updateField("contactPhone", e.target.value)}
                   placeholder="选填"
-                  style={{ width: "100%", maxWidth: "360px" }}
+                  style={inputStyle()}
                 />
               </FieldRow>
-              <div style={{ marginTop: "20px" }}>
+
+              <div style={{ height: "20px" }} />
+              <SectionHeader>银行账户</SectionHeader>
+              <FieldRow label="开户银行">
+                <input
+                  value={editProfile.bankName ?? ""}
+                  onChange={(e) => updateField("bankName", e.target.value)}
+                  placeholder="例如：招商银行上海分行"
+                  style={inputStyle()}
+                />
+              </FieldRow>
+              <FieldRow label="银行账号">
+                <input
+                  value={editProfile.bankAccount ?? ""}
+                  onChange={(e) => updateField("bankAccount", e.target.value)}
+                  placeholder="基本户账号"
+                  style={inputStyle()}
+                />
+              </FieldRow>
+
+              <div style={{ marginTop: "24px", display: "flex", alignItems: "center", gap: "16px" }}>
                 <button
                   onClick={() => void saveProfile()}
                   disabled={saving}
@@ -166,6 +229,11 @@ export function SettingsPage() {
                 >
                   {saving ? "保存中…" : "保存公司信息"}
                 </button>
+                {profile.updatedAt && (
+                  <span style={{ fontSize: "12px", color: "#9aa5b4" }}>
+                    最后更新：{new Date(profile.updatedAt).toLocaleString("zh-CN")}
+                  </span>
+                )}
               </div>
             </>
           ) : (
@@ -244,7 +312,8 @@ export function SettingsPage() {
               ["技术栈前端", "React + TypeScript + Vite"],
               ["部署方式", "Docker Compose（db / api / web 三服务）"],
               ["主要功能", "账务内核、税务申报、研发财税、风险勾稽、AI 财税助手、老板专线"],
-              ["AI 后端", "Anthropic Claude / 本地 Ollama（二选一）"]
+              ["AI 后端", "Anthropic Claude / 本地 Ollama（二选一）"],
+              ["V1 对齐", "登出吊销、公司扩展信息、附件下载、现金/银行日记账"]
             ].map(([label, value]) => (
               <div
                 key={label}

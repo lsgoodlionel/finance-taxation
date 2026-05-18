@@ -4,8 +4,8 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`收尾开发完成：锁账控制、设置页、AI 后端 Ollama 降级已实现，系统进入生产就绪状态`
-- 当前里程碑：`Phase 3 收尾开发 ✅`
+- 当前目标：`V1/V2 功能完整性对齐完成：登出吊销、公司扩展信息（信用代码/法人/银行）、附件下载接口均已落地；V2 已完整覆盖 V1 全部功能`
+- 当前里程碑：`Phase 3 收尾开发 + V1 对齐 ✅`
 - 更新时间：`2026-05-18`
 
 ## 2. 总览
@@ -37,6 +37,7 @@
 | WS-LOCK | 锁账/反结账控制（TASK-07-07） | Codex | main | ✅ done | 2026-05-18 | migration 012 accounting_periods 表、GET/POST /api/ledger/periods、lockAccountingPeriod/unlockAccountingPeriod API、postVoucher 过账前期间锁定检查、LedgerPage 新增「期间锁账」Tab | 无 |
 | WS-SETTINGS | 系统设置页（公司信息/AI配置） | Codex | main | ✅ done | 2026-05-18 | migration 013 companies 补充字段、/api/settings/company (GET/PUT)、/api/settings/ai、/api/settings/users、SettingsPage（公司信息/AI配置/关于系统三Tab）、AppLayout 导航入口 | 无 |
 | WS-AI-OLLAMA | AI 后端 Ollama 降级支持 | Codex | main | ✅ done | 2026-05-18 | services/ai.ts 抽象层（Anthropic优先/Ollama降级）、docker-compose extra_hosts、.env.docker 新增 OLLAMA 配置；财税秘书+老板专线均已切换 | 无 |
+| WS-V1ALIGN | V1/V2 功能对齐（全部缺口修复） | Codex | main | ✅ done | 2026-05-18 | POST /api/auth/logout（服务端吊销 session）、migration 014 companies 扩展字段（creditCode/legalRep/bankName/bankAccount）、GET /api/attachments/:id/download（文件下载）；SettingsPage 公司信息表单扩展；AppLayout 退出登录改为服务端吊销 | 无 |
 
 ## 3. 当前优先任务
 

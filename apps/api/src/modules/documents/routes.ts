@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ServerResponse } from "node:http";
 import type {
   DocumentAttachmentRecord,
@@ -7,6 +10,8 @@ import { query, queryOne } from "../../db/client.js";
 import { parseMultipart } from "../../utils/multipart.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
+
+const UPLOADS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../data/uploads");
 
 interface GeneratedDocumentRow {
   id: string;
@@ -361,4 +366,35 @@ export async function listDocumentAttachments(req: ApiRequest, res: ServerRespon
   }
   const items = await listCompanyDocumentAttachments(req.auth!.companyId, documentId);
   return json(res, 200, { items, total: items.length });
+}
+
+export async function downloadAttachment(req: ApiRequest, res: ServerResponse, attachmentId: string) {
+  const rows = await query<AttachmentRow>(
+    `select id, company_id, document_id, file_name, file_type, file_size, storage_key, uploaded_at
+     from document_attachment_records
+     where id = $1 and company_id = $2`,
+    [attachmentId, req.auth!.companyId]
+  );
+  const attachment = rows[0];
+  if (!attachment) {
+    return json(res, 404, { error: "Attachment not found" });
+  }
+  if (!attachment.storage_key) {
+    return json(res, 404, { error: "No file stored for this attachment" });
+  }
+
+  try {
+    const filePath = path.join(UPLOADS_DIR, attachment.storage_key);
+    const buffer = await readFile(filePath);
+    const mimeType = attachment.file_type || "application/octet-stream";
+    const safeFileName = encodeURIComponent(attachment.file_name || attachment.storage_key);
+    res.writeHead(200, {
+      "Content-Type": mimeType,
+      "Content-Length": buffer.byteLength,
+      "Content-Disposition": `attachment; filename*=UTF-8''${safeFileName}`
+    });
+    res.end(buffer);
+  } catch {
+    return json(res, 404, { error: "File not found on disk" });
+  }
 }

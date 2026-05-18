@@ -506,3 +506,14 @@ export async function me(req: ApiRequest, res: ServerResponse) {
     roleIds: user.roleIds
   });
 }
+
+export async function logout(req: ApiRequest, res: ServerResponse) {
+  const token = req.auth?.token;
+  if (token) {
+    await queryOne(
+      `update sessions set status = 'revoked' where access_token = $1 returning id`,
+      [token]
+    );
+  }
+  return json(res, 200, { ok: true });
+}

@@ -218,6 +218,12 @@ export async function getCurrentUser() {
   return request<AccessUser>("/api/access/me");
 }
 
+export async function logoutSession() {
+  await request<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+  localStorage.removeItem("finance-taxation-v2-token");
+  localStorage.removeItem("finance-taxation-v2-refresh-token");
+}
+
 export async function getMenu() {
   return request<{ items: MenuNode[] }>("/api/access/menu");
 }
@@ -1059,6 +1065,11 @@ export interface CompanyProfile {
   registeredAddress?: string;
   contactEmail?: string;
   contactPhone?: string;
+  creditCode?: string;
+  legalRepresentative?: string;
+  bankName?: string;
+  bankAccount?: string;
+  updatedAt?: string;
 }
 
 export async function getCompanyProfile() {
