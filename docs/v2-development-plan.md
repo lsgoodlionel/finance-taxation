@@ -96,7 +96,7 @@
 - 打印与 PDF ✅（HTML 打印模板、PdfExportPage 已落地）
 - 权限完善 ✅（全量 requirePermission 守卫已就位）
 - 审计日志 ✅（audit_logs + writeAudit + AuditPage 已落地）
-- 上线准备 ❌（单元测试、E2E、回归、发布准入未完成）
+- 上线准备 ⚠️（单元测试基线 ✅，E2E、回归、发布准入未完成）
 
 ## 4. 工作流分组
 
@@ -208,7 +208,7 @@
 
 **落地情况**：risk_findings + 评分模型 + 收入/采购/工资/研发/税务勾稽规则 + 异常关闭复盘 + audit_logs + writeAudit 服务 + AuditPage 全部落地
 
-### WS9：AI Agent 与知识库 ⚠️ 部分完成
+### WS9：AI Agent 与知识库 ⚠️ 大部分完成
 
 职责：
 
@@ -218,7 +218,7 @@
 - Agent 编排
 - 知识库 / 制度库
 
-**落地情况**：✅ AI 财税秘书（SSE 流式对话 + 上下文注入）、老板专线（实时财务快照问答）；❌ 知识库/制度库、Prompt 版本化、Agent 编排、AI 结论回放未实现
+**落地情况**：✅ AI 财税秘书（SSE 流式对话 + 上下文注入）、老板专线（实时财务快照问答）、企业制度库/财税口径库/常见问题知识库（company_knowledge_items + KnowledgePage + AI Prompt 关键词注入）；❌ Prompt 版本化、Agent 编排、AI 结论回放未实现
 
 ### WS10：DevOps、QA、发布 ⚠️ 部分完成
 
@@ -230,7 +230,7 @@
 - 数据迁移
 - 发布流程
 
-**落地情况**：✅ PR 模板 / Issue 模板 / typecheck 基线 / migration runner / package-lock；❌ 单元测试基线、API 合约测试、E2E、回归场景、发布准入评审未实现
+**落地情况**：✅ PR 模板 / Issue 模板 / typecheck 基线 / migration runner / package-lock / 单元测试基线（44 passes，overdue 纯函数 6 条覆盖）；❌ API 合约测试、E2E、回归场景、发布准入评审未实现
 
 ## 5. 任务拆解
 
@@ -290,8 +290,8 @@
 
 - `TASK-05-01` ✅ 任务模型（tasks_v2 + task_checklist_items）
 - `TASK-05-02` ✅ 子任务树模型（parent_task_id 自引用）
-- `TASK-05-03` ❌ SLA 与截止时间规则（due_at 字段存在但无规则引擎触发）
-- `TASK-05-04` ❌ 催办与升级机制
+- `TASK-05-03` ✅ SLA 与截止时间规则（isTaskOverdue 纯函数 + overdueOnly 过滤 + TasksPage 逾期高亮与计数徽章）
+- `TASK-05-04` ✅ 催办机制（POST /api/tasks/:id/remind + 审计日志写入 + TasksPage 催办按钮）
 - `TASK-05-05` ❌ 审批流配置
 - `TASK-05-06` ⚠️ 任务列表与责任人视图已实现；任务看板（Kanban）未实现
 
@@ -351,11 +351,11 @@
 - `TASK-11-05` ✅ 风险评分与优先级模型（risk_score + priority 字段）
 - `TASK-11-06` ✅ 异常关闭与复盘记录（risk_closure_records + 复盘接口）
 
-### EPIC-12 知识库与制度库 ❌ 全部未完成
+### EPIC-12 知识库与制度库 ⚠️ 部分完成
 
-- `TASK-12-01` ❌ 企业制度库
-- `TASK-12-02` ❌ 财税口径库
-- `TASK-12-03` ❌ 常见问题知识库
+- `TASK-12-01` ✅ 企业制度库（company_knowledge_items 表 + CRUD API + KnowledgePage）
+- `TASK-12-02` ✅ 财税口径库（同表 category=tax_rule/regulation 类型支持）
+- `TASK-12-03` ✅ 常见问题知识库（同表 category=faq 类型支持）
 - `TASK-12-04` ❌ Prompt 版本化
 - `TASK-12-05` ❌ AI 结论回放页
 - `TASK-12-06` ❌ 法规更新对照机制
@@ -376,9 +376,9 @@
 - ✅ `GET /api/pdf/report` 报表快照 PDF
 - ✅ PdfExportPage（工资/报表/凭证三 Tab 下载中心）
 
-### EPIC-14 测试、联调、上线 ❌ 全部未完成
+### EPIC-14 测试、联调、上线 ⚠️ 部分完成
 
-- `TASK-14-01` ❌ 单元测试基线
+- `TASK-14-01` ✅ 单元测试基线（44 passes，overdue.ts 纯函数提取 + 6 条任务逾期单元测试）
 - `TASK-14-02` ❌ API 合约测试
 - `TASK-14-03` ❌ 前后端联调清单（未正式整理）
 - `TASK-14-04` ❌ 端到端回归场景
@@ -446,8 +446,8 @@
 
 - `TASK-05-01` ✅ 任务模型
 - `TASK-05-02` ✅ 子任务树模型
-- `TASK-05-03` ❌ SLA 与截止时间规则
-- `TASK-05-04` ❌ 催办与升级机制
+- `TASK-05-03` ✅ SLA 与截止时间规则（isTaskOverdue + overdueOnly 过滤 + 逾期高亮）
+- `TASK-05-04` ✅ 催办机制（remindTask API + 审计日志）
 - `TASK-05-05` ❌ 审批流配置
 - `TASK-05-06` ⚠️ 任务看板、列表、责任人工作台
 
@@ -467,7 +467,7 @@
 - `TASK-07-03` ✅ 过账服务
 - `TASK-07-04` ✅ 总账与明细账查询
 - `TASK-07-05` ✅ 科目余额表生成
-- `TASK-07-06` ❌ 现金 / 银行日记账生成
+- `TASK-07-06` ✅ 现金 / 银行日记账生成（GET /api/ledger/cash-journal + LedgerPage 日记账 Tab）
 - `TASK-07-07` ❌ 反结账与锁账控制
 
 ### EPIC-08 财务报表
@@ -549,9 +549,9 @@
 
 ### EPIC-12 知识库与制度库
 
-- `TASK-12-01` ❌ 企业制度库
-- `TASK-12-02` ❌ 财税口径库
-- `TASK-12-03` ❌ 常见问题知识库
+- `TASK-12-01` ✅ 企业制度库（company_knowledge_items + KnowledgePage + CRUD API）
+- `TASK-12-02` ✅ 财税口径库（同表 category=tax_rule/regulation 类型支持）
+- `TASK-12-03` ✅ 常见问题知识库（同表 category=faq 类型支持）
 - `TASK-12-04` ❌ Prompt 版本化
 - `TASK-12-05` ❌ AI 结论回放页
 - `TASK-12-06` ❌ 法规更新对照机制
@@ -573,7 +573,7 @@
 
 ### EPIC-14 测试、联调、上线
 
-- `TASK-14-01` ❌ 单元测试基线
+- `TASK-14-01` ✅ 单元测试基线（44 passes，overdue.ts 纯函数提取 + 6 条任务逾期单元测试）
 - `TASK-14-02` ❌ API 合约测试
 - `TASK-14-03` ❌ 前后端联调清单
 - `TASK-14-04` ❌ 端到端回归场景
@@ -623,13 +623,21 @@
 - `TASK-03-05` 老板问答入口已落地（P3-6：BossQAPage + /api/boss-qa/chat）
 - P3-1 合同管理、P3-2 工资/社保/公积金、P3-4 PDF 导出均已落地
 
+收尾 Sprint F-1~F-4（2026-05-16 完成）：
+
+- `TASK-12-01~12-03` 企业制度库 / 财税口径库 / 常见问题知识库（company_knowledge_items + KnowledgePage + AI Prompt 注入）
+- `TASK-07-06` 现金/银行日记账（GET /api/ledger/cash-journal + LedgerPage 日记账 Tab 重构）
+- EventsPage 跨页导航（凭证中心/单据中心快捷链接）
+- `TASK-05-03~05-04` 任务 SLA + 催办（isTaskOverdue + remindTask API + TasksPage 逾期高亮徽章催办按钮）
+- `TASK-14-01` 单元测试基线（overdue.ts 纯函数提取 + 6 条逾期测试，总计 44 passes）
+
 下一阶段优先顺序（建议 Next Sprint）：
 
-1. `EPIC-12`（TASK-12-01 起）— 企业制度库 / 财税口径库
+1. `TASK-07-07` — 反结账与锁账控制
 2. `TASK-06-03` / `TASK-06-04` — 对象存储接入 + 在线预览
-3. `TASK-07-06` / `TASK-07-07` — 日记账 + 锁账控制
-4. `TASK-05-03` / `TASK-05-04` — 任务 SLA + 催办升级
-5. `EPIC-14` — 测试基线 + 发布准入
+3. `TASK-13-03` — 单据打印模板
+4. `EPIC-14`（TASK-14-02 起）— API 合约测试、E2E、回归场景
+5. `TASK-12-04` — Prompt 版本化
 
 ## 7. 建议排期
 
@@ -752,14 +760,14 @@
 
 这批任务互相冲突最小，适合第一轮多人并行。
 
-## 12. 完成状态总览（2026-05-15 更新）
+## 12. 完成状态总览（2026-05-16 更新）
 
 | 维度 | 完成数 | 总数 | 完成率 |
 | --- | --- | --- | --- |
 | Phase（总体阶段） | 7 | 8 | 87.5% |
-| WS（工作流分组） | 8 | 11 | 72.7% |
-| EPIC（史诗任务组） | 6 | 15 | 40% |
-| TASK（具体任务） | 约 55 | 约 85 | 约 65% |
+| WS（工作流分组） | 9 | 11 | 81.8% |
+| EPIC（史诗任务组） | 6 全完成 + 3 部分 | 15 | 60% 全完成 |
+| TASK（具体任务） | 约 62 | 约 85 | 约 73% |
 | Sprint（排期） | 6 | 7 | 85.7% |
 
-> **关键缺口**：EPIC-12（知识库/制度库）、EPIC-14（测试/上线）、WS10（测试/QA）、Sprint 11-12 的联调与回归部分尚未启动。
+> **关键缺口**：TASK-07-07（锁账）、TASK-06-03/06-04（对象存储/在线预览）、TASK-13-03（单据打印）、EPIC-14 大部分（API 合约测试、E2E、回归、发布准入）、EPIC-12 深化（Prompt 版本化、AI 结论回放）。
