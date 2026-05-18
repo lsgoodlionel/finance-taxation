@@ -4,9 +4,9 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`全部收尾 Sprint（F-1~F-4）已完成，系统进入稳定运营状态`
-- 当前里程碑：`最终收尾完成 ✅`
-- 更新时间：`2026-05-16`
+- 当前目标：`全功能验证完成，全部 21 个 API 端点健康，系统进入稳定运营状态`
+- 当前里程碑：`全功能修复完成 ✅`
+- 更新时间：`2026-05-18`
 
 ## 2. 总览
 
@@ -33,6 +33,7 @@
 | WS-FINAL-F2 | 日记账 Tab + 事项跨页导航 | Codex | main | ✅ done | 2026-05-16 | getCashJournal API、LedgerPage Tab 重构（科目汇总/余额/日记账/总账分录）、EventsPage 凭证/单据跨页链接 | 无 |
 | WS-FINAL-F3 | 任务逾期 + 催办机制 | Codex | main | ✅ done | 2026-05-16 | isTaskOverdue、remindTask API、TasksPage 逾期高亮+催办按钮+逾期计数徽章 | 无 |
 | WS-FINAL-F4 | 单元测试基线 | Codex | main | ✅ done | 2026-05-16 | 纯函数提取（overdue.ts）、6 条任务逾期单元测试、根 npm run test 脚本、总计 44 passes | 无 |
+| WS-BUGFIX | 全功能验证修复 | Codex | main | ✅ done | 2026-05-18 | 修复 requireAuth 缺失（401）、tables_v2 表名（503）、ROLE_PERMISSIONS 权限缺口（403）、migration 011 修复 audit_logs/knowledge UUID 类型崩溃（22P02）；21/21 端点全部 200 | 无 |
 
 ## 3. 当前优先任务
 
