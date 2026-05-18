@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { getStoredToken } from "../lib/api";
+import { useChatHistory } from "../lib/useChatHistory";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
+const HISTORY_KEY = "ft-bossqa-history";
 
 interface Message {
   id: string;
@@ -44,16 +46,24 @@ function formatText(text: string): React.ReactNode {
 }
 
 export function BossQAPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { messages: persistedMsgs, saveMessages, clearHistory } = useChatHistory(HISTORY_KEY);
+  // BossQAPage uses richer Message type with id/streaming; bridge from persisted plain messages
+  const [messages, setMessages] = useState<Message[]>(() =>
+    persistedMsgs.map((m, i) => ({ id: `h-${i}`, role: m.role, content: m.content }))
+  );
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [ready, setReady] = useState(false);
-  const [statusMsg, setStatusMsg] = useState("正在连接财务数据...");
+  const [statusMsg, setStatusMsg] = useState(
+    persistedMsgs.length > 0 ? "已恢复历史对话 — 实时快照每次提问自动刷新" : "正在连接财务数据..."
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setReady(true);
-    setStatusMsg("实时财务快照已加载 — 直接提问即可");
+    if (persistedMsgs.length === 0) {
+      setStatusMsg("实时财务快照已加载 — 直接提问即可");
+    }
   }, []);
 
   useEffect(() => {
@@ -111,9 +121,11 @@ export function BossQAPage() {
                 )
               );
             } else if (payload.type === "done") {
-              setMessages((prev) =>
-                prev.map((m) => m.id === assistantMsgId ? { ...m, streaming: false } : m)
-              );
+              setMessages((prev) => {
+                const updated = prev.map((m) => m.id === assistantMsgId ? { ...m, streaming: false } : m);
+                saveMessages(updated.filter((m) => !m.streaming).map((m) => ({ role: m.role, content: m.content })));
+                return updated;
+              });
             } else if (payload.type === "error") {
               setMessages((prev) =>
                 prev.map((m) =>
@@ -129,13 +141,15 @@ export function BossQAPage() {
         }
       }
     } catch (err) {
-      setMessages((prev) =>
-        prev.map((m) =>
+      setMessages((prev) => {
+        const updated = prev.map((m) =>
           m.id === assistantMsgId
             ? { ...m, content: `⚠️ 请求失败：${err instanceof Error ? err.message : "未知错误"}`, streaming: false }
             : m
-        )
-      );
+        );
+        saveMessages(updated.filter((m) => !m.streaming).map((m) => ({ role: m.role, content: m.content })));
+        return updated;
+      });
     } finally {
       setStreaming(false);
     }
@@ -150,7 +164,7 @@ export function BossQAPage() {
         </div>
         {messages.length > 0 && (
           <button
-            onClick={() => setMessages([])}
+            onClick={() => { setMessages([]); clearHistory(); setStatusMsg("对话已清除。"); }}
             style={{
               padding: "8px 16px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)",
               background: "none", color: "#6c7a89", fontSize: "13px", cursor: "pointer"

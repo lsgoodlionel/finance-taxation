@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { createEvent } from "../lib/api";
+import { useChatHistory } from "../lib/useChatHistory";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
+const HISTORY_KEY = "ft-assistant-history";
 
 interface Message {
   role: "user" | "assistant";
@@ -54,15 +56,16 @@ function formatMessage(text: string): string {
 }
 
 export function AssistantPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { messages, setMessages, saveMessages, clearHistory } = useChatHistory(HISTORY_KEY);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [status, setStatus] = useState("财税秘书已就绪，请输入您的问题或经营事项描述。");
+  const [status, setStatus] = useState(
+    messages.length > 0 ? "已恢复历史对话，可继续提问。" : "财税秘书已就绪，请输入您的问题或经营事项描述。"
+  );
   const [suggestedEvent, setSuggestedEvent] = useState<SuggestedEvent | null>(null);
   const [creating, setCreating] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -144,6 +147,7 @@ export function AssistantPage() {
       setMessages((prev) => {
         const updated = [...prev];
         updated[updated.length - 1] = { role: "assistant", content: cleanContent };
+        saveMessages(updated.filter((m) => !m.loading));
         return updated;
       });
 
@@ -154,6 +158,7 @@ export function AssistantPage() {
       setMessages((prev) => {
         const updated = [...prev];
         updated[updated.length - 1] = { role: "assistant", content: `⚠️ ${errMsg}` };
+        saveMessages(updated.filter((m) => !m.loading));
         return updated;
       });
       setStatus(errMsg);
@@ -208,7 +213,7 @@ export function AssistantPage() {
         </div>
         {messages.length > 0 && (
           <button
-            onClick={() => { setMessages([]); setSuggestedEvent(null); setStatus("对话已清除。"); }}
+            onClick={() => { clearHistory(); setSuggestedEvent(null); setStatus("对话已清除。"); }}
             style={{ background: "#eef0f3", color: "#6c7a89", border: "none", borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontSize: "13px" }}
           >
             清除对话
