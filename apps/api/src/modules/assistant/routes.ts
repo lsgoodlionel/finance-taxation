@@ -1,12 +1,10 @@
 import type { ServerResponse } from "node:http";
-import Anthropic from "@anthropic-ai/sdk";
-import { env } from "../../config/env.js";
 import { query } from "../../db/client.js";
 import { searchKnowledgeForAi } from "../knowledge/routes.js";
 import { json } from "../../utils/http.js";
+import { streamChat, isAiAvailable } from "../../services/ai.js";
+import type { ChatMessage } from "../../services/ai.js";
 import type { ApiRequest } from "../../types.js";
-
-const MODEL = "claude-sonnet-4-6";
 
 function buildSystemPrompt(ctx: {
   companyName: string;
@@ -87,19 +85,14 @@ async function loadContext(companyId: string): Promise<{
   return { companyName, recentEvents, pendingTasks };
 }
 
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
 export async function chat(req: ApiRequest, res: ServerResponse): Promise<void> {
   if (!req.auth) {
     json(res, 401, { error: "Unauthorized" });
     return;
   }
 
-  if (!env.anthropicApiKey) {
-    json(res, 503, { error: "ANTHROPIC_API_KEY 未配置，AI 助手暂不可用。" });
+  if (!isAiAvailable()) {
+    json(res, 503, { error: "AI 服务未配置，请设置 ANTHROPIC_API_KEY 或确保 Ollama 已启动。" });
     return;
   }
 
@@ -123,41 +116,5 @@ export async function chat(req: ApiRequest, res: ServerResponse): Promise<void> 
     knowledgeContext
   });
 
-  const client = new Anthropic({ apiKey: env.anthropicApiKey });
-
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    "Connection": "keep-alive",
-    "Access-Control-Allow-Origin": "*"
-  });
-
-  let fullText = "";
-
-  try {
-    const stream = client.messages.stream({
-      model: MODEL,
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: messages.map((m) => ({ role: m.role, content: m.content }))
-    });
-
-    for await (const event of stream) {
-      if (
-        event.type === "content_block_delta" &&
-        event.delta.type === "text_delta"
-      ) {
-        const chunk = event.delta.text;
-        fullText += chunk;
-        res.write(`data: ${JSON.stringify({ type: "delta", text: chunk })}\n\n`);
-      }
-    }
-
-    res.write(`data: ${JSON.stringify({ type: "done", fullText })}\n\n`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "AI 调用失败";
-    res.write(`data: ${JSON.stringify({ type: "error", error: msg })}\n\n`);
-  }
-
-  res.end();
+  await streamChat(res, systemPrompt, messages);
 }

@@ -25,6 +25,8 @@ services:
       - apps/api/.env.docker
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "3100:3100"
     depends_on:
