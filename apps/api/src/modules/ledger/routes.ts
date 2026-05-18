@@ -1,6 +1,6 @@
 import type { ServerResponse } from "node:http";
 import type { ApiRequest } from "../../types.js";
-import { query } from "../../db/client.js";
+import { query, queryOne } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import {
   listCompanyLedgerEntries,
@@ -145,4 +145,108 @@ export async function getCashJournal(req: ApiRequest, res: ServerResponse) {
   });
 
   json(res, 200, { items: entries, total: entries.length, journalType, prefix });
+}
+
+// ── 账期管理 ──────────────────────────────────────────────────────────────────
+
+interface PeriodRow {
+  id: string;
+  period: string;
+  is_locked: boolean;
+  locked_at: string | null;
+  locked_by: string | null;
+  note: string | null;
+  updated_at: string;
+}
+
+function rowToPeriod(r: PeriodRow) {
+  return {
+    id: r.id,
+    period: r.period,
+    isLocked: r.is_locked,
+    lockedAt: r.locked_at,
+    lockedBy: r.locked_by,
+    note: r.note,
+    updatedAt: r.updated_at
+  };
+}
+
+export async function listAccountingPeriods(req: ApiRequest, res: ServerResponse): Promise<void> {
+  const rows = await query<PeriodRow>(
+    `select id, period, is_locked, locked_at::text, locked_by, note, updated_at::text
+     from accounting_periods
+     where company_id = $1
+     order by period desc`,
+    [req.auth!.companyId]
+  );
+  json(res, 200, { items: rows.map(rowToPeriod), total: rows.length });
+}
+
+export async function lockAccountingPeriod(
+  req: ApiRequest,
+  res: ServerResponse,
+  period: string
+): Promise<void> {
+  const existing = await queryOne<PeriodRow>(
+    `select id, period, is_locked, locked_at::text, locked_by, note, updated_at::text
+     from accounting_periods where company_id = $1 and period = $2`,
+    [req.auth!.companyId, period]
+  );
+
+  if (existing) {
+    if (existing.is_locked) {
+      json(res, 200, { ...rowToPeriod(existing), message: "期间已处于锁定状态" });
+      return;
+    }
+    const updated = await queryOne<PeriodRow>(
+      `update accounting_periods
+       set is_locked = true, locked_at = now(), locked_by = $1, updated_at = now()
+       where company_id = $2 and period = $3
+       returning id, period, is_locked, locked_at::text, locked_by, note, updated_at::text`,
+      [req.auth!.username, req.auth!.companyId, period]
+    );
+    json(res, 200, rowToPeriod(updated!));
+  } else {
+    const created = await queryOne<PeriodRow>(
+      `insert into accounting_periods (company_id, period, is_locked, locked_at, locked_by)
+       values ($1, $2, true, now(), $3)
+       returning id, period, is_locked, locked_at::text, locked_by, note, updated_at::text`,
+      [req.auth!.companyId, period, req.auth!.username]
+    );
+    json(res, 200, rowToPeriod(created!));
+  }
+}
+
+export async function unlockAccountingPeriod(
+  req: ApiRequest,
+  res: ServerResponse,
+  period: string
+): Promise<void> {
+  const existing = await queryOne<PeriodRow>(
+    `select id, period, is_locked, locked_at::text, locked_by, note, updated_at::text
+     from accounting_periods where company_id = $1 and period = $2`,
+    [req.auth!.companyId, period]
+  );
+
+  if (!existing || !existing.is_locked) {
+    json(res, 200, { period, isLocked: false, message: "期间未处于锁定状态" });
+    return;
+  }
+
+  const updated = await queryOne<PeriodRow>(
+    `update accounting_periods
+     set is_locked = false, locked_at = null, locked_by = null, updated_at = now()
+     where company_id = $1 and period = $2
+     returning id, period, is_locked, locked_at::text, locked_by, note, updated_at::text`,
+    [req.auth!.companyId, period]
+  );
+  json(res, 200, rowToPeriod(updated!));
+}
+
+export async function isPeriodLocked(companyId: string, period: string): Promise<boolean> {
+  const row = await queryOne<{ is_locked: boolean }>(
+    `select is_locked from accounting_periods where company_id = $1 and period = $2`,
+    [companyId, period]
+  );
+  return row?.is_locked ?? false;
 }

@@ -56,6 +56,12 @@ const navGroups = [
       { to: "/knowledge", label: "制度库", icon: "⊞" },
       { to: "/pdf-export", label: "PDF 导出", icon: "↓" }
     ]
+  },
+  {
+    label: "系统",
+    items: [
+      { to: "/settings", label: "系统设置", icon: "⚙" }
+    ]
   }
 ];
 

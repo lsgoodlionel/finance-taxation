@@ -4,8 +4,8 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`全功能验证完成，全部 21 个 API 端点健康，系统进入稳定运营状态`
-- 当前里程碑：`全功能修复完成 ✅`
+- 当前目标：`收尾开发完成：锁账控制、设置页、AI 后端 Ollama 降级已实现，系统进入生产就绪状态`
+- 当前里程碑：`Phase 3 收尾开发 ✅`
 - 更新时间：`2026-05-18`
 
 ## 2. 总览
@@ -34,6 +34,9 @@
 | WS-FINAL-F3 | 任务逾期 + 催办机制 | Codex | main | ✅ done | 2026-05-16 | isTaskOverdue、remindTask API、TasksPage 逾期高亮+催办按钮+逾期计数徽章 | 无 |
 | WS-FINAL-F4 | 单元测试基线 | Codex | main | ✅ done | 2026-05-16 | 纯函数提取（overdue.ts）、6 条任务逾期单元测试、根 npm run test 脚本、总计 44 passes | 无 |
 | WS-BUGFIX | 全功能验证修复 | Codex | main | ✅ done | 2026-05-18 | 修复 requireAuth 缺失（401）、tables_v2 表名（503）、ROLE_PERMISSIONS 权限缺口（403）、migration 011 修复 audit_logs/knowledge UUID 类型崩溃（22P02）；21/21 端点全部 200 | 无 |
+| WS-LOCK | 锁账/反结账控制（TASK-07-07） | Codex | main | ✅ done | 2026-05-18 | migration 012 accounting_periods 表、GET/POST /api/ledger/periods、lockAccountingPeriod/unlockAccountingPeriod API、postVoucher 过账前期间锁定检查、LedgerPage 新增「期间锁账」Tab | 无 |
+| WS-SETTINGS | 系统设置页（公司信息/AI配置） | Codex | main | ✅ done | 2026-05-18 | migration 013 companies 补充字段、/api/settings/company (GET/PUT)、/api/settings/ai、/api/settings/users、SettingsPage（公司信息/AI配置/关于系统三Tab）、AppLayout 导航入口 | 无 |
+| WS-AI-OLLAMA | AI 后端 Ollama 降级支持 | Codex | main | ✅ done | 2026-05-18 | services/ai.ts 抽象层（Anthropic优先/Ollama降级）、docker-compose extra_hosts、.env.docker 新增 OLLAMA 配置；财税秘书+老板专线均已切换 | 无 |
 
 ## 3. 当前优先任务
 

@@ -11,6 +11,7 @@ import { LedgerPage } from "./pages/LedgerPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { RiskPage } from "./pages/RiskPage";
 import { RndPage } from "./pages/RndPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { TaxPage } from "./pages/TaxPage";
 import { TasksPage } from "./pages/TasksPage";
 import { VouchersPage } from "./pages/VouchersPage";
@@ -40,7 +41,8 @@ const router = createBrowserRouter([
       { path: "pdf-export", element: <PdfExportPage /> },
       { path: "audit", element: <AuditPage /> },
       { path: "knowledge", element: <KnowledgePage /> },
-      { path: "boss-qa", element: <BossQAPage /> }
+      { path: "boss-qa", element: <BossQAPage /> },
+      { path: "settings", element: <SettingsPage /> }
     ]
   }
 ]);

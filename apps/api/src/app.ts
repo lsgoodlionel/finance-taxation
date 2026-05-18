@@ -26,8 +26,11 @@ import {
   getCashJournal,
   getLedgerBalances,
   getLedgerSummary,
+  listAccountingPeriods,
   listLedgerEntries,
-  listLedgerPostingBatches
+  listLedgerPostingBatches,
+  lockAccountingPeriod,
+  unlockAccountingPeriod
 } from "./modules/ledger/routes.js";
 import {
   getChairmanReportSummary,
@@ -122,6 +125,12 @@ import {
   updateKnowledgeItem
 } from "./modules/knowledge/routes.js";
 import { getRndTrend } from "./modules/rnd/routes.js";
+import {
+  getAiSettings,
+  getCompanySettings,
+  getUserList,
+  updateCompanySettings
+} from "./modules/settings/routes.js";
 import { login, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
@@ -291,6 +300,28 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("ledger.view", req, res))) return;
     if (req.method === "GET") return getCashJournal(req, res);
+  }
+
+  if (url.pathname === "/api/ledger/periods") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.view", req, res))) return;
+    if (req.method === "GET") return listAccountingPeriods(req, res);
+  }
+
+  const periodLockMatch = url.pathname.match(/^\/api\/ledger\/periods\/([^/]+)\/lock$/);
+  const periodLockId = periodLockMatch?.[1];
+  if (periodLockId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.post", req, res))) return;
+    if (req.method === "POST") return lockAccountingPeriod(req, res, decodeURIComponent(periodLockId));
+  }
+
+  const periodUnlockMatch = url.pathname.match(/^\/api\/ledger\/periods\/([^/]+)\/unlock$/);
+  const periodUnlockId = periodUnlockMatch?.[1];
+  if (periodUnlockId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.post", req, res))) return;
+    if (req.method === "POST") return unlockAccountingPeriod(req, res, decodeURIComponent(periodUnlockId));
   }
 
   if (url.pathname === "/api/accounts") {
@@ -927,6 +958,31 @@ async function router(req: ApiRequest, res: ServerResponse) {
       if (!(await requirePermission("knowledge.manage", req, res))) return;
       return deleteKnowledgeItem(req, res, knowledgeItemId);
     }
+  }
+
+  // ── Settings ──
+  if (url.pathname === "/api/settings/company") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") {
+      if (!(await requirePermission("dashboard.view", req, res))) return;
+      return getCompanySettings(req, res);
+    }
+    if (req.method === "PUT") {
+      if (!(await requirePermission("dashboard.view", req, res))) return;
+      return updateCompanySettings(req, res);
+    }
+  }
+
+  if (url.pathname === "/api/settings/ai") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("dashboard.view", req, res))) return;
+    if (req.method === "GET") return getAiSettings(req, res);
+  }
+
+  if (url.pathname === "/api/settings/users") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("dashboard.view", req, res))) return;
+    if (req.method === "GET") return getUserList(req, res);
   }
 
   return json(res, 404, { error: "Not Found" });

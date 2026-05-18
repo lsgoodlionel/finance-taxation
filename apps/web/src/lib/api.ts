@@ -1022,3 +1022,62 @@ export async function updateKnowledgeItem(id: string, data: Partial<{
 export async function deleteKnowledgeItem(id: string) {
   return request<{ ok: boolean }>(`/api/knowledge/${id}`, { method: "DELETE" });
 }
+
+// ── 账期管理 ──────────────────────────────────────────────────────────────────
+
+export interface AccountingPeriod {
+  id: string;
+  period: string;
+  isLocked: boolean;
+  lockedAt: string | null;
+  lockedBy: string | null;
+  note: string | null;
+  updatedAt: string;
+}
+
+export async function listAccountingPeriods() {
+  return request<{ items: AccountingPeriod[]; total: number }>("/api/ledger/periods");
+}
+
+export async function lockPeriod(period: string) {
+  return request<AccountingPeriod>(`/api/ledger/periods/${encodeURIComponent(period)}/lock`, {
+    method: "POST"
+  });
+}
+
+export async function unlockPeriod(period: string) {
+  return request<AccountingPeriod>(`/api/ledger/periods/${encodeURIComponent(period)}/unlock`, {
+    method: "POST"
+  });
+}
+
+// ── 公司设置 ──────────────────────────────────────────────────────────────────
+
+export interface CompanyProfile {
+  id: string;
+  name: string;
+  registeredAddress?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+}
+
+export async function getCompanyProfile() {
+  return request<CompanyProfile>("/api/settings/company");
+}
+
+export async function updateCompanyProfile(data: Partial<Omit<CompanyProfile, "id">>) {
+  return request<CompanyProfile>("/api/settings/company", {
+    method: "PUT",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function getAiSettings() {
+  return request<{
+    provider: "anthropic" | "ollama";
+    anthropicConfigured: boolean;
+    ollamaBaseUrl: string;
+    ollamaModel: string;
+    note: string;
+  }>("/api/settings/ai");
+}

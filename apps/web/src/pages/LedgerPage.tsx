@@ -5,10 +5,14 @@ import {
   getLedgerBalances,
   getLedgerSummary,
   listLedgerEntries,
-  listLedgerPostingBatches
+  listLedgerPostingBatches,
+  listAccountingPeriods,
+  lockPeriod,
+  unlockPeriod
 } from "../lib/api";
+import type { AccountingPeriod } from "../lib/api";
 
-type ActiveTab = "summary" | "balances" | "journal" | "entries";
+type ActiveTab = "summary" | "balances" | "journal" | "entries" | "periods";
 
 interface JournalItem {
   id: string;
@@ -84,6 +88,9 @@ export function LedgerPage() {
   const [selectedVoucherId, setSelectedVoucherId] = useState<string>("");
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
+  const [periods, setPeriods] = useState<AccountingPeriod[]>([]);
+  const [newPeriod, setNewPeriod] = useState("");
+  const [periodOp, setPeriodOp] = useState<string | null>(null);
 
   useEffect(() => {
     async function bootstrap() {
@@ -120,6 +127,50 @@ export function LedgerPage() {
         ? `已按条件过滤，当前 ${entriesPayload.total} 条分录，${batchesPayload.total} 个批次。`
         : `已恢复全部总账数据，当前 ${entriesPayload.total} 条分录，${batchesPayload.total} 个批次。`
     );
+  }
+
+  async function loadPeriods() {
+    try {
+      const payload = await listAccountingPeriods();
+      setPeriods(payload.items);
+    } catch (err) {
+      setMessage((err as Error).message);
+    }
+  }
+
+  async function handleLock(period: string) {
+    setPeriodOp(period);
+    try {
+      await lockPeriod(period);
+      await loadPeriods();
+      setMessage(`期间 ${period} 已锁账。`);
+    } catch (err) {
+      setMessage((err as Error).message);
+    } finally {
+      setPeriodOp(null);
+    }
+  }
+
+  async function handleUnlock(period: string) {
+    setPeriodOp(period);
+    try {
+      await unlockPeriod(period);
+      await loadPeriods();
+      setMessage(`期间 ${period} 已解锁。`);
+    } catch (err) {
+      setMessage((err as Error).message);
+    } finally {
+      setPeriodOp(null);
+    }
+  }
+
+  async function handleLockNew() {
+    if (!/^\d{4}-\d{2}$/.test(newPeriod)) {
+      setMessage("期间格式错误，请输入 YYYY-MM 格式，例如 2026-05");
+      return;
+    }
+    await handleLock(newPeriod);
+    setNewPeriod("");
   }
 
   async function loadJournal() {
@@ -160,6 +211,7 @@ export function LedgerPage() {
         {tabBtn(activeTab === "balances", () => setActiveTab("balances"), "科目余额")}
         {tabBtn(activeTab === "journal", () => { setActiveTab("journal"); void loadJournal(); }, "现金/银行日记账")}
         {tabBtn(activeTab === "entries", () => setActiveTab("entries"), "总账分录")}
+        {tabBtn(activeTab === "periods", () => { setActiveTab("periods"); void loadPeriods(); }, "期间锁账")}
       </div>
 
       {/* ── 科目汇总 ── */}
@@ -294,6 +346,104 @@ export function LedgerPage() {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          )}
+        </article>
+      )}
+
+      {/* ── 期间锁账 ── */}
+      {activeTab === "periods" && (
+        <article style={panelStyle()}>
+          <h3 style={{ marginTop: 0 }}>会计期间锁账管理</h3>
+          <p style={{ color: "#4d5d6c", fontSize: "13px", marginBottom: "16px" }}>
+            锁账后，该会计期间内的凭证将无法过账，防止账期关闭后的数据篡改。
+          </p>
+
+          {/* 新增锁账 */}
+          <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
+            <input
+              value={newPeriod}
+              onChange={(e) => setNewPeriod(e.target.value)}
+              placeholder="输入期间 YYYY-MM，如 2026-05"
+              style={{ width: "200px" }}
+            />
+            <button
+              onClick={() => void handleLockNew()}
+              disabled={!newPeriod || periodOp !== null}
+              style={{
+                background: "#c0392b", color: "#fff", border: "none",
+                padding: "8px 16px", borderRadius: "8px", cursor: "pointer"
+              }}
+            >
+              锁定该期间
+            </button>
+          </div>
+
+          {/* 期间列表 */}
+          {periods.length === 0 ? (
+            <p style={{ color: "#aaa" }}>暂无已锁定期间记录。</p>
+          ) : (
+            <table style={tableStyle()}>
+              <thead>
+                <tr>
+                  <th style={cellStyle()}>会计期间</th>
+                  <th style={cellStyle()}>状态</th>
+                  <th style={cellStyle()}>锁定时间</th>
+                  <th style={cellStyle()}>操作人</th>
+                  <th style={cellStyle()}>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {periods.map((p) => (
+                  <tr key={p.id}>
+                    <td style={{ ...cellStyle(), fontWeight: 600 }}>{p.period}</td>
+                    <td style={cellStyle()}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "2px 10px",
+                          borderRadius: "12px",
+                          fontSize: "12px",
+                          background: p.isLocked ? "rgba(192,57,43,0.12)" : "rgba(39,174,96,0.12)",
+                          color: p.isLocked ? "#c0392b" : "#27ae60",
+                          fontWeight: 600
+                        }}
+                      >
+                        {p.isLocked ? "🔒 已锁账" : "🔓 未锁账"}
+                      </span>
+                    </td>
+                    <td style={cellStyle()}>{p.lockedAt ? p.lockedAt.slice(0, 16).replace("T", " ") : "—"}</td>
+                    <td style={cellStyle()}>{p.lockedBy ?? "—"}</td>
+                    <td style={cellStyle()}>
+                      {p.isLocked ? (
+                        <button
+                          onClick={() => void handleUnlock(p.period)}
+                          disabled={periodOp === p.period}
+                          style={{
+                            background: "transparent", border: "1px solid #27ae60",
+                            color: "#27ae60", padding: "4px 12px", borderRadius: "6px",
+                            cursor: "pointer", fontSize: "12px"
+                          }}
+                        >
+                          {periodOp === p.period ? "处理中…" : "解锁"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => void handleLock(p.period)}
+                          disabled={periodOp === p.period}
+                          style={{
+                            background: "transparent", border: "1px solid #c0392b",
+                            color: "#c0392b", padding: "4px 12px", borderRadius: "6px",
+                            cursor: "pointer", fontSize: "12px"
+                          }}
+                        >
+                          {periodOp === p.period ? "处理中…" : "锁账"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}

@@ -14,6 +14,7 @@ import {
   listVoucherTemplates
 } from "./templates.js";
 import { writeAudit } from "../../services/audit.js";
+import { isPeriodLocked } from "../ledger/routes.js";
 
 interface VoucherRow {
   id: string;
@@ -606,6 +607,10 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
   }
 
   const postedAt = new Date().toISOString();
+  const voucherPeriod = postedAt.slice(0, 7);
+  if (await isPeriodLocked(req.auth!.companyId, voucherPeriod)) {
+    return json(res, 400, { error: `会计期间 ${voucherPeriod} 已锁账，无法过账。请先解锁该期间。` });
+  }
   const postingRecord: VoucherPostingRecord = {
     id: `post-${voucherId}-${Date.now()}`,
     companyId: target.companyId,
