@@ -24,8 +24,6 @@ import {
   listTaxFilingBatches,
   listTaxItems,
   listTaxpayerProfiles,
-  login,
-  refreshSession,
   reviewTaxFilingBatch,
   submitTaxFilingBatch,
   validateTaxFilingBatch
@@ -89,8 +87,6 @@ export function TaxPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        await login("chairman", "123456");
-        await refreshSession();
         const [itemsPayload, batchesPayload, profilesPayload] = await Promise.all([
           listTaxItems(),
           listTaxFilingBatches(),

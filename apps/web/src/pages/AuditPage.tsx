@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AuditLog } from "@finance-taxation/domain-model";
-import { listAuditLogs, login, refreshSession } from "../lib/api";
+import { listAuditLogs } from "../lib/api";
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   business_event: "经营事项",
@@ -61,10 +61,7 @@ export function AuditPage() {
   const LIMIT = 50;
 
   useEffect(() => {
-    login("chairman", "123456")
-      .then(() => refreshSession())
-      .catch(() => null)
-      .finally(() => load(0, resourceType, fromDate, toDate));
+    void load(0, resourceType, fromDate, toDate);
   }, []);
 
   async function load(off: number, rt: string, fd: string, td: string) {

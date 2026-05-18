@@ -4,8 +4,6 @@ import {
   createKnowledgeItem,
   deleteKnowledgeItem,
   listKnowledgeItems,
-  login,
-  refreshSession,
   updateKnowledgeItem
 } from "../lib/api";
 
@@ -56,8 +54,6 @@ export function KnowledgePage() {
   useEffect(() => {
     void (async () => {
       try {
-        await login("chairman", "123456");
-        await refreshSession();
         await refresh();
       } catch (error) {
         setMessage((error as Error).message);

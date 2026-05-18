@@ -8,8 +8,6 @@ import {
   getPayrollPolicy,
   listEmployees,
   listPayroll,
-  login,
-  refreshSession,
   updateEmployee,
   updatePayrollPolicy
 } from "../lib/api";
@@ -104,8 +102,6 @@ export function PayrollPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        await login("chairman", "123456");
-        await refreshSession();
         await loadAll();
       } catch {
         setMessage("加载失败，请检查后端连接。");

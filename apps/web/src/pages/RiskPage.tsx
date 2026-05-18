@@ -5,8 +5,6 @@ import {
   listEvents,
   listRiskClosureRecords,
   listRiskFindings,
-  login,
-  refreshSession,
   runEventRiskCheck
 } from "../lib/api";
 
@@ -39,8 +37,6 @@ export function RiskPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        await login("chairman", "123456");
-        await refreshSession();
         const [eventsPayload, findingsPayload] = await Promise.all([
           listEvents(),
           listRiskFindings()

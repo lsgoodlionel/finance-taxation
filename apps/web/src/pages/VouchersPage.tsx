@@ -6,9 +6,7 @@ import {
   getVoucherDetail,
   listVouchers,
   listVoucherTemplates,
-  login,
   postVoucher,
-  refreshSession,
   updateVoucher,
   type VoucherDetail,
   type VoucherTemplate,
@@ -55,8 +53,6 @@ export function VouchersPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        await login("chairman", "123456");
-        await refreshSession();
         const [payload, templatePayload] = await Promise.all([
           listVouchers(),
           listVoucherTemplates()

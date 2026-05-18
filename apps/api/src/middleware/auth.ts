@@ -11,22 +11,34 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "dashboard.view", "events.view", "events.create", "events.assign",
     "tasks.view", "tasks.manage", "documents.view", "documents.manage",
     "ledger.view", "ledger.post", "tax.view", "tax.manage",
-    "rnd.view", "rnd.manage", "risk.view", "risk.manage", "settings.manage"
+    "rnd.view", "rnd.manage", "risk.view", "risk.manage", "settings.manage",
+    "contracts.view", "contracts.manage",
+    "payroll.view", "payroll.manage",
+    "audit.view",
+    "knowledge.view", "knowledge.manage"
   ],
   "role-finance-director": [
     "dashboard.view", "events.view", "events.create", "events.assign",
     "tasks.view", "tasks.manage", "documents.view", "documents.manage",
     "ledger.view", "ledger.post", "tax.view", "tax.manage",
-    "rnd.view", "rnd.manage", "risk.view", "risk.manage"
+    "rnd.view", "rnd.manage", "risk.view", "risk.manage",
+    "contracts.view", "contracts.manage",
+    "payroll.view", "payroll.manage",
+    "audit.view",
+    "knowledge.view"
   ],
   "role-accountant": [
     "dashboard.view", "events.view",
     "tasks.view", "documents.view", "documents.manage",
-    "ledger.view", "ledger.post", "tax.view", "tax.manage"
+    "ledger.view", "ledger.post", "tax.view", "tax.manage",
+    "payroll.view",
+    "audit.view",
+    "knowledge.view"
   ],
   "role-viewer": [
     "dashboard.view", "events.view", "tasks.view",
-    "documents.view", "ledger.view", "tax.view"
+    "documents.view", "ledger.view", "tax.view",
+    "contracts.view", "payroll.view", "knowledge.view"
   ]
 };
 

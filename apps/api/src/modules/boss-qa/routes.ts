@@ -68,7 +68,7 @@ async function loadBossContext(companyId: string): Promise<FinancialContext> {
       [companyId]
     ),
     query<{ cnt: string }>(
-      `select count(*)::int as cnt from tasks_v2
+      `select count(*)::int as cnt from tasks
        where company_id = $1 and status not in ('done', 'cancelled')`,
       [companyId]
     ),

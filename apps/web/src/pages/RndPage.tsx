@@ -8,8 +8,6 @@ import {
   getRndSuperDeductionPackage,
   getRndTrend,
   listRndProjects,
-  login,
-  refreshSession,
   type RndProjectDetail
 } from "../lib/api";
 
@@ -59,8 +57,6 @@ export function RndPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        await login("chairman", "123456");
-        await refreshSession();
         await refreshProjects();
       } catch (error) {
         setMessage((error as Error).message);

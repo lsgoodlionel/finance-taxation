@@ -5,9 +5,7 @@ import {
   getLedgerBalances,
   getLedgerSummary,
   listLedgerEntries,
-  listLedgerPostingBatches,
-  login,
-  refreshSession
+  listLedgerPostingBatches
 } from "../lib/api";
 
 type ActiveTab = "summary" | "balances" | "journal" | "entries";
@@ -90,8 +88,6 @@ export function LedgerPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        await login("chairman", "123456");
-        await refreshSession();
         const [entriesPayload, batchesPayload, summaryPayload, balancesPayload] = await Promise.all([
           listLedgerEntries(),
           listLedgerPostingBatches(),

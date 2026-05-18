@@ -15,9 +15,7 @@ import {
   getPrintableReportHtml,
   getReportDiff,
   getProfitStatementReport,
-  listReportSnapshots,
-  login,
-  refreshSession
+  listReportSnapshots
 } from "../lib/api";
 
 function panelStyle() {
@@ -60,8 +58,6 @@ export function ReportsPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        await login("chairman", "123456");
-        await refreshSession();
         await loadReports();
       } catch (error) {
         setMessage((error as Error).message);

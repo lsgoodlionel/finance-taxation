@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getStoredToken, login, refreshSession } from "../lib/api";
+import { getStoredToken } from "../lib/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 
@@ -52,13 +52,8 @@ export function BossQAPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    login("chairman", "123456")
-      .then(() => refreshSession())
-      .catch(() => null)
-      .finally(() => {
-        setReady(true);
-        setStatusMsg("实时财务快照已加载 — 直接提问即可");
-      });
+    setReady(true);
+    setStatusMsg("实时财务快照已加载 — 直接提问即可");
   }, []);
 
   useEffect(() => {

@@ -873,7 +873,10 @@ async function router(req: ApiRequest, res: ServerResponse) {
       res.end();
       return;
     }
-    if (req.method === "POST") return assistantChat(req, res);
+    if (req.method === "POST") {
+      if (!(await requireAuth(req, res))) return;
+      return assistantChat(req, res);
+    }
   }
 
   if (req.method === "GET" && url.pathname === "/api/audit/logs") {

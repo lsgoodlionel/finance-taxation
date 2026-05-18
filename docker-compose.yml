@@ -23,6 +23,8 @@ services:
     restart: unless-stopped
     env_file:
       - apps/api/.env.docker
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     ports:
       - "3100:3100"
     depends_on:

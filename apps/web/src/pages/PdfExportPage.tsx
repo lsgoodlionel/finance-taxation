@@ -3,9 +3,7 @@ import {
   getStoredToken,
   getPayrollPeriods,
   listReportSnapshots,
-  listVouchers,
-  login,
-  refreshSession
+  listVouchers
 } from "../lib/api";
 import type { PayrollPeriodSummary, ReportSnapshot, Voucher } from "@finance-taxation/domain-model";
 
@@ -67,8 +65,6 @@ export function PdfExportPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        await login("chairman", "123456");
-        await refreshSession();
         const [perRes, snapRes, vcRes] = await Promise.all([
           getPayrollPeriods(),
           listReportSnapshots(),

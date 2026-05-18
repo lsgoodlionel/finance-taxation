@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createEvent, login, refreshSession } from "../lib/api";
+import { createEvent } from "../lib/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
@@ -63,17 +63,6 @@ export function AssistantPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    async function bootstrap() {
-      try {
-        await login("chairman", "123456");
-        await refreshSession();
-      } catch {
-        setStatus("连接失败，请检查后端服务。");
-      }
-    }
-    bootstrap();
-  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

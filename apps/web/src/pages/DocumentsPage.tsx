@@ -5,8 +5,6 @@ import {
   attachDocumentFile,
   getDocumentDetail,
   listDocuments,
-  login,
-  refreshSession,
   type DocumentDetail
 } from "../lib/api";
 
@@ -38,8 +36,6 @@ export function DocumentsPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        await login("chairman", "123456");
-        await refreshSession();
         const payload = await listDocuments();
         setDocuments(payload.items);
         const first = payload.items[0]?.id || null;

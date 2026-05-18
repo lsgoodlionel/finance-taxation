@@ -4,9 +4,7 @@ import {
   closeContract,
   createContract,
   getContractDetail,
-  listContracts,
-  login,
-  refreshSession
+  listContracts
 } from "../lib/api";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
@@ -80,8 +78,6 @@ export function ContractsPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        await login("chairman", "123456");
-        await refreshSession();
         await loadContracts();
       } catch {
         setMessage("加载失败，请检查后端连接。");
