@@ -128,6 +128,16 @@ import { json } from "./utils/http.js";
 import { readJsonBody } from "./utils/body.js";
 
 async function router(req: ApiRequest, res: ServerResponse) {
+  res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   const url = new URL(req.url || "/", `http://${env.host}:${env.port}`);
   if (["POST", "PUT", "PATCH"].includes(req.method || "")) {
     const ct = req.headers["content-type"] || "";

@@ -7,76 +7,43 @@ import {
   getEventDetail,
   listEvents,
   listTasks,
-  login,
-  refreshSession,
   runEventRiskCheck,
   updateEvent,
   type EventDetail
 } from "../lib/api";
 
-const eventTypes = [
-  "sales",
-  "procurement",
-  "expense",
-  "payroll",
-  "tax",
-  "asset",
-  "financing",
-  "rnd",
-  "general"
+const EVENT_TYPES = [
+  "sales", "procurement", "expense", "payroll",
+  "tax", "asset", "financing", "rnd", "general"
 ] as const;
 
-function panelStyle() {
-  return {
-    background: "rgba(255,255,255,0.82)",
-    borderRadius: "24px",
-    border: "1px solid rgba(20,40,60,0.08)",
-    padding: "24px"
-  } as const;
+const STATUS_OPTIONS: BusinessEventStatus[] = [
+  "draft", "awaiting_documents", "awaiting_approval", "analyzed", "blocked"
+];
+
+function statusBadge(status: string) {
+  const map: Record<string, string> = {
+    draft: "badge badge-gray",
+    awaiting_documents: "badge badge-yellow",
+    awaiting_approval: "badge badge-blue",
+    analyzed: "badge badge-green",
+    blocked: "badge badge-red"
+  };
+  return map[status] ?? "badge badge-gray";
 }
 
 function renderTaskTree(nodes: EventDetail["taskTree"]) {
-  if (!nodes.length) {
-    return <p>当前还没有任务。</p>;
-  }
+  if (!nodes.length) return <p className="text-muted text-sm">当前还没有任务。</p>;
   return (
-    <ul style={{ paddingLeft: "22px", lineHeight: 1.8 }}>
+    <ul style={{ paddingLeft: 20, lineHeight: 1.9, fontSize: 13.5 }}>
       {nodes.map((node) => (
         <li key={node.id}>
-          {node.title} | {node.status} | {node.priority}
+          {node.title} · <span className="text-muted">{node.status}</span> · {node.priority}
           {node.children.length ? renderTaskTree(node.children) : null}
         </li>
       ))}
     </ul>
   );
-}
-
-function tableStyle() {
-  return {
-    width: "100%",
-    borderCollapse: "collapse" as const,
-    fontSize: "14px"
-  };
-}
-
-function cellStyle() {
-  return {
-    borderBottom: "1px solid rgba(20,40,60,0.08)",
-    padding: "10px 8px",
-    textAlign: "left" as const,
-    verticalAlign: "top" as const
-  };
-}
-
-function navLinkStyle() {
-  return {
-    display: "inline-block",
-    marginTop: "8px",
-    fontSize: "13px",
-    color: "#1e6fcc",
-    cursor: "pointer",
-    textDecoration: "underline" as const
-  };
 }
 
 export function EventsPage() {
@@ -85,64 +52,58 @@ export function EventsPage() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState("idle");
-  const [message, setMessage] = useState("尚未加载经营事项。");
+  const [message, setMessage] = useState("");
   const [form, setForm] = useState({
     type: "general",
     title: "",
     description: "",
     department: "财务部",
-    occurredOn: "2026-05-14",
+    occurredOn: new Date().toISOString().slice(0, 10),
     amount: "",
     currency: "CNY",
     source: "manual"
   });
   const [statusDraft, setStatusDraft] = useState<BusinessEventStatus>("draft");
 
-  async function bootstrap() {
+  async function loadEvents() {
     setLoading("loading");
     try {
-      await login("chairman", "123456");
-      await refreshSession();
       const payload = await listEvents();
       setEvents(payload.items);
-      const first = payload.items[0]?.id || null;
+      const first = payload.items[0]?.id ?? null;
       setSelectedEventId(first);
-      setMessage(`已加载 ${payload.total} 条经营事项。`);
+      setMessage(`已加载 ${payload.total} 条经营事项`);
       if (first) {
-        const detailPayload = await getEventDetail(first);
-        setDetail(detailPayload);
+        const d = await getEventDetail(first);
+        setDetail(d);
       }
-    } catch (error) {
-      setMessage((error as Error).message);
+    } catch (err) {
+      setMessage((err as Error).message);
     } finally {
       setLoading("done");
     }
   }
 
-  useEffect(() => {
-    void bootstrap();
-  }, []);
+  useEffect(() => { void loadEvents(); }, []);
 
   async function refreshDetail(eventId: string) {
-    const payload = await getEventDetail(eventId);
-    setDetail(payload);
+    const d = await getEventDetail(eventId);
+    setDetail(d);
   }
 
   async function handleCreate() {
+    if (!form.title.trim()) return;
     setLoading("saving");
     try {
-      const created = await createEvent({
-        ...form,
-        amount: form.amount || null
-      });
+      const created = await createEvent({ ...form, amount: form.amount || null });
       const payload = await listEvents();
       setEvents(payload.items);
       setSelectedEventId(created.id);
       await refreshDetail(created.id);
-      setMessage(`已创建经营事项：${created.title}`);
-      setForm((current) => ({ ...current, title: "", description: "", amount: "" }));
-    } catch (error) {
-      setMessage((error as Error).message);
+      setMessage(`已创建：${created.title}`);
+      setForm((f) => ({ ...f, title: "", description: "", amount: "" }));
+    } catch (err) {
+      setMessage((err as Error).message);
     } finally {
       setLoading("done");
     }
@@ -154,9 +115,9 @@ export function EventsPage() {
       const result = await analyzeEvent(eventId);
       await refreshDetail(eventId);
       const tasks = await listTasks(eventId);
-      setMessage(`AI 已为该事项生成 ${result.generatedTasks} 个任务，当前任务数 ${tasks.total}。`);
-    } catch (error) {
-      setMessage((error as Error).message);
+      setMessage(`AI 已生成 ${result.generatedTasks} 个任务，当前共 ${tasks.total} 个`);
+    } catch (err) {
+      setMessage((err as Error).message);
     } finally {
       setLoading("done");
     }
@@ -169,9 +130,9 @@ export function EventsPage() {
       await refreshDetail(eventId);
       const payload = await listEvents();
       setEvents(payload.items);
-      setMessage(`事项状态已更新为 ${statusDraft}。`);
-    } catch (error) {
-      setMessage((error as Error).message);
+      setMessage(`状态已更新为 ${statusDraft}`);
+    } catch (err) {
+      setMessage((err as Error).message);
     } finally {
       setLoading("done");
     }
@@ -181,386 +142,365 @@ export function EventsPage() {
     setLoading("updating");
     try {
       const result = await runEventRiskCheck(eventId);
-      setMessage(`已完成风险检查，生成 ${result.total} 条风险发现。`);
-    } catch (error) {
-      setMessage((error as Error).message);
+      setMessage(`风险检查完成，生成 ${result.total} 条发现`);
+    } catch (err) {
+      setMessage((err as Error).message);
     } finally {
       setLoading("done");
     }
   }
 
   const selectedSummary = useMemo(() => {
-    if (!detail) return "请选择一条经营事项。";
-    return `${detail.title} | ${detail.type} | ${detail.status} | ${detail.amount || "未填金额"} ${detail.currency}`;
+    if (!detail) return null;
+    return `${detail.type} · ${detail.department} · ${detail.amount || "—"} ${detail.currency}`;
   }, [detail]);
 
+  const isBusy = loading !== "done" && loading !== "idle";
+
   return (
-    <section style={{ display: "grid", gap: "20px" }}>
-      <article style={panelStyle()}>
-        <h2 style={{ marginTop: 0 }}>Phase 1 经营事项总线</h2>
-        <p style={{ lineHeight: 1.8, marginBottom: "12px" }}>
-          当前页面已接入最小闭环：登录、经营事项列表、创建、详情、AI 任务拆解。
-        </p>
-        <div style={{ color: "#4d5d6c" }}>{message}</div>
-      </article>
+    <div style={{ display: "grid", gap: 20 }}>
+      <div className="page-header">
+        <div>
+          <div className="page-title">经营事项总线</div>
+          <div className="page-subtitle">登记、分析与跟踪所有经营事项</div>
+        </div>
+        {message && <span className="badge badge-blue">{message}</span>}
+      </div>
 
-      <section style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "20px" }}>
-        <article style={panelStyle()}>
-          <h3 style={{ marginTop: 0 }}>新建经营事项</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <label>
-              类型
-              <select
-                value={form.type}
-                onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
-                style={{ display: "block", width: "100%", marginTop: "6px" }}
-              >
-                {eventTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              部门
-              <input
-                value={form.department}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, department: event.target.value }))
-                }
-                style={{ display: "block", width: "100%", marginTop: "6px" }}
-              />
-            </label>
-            <label style={{ gridColumn: "1 / -1" }}>
-              标题
-              <input
-                value={form.title}
-                onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                style={{ display: "block", width: "100%", marginTop: "6px" }}
-              />
-            </label>
-            <label style={{ gridColumn: "1 / -1" }}>
-              描述
-              <textarea
-                value={form.description}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, description: event.target.value }))
-                }
-                rows={4}
-                style={{ display: "block", width: "100%", marginTop: "6px" }}
-              />
-            </label>
-            <label>
-              日期
-              <input
-                value={form.occurredOn}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, occurredOn: event.target.value }))
-                }
-                style={{ display: "block", width: "100%", marginTop: "6px" }}
-              />
-            </label>
-            <label>
-              金额
-              <input
-                value={form.amount}
-                onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
-                style={{ display: "block", width: "100%", marginTop: "6px" }}
-              />
-            </label>
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20 }}>
+        {/* 新建表单 */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">新建经营事项</span>
           </div>
-          <button
-            onClick={() => void handleCreate()}
-            disabled={loading !== "done" && loading !== "idle"}
-            style={{ marginTop: "16px" }}
-          >
-            创建事项
-          </button>
-        </article>
-
-        <article style={panelStyle()}>
-          <h3 style={{ marginTop: 0 }}>经营事项列表</h3>
-          <div style={{ display: "grid", gap: "10px" }}>
-            {events.map((event) => (
+          <div className="card-body">
+            <div className="grid-2" style={{ gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label">类型</label>
+                <select
+                  className="form-select"
+                  value={form.type}
+                  onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+                >
+                  {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">部门</label>
+                <input
+                  className="form-input"
+                  value={form.department}
+                  onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+                <label className="form-label">标题</label>
+                <input
+                  className="form-input"
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="请输入事项标题"
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+                <label className="form-label">描述</label>
+                <textarea
+                  className="form-textarea"
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                  placeholder="请输入事项描述"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">发生日期</label>
+                <input
+                  className="form-input"
+                  type="date"
+                  value={form.occurredOn}
+                  onChange={(e) => setForm((f) => ({ ...f, occurredOn: e.target.value }))}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">金额</label>
+                <input
+                  className="form-input"
+                  value={form.amount}
+                  onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                  placeholder="选填"
+                />
+              </div>
+            </div>
+            <div className="mt-16">
               <button
-                key={event.id}
-                onClick={() => {
-                  setSelectedEventId(event.id);
-                  void refreshDetail(event.id);
-                }}
-                style={{
-                  textAlign: "left",
-                  borderRadius: "16px",
-                  border: event.id === selectedEventId ? "1px solid #1e2a37" : "1px solid rgba(20,40,60,0.08)",
-                  background: event.id === selectedEventId ? "rgba(30,42,55,0.08)" : "#ffffff",
-                  padding: "14px"
-                }}
+                className="btn btn-primary"
+                onClick={() => void handleCreate()}
+                disabled={isBusy || !form.title.trim()}
               >
-                <div style={{ fontWeight: 700 }}>{event.title}</div>
-                <div style={{ fontSize: "14px", color: "#4d5d6c", marginTop: "4px" }}>
-                  {event.type} | {event.department} | {event.status}
-                </div>
+                {loading === "saving" ? "创建中…" : "创建事项"}
               </button>
-            ))}
+            </div>
           </div>
-        </article>
-      </section>
+        </div>
 
-      <article style={panelStyle()}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-          <div>
-            <h3 style={{ marginTop: 0 }}>经营事项详情</h3>
-            <div style={{ color: "#4d5d6c" }}>{selectedSummary}</div>
+        {/* 事项列表 */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">经营事项列表</span>
+            <span className="badge badge-gray">{events.length}</span>
           </div>
-          {selectedEventId ? (
-            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <div className="card-body" style={{ padding: "8px 12px", maxHeight: 480, overflowY: "auto" }}>
+            {events.length === 0 ? (
+              <div className="state-empty">暂无事项</div>
+            ) : (
+              <div style={{ display: "grid", gap: 6 }}>
+                {events.map((evt) => (
+                  <button
+                    key={evt.id}
+                    onClick={() => {
+                      setSelectedEventId(evt.id);
+                      void refreshDetail(evt.id);
+                    }}
+                    style={{
+                      textAlign: "left",
+                      padding: "12px 14px",
+                      borderRadius: "var(--r-lg)",
+                      border: evt.id === selectedEventId
+                        ? "1px solid var(--c-primary)"
+                        : "1px solid var(--c-border)",
+                      background: evt.id === selectedEventId
+                        ? "var(--c-primary-light)"
+                        : "var(--c-surface)",
+                      cursor: "pointer",
+                      width: "100%"
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{evt.title}</div>
+                    <div className="flex-row mt-4">
+                      <span className={statusBadge(evt.status)}>{evt.status}</span>
+                      <span className="text-muted text-sm">{evt.type} · {evt.department}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 事项详情 */}
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <span className="card-title">
+              {detail ? detail.title : "经营事项详情"}
+            </span>
+            {selectedSummary && (
+              <div className="text-muted text-sm mt-4">{selectedSummary}</div>
+            )}
+          </div>
+          {selectedEventId && (
+            <div className="flex-row">
               <select
+                className="form-select"
+                style={{ width: "auto" }}
                 value={statusDraft}
-                onChange={(event) => setStatusDraft(event.target.value as BusinessEventStatus)}
+                onChange={(e) => setStatusDraft(e.target.value as BusinessEventStatus)}
               >
-                <option value="draft">draft</option>
-                <option value="awaiting_documents">awaiting_documents</option>
-                <option value="awaiting_approval">awaiting_approval</option>
-                <option value="analyzed">analyzed</option>
-                <option value="blocked">blocked</option>
+                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
-              <button onClick={() => void handleAnalyze(selectedEventId)} disabled={loading === "analyzing"}>
-                触发 AI 任务拆解
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => void handleAnalyze(selectedEventId)}
+                disabled={isBusy}
+              >
+                AI 拆解
               </button>
-              <button onClick={() => void handleRiskCheck(selectedEventId)} disabled={loading === "updating"}>
-                执行风险检查
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => void handleRiskCheck(selectedEventId)}
+                disabled={isBusy}
+              >
+                风险检查
               </button>
-              <button onClick={() => void handleStatusUpdate(selectedEventId)} disabled={loading === "updating"}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => void handleStatusUpdate(selectedEventId)}
+                disabled={isBusy}
+              >
                 更新状态
               </button>
             </div>
-          ) : null}
+          )}
         </div>
+
         {detail ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "20px" }}>
-            <section>
-              <h4>事项描述</h4>
-              <p style={{ lineHeight: 1.8 }}>{detail.description}</p>
-              <h4>关联对象</h4>
-              {detail.relations.length ? (
-                <ul style={{ paddingLeft: "22px", lineHeight: 1.8 }}>
-                  {detail.relations.map((relation) => (
-                    <li key={relation.id}>
-                      {relation.relationType} / {relation.label}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>当前还没有建立关联对象。</p>
-              )}
-              <h4 style={{ marginTop: "18px" }}>单据映射</h4>
-              {detail.documentMappings.length ? (
-                <table style={tableStyle()}>
-                  <thead>
-                    <tr>
-                      <th style={cellStyle()}>类型</th>
-                      <th style={cellStyle()}>单据</th>
-                      <th style={cellStyle()}>状态</th>
-                      <th style={cellStyle()}>责任部门</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.documentMappings.map((item) => (
-                      <tr key={item.id}>
-                        <td style={cellStyle()}>{item.documentType}</td>
-                        <td style={cellStyle()}>
-                          <div>{item.title}</div>
-                          <div style={{ color: "#4d5d6c", marginTop: "4px" }}>{item.notes}</div>
-                        </td>
-                        <td style={cellStyle()}>{item.status}</td>
-                        <td style={cellStyle()}>{item.ownerDepartment}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p>当前还没有单据映射。</p>
-              )}
-              <h4 style={{ marginTop: "18px" }}>已生成单据对象</h4>
-              {detail.generatedDocuments.length ? (
-                <table style={tableStyle()}>
-                  <thead>
-                    <tr>
-                      <th style={cellStyle()}>编号</th>
-                      <th style={cellStyle()}>名称</th>
-                      <th style={cellStyle()}>状态</th>
-                      <th style={cellStyle()}>责任部门</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.generatedDocuments.map((item) => (
-                      <tr key={item.id}>
-                        <td style={cellStyle()}>{item.id}</td>
-                        <td style={cellStyle()}>{item.title}</td>
-                        <td style={cellStyle()}>{item.status}</td>
-                        <td style={cellStyle()}>{item.ownerDepartment}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p>当前还没有正式单据对象。</p>
-              )}
-              <span style={navLinkStyle()} onClick={() => navigate("/documents")}>
-                → 前往单据中心查看全部
-              </span>
-              <h4 style={{ marginTop: "18px" }}>税务处理映射</h4>
-              {detail.taxMappings.length ? (
-                <table style={tableStyle()}>
-                  <thead>
-                    <tr>
-                      <th style={cellStyle()}>税种</th>
-                      <th style={cellStyle()}>处理建议</th>
-                      <th style={cellStyle()}>状态</th>
-                      <th style={cellStyle()}>申报期</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.taxMappings.map((item) => (
-                      <tr key={item.id}>
-                        <td style={cellStyle()}>{item.taxType}</td>
-                        <td style={cellStyle()}>
-                          <div>{item.treatment}</div>
-                          <div style={{ color: "#4d5d6c", marginTop: "4px" }}>{item.basis}</div>
-                        </td>
-                        <td style={cellStyle()}>{item.status}</td>
-                        <td style={cellStyle()}>{item.filingPeriod}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p>当前还没有税务映射。</p>
-              )}
-              <h4 style={{ marginTop: "18px" }}>已生成税务事项</h4>
-              {detail.taxItems.length ? (
-                <table style={tableStyle()}>
-                  <thead>
-                    <tr>
-                      <th style={cellStyle()}>编号</th>
-                      <th style={cellStyle()}>税种</th>
-                      <th style={cellStyle()}>状态</th>
-                      <th style={cellStyle()}>申报期</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.taxItems.map((item) => (
-                      <tr key={item.id}>
-                        <td style={cellStyle()}>{item.id}</td>
-                        <td style={cellStyle()}>{item.taxType}</td>
-                        <td style={cellStyle()}>{item.status}</td>
-                        <td style={cellStyle()}>{item.filingPeriod}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p>当前还没有正式税务事项。</p>
-              )}
-            </section>
-            <section>
-              <h4>任务树</h4>
-              {renderTaskTree(detail.taskTree)}
-              <h4 style={{ marginTop: "18px" }}>凭证草稿</h4>
-              {detail.voucherDrafts.length ? (
-                <div style={{ display: "grid", gap: "14px" }}>
-                  {detail.voucherDrafts.map((voucher) => (
-                    <article
-                      key={voucher.id}
-                      style={{
-                        border: "1px solid rgba(20,40,60,0.08)",
-                        borderRadius: "16px",
-                        padding: "14px"
-                      }}
-                    >
-                      <div style={{ fontWeight: 700 }}>
-                        {voucher.summary} | {voucher.voucherType} | {voucher.status}
-                      </div>
-                      <table style={{ ...tableStyle(), marginTop: "10px" }}>
-                        <thead>
-                          <tr>
-                            <th style={cellStyle()}>摘要</th>
-                            <th style={cellStyle()}>科目编码</th>
-                            <th style={cellStyle()}>科目名称</th>
-                            <th style={cellStyle()}>借方</th>
-                            <th style={cellStyle()}>贷方</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {voucher.lines.map((line) => (
-                            <tr key={line.id}>
-                              <td style={cellStyle()}>{line.summary}</td>
-                              <td style={cellStyle()}>{line.accountCode}</td>
-                              <td style={cellStyle()}>{line.accountName}</td>
-                              <td style={cellStyle()}>{line.debit}</td>
-                              <td style={cellStyle()}>{line.credit}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </article>
-                  ))}
+          <div className="card-body">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+              {/* 左列 */}
+              <div style={{ display: "grid", gap: 20 }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                    事项描述
+                  </div>
+                  <p style={{ lineHeight: 1.8, margin: 0, fontSize: 13.5 }}>{detail.description}</p>
                 </div>
-              ) : (
-                <p>当前还没有凭证草稿。</p>
-              )}
-              <h4 style={{ marginTop: "18px" }}>已生成凭证对象</h4>
-              {detail.vouchers.length ? (
-                <table style={tableStyle()}>
-                  <thead>
-                    <tr>
-                      <th style={cellStyle()}>编号</th>
-                      <th style={cellStyle()}>摘要</th>
-                      <th style={cellStyle()}>类型</th>
-                      <th style={cellStyle()}>状态</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.vouchers.map((item) => (
-                      <tr key={item.id}>
-                        <td style={cellStyle()}>{item.id}</td>
-                        <td style={cellStyle()}>{item.summary}</td>
-                        <td style={cellStyle()}>{item.voucherType}</td>
-                        <td style={cellStyle()}>{item.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p>当前还没有正式凭证对象。</p>
-              )}
-              <span style={navLinkStyle()} onClick={() => navigate("/vouchers")}>
-                → 前往凭证中心查看全部
-              </span>
-              {detail.mappingGeneratedAt ? (
-                <p style={{ color: "#4d5d6c", marginTop: "10px" }}>
-                  映射生成时间：{detail.mappingGeneratedAt}
-                </p>
-              ) : null}
-              <h4 style={{ marginTop: "18px" }}>活动时间轴</h4>
-              {detail.activities.length ? (
-                <ul style={{ paddingLeft: "22px", lineHeight: 1.8 }}>
-                  {detail.activities.map((activity) => (
-                    <li key={activity.id}>
-                      {activity.createdAt} | {activity.actorName} | {activity.summary}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>当前还没有活动记录。</p>
-              )}
-            </section>
+
+                {/* 单据映射 */}
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                    单据映射
+                  </div>
+                  {detail.documentMappings.length ? (
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>类型</th><th>单据</th><th>状态</th><th>部门</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detail.documentMappings.map((item) => (
+                          <tr key={item.id}>
+                            <td>{item.documentType}</td>
+                            <td>
+                              <div>{item.title}</div>
+                              {item.notes && <div className="text-muted text-sm mt-4">{item.notes}</div>}
+                            </td>
+                            <td><span className={statusBadge(item.status)}>{item.status}</span></td>
+                            <td>{item.ownerDepartment}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : <p className="text-muted text-sm">暂无单据映射</p>}
+                </div>
+
+                {/* 已生成单据 */}
+                {detail.generatedDocuments.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                      已生成单据
+                    </div>
+                    <table className="data-table">
+                      <thead>
+                        <tr><th>名称</th><th>状态</th><th>部门</th></tr>
+                      </thead>
+                      <tbody>
+                        {detail.generatedDocuments.map((item) => (
+                          <tr key={item.id}>
+                            <td>{item.title}</td>
+                            <td><span className={statusBadge(item.status)}>{item.status}</span></td>
+                            <td>{item.ownerDepartment}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <button className="btn btn-outline btn-xs mt-8" onClick={() => navigate("/documents")}>
+                      前往单据中心 →
+                    </button>
+                  </div>
+                )}
+
+                {/* 税务映射 */}
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                    税务映射
+                  </div>
+                  {detail.taxMappings.length ? (
+                    <table className="data-table">
+                      <thead>
+                        <tr><th>税种</th><th>处理建议</th><th>状态</th><th>申报期</th></tr>
+                      </thead>
+                      <tbody>
+                        {detail.taxMappings.map((item) => (
+                          <tr key={item.id}>
+                            <td>{item.taxType}</td>
+                            <td>
+                              <div>{item.treatment}</div>
+                              {item.basis && <div className="text-muted text-sm mt-4">{item.basis}</div>}
+                            </td>
+                            <td><span className={statusBadge(item.status)}>{item.status}</span></td>
+                            <td>{item.filingPeriod}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : <p className="text-muted text-sm">暂无税务映射</p>}
+                </div>
+              </div>
+
+              {/* 右列 */}
+              <div style={{ display: "grid", gap: 20 }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                    任务树
+                  </div>
+                  {renderTaskTree(detail.taskTree)}
+                </div>
+
+                {/* 凭证草稿 */}
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                    凭证草稿
+                  </div>
+                  {detail.voucherDrafts.length ? (
+                    <div style={{ display: "grid", gap: 12 }}>
+                      {detail.voucherDrafts.map((v) => (
+                        <div key={v.id} style={{ border: "1px solid var(--c-border)", borderRadius: "var(--r-md)", padding: 12 }}>
+                          <div className="flex-row" style={{ marginBottom: 8 }}>
+                            <span style={{ fontWeight: 600, fontSize: 13.5 }}>{v.summary}</span>
+                            <span className={statusBadge(v.status)}>{v.status}</span>
+                            <span className="badge badge-gray">{v.voucherType}</span>
+                          </div>
+                          <table className="data-table">
+                            <thead>
+                              <tr><th>摘要</th><th>科目</th><th>借方</th><th>贷方</th></tr>
+                            </thead>
+                            <tbody>
+                              {v.lines.map((line) => (
+                                <tr key={line.id}>
+                                  <td>{line.summary}</td>
+                                  <td>{line.accountCode} {line.accountName}</td>
+                                  <td>{line.debit}</td>
+                                  <td>{line.credit}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-muted text-sm">暂无凭证草稿</p>}
+                  {detail.vouchers.length > 0 && (
+                    <button className="btn btn-outline btn-xs mt-8" onClick={() => navigate("/vouchers")}>
+                      前往凭证中心 →
+                    </button>
+                  )}
+                </div>
+
+                {/* 活动时间轴 */}
+                {detail.activities.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                      活动时间轴
+                    </div>
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {detail.activities.map((act) => (
+                        <div key={act.id} style={{ fontSize: 13, lineHeight: 1.7, borderLeft: "2px solid var(--c-border)", paddingLeft: 12 }}>
+                          <span className="text-muted">{act.createdAt?.slice(0, 16)} · {act.actorName}</span>
+                          <div>{act.summary}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
-          <p style={{ marginTop: "20px" }}>尚未选择事项。</p>
+          <div className="state-empty">请从左侧列表选择一条经营事项</div>
         )}
-      </article>
-    </section>
+      </div>
+    </div>
   );
 }
