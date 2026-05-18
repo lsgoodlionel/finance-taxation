@@ -3,6 +3,7 @@ WORKDIR /app
 
 # 安装所有 workspace 依赖
 COPY package.json package-lock.json ./
+COPY tsconfig.base.json ./
 COPY packages/domain-model/package.json ./packages/domain-model/
 COPY apps/web/package.json ./apps/web/
 
