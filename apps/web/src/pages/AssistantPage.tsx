@@ -268,19 +268,18 @@ export function AssistantPage() {
           <div style={{ color: "#6c7a89", fontSize: "13px" }}>{status}</div>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          {sessions.length > 0 && (
-            <button
-              onClick={() => setShowHistory((v) => !v)}
-              style={{
-                background: showHistory ? "#1e2a37" : "#eef0f3",
-                color: showHistory ? "#fff" : "#6c7a89",
-                border: "none", borderRadius: "8px", padding: "6px 14px",
-                cursor: "pointer", fontSize: "13px"
-              }}
-            >
-              历史记录 {sessions.length > 0 && `(${sessions.length})`}
-            </button>
-          )}
+          <button
+            onClick={() => sessions.length > 0 && setShowHistory((v) => !v)}
+            style={{
+              background: showHistory ? "#1e2a37" : "#eef0f3",
+              color: showHistory ? "#fff" : sessions.length > 0 ? "#1e2a37" : "#bcc5ce",
+              border: "none", borderRadius: "8px", padding: "6px 14px",
+              cursor: sessions.length > 0 ? "pointer" : "default", fontSize: "13px"
+            }}
+            title={sessions.length === 0 ? "暂无历史记录" : undefined}
+          >
+            历史记录{sessions.length > 0 ? ` (${sessions.length})` : ""}
+          </button>
           <button
             onClick={handleNewSession}
             style={{

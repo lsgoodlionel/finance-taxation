@@ -226,20 +226,20 @@ export function BossQAPage() {
           <div style={{ color: "#6c7a89", fontSize: "13px" }}>{statusMsg}</div>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          {sessions.length > 0 && (
-            <button
-              onClick={() => setShowHistory((v) => !v)}
-              style={{
-                padding: "8px 16px", borderRadius: "8px",
-                border: "1px solid rgba(20,40,60,0.15)",
-                background: showHistory ? "#1e2a37" : "none",
-                color: showHistory ? "#fff" : "#6c7a89",
-                fontSize: "13px", cursor: "pointer"
-              }}
-            >
-              历史记录 ({sessions.length})
-            </button>
-          )}
+          <button
+            onClick={() => sessions.length > 0 && setShowHistory((v) => !v)}
+            style={{
+              padding: "8px 16px", borderRadius: "8px",
+              border: "1px solid rgba(20,40,60,0.15)",
+              background: showHistory ? "#1e2a37" : "none",
+              color: showHistory ? "#fff" : sessions.length > 0 ? "#6c7a89" : "#bcc5ce",
+              fontSize: "13px",
+              cursor: sessions.length > 0 ? "pointer" : "default"
+            }}
+            title={sessions.length === 0 ? "暂无历史记录" : undefined}
+          >
+            历史记录{sessions.length > 0 ? ` (${sessions.length})` : ""}
+          </button>
           <button
             onClick={handleNewSession}
             style={{
