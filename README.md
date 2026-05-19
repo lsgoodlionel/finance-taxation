@@ -1,103 +1,328 @@
-# Finance Taxation Web Prototype
+# Finance Taxation V2
 
-中国大陆中小企业财务及税务管理 Web 原型。
+中国大陆中小企业财务及税务管理 Web 应用（V2 正式版）。
 
-这个项目当前已经演进为 `前端高保真原型 + 后端骨架 + V2 升级方案` 的组合形态，聚焦企业经营事项录入、财税资料自动拆分、原始凭证归档、税务底稿预览、规则库匹配、本地 AI 辅助判断，以及后续向“AI 财税工作台”升级的工程化路线。它适合用于流程演示、产品验证、财税场景梳理、协作开发和内部培训，不应直接视为正式记账报税系统。
+本项目为 `全栈 TypeScript monorepo + PostgreSQL + AI 辅助` 的形态，覆盖企业经营事项录入、账务内核、财税申报、合同管理、工资计算、研发辅助账、风险勾稽、AI 财税秘书、老板专线和审计日志，目标是为科技型中小企业董事长提供可以直接交办日常财税工作的 **AI 财税负责人工作台**。
 
-## 当前版本重点更新
+## 当前状态
 
-本次版本在原有原型基础上，重点补强了以下能力：
+**Phase 0 → Phase 3 全部完成**（截止 2026-05-18）
 
-- V2 报表、税务、研发、风险深化
-  - 财务三表已补月 / 季 / 年快照持久化
-  - 已支持报表差异分析、老板口径摘要、报表打印版
-  - 已支持纳税人口径档案、税率规则与期间规则、增值税底稿、企业所得税准备、个税申报资料、印花税与附加税汇总
-  - 已支持税务批次复核、留档、复核记录、留档记录
-  - 已支持研发加计扣除资料包摘要、资本化 / 费用化冲突复核、政策补贴与研发口径提示
-  - 已支持风险评分、异常关闭与复盘记录，以及收入/采购/研发勾稽规则深化
-  - 已支持月结 / 审计 / 稽核资料包导出
+| 阶段 | 状态 | 完成时间 |
+|------|------|----------|
+| Phase 0 Sprint 0（工程骨架） | ✅ 完成 | 2026-05-12 |
+| Phase 1（身份权限 + 账务骨架） | ✅ 完成 | 2026-05-14 |
+| Phase 2（PostgreSQL 全迁移 + 三表 + 税务 + 研发 + 风险） | ✅ 完成 | 2026-05-15 |
+| Phase 3 Sprint P3-1（合同管理） | ✅ 完成 | 2026-05-15 |
+| Phase 3 Sprint P3-2（员工/工资/社保/公积金） | ✅ 完成 | 2026-05-15 |
+| Phase 3 Sprint P3-3（AI 财税秘书） | ✅ 完成 | 2026-05-15 |
+| Phase 3 Sprint P3-4（PDF 导出） | ✅ 完成 | 2026-05-15 |
+| Phase 3 Sprint P3-5（审计日志） | ✅ 完成 | 2026-05-15 |
+| Phase 3 Sprint P3-6（老板专线 + 研发深化） | ✅ 完成 | 2026-05-15 |
+| WS-FINAL（企业知识库 + 日记账 + 任务逾期 + 单测基线） | ✅ 完成 | 2026-05-16 |
+| WS-BUGFIX（全功能验证修复，21/21 端点全 200） | ✅ 完成 | 2026-05-18 |
+| WS-LOCK（锁账/反结账控制） | ✅ 完成 | 2026-05-18 |
+| WS-SETTINGS（系统设置页） | ✅ 完成 | 2026-05-18 |
+| WS-AI-OLLAMA（Ollama 本地 AI 降级） | ✅ 完成 | 2026-05-18 |
+| WS-V1ALIGN（V1/V2 功能全对齐） | ✅ 完成 | 2026-05-18 |
 
-- 行为录入智能识别增强
-  - 本地规则优先识别
-  - 可选网络参考摘要
-  - 可选本地 Ollama 辅助判断
-  - 动态显示识别进度
-  - 展示“识别依据”而不暴露模型原始推理
-  - 增加“模型过程摘要（流式）”显示可读判断过程
-- 生成结果展示重构
-  - 右侧拆分为“本次输入刚生成的结果”和“历史记录”
-  - 自动汇总本次新增单据数量、缺失凭证数量、补录入口和查询入口
-- 凭证链完整性增强
-  - 每条生成记录可标记待补原始凭证
-  - 自动提示去哪里补、补后去哪里查
-  - 下载与附件 URL 管理做了稳定性和内存释放优化
-- 本地 AI 配置优化
-  - 默认 Ollama 模型已调整为 `gemma4:latest`
-  - 检索密钥不再持久化到 `localStorage`
-  - 带密钥的自定义检索接口仅允许本地地址，降低误发到外部域名的风险
+## 功能概览（V2 最终版）
 
-## 功能概览（V2 当前版本）
-
-V2 系统当前已具备完整的"经营事项 → 账务 → 税务 → 报表 → 风险"全闭环，共 10 个业务页面：
+系统共 **18 个业务页面**，覆盖"经营事项 → 账务 → 税务 → 报表 → 风险"完整闭环，并叠加合同、工资、AI 辅助、知识库、审计等高阶功能：
 
 | 页面 | 路由 | 核心能力 |
 |------|------|----------|
 | 董事长驾驶舱 | `/dashboard/chairman` | 银行余额 / 利润 / 税负 / 风险事项 / AI 摘要 |
-| 经营事项总线 | `/events` | 创建 / 编辑 / AI 拆任务 / 风险检查 |
-| 任务中心 | `/tasks` | 任务树 / 状态流 / 催办 |
+| 经营事项总线 | `/events` | 创建 / 编辑 / AI 拆任务 / 风险检查 / 跨页导航 |
+| 任务中心 | `/tasks` | 任务树 / 状态流 / 逾期高亮 / 催办徽章 |
 | 单据中心 | `/documents` | 附件上传（multipart）/ 归档 |
-| 凭证中心 | `/vouchers` | 模板生成 / 校验 / 审核 / 过账 |
-| 总账中心 | `/ledger` | 分录列表 / 科目余额 / 过账批次 |
+| 凭证中心 | `/vouchers` | 模板生成 / 校验 / 审核 / 过账 / 摘要编辑 |
+| 总账中心 | `/ledger` | 分录列表 / 科目余额 / 过账批次 / 日记账 Tab / 期间锁账 |
 | 财务报表 | `/reports` | 三表 + 快照 + 差异分析 + 老板摘要 + 打印版 |
 | 税务中心 | `/tax` | 增值税底稿 / 企所税 / 个税 / 印花税 / 申报批次 / 复核留档 |
-| 研发辅助账 | `/rnd` | 研发项目 / 费用归集 / 加计扣除资料包 |
+| 研发辅助账 | `/rnd` | 研发项目 / 费用归集 / 加计扣除资料包 / 月度趋势 |
 | 风险勾稽 | `/risk` | 规则引擎 / 风险发现 / 异常关闭复盘 |
+| 合同管理 | `/contracts` | 合同主数据 / 类型 / 状态流 / 关联事项 |
+| 工资管理 | `/payroll` | 员工档案 / IIT 七级计算 / 社保公积金 / 工资确认 |
+| AI 财税秘书 | `/assistant` | 流式对话 / 财税问答 / 建议事项一键创建 |
+| PDF 导出 | `/pdf-export` | 工资汇总 / 工资条 / 凭证 / 报表快照四类 PDF |
+| 审计日志 | `/audit` | 操作人 / 时间 / 模块 / 变更详情全量追踪 |
+| 老板专线 | `/boss-qa` | 实时财务快照注入 + SSE 流式问答 |
+| 企业知识库 | `/knowledge` | 制度条款 / 口径规则 / AI Prompt 关键词注入 |
+| 系统设置 | `/settings` | 公司信息 / AI 配置（Anthropic/Ollama）/ 关于系统 |
+
+## V2 规划文档
+
+- [V2 产品蓝图](./docs/v2-product-blueprint.md) — 目标用户、模块边界、Agent 规划
+- [V2 升级开发计划](./docs/v2-development-plan.md) — 任务拆解与实施对照
+- [V2 协作与开发运行机制](./docs/v2-collaboration-operating-model.md) — 分支策略与团队协作规则
+- [V2 进度板](./docs/v2-progress-board.md) — 完整历史进度记录
+
+## 项目结构
+
+```text
+.
+├── apps/
+│   ├── api/                        — V2 后端（Node.js + TypeScript）
+│   │   ├── src/
+│   │   │   ├── modules/            — 业务路由模块
+│   │   │   │   ├── auth/           — 登录 / 刷新 / 登出（服务端吊销）
+│   │   │   │   ├── access/         — me / menu（RBAC 过滤）
+│   │   │   │   ├── events/         — 经营事项总线
+│   │   │   │   ├── tasks/          — 任务管理（含逾期与催办）
+│   │   │   │   ├── documents/      — 单据 + 附件 + 文件下载
+│   │   │   │   ├── vouchers/       — 凭证 + 过账 + 分录
+│   │   │   │   ├── ledger/         — 总账 + 科目余额 + 日记账 + 期间锁账
+│   │   │   │   ├── reports/        — 三表 + 快照 + 差异分析 + 打印版
+│   │   │   │   ├── tax/            — 税务底稿 + 申报批次 + 纳税人档案
+│   │   │   │   ├── rnd/            — 研发项目 + 成本 + 工时 + 趋势
+│   │   │   │   ├── risk/           — 风险勾稽引擎 + 复盘记录
+│   │   │   │   ├── contracts/      — 合同主数据 + 事项关联
+│   │   │   │   ├── payroll/        — 员工档案 + IIT + 社保/公积金
+│   │   │   │   ├── assistant/      — AI 财税秘书（SSE 流式）
+│   │   │   │   ├── boss-qa/        — 老板专线（实时快照注入 + SSE）
+│   │   │   │   ├── pdf/            — 工资/凭证/报表 HTML 打印模板
+│   │   │   │   ├── audit/          — 审计日志查询
+│   │   │   │   ├── knowledge/      — 企业知识库 CRUD
+│   │   │   │   ├── settings/       — 公司信息 / AI 配置
+│   │   │   │   └── accounts/       — 科目主数据（60+ 科目）
+│   │   │   ├── services/
+│   │   │   │   ├── ai.ts           — AI 抽象层（Anthropic 优先 / Ollama 降级）
+│   │   │   │   └── audit.ts        — writeAudit fire-and-forget 服务
+│   │   │   ├── middleware/
+│   │   │   │   └── auth.ts         — JWT 认证中间件
+│   │   │   ├── db/
+│   │   │   │   ├── client.ts       — pg 连接池
+│   │   │   │   └── migrate.ts      — migration runner（幂等）
+│   │   │   └── utils/              — body 解析 / multipart / http 工具
+│   │   └── migrations/             — 001–014 完整 schema + 种子数据
+│   └── web/                        — V2 前端（React + TypeScript + Vite）
+│       └── src/
+│           ├── pages/              — 18 个业务页面
+│           ├── components/
+│           │   └── AppLayout.tsx   — 主导航布局（含退出登录服务端吊销）
+│           └── lib/api.ts          — 统一 API 客户端
+├── packages/
+│   └── domain-model/               — 共享领域类型（BusinessEvent / Voucher / Contract / Employee / AuditLog …）
+├── backend/                        — 旧版 JS 后端（保留供迁移参考）
+├── docs/                           — V2 设计文档与进度板
+├── STARTUP_YEAR1_SIMULATION.md
+└── STARTUP_YEAR1_VALIDATION.md
+```
+
+## 本地运行
+
+### 方式一：Docker Compose（推荐）
+
+```bash
+# 配置环境变量
+cp apps/api/.env.docker apps/api/.env.docker.local
+# 按需填入 ANTHROPIC_API_KEY 或 OLLAMA_BASE_URL
+
+# 启动三服务（db / api / web）
+docker compose up -d
+```
+
+浏览器打开：`http://localhost:5173/`
+
+如需切换 AI 后端：
+- **Anthropic Claude**：在 `.env.docker` 中填入 `ANTHROPIC_API_KEY`
+- **本地 Ollama**：保持 key 为空，填入 `OLLAMA_BASE_URL` 和 `OLLAMA_MODEL`，重启 api 容器生效
+
+### 方式二：本地开发
+
+#### 环境依赖
+
+- Node.js >= 18
+- PostgreSQL >= 14
+
+#### 配置环境变量
+
+```bash
+cp apps/api/.env.example apps/api/.env
+# 修改 DATABASE_URL、JWT_SECRET 等必填项
+```
+
+#### 初始化数据库
+
+```bash
+npm run -w @finance-taxation/api db:migrate
+```
+
+#### 启动开发服务
+
+```bash
+# 后端 API（端口 3001）
+npm run -w @finance-taxation/api dev
+
+# 前端（端口 5173，新建终端）
+npm run -w @finance-taxation/web dev
+```
+
+### 演示账号
+
+| 用户名 | 密码 | 角色 |
+|--------|------|------|
+| `admin` | `123456` | 董事长（全权限）|
+
+## AI 后端说明
+
+系统支持两种 AI 后端，自动降级：
+
+1. **Anthropic Claude**（优先）：配置 `ANTHROPIC_API_KEY` 后启用，用于财税秘书、老板专线和驾驶舱摘要
+2. **本地 Ollama**（降级）：未配置 API Key 时自动切换，支持 `gemma4:latest` 等本地模型
+
+切换方式见 `系统设置 → AI 配置` 页面说明。
+
+## 已接入 API 接口（约 110+ 个）
+
+### 认证与权限
+
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/auth/logout`（服务端吊销 session）
+- `GET /api/access/me`
+- `GET /api/access/menu`
+
+### 经营事项与任务
+
+- `GET /api/events`、`POST /api/events`
+- `GET /api/events/:id`、`PUT /api/events/:id`
+- `POST /api/events/:id/analyze`
+- `POST /api/events/:id/risk-check`
+- `GET /api/tasks`
+- `POST /api/tasks/:id/remind`（催办）
+
+### 单据与附件
+
+- `GET /api/documents`、`GET /api/documents/:id`、`PUT /api/documents/:id`
+- `POST /api/documents/:id/attach`、`POST /api/documents/:id/upload`（multipart）
+- `POST /api/documents/:id/archive`、`GET /api/documents/:id/attachments`
+- `GET /api/attachments/:id/download`（文件下载）
+
+### 凭证
+
+- `GET /api/vouchers`、`POST /api/vouchers`（模板生成）
+- `GET /api/vouchers/:id`、`PUT /api/vouchers/:id`
+- `GET /api/vouchers/:id/validate`
+- `POST /api/vouchers/:id/approve`、`POST /api/vouchers/:id/post`
+- `GET /api/vouchers/:id/posting-records`
+- `GET /api/vouchers/templates`
+
+### 总账与期间
+
+- `GET /api/ledger/entries`、`GET /api/ledger/posting-batches`
+- `GET /api/ledger/summary`、`GET /api/ledger/balances`
+- `GET /api/ledger/cash-journal`（现金/银行日记账）
+- `GET /api/ledger/periods`、`POST /api/ledger/periods`
+- `POST /api/ledger/periods/:id/lock`、`POST /api/ledger/periods/:id/unlock`
+
+### 科目主数据
+
+- `GET /api/accounts`（支持 `category` / `q` / `leafOnly` 过滤）
+- `GET /api/accounts/:code`
+
+### 财务报表
+
+- `GET /api/reports/balance-sheet`、`GET /api/reports/profit-statement`、`GET /api/reports/cash-flow`
+- `GET /api/reports/snapshots`、`POST /api/reports/snapshots`、`GET /api/reports/diff`
+- `GET /api/reports/chairman-summary`、`GET /api/reports/printable`
+
+### 税务
+
+- `GET /api/tax-items`、`GET /api/tax-items/:id`、`PUT /api/tax-items/:id`
+- `GET /api/tax-filing-batches`、`POST /api/tax-filing-batches`、`GET /api/tax-filing-batches/:id`
+- `POST /api/tax-filing-batches/:id/validate`、`POST /api/tax-filing-batches/:id/submit`
+- `POST /api/tax-filing-batches/:id/review`、`POST /api/tax-filing-batches/:id/archive`
+- `GET /api/tax-filing-batches/:id/reviews`、`GET /api/tax-filing-batches/:id/archives`
+- `GET /api/taxpayer-profiles`、`POST /api/taxpayer-profiles`、`PUT /api/taxpayer-profiles/:id/activate`
+- `GET /api/tax/rules`、`GET /api/tax/vat-working-paper`、`GET /api/tax/corporate-income-tax-preparation`
+- `GET /api/tax/individual-income-tax-materials`、`GET /api/tax/stamp-and-surtax-summary`
+- `GET /api/tax/printable`
+
+### 研发辅助账
+
+- `GET /api/rnd/projects`、`POST /api/rnd/projects`、`GET /api/rnd/projects/:id`
+- `POST /api/rnd/projects/:id/cost-lines`、`POST /api/rnd/projects/:id/time-entries`
+- `GET /api/rnd/projects/:id/super-deduction-package`
+- `GET /api/rnd/trend`（月度成本趋势）
+
+### 风险勾稽
+
+- `GET /api/risk/findings`、`POST /api/risk/findings/:id/close`
+- `GET /api/risk/closure-records`
+
+### 合同管理
+
+- `GET /api/contracts`、`POST /api/contracts`
+- `GET /api/contracts/:id`、`PUT /api/contracts/:id`
+- `POST /api/contracts/:id/close`
+- `GET /api/contracts/:id/events`
+
+### 工资管理
+
+- `GET /api/employees`、`POST /api/employees`、`PUT /api/employees/:id`
+- `GET /api/payroll/policy`、`PUT /api/payroll/policy`
+- `POST /api/payroll/compute`、`GET /api/payroll`
+- `POST /api/payroll/:id/confirm`
+- `GET /api/payroll/periods`
+
+### AI 辅助
+
+- `POST /api/assistant/chat`（SSE 流式，财税秘书）
+- `POST /api/boss-qa/chat`（SSE 流式，老板专线，实时财务快照注入）
+
+### PDF 导出
+
+- `GET /api/pdf/payroll`（工资汇总 HTML）
+- `GET /api/pdf/payroll-slip/:employeeId`（个人工资条）
+- `GET /api/pdf/voucher/:id`（凭证详情）
+- `GET /api/pdf/report`（报表快照）
+
+### 审计日志
+
+- `GET /api/audit/logs`（分页 + 模块/时间/操作人过滤）
+
+### 企业知识库
+
+- `GET /api/knowledge`、`POST /api/knowledge`
+- `GET /api/knowledge/:id`、`PUT /api/knowledge/:id`、`DELETE /api/knowledge/:id`
+
+### 系统设置
+
+- `GET /api/settings/company`、`PUT /api/settings/company`
+- `GET /api/settings/ai`
+- `GET /api/settings/users`
+
+### 资料包
+
+- `GET /api/packages/closing-bundle`（月结 / 审计 / 稽核资料包）
 
 ## 已覆盖业务场景
 
 当前规则库已覆盖并可生成对应单据、台账、归档卡或合规提醒的常见场景，包括但不限于：
 
-- 银行账户管理费
-- 银行利息收入
-- 销售收款
-- 收入调整与退款
-- 采购付款
-- 费用报销
-- 业务招待费
-- 设立与开办费用
-- 云服务与软件订阅
+- 银行账户管理费 / 银行利息收入
+- 销售收款 / 收入调整与退款
+- 采购付款 / 费用报销 / 业务招待费
+- 设立与开办费用 / 云服务与软件订阅
 - 研发外包与技术服务
-- 薪酬发放
-- 社保公积金缴纳
-- 固定资产采购
-- 折旧与摊销
-- 借款与融资
-- 借款利息
-- 股东出资
-- 利润分配
-- 政府补助
-- 增值税及附加
-- 企业所得税
-- 个人所得税扣缴
-- 印花税
-- 存货盘点与报损
-- 资产处置
-- 房租与水电物业
-- 知识产权与资质申请
+- 薪酬发放 / 社保公积金缴纳
+- 固定资产采购 / 折旧与摊销
+- 借款与融资 / 借款利息 / 股东出资 / 利润分配
+- 政府补助 / 增值税及附加 / 企业所得税 / 个人所得税扣缴 / 印花税
+- 存货盘点与报损 / 资产处置
+- 房租与水电物业 / 知识产权与资质申请
 - 应收与坏账管理
-- 月度结账与申报准备
-- 年度归档与工商年报
-- 研发加计扣除与汇算备查
-- 罚款与捐赠
+- 月度结账与申报准备 / 年度归档与工商年报
+- 研发加计扣除与汇算备查 / 罚款与捐赠
 
 ## 创业公司首年全流程压测
 
-项目已补充了一套“科技创业公司首年财税全流程”模拟资料，并据此做过顺序化压测，覆盖：
+项目已补充了一套"科技创业公司首年财税全流程"模拟资料，并据此做过顺序化压测，覆盖：
 
-- 公司设立、开户、开办费
-- 股东出资
-- 租赁、押金、办公费用
-- 云服务、软件订阅、研发外包
+- 公司设立、开户、开办费 / 股东出资
+- 租赁、押金、办公费用 / 云服务、软件订阅、研发外包
 - 固定资产采购、知识产权申请
 - 工资、个税、社保公积金
 - 销售回款、退款、红字发票、坏账风险
@@ -112,318 +337,113 @@ V2 系统当前已具备完整的"经营事项 → 账务 → 税务 → 报表 
 - 场景矩阵：[STARTUP_YEAR1_SIMULATION.md](./STARTUP_YEAR1_SIMULATION.md)
 - 验证报告：[STARTUP_YEAR1_VALIDATION.md](./STARTUP_YEAR1_VALIDATION.md)
 
-## V2 规划文档
+## Phase 3 完成明细
 
-仓库已经补充 V2 升级蓝图与协作机制文档：
+### Sprint P3-1：合同管理（2026-05-15）
 
-- [V2 产品蓝图](./docs/v2-product-blueprint.md)
-- [V2 升级开发计划](./docs/v2-development-plan.md)
-- [V2 协作与开发运行机制](./docs/v2-collaboration-operating-model.md)
-- [V2 进度板](./docs/v2-progress-board.md)
+- `migrations/007_contracts.sql` + `business_events.contract_id` 外键
+- `contracts/routes.ts` — listContracts / createContract / getContractDetail / updateContract / closeContract / getContractEvents
+- `ContractsPage.tsx` — 列表、筛选、新建、详情、关闭动作
+- domain-model 扩展 Contract / ContractWithEventCount / ContractType / ContractStatus
 
-这些文档用于指导后续多人员、多 Agent、多分支并行开发，目标是将当前系统升级为可供科技型中小企业董事长直接交办日常财税工作的 `AI 财税负责人工作台`。
+### Sprint P3-2：员工/工资/社保/公积金（2026-05-15）
 
-## 项目结构
+- `migrations/008_employees_payroll.sql` — employees + payroll_policy + payroll_records 表
+- IIT 七级超额累进税率计算引擎（taxableIncome → iitWithheld）
+- 社保/公积金 clamp 计算（base = clamp(gross, min, max)，员工+单位分别计算）
+- `PayrollPage.tsx` — 员工管理 / 工资计算 / 参数设置三 Tab
 
-当前项目主要包含：
+### Sprint P3-3：AI 财税秘书 v1（2026-05-15）
 
-- `index.html` / `src/` — 旧版单页原型（保留供参考）
-- `apps/web/` — V2 前端（React + TypeScript + Vite）
-  - `src/pages/` — 10 个业务页面（驾驶舱 / 事项 / 任务 / 单据 / 凭证 / 总账 / 报表 / 税务 / 研发 / 风险）
-  - `src/lib/api.ts` — 统一 API 客户端
-  - `src/components/AppLayout.tsx` — 主导航布局
-- `apps/api/` — V2 后端（Node.js + TypeScript）
-  - `src/modules/` — 模块化路由（auth / access / events / tasks / documents / vouchers / ledger / reports / tax / rnd / risk）
-  - `src/middleware/auth.ts` — JWT 认证中间件
-  - `src/db/` — PostgreSQL client、migration runner、实体草案
-- `packages/domain-model/` — 共享领域类型包（BusinessEvent / Task / Voucher / TaxItem 等）
-- `backend/` — 旧版 JS 后端（保留供迁移参考）
-- `docs/` — V2 设计文档与进度板
-- `README.md`
-- `STARTUP_YEAR1_SIMULATION.md`
-- `STARTUP_YEAR1_VALIDATION.md`
+- `@anthropic-ai/sdk` 接入，SSE 流式响应
+- 系统 Prompt：公司名称 + 今日日期 + 近期经营事项 + 待办任务
+- `AssistantPage.tsx` — 快捷提示 / 流式渲染 / 建议事项一键创建
 
-## 本地运行
+### Sprint P3-4：PDF 导出（2026-05-15）
 
-### 环境依赖
+- `pdf/template.ts` — `wrapHtml()` HTML 打印模板（A4 + CJK 字体）
+- 工资汇总 / 工资条 / 凭证 / 报表快照四类路由
+- `PdfExportPage.tsx` — 三 Tab 下载中心
 
-- Node.js >= 18
-- PostgreSQL >= 14
+### Sprint P3-5：完整审计日志（2026-05-15）
 
-### 配置环境变量
+- `migrations/009_audit_log.sql` — audit_logs 表 + 三个索引
+- `writeAudit()` fire-and-forget 服务（event / voucher / contract / payroll 写操作接入）
+- `AuditPage.tsx` — 日志列表、类型/时间过滤、变更详情展开、分页
 
-```bash
-cp apps/api/.env.example apps/api/.env
-# 修改 DATABASE_URL、JWT_SECRET 等必填项
-```
+### Sprint P3-6：老板专线 + 研发深化（2026-05-15）
 
-### 初始化数据库
+- `boss-qa/routes.ts` — 实时财务快照（现金/应收/税负/利润/风险事项）注入 Prompt + SSE
+- `BossQAPage.tsx` — 6 个常见问题快捷入口
+- `GET /api/rnd/trend` — 月度研发成本趋势（费用化/资本化/合计）
 
-```bash
-npm run -w @finance-taxation/api db:migrate
-```
+### Sprint F-1 ~ F-4：最终收尾（2026-05-16）
 
-### 启动开发服务
+- **F-1** 企业知识库：`migration 010`、knowledge CRUD、KnowledgePage、AI Prompt 关键词注入
+- **F-2** 日记账 + 事项跨页导航：getCashJournal API、LedgerPage Tab 重构（科目汇总/余额/日记账/总账分录）、EventsPage 凭证/单据跨页链接
+- **F-3** 任务逾期 + 催办机制：isTaskOverdue、remindTask API、TasksPage 逾期高亮+催办按钮+逾期计数徽章
+- **F-4** 单元测试基线：纯函数提取（`overdue.ts`）、6 条逾期测试、根 `npm run test`，共 44 passes
 
-```bash
-# 后端 API（端口 3001）
-npm run -w @finance-taxation/api dev
+### WS-BUGFIX：全功能验证修复（2026-05-18）
 
-# 前端（端口 5173，新建终端）
-npm run -w @finance-taxation/web dev
-```
+修复 requireAuth 缺失（401）、表名错误（503）、RBAC 权限缺口（403）、migration 011 修复 UUID 类型崩溃（22P02）；21/21 端点全部 200。
 
-浏览器打开：
+### WS-LOCK：锁账/反结账控制（2026-05-18）
 
-```text
-http://localhost:5173/
-```
+- `migration 012` accounting_periods 表
+- `GET/POST /api/ledger/periods`、`lock` / `unlock` 接口
+- postVoucher 过账前期间锁定检查
+- LedgerPage 新增「期间锁账」Tab
 
-### 演示账号
+### WS-SETTINGS：系统设置页（2026-05-18）
 
-- 用户名：`admin`，密码：`123456`（董事长角色）
+- `migration 013` companies 补充字段（creditCode / legalRep / bankName / bankAccount）
+- `/api/settings/company`（GET/PUT）、`/api/settings/ai`、`/api/settings/users`
+- `SettingsPage.tsx` — 公司信息 / AI 配置 / 关于系统三 Tab
+- AppLayout 导航入口
 
-## 历史阶段说明（已收口）
+### WS-AI-OLLAMA：AI 后端 Ollama 降级支持（2026-05-18）
 
-- **Phase 0**（Sprint 0）：工程骨架搭建，monorepo / TS 工程 / env / migration 目录建立，已收口。
-- **Phase 1**：身份权限、经营事项总线、任务中心、账务内核、单据、初步报表、初步税务，已收口。
-- **Phase 2**：全量 PostgreSQL 迁移（下线 JSON 文件存储）、RBAC、驾驶舱、财务三表、税务运营中心、研发辅助账、风险勾稽引擎，已收口。
+- `services/ai.ts` 抽象层（Anthropic 优先 / Ollama 降级）
+- docker-compose extra_hosts、`.env.docker` 新增 OLLAMA 配置
+- 财税秘书 + 老板专线均已切换至统一 AI 服务层
 
-详细进度历史见：[docs/v2-progress-board.md](./docs/v2-progress-board.md)
+### WS-V1ALIGN：V1/V2 功能全对齐（2026-05-18）
 
-## Phase 2 新增实现
-
-- `EPIC-08` 财务三表首版
-  - 后端已实现：
-    - `GET /api/reports/balance-sheet`
-    - `GET /api/reports/profit-statement`
-    - `GET /api/reports/cash-flow`
-  - 前端已接入报表中心页，支持月度 / 季度 / 年度切换
-- `TASK-RND-01` 研发项目辅助账首版
-  - 已新增 PostgreSQL migration：
-    - `rnd_projects`
-    - `rnd_cost_lines`
-    - `rnd_time_entries`
-  - 后端已实现：
-    - `GET /api/rnd/projects`
-    - `POST /api/rnd/projects`
-    - `GET /api/rnd/projects/:id`
-  - 已提供研发费用化 / 资本化 / 工时 / 可选加计扣除基数摘要
-  - 已支持研发成本归集、工时录入和加计扣除资料包摘要
-- `TASK-RISK-01` 风险勾稽首版
-  - 已新增 PostgreSQL migration：
-    - `risk_findings`
-  - 后端已实现：
-    - `GET /api/risk/findings`
-    - `POST /api/events/:id/risk-check`
-  - 首版规则包括：
-    - 销售收入已入账但未形成增值税事项
-    - 已过账凭证缺少关联原始单据
-    - 研发支出未归集到研发项目辅助账
-    - 存在逾期且阻塞的执行任务
-    - 工资事项缺少个税处理
-    - 工资事项缺少社保处理
-    - 工资事项缺少公积金支持资料
-  - 风险结果已返回评分和优先级
-- `TASK-08-04 / 08-05`
-  - 已支持报表快照保存、快照列表和差异分析
-- `TASK-09-02 / 09-04 / 13-05`
-  - 已支持税率规则与期间规则解析
-  - 已支持企业所得税预缴与汇算准备视图
-  - 已支持增值税底稿和企业所得税准备打印版
-- `TASK-10-05`
-  - 已支持研发项目资本化 / 费用化冲突复核和口径建议
-- `TASK-11-01 ~ 11-04`
-  - 已扩展销售合同缺失、回款依据缺失、采购进项税缺失、采购发票/付款依据缺失等风险规则
-- V2 前端已增加 `documents` 占位页承接单据对象查询
-- V2 前端已增加 `tax` 占位页承接税务事项和申报批次查询
-- `documents` 前端已支持单据详情、附件绑定和归档动作承接
-- `tax` 前端已支持批次详情、校验和提交动作承接
-- `ledger` 前端已支持按凭证编号过滤钻取
-- `vouchers` 前端已支持凭证详情、校验、审核、过账动作承接
-- `ledger` 前端已支持按事项编号进一步过滤钻取
-- `vouchers` 前端已支持修改凭证摘要
-- `ledger` 前端已增加科目余额视图
-
-当前已接入的 V2 接口（约 76 个）：
-
-**认证与权限**
-
-- `POST /api/auth/login`
-- `POST /api/auth/refresh`
-- `GET /api/access/me`
-- `GET /api/access/menu`（按角色过滤可见菜单项）
-
-**经营事项与任务**
-
-- `GET /api/events`、`POST /api/events`
-- `GET /api/events/:id`、`PUT /api/events/:id`
-- `POST /api/events/:id/analyze`
-- `POST /api/events/:id/risk-check`（触发风险勾稽）
-- `GET /api/tasks`
-
-**单据**
-
-- `GET /api/documents`、`GET /api/documents/:id`、`PUT /api/documents/:id`
-- `POST /api/documents/:id/attach`、`POST /api/documents/:id/upload`（multipart）
-- `POST /api/documents/:id/archive`、`GET /api/documents/:id/attachments`
-
-**凭证**
-
-- `GET /api/vouchers`、`GET /api/vouchers/:id`、`PUT /api/vouchers/:id`
-- `GET /api/vouchers/:id/validate`、`POST /api/vouchers/:id/approve`、`POST /api/vouchers/:id/post`
-- `GET /api/vouchers/:id/posting-records`
-- `GET /api/vouchers/templates`（凭证模板列表）
-- `POST /api/vouchers`（模板生成模式）
-
-**税务**
-
-- `GET /api/tax-items`、`GET /api/tax-items/:id`、`PUT /api/tax-items/:id`
-- `GET /api/tax-filing-batches`、`POST /api/tax-filing-batches`、`GET /api/tax-filing-batches/:id`
-- `POST /api/tax-filing-batches/:id/validate`、`POST /api/tax-filing-batches/:id/submit`
-- `POST /api/tax-filing-batches/:id/review`、`POST /api/tax-filing-batches/:id/archive`
-- `GET /api/tax-filing-batches/:id/reviews`、`GET /api/tax-filing-batches/:id/archives`
-- `GET /api/taxpayer-profiles`、`POST /api/taxpayer-profiles`、`PUT /api/taxpayer-profiles/:id/activate`
-- `GET /api/tax/rules`、`GET /api/tax/vat-working-paper`、`GET /api/tax/corporate-income-tax-preparation`
-- `GET /api/tax/individual-income-tax-materials`、`GET /api/tax/stamp-and-surtax-summary`
-- `GET /api/tax/printable`
-
-**总账**
-
-- `GET /api/ledger/entries`、`GET /api/ledger/posting-batches`
-- `GET /api/ledger/summary`、`GET /api/ledger/balances`
-
-**科目主数据**
-
-- `GET /api/accounts`（支持 `category` / `q` / `leafOnly` 过滤）
-- `GET /api/accounts/:code`
-
-**财务报表**
-
-- `GET /api/reports/balance-sheet`、`GET /api/reports/profit-statement`、`GET /api/reports/cash-flow`
-- `GET /api/reports/snapshots`、`POST /api/reports/snapshots`、`GET /api/reports/diff`
-- `GET /api/reports/chairman-summary`、`GET /api/reports/printable`
-
-**研发辅助账**
-
-- `GET /api/rnd/projects`、`POST /api/rnd/projects`、`GET /api/rnd/projects/:id`
-- `POST /api/rnd/projects/:id/cost-lines`、`POST /api/rnd/projects/:id/time-entries`
-- `GET /api/rnd/projects/:id/super-deduction-package`
-
-**风险勾稽**
-
-- `GET /api/risk/findings`、`POST /api/risk/findings/:id/close`
-- `GET /api/risk/closure-records`
-
-**资料包**
-
-- `GET /api/packages/closing-bundle`（月结 / 审计 / 稽核资料包）
-
-当前已接入的 V2 页面（10 个）：
-
-- 董事长驾驶舱（`/dashboard/chairman`）— 真实数据：银行余额 / 利润 / 税负 / 风险事项 / AI 摘要
-- 经营事项总线（`/events`）— 支持风险检查入口
-- 任务中心（`/tasks`）
-- 单据中心（`/documents`）— 支持 multipart 文件上传
-- 凭证中心（`/vouchers`）— 支持凭证模板生成
-- 总账中心（`/ledger`）
-- 财务报表（`/reports`）— 三表 + 快照 + 差异分析 + 老板摘要 + 打印版
-- 税务中心（`/tax`）— 增值税底稿 + 企所税 + 个税 + 印花税 + 申报批次管理
-- 研发辅助账（`/rnd`）— 项目主数据 + 成本归集 + 加计扣除资料包
-- 风险勾稽（`/risk`）— 规则引擎 + 风险发现 + 异常关闭复盘
-
-## Phase 2 Sprint 1 完成项（2026-05-14）
-
-在 Phase 1 基础上，Phase 2 Sprint 1 已完成以下内容：
-
-- **TASK-01-04** 菜单权限过滤：`GET /api/access/menu` 按用户角色返回可见菜单项
-- **TASK-01-05** 全量 API 权限守卫：所有写操作加 `requirePermission`，视图操作加 view 权限
-- **TASK-03-01** 驾驶舱真实数据：从 ledger / events / tasks / vouchers JSON 实时计算 4 张指标卡
-- **TASK-07-01** 科目主数据：小企业会计准则 60+ 科目 + `GET /api/accounts`；`ChartAccount` 已加入 domain-model
-- **TASK-06-02** 文件 multipart 上传：busboy 解析落盘 + `POST /api/documents/:id/upload`
-- **DB-MIGRATE** PostgreSQL 基础设施：25 张表完整 schema（`migrations/001_initial_schema.sql`）+ 种子数据（`migrations/002_seed_data.sql`）+ pg 连接池（`src/db/client.ts`）+ migration runner（`src/db/migrate.ts`）
-
-### 运行数据库迁移
-
-```bash
-# 配置 .env
-DATABASE_URL=postgres://user:pass@127.0.0.1:5432/finance_taxation_v2
-
-# 执行迁移（跳过已应用版本，幂等）
-npm run -w @finance-taxation/api db:migrate
-```
-
-## Phase 2 完成情况
-
-**所有 Phase 2 任务已收口**，按完成顺序：
-
-1. **DB-MIGRATE**（全部完成）：所有业务模块（auth / events / tasks / vouchers / ledger / documents / tax / rnd / risk / reports）已切换到 PostgreSQL；原 JSON 数据文件（`apps/api/src/data/*.v2.json`）已全部删除；新增 migrations 001–006
-2. **TASK-07-02**：凭证模板与自动分录（5 种模板：销售/采购/费用报销/工资计提/固定资产采购）
-3. **TASK-03-02/03/04**：驾驶舱利润概览、风险待办列表、AI 今日工作摘要
-4. **EPIC-08**：财务三表（资产负债表/利润表/现金流量表）+ 快照持久化 + 差异分析 + 老板口径摘要 + 打印版 + 月结/审计/稽核资料包
-5. **EPIC-09**（全部完成）：纳税人口径档案、税率规则与期间规则、增值税底稿、企业所得税预缴准备、个税申报资料、印花税与附加税汇总、批次复核与留档
-6. **EPIC-10**（全部完成）：研发项目辅助账、成本归集、工时录入、加计扣除资料包、资本化/费用化冲突复核、政策补贴与口径提示
-7. **EPIC-11**（全部完成）：风险规则引擎、评分模型、收入/采购/工资/研发/税务勾稽规则深化、风险关闭与复盘记录
-
-**Phase 3 优先顺序：**
-
-1. `TASK-09-08` — 税务批次自动归集与期间锁定
-2. `TASK-10-07` — 研发项目成果与补贴申报资料绑定
-3. `TASK-11-07` — 风险处置 SLA、升级和关闭后回归检查
-4. `TASK-13-07` — 报表 / 税务 / 资料包 PDF 导出
-5. `TASK-12-01` — 企业制度库
+- `POST /api/auth/logout` — 服务端吊销 session，AppLayout 退出登录入口同步更新
+- `migration 014` companies 扩展字段（统一社会信用代码 / 法定代表人 / 开户银行 / 银行账号）
+- `GET /api/attachments/:id/download` — 磁盘文件读取并以正确 MIME 类型返回
+- SettingsPage 公司信息表单已补充上述新字段的编辑和保存支持
 
 ## GitHub Actions
 
 仓库当前已经补充 GitHub Actions，覆盖两类自动检查：
 
-- `CI`
-  - 在 `push` 和 `pull_request` 上执行
-  - 校验前端脚本语法
-  - 校验后端源码语法
-  - 校验 `backend/data` 下的 JSON 数据文件可解析
-  - 校验关键项目文件是否存在
-- `PR Review Summary`
-  - 在 PR 打开、更新、重新打开、转为 Ready for review 时执行
-  - 自动在 PR 里回帖说明当前自动审查覆盖范围和人工仍需复核的重点
+- **CI**：在 `push` 和 `pull_request` 上执行，校验前后端脚本语法、JSON 数据文件可解析性、关键项目文件是否存在
+- **PR Review Summary**：在 PR 打开、更新时自动在 PR 里回帖说明当前自动审查覆盖范围
 
-当前自动审查仍属于基础质量门禁，不替代人工财税规则复核，也不替代正式端到端测试。
+当前自动审查属于基础质量门禁，不替代人工财税规则复核。
 
-## V2 设计文档
+## 历史阶段说明（已收口）
 
-- [V2 产品蓝图](./docs/v2-product-blueprint.md) — 目标用户、模块边界、Agent 规划
-- [V2 升级开发计划](./docs/v2-development-plan.md) — 任务拆解与实施对照
-- [V2 协作与开发运行机制](./docs/v2-collaboration-operating-model.md) — 分支策略与团队协作规则
-- [V2 进度板](./docs/v2-progress-board.md) — 当前实时进度
+- **Phase 0**（Sprint 0）：工程骨架搭建，monorepo / TS 工程 / env / migration 目录建立，已收口
+- **Phase 1**：身份权限、经营事项总线、任务中心、账务内核、单据、初步报表、初步税务，已收口
+- **Phase 2**：全量 PostgreSQL 迁移（下线 JSON 文件存储）、RBAC、驾驶舱、财务三表、税务运营中心、研发辅助账、风险勾稽引擎，已收口
+- **Phase 3**：合同管理、工资计算、AI 财税秘书、PDF 导出、审计日志、老板专线、企业知识库、锁账控制、系统设置、V1 功能全对齐，已收口
+
+详细进度历史见：[docs/v2-progress-board.md](./docs/v2-progress-board.md)
 
 ## 依据与定位
 
 本项目中的表单、报表和识别逻辑，尽量参考了中国大陆财务税务管理的常见实务和公开官方规则来源，例如：
 
-- 《会计基础工作规范》
-- 《中华人民共和国会计法》
-- 《小企业会计准则》
-- 企业所得税税前扣除凭证管理办法
-- 研发费用加计扣除政策执行指引
-- 个人所得税扣缴申报规则
-- 增值税及附加税费申报规则
-- 《中华人民共和国印花税法》
-- 《企业信息公示暂行条例》
+- 《会计基础工作规范》/ 《中华人民共和国会计法》/ 《小企业会计准则》
+- 企业所得税税前扣除凭证管理办法 / 研发费用加计扣除政策执行指引
+- 个人所得税扣缴申报规则 / 增值税及附加税费申报规则
+- 《中华人民共和国印花税法》/ 《企业信息公示暂行条例》
 
 说明：
 
 - 当前仍属于高保真演示原型，而不是正式报送系统。
 - 页面中的税表和财务报表为展示型预览，不等同于税务机关电子申报模板的完整 1:1 复刻。
-- 创业公司首年全流程已经具备较好的场景覆盖，但正式会计处理、正式申报、税收优惠适用判断仍应由专业人员最终确认。
-
-## Phase 3 计划方向
-
-以下为 Phase 3 的主要优先项（Phase 0–2 已全部完成）：
-
-- **AI 财税秘书**（EPIC-04）— 自然语言交办 + 经营事件结构化识别
-- **合同管理**（EPIC-02 补全）— 合同主数据 + 收入/采购闭环
-- **员工 / 工资 / 社保 / 公积金**（EPIC-05 补全）— 工资计提闭环 + 个税勾稽
-- **PDF 导出**（TASK-13-07）— 报表 / 税务底稿 / 资料包 PDF 渲染
-- **老板问答 Agent**（EPIC-04-05）— 结构化数据已就绪，可接入问答层
-- **完整审计日志**（EPIC-01-06）— 操作人 / 时间 / 资料来源追踪
-- **企业制度库**（EPIC-12）— AI 建议优先参考企业内部口径
+- 正式会计处理、正式申报、税收优惠适用判断仍应由专业人员最终确认。
