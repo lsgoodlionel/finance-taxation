@@ -1,16 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createEvent } from "../lib/api";
-import { useChatHistory } from "../lib/useChatHistory";
+import { useChatSessions } from "../lib/useChatSessions";
+import type { SessionMessage } from "../lib/useChatSessions";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
-const HISTORY_KEY = "ft-assistant-history";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  loading?: boolean;
-}
+const STORAGE_KEY = "ft-assistant-history";
 
 interface SuggestedEvent {
   type: string;
@@ -55,8 +50,35 @@ function formatMessage(text: string): string {
     .replace(/\n/g, "<br/>");
 }
 
+function groupByDate(sessions: { id: string; title: string; updatedAt: string; messages: SessionMessage[] }[]) {
+  const today = new Date().toDateString();
+  const yesterday = new Date(Date.now() - 86400000).toDateString();
+  const groups: { label: string; items: typeof sessions }[] = [];
+  const map = new Map<string, typeof sessions>();
+
+  for (const s of sessions) {
+    const d = new Date(s.updatedAt).toDateString();
+    let label: string;
+    if (d === today) label = "今天";
+    else if (d === yesterday) label = "昨天";
+    else {
+      const dt = new Date(s.updatedAt);
+      label = `${dt.getMonth() + 1}月${dt.getDate()}日`;
+    }
+    if (!map.has(label)) map.set(label, []);
+    map.get(label)!.push(s);
+  }
+
+  for (const [label, items] of map) {
+    groups.push({ label, items });
+  }
+  return groups;
+}
+
 export function AssistantPage() {
-  const { messages, setMessages, saveMessages, clearHistory } = useChatHistory(HISTORY_KEY);
+  const { messages, setMessages, persistMessages, sessions, activeId, newSession, loadSession, deleteSession } =
+    useChatSessions(STORAGE_KEY);
+
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState(
@@ -64,28 +86,41 @@ export function AssistantPage() {
   );
   const [suggestedEvent, setSuggestedEvent] = useState<SuggestedEvent | null>(null);
   const [creating, setCreating] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [hoveredSession, setHoveredSession] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Auto-save on unmount if there are unsaved messages
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
   async function sendMessage(userText: string) {
     if (!userText.trim() || sending) return;
     setSending(true);
     setSuggestedEvent(null);
+    setShowHistory(false);
 
-    const userMsg: Message = { role: "user", content: userText };
-    const assistantMsg: Message = { role: "assistant", content: "", loading: true };
-
+    const userMsg: SessionMessage = { role: "user", content: userText };
     const nextMessages = [...messages, userMsg];
-    setMessages([...nextMessages, assistantMsg]);
+    const loadingMessages = [...nextMessages, { role: "assistant" as const, content: "", loading: true }];
+
+    setMessages(loadingMessages as SessionMessage[]);
     setInput("");
     setStatus("财税秘书正在思考...");
 
     const token = window.localStorage.getItem(TOKEN_KEY) ?? "";
     let accumulated = "";
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/assistant/chat`, {
@@ -96,7 +131,8 @@ export function AssistantPage() {
         },
         body: JSON.stringify({
           messages: nextMessages.map((m) => ({ role: m.role, content: m.content }))
-        })
+        }),
+        signal: controller.signal
       });
 
       if (!response.ok) {
@@ -127,7 +163,7 @@ export function AssistantPage() {
               accumulated += event.text;
               setMessages((prev) => {
                 const updated = [...prev];
-                updated[updated.length - 1] = { role: "assistant", content: accumulated, loading: true };
+                updated[updated.length - 1] = { role: "assistant", content: accumulated };
                 return updated;
               });
             } else if (event.type === "done") {
@@ -147,23 +183,25 @@ export function AssistantPage() {
       setMessages((prev) => {
         const updated = [...prev];
         updated[updated.length - 1] = { role: "assistant", content: cleanContent };
-        saveMessages(updated.filter((m) => !m.loading));
+        persistMessages(updated);
         return updated;
       });
 
       if (suggested) setSuggestedEvent(suggested);
       setStatus("财税秘书已就绪，请继续提问。");
     } catch (err) {
+      if ((err as Error).name === "AbortError") return;
       const errMsg = err instanceof Error ? err.message : "发送失败";
       setMessages((prev) => {
         const updated = [...prev];
         updated[updated.length - 1] = { role: "assistant", content: `⚠️ ${errMsg}` };
-        saveMessages(updated.filter((m) => !m.loading));
+        persistMessages(updated);
         return updated;
       });
       setStatus(errMsg);
     } finally {
       setSending(false);
+      abortRef.current = null;
     }
   }
 
@@ -197,32 +235,138 @@ export function AssistantPage() {
     }
   }
 
+  function handleNewSession() {
+    abortRef.current?.abort();
+    setSuggestedEvent(null);
+    newSession();
+    setStatus("新对话已开始，请输入您的问题。");
+    setShowHistory(false);
+  }
+
+  function handleLoadSession(id: string) {
+    abortRef.current?.abort();
+    setSuggestedEvent(null);
+    loadSession(id);
+    setStatus("已恢复历史对话，可继续提问。");
+    setShowHistory(false);
+  }
+
   const panelBg = {
     background: "rgba(255,255,255,0.82)",
     borderRadius: "24px",
     border: "1px solid rgba(20,40,60,0.08)"
   } as const;
 
+  const sessionGroups = groupByDate(sessions);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px", height: "calc(100vh - 180px)", maxHeight: "800px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px", height: "calc(100vh - 180px)", maxHeight: "800px", position: "relative" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <h2 style={{ margin: "0 0 4px", fontSize: "22px" }}>AI 财税秘书</h2>
           <div style={{ color: "#6c7a89", fontSize: "13px" }}>{status}</div>
         </div>
-        {messages.length > 0 && (
+        <div style={{ display: "flex", gap: "8px" }}>
+          {sessions.length > 0 && (
+            <button
+              onClick={() => setShowHistory((v) => !v)}
+              style={{
+                background: showHistory ? "#1e2a37" : "#eef0f3",
+                color: showHistory ? "#fff" : "#6c7a89",
+                border: "none", borderRadius: "8px", padding: "6px 14px",
+                cursor: "pointer", fontSize: "13px"
+              }}
+            >
+              历史记录 {sessions.length > 0 && `(${sessions.length})`}
+            </button>
+          )}
           <button
-            onClick={() => { clearHistory(); setSuggestedEvent(null); setStatus("对话已清除。"); }}
-            style={{ background: "#eef0f3", color: "#6c7a89", border: "none", borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontSize: "13px" }}
+            onClick={handleNewSession}
+            style={{
+              background: "#eef0f3", color: "#1e2a37", border: "none",
+              borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontSize: "13px"
+            }}
           >
-            清除对话
+            + 新对话
           </button>
-        )}
+        </div>
       </div>
 
+      {/* History panel */}
+      {showHistory && (
+        <div style={{
+          ...panelBg,
+          padding: "16px",
+          maxHeight: "240px",
+          overflowY: "auto",
+          background: "rgba(248,249,250,0.95)"
+        }}>
+          {sessionGroups.length === 0 ? (
+            <div style={{ color: "#aab5c0", fontSize: "13px", textAlign: "center", padding: "16px 0" }}>暂无历史记录</div>
+          ) : (
+            sessionGroups.map((group) => (
+              <div key={group.label} style={{ marginBottom: "12px" }}>
+                <div style={{ fontSize: "11px", color: "#aab5c0", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+                  {group.label}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                  {group.items.map((s) => (
+                    <div
+                      key={s.id}
+                      onMouseEnter={() => setHoveredSession(s.id)}
+                      onMouseLeave={() => setHoveredSession(null)}
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "8px 10px", borderRadius: "8px", cursor: "pointer",
+                        background: activeId === s.id
+                          ? "rgba(30,42,55,0.08)"
+                          : hoveredSession === s.id
+                            ? "rgba(30,42,55,0.04)"
+                            : "transparent",
+                        transition: "background 0.15s"
+                      }}
+                    >
+                      <div
+                        onClick={() => handleLoadSession(s.id)}
+                        style={{ flex: 1, overflow: "hidden" }}
+                      >
+                        <div style={{
+                          fontSize: "13px", color: "#1e2a37",
+                          fontWeight: activeId === s.id ? 600 : 400,
+                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
+                        }}>
+                          {activeId === s.id && "● "}{s.title}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#aab5c0", marginTop: "2px" }}>
+                          {new Date(s.updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                          {" · "}{s.messages.length / 2 | 0} 轮对话
+                        </div>
+                      </div>
+                      {hoveredSession === s.id && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
+                          style={{
+                            background: "none", border: "none", cursor: "pointer",
+                            color: "#c0392b", fontSize: "12px", padding: "2px 6px",
+                            borderRadius: "4px", flexShrink: 0
+                          }}
+                          title="删除此对话"
+                        >
+                          删除
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
       {/* Quick prompts */}
-      {messages.length === 0 && (
+      {messages.length === 0 && !showHistory && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
           {QUICK_PROMPTS.map((p) => (
             <button
@@ -278,7 +422,7 @@ export function AssistantPage() {
               lineHeight: "1.6",
               border: msg.role === "assistant" ? "1px solid rgba(20,40,60,0.08)" : "none"
             }}>
-              {msg.loading && msg.content === "" ? (
+              {msg.content === "" ? (
                 <span style={{ color: "#aab5c0", fontStyle: "italic" }}>正在思考...</span>
               ) : (
                 <span dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
@@ -333,7 +477,6 @@ export function AssistantPage() {
       {/* Input area */}
       <div style={{ ...panelBg, padding: "12px 16px", display: "flex", gap: "10px", alignItems: "flex-end" }}>
         <textarea
-          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
