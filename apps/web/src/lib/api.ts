@@ -1083,12 +1083,64 @@ export async function updateCompanyProfile(data: Partial<Omit<CompanyProfile, "i
   });
 }
 
+export interface AiProviderModel {
+  id: string;
+  name: string;
+}
+
+export interface AiProviderInfo {
+  id: string;
+  name: string;
+  authType: "apiKey" | "none";
+  models: AiProviderModel[];
+  defaultBaseUrl: string;
+  keyPlaceholder: string;
+}
+
+export interface AiConfigResponse {
+  provider: string;
+  model: string;
+  apiKeyConfigured: boolean;
+  apiKeyMasked: string | null;
+  baseUrl: string | null;
+  extraConfig: Record<string, string> | null;
+  providers: AiProviderInfo[];
+}
+
 export async function getAiSettings() {
-  return request<{
-    provider: "anthropic" | "ollama";
-    anthropicConfigured: boolean;
-    ollamaBaseUrl: string;
-    ollamaModel: string;
-    note: string;
-  }>("/api/settings/ai");
+  return request<AiConfigResponse>("/api/settings/ai");
+}
+
+export async function updateAiSettings(data: {
+  provider: string;
+  model: string;
+  apiKey?: string;
+  baseUrl?: string;
+  extraConfig?: Record<string, string>;
+}) {
+  return request<AiConfigResponse>("/api/settings/ai", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+}
+
+export async function getOllamaModels(baseUrl: string) {
+  const params = new URLSearchParams({ baseUrl });
+  return request<{ models: { name: string; size: number; modifiedAt: string }[] }>(
+    `/api/settings/ai/ollama-models?${params.toString()}`
+  );
+}
+
+export async function testAiConnection(data: {
+  provider: string;
+  model: string;
+  apiKey?: string;
+  baseUrl?: string;
+}) {
+  return request<{ ok: boolean; note: string }>("/api/settings/ai/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
 }

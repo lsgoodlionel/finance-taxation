@@ -1,7 +1,7 @@
 import type { ServerResponse } from "node:http";
 import { query } from "../../db/client.js";
 import { json } from "../../utils/http.js";
-import { streamChat, isAiAvailable } from "../../services/ai.js";
+import { streamChat, isAiConfigured } from "../../services/ai.js";
 import type { ChatMessage } from "../../services/ai.js";
 import type { ApiRequest } from "../../types.js";
 
@@ -132,8 +132,8 @@ export async function bossChat(req: ApiRequest, res: ServerResponse): Promise<vo
     return;
   }
 
-  if (!isAiAvailable()) {
-    json(res, 503, { error: "AI 服务未配置，请设置 ANTHROPIC_API_KEY 或确保 Ollama 已启动。" });
+  if (!(await isAiConfigured(req.auth.companyId))) {
+    json(res, 503, { error: "AI 服务未配置，请在系统设置中配置 AI 后端。" });
     return;
   }
 
@@ -147,5 +147,5 @@ export async function bossChat(req: ApiRequest, res: ServerResponse): Promise<vo
   const ctx = await loadBossContext(req.auth.companyId);
   const systemPrompt = buildBossSystemPrompt(ctx);
 
-  await streamChat(res, systemPrompt, messages);
+  await streamChat(res, systemPrompt, messages, req.auth.companyId);
 }

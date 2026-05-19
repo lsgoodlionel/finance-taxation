@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 export interface PersistedMessage {
   role: "user" | "assistant";
   content: string;
+  loading?: boolean;
 }
 
 const MAX_MESSAGES = 200;

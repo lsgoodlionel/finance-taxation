@@ -1,6 +1,7 @@
 import type { ServerResponse } from "node:http";
 import { query, queryOne } from "../../db/client.js";
 import { json } from "../../utils/http.js";
+import { AI_PROVIDERS, loadAiConfig, listOllamaModels } from "../../services/ai.js";
 import type { ApiRequest } from "../../types.js";
 
 interface CompanyRow {
@@ -106,19 +107,164 @@ export async function updateCompanySettings(req: ApiRequest, res: ServerResponse
   json(res, 200, rowToProfile(updated));
 }
 
-export async function getAiSettings(_req: ApiRequest, res: ServerResponse): Promise<void> {
-  const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
-  const ollamaBase = process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "gemma4:latest";
+export async function getAiSettings(req: ApiRequest, res: ServerResponse): Promise<void> {
+  const cfg = await loadAiConfig(req.auth!.companyId);
   json(res, 200, {
-    provider: hasAnthropic ? "anthropic" : "ollama",
-    anthropicConfigured: hasAnthropic,
-    ollamaBaseUrl: ollamaBase,
-    ollamaModel,
-    note: hasAnthropic
-      ? "当前使用 Anthropic Claude 作为 AI 后端（优先级更高）"
-      : "当前使用本地 Ollama 作为 AI 后端（ANTHROPIC_API_KEY 未配置）"
+    provider: cfg.provider,
+    model: cfg.model,
+    apiKeyConfigured: Boolean(cfg.apiKey),
+    apiKeyMasked: cfg.apiKey ? `${cfg.apiKey.slice(0, 6)}${"*".repeat(Math.max(0, cfg.apiKey.length - 10))}${cfg.apiKey.slice(-4)}` : null,
+    baseUrl: cfg.baseUrl,
+    extraConfig: cfg.extraConfig,
+    providers: AI_PROVIDERS
   });
+}
+
+export async function updateAiSettings(req: ApiRequest, res: ServerResponse): Promise<void> {
+  const body = (req.body ?? {}) as {
+    provider?: string;
+    model?: string;
+    apiKey?: string;
+    baseUrl?: string;
+    extraConfig?: Record<string, string>;
+  };
+
+  if (!body.provider) {
+    json(res, 400, { error: "provider 不能为空" });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const existingRow = await queryOne<{ id: string }>(
+    "select id from ai_configs where company_id = $1",
+    [req.auth!.companyId]
+  );
+
+  if (existingRow) {
+    const sets: string[] = ["provider = $1", "model = $2", "updated_at = $3"];
+    const params: unknown[] = [body.provider, body.model ?? "", now];
+    let idx = 4;
+
+    if (body.apiKey !== undefined && body.apiKey !== "") {
+      sets.push(`api_key = $${idx++}`);
+      params.push(body.apiKey);
+    }
+    if (body.baseUrl !== undefined) {
+      sets.push(`base_url = $${idx++}`);
+      params.push(body.baseUrl || null);
+    }
+    if (body.extraConfig !== undefined) {
+      sets.push(`extra_config = $${idx++}`);
+      params.push(JSON.stringify(body.extraConfig));
+    }
+    params.push(req.auth!.companyId);
+    await queryOne(
+      `update ai_configs set ${sets.join(", ")} where company_id = $${idx} returning id`,
+      params
+    );
+  } else {
+    await queryOne(
+      `insert into ai_configs (company_id, provider, model, api_key, base_url, extra_config, updated_at)
+       values ($1, $2, $3, $4, $5, $6, $7) returning id`,
+      [
+        req.auth!.companyId,
+        body.provider,
+        body.model ?? "",
+        body.apiKey || null,
+        body.baseUrl || null,
+        body.extraConfig ? JSON.stringify(body.extraConfig) : null,
+        now
+      ]
+    );
+  }
+
+  const cfg = await loadAiConfig(req.auth!.companyId);
+  json(res, 200, {
+    provider: cfg.provider,
+    model: cfg.model,
+    apiKeyConfigured: Boolean(cfg.apiKey),
+    baseUrl: cfg.baseUrl,
+    extraConfig: cfg.extraConfig
+  });
+}
+
+export async function getOllamaModels(req: ApiRequest, res: ServerResponse): Promise<void> {
+  const url = new URL(req.url || "/", "http://127.0.0.1");
+  const baseUrl = url.searchParams.get("baseUrl") || "http://localhost:11434";
+  try {
+    const models = await listOllamaModels(baseUrl);
+    json(res, 200, { models });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "连接 Ollama 失败";
+    json(res, 502, { error: msg });
+  }
+}
+
+export async function testAiConnection(req: ApiRequest, res: ServerResponse): Promise<void> {
+  const body = (req.body ?? {}) as {
+    provider?: string;
+    model?: string;
+    apiKey?: string;
+    baseUrl?: string;
+  };
+  if (!body.provider) {
+    json(res, 400, { error: "provider 不能为空" });
+    return;
+  }
+
+  try {
+    if (body.provider === "ollama") {
+      const base = body.baseUrl || "http://localhost:11434";
+      const models = await listOllamaModels(base);
+      json(res, 200, { ok: true, note: `Ollama 连接成功，已安装 ${models.length} 个模型` });
+      return;
+    }
+
+    if (body.provider === "anthropic") {
+      if (!body.apiKey) {
+        json(res, 400, { error: "需要 API Key" });
+        return;
+      }
+      const { default: Anthropic } = await import("@anthropic-ai/sdk");
+      const client = new Anthropic({ apiKey: body.apiKey });
+      const msg = await client.messages.create({
+        model: body.model || "claude-haiku-4-5-20251001",
+        max_tokens: 10,
+        messages: [{ role: "user", content: "hi" }]
+      });
+      json(res, 200, { ok: true, note: `连接成功，model=${msg.model}` });
+      return;
+    }
+
+    // OpenAI-compatible
+    if (!body.apiKey) {
+      json(res, 400, { error: "需要 API Key" });
+      return;
+    }
+    const { AI_PROVIDERS: providers } = await import("../../services/ai.js");
+    const providerInfo = providers.find((p) => p.id === body.provider);
+    const base = body.baseUrl || providerInfo?.defaultBaseUrl || "";
+    const url2 = `${base.replace(/\/$/, "")}/chat/completions`;
+    const resp = await fetch(url2, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${body.apiKey}` },
+      body: JSON.stringify({
+        model: body.model,
+        max_tokens: 10,
+        messages: [{ role: "user", content: "hi" }]
+      }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "");
+      json(res, 502, { error: `HTTP ${resp.status}: ${errText.slice(0, 200)}` });
+      return;
+    }
+    json(res, 200, { ok: true, note: `${body.provider} 连接成功` });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "连接失败";
+    json(res, 502, { error: msg });
+  }
 }
 
 export async function getUserList(req: ApiRequest, res: ServerResponse): Promise<void> {

@@ -128,6 +128,9 @@ import {
 import { getRndTrend } from "./modules/rnd/routes.js";
 import {
   getAiSettings,
+  updateAiSettings,
+  getOllamaModels,
+  testAiConnection,
   getCompanySettings,
   getUserList,
   updateCompanySettings
@@ -991,6 +994,17 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("dashboard.view", req, res))) return;
     if (req.method === "GET") return getAiSettings(req, res);
+    if (req.method === "PUT") return updateAiSettings(req, res);
+  }
+
+  if (url.pathname === "/api/settings/ai/ollama-models") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return getOllamaModels(req, res);
+  }
+
+  if (url.pathname === "/api/settings/ai/test") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") return testAiConnection(req, res);
   }
 
   if (url.pathname === "/api/settings/users") {
