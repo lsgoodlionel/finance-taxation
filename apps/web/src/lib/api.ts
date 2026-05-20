@@ -79,6 +79,7 @@ export interface EventDetail extends BusinessEvent {
 }
 
 export interface DocumentDetail extends GeneratedDocument {
+  notes: string | null;
   attachments: DocumentAttachmentRecord[];
 }
 
@@ -136,10 +137,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers
-  });
+  let response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+
+  // Auto-refresh on 401, but never recurse into the refresh endpoint itself
+  if (response.status === 401 && path !== "/api/auth/refresh") {
+    const refreshToken = getStoredRefreshToken();
+    if (refreshToken) {
+      const refreshResp = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken })
+      }).catch(() => null);
+      if (refreshResp?.ok) {
+        const data = await refreshResp.json() as { accessToken: string; refreshToken: string };
+        setStoredToken(data.accessToken);
+        setStoredRefreshToken(data.refreshToken);
+        const retryHeaders = new Headers(init?.headers);
+        retryHeaders.set("Content-Type", "application/json");
+        retryHeaders.set("Authorization", `Bearer ${data.accessToken}`);
+        response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers: retryHeaders });
+      }
+    }
+  }
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -286,8 +305,34 @@ export async function remindTask(taskId: string) {
   });
 }
 
-export async function listDocuments() {
-  return request<{ items: GeneratedDocument[]; total: number }>("/api/documents");
+export async function updateTaskStatus(taskId: string, status: string) {
+  return request<{ id: string; status: string }>(`/api/tasks/${taskId}`, {
+    method: "PUT",
+    body: JSON.stringify({ status })
+  });
+}
+
+export async function listDocuments(filters?: { businessEventId?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.businessEventId) params.set("businessEventId", filters.businessEventId);
+  const qs = params.toString();
+  return request<{ items: GeneratedDocument[]; total: number }>(`/api/documents${qs ? "?" + qs : ""}`);
+}
+
+export async function uploadDocumentFileRaw(documentId: string, file: File) {
+  const token = window.localStorage.getItem("finance-taxation-v2-token") ?? "";
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${API_BASE_URL}/api/documents/${documentId}/upload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: "上传失败" })) as { error?: string };
+    throw new Error(err.error ?? "上传失败");
+  }
+  return response.json() as Promise<DocumentDetail>;
 }
 
 export async function listTaxItems() {
@@ -1029,6 +1074,23 @@ export async function deleteKnowledgeItem(id: string) {
   return request<{ ok: boolean }>(`/api/knowledge/${id}`, { method: "DELETE" });
 }
 
+export interface ParsedKnowledgeItem {
+  fileName: string;
+  title: string;
+  category: "regulation" | "policy" | "faq" | "template";
+  content: string;
+  tags: string[];
+  error?: string;
+}
+
+export async function parseKnowledgeDocuments(files: File[]): Promise<{ items: ParsedKnowledgeItem[] }> {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append("files", file, file.name);
+  }
+  return requestMultipart<{ items: ParsedKnowledgeItem[] }>("/api/knowledge/parse-documents", formData);
+}
+
 // ── 账期管理 ──────────────────────────────────────────────────────────────────
 
 export interface AccountingPeriod {
@@ -1069,6 +1131,7 @@ export interface CompanyProfile {
   legalRepresentative?: string;
   bankName?: string;
   bankAccount?: string;
+  financeApproverRole?: string;
   updatedAt?: string;
 }
 

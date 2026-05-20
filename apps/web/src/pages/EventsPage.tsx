@@ -11,13 +11,25 @@ import {
   updateEvent,
   type EventDetail
 } from "../lib/api";
+import {
+  useI18n,
+  EVENT_TYPE_LABELS,
+  EVENT_STATUS_LABELS,
+  TASK_STATUS_LABELS,
+  TASK_PRIORITY_SHORT,
+  DOC_STATUS_LABELS,
+  DOC_TYPE_LABELS,
+  VOUCHER_STATUS_LABELS,
+  VOUCHER_TYPE_LABELS,
+  TAX_STATUS_LABELS
+} from "../lib/i18n";
 
-const EVENT_TYPES = [
+const EVENT_TYPE_KEYS = [
   "sales", "procurement", "expense", "payroll",
   "tax", "asset", "financing", "rnd", "general"
 ] as const;
 
-const STATUS_OPTIONS: BusinessEventStatus[] = [
+const STATUS_OPTION_KEYS: BusinessEventStatus[] = [
   "draft", "awaiting_documents", "awaiting_approval", "analyzed", "blocked"
 ];
 
@@ -32,14 +44,15 @@ function statusBadge(status: string) {
   return map[status] ?? "badge badge-gray";
 }
 
-function renderTaskTree(nodes: EventDetail["taskTree"]) {
+function RenderTaskTree({ nodes }: { nodes: EventDetail["taskTree"] }) {
+  const { t } = useI18n();
   if (!nodes.length) return <p className="text-muted text-sm">当前还没有任务。</p>;
   return (
     <ul style={{ paddingLeft: 20, lineHeight: 1.9, fontSize: 13.5 }}>
       {nodes.map((node) => (
         <li key={node.id}>
-          {node.title} · <span className="text-muted">{node.status}</span> · {node.priority}
-          {node.children.length ? renderTaskTree(node.children) : null}
+          {node.title} · <span className="text-muted">{t(TASK_STATUS_LABELS, node.status)}</span> · {t(TASK_PRIORITY_SHORT, node.priority)}
+          {node.children.length ? <RenderTaskTree nodes={node.children} /> : null}
         </li>
       ))}
     </ul>
@@ -64,6 +77,7 @@ export function EventsPage() {
     source: "manual"
   });
   const [statusDraft, setStatusDraft] = useState<BusinessEventStatus>("draft");
+  const { t } = useI18n();
 
   async function loadEvents() {
     setLoading("loading");
@@ -152,8 +166,8 @@ export function EventsPage() {
 
   const selectedSummary = useMemo(() => {
     if (!detail) return null;
-    return `${detail.type} · ${detail.department} · ${detail.amount || "—"} ${detail.currency}`;
-  }, [detail]);
+    return `${t(EVENT_TYPE_LABELS, detail.type)} · ${detail.department} · ${detail.amount || "—"} ${detail.currency}`;
+  }, [detail, t]);
 
   const isBusy = loading !== "done" && loading !== "idle";
 
@@ -182,7 +196,7 @@ export function EventsPage() {
                   value={form.type}
                   onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
                 >
-                  {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {EVENT_TYPE_KEYS.map((k) => <option key={k} value={k}>{t(EVENT_TYPE_LABELS, k)}</option>)}
                 </select>
               </div>
               <div className="form-group">
@@ -277,8 +291,8 @@ export function EventsPage() {
                   >
                     <div style={{ fontWeight: 600, fontSize: 13.5 }}>{evt.title}</div>
                     <div className="flex-row mt-4">
-                      <span className={statusBadge(evt.status)}>{evt.status}</span>
-                      <span className="text-muted text-sm">{evt.type} · {evt.department}</span>
+                      <span className={statusBadge(evt.status)}>{t(EVENT_STATUS_LABELS, evt.status)}</span>
+                      <span className="text-muted text-sm">{t(EVENT_TYPE_LABELS, evt.type)} · {evt.department}</span>
                     </div>
                   </button>
                 ))}
@@ -307,7 +321,7 @@ export function EventsPage() {
                 value={statusDraft}
                 onChange={(e) => setStatusDraft(e.target.value as BusinessEventStatus)}
               >
-                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                {STATUS_OPTION_KEYS.map((s) => <option key={s} value={s}>{t(EVENT_STATUS_LABELS, s)}</option>)}
               </select>
               <button
                 className="btn btn-outline btn-sm"
@@ -361,12 +375,12 @@ export function EventsPage() {
                       <tbody>
                         {detail.documentMappings.map((item) => (
                           <tr key={item.id}>
-                            <td>{item.documentType}</td>
+                            <td>{t(DOC_TYPE_LABELS, item.documentType)}</td>
                             <td>
                               <div>{item.title}</div>
                               {item.notes && <div className="text-muted text-sm mt-4">{item.notes}</div>}
                             </td>
-                            <td><span className={statusBadge(item.status)}>{item.status}</span></td>
+                            <td><span className={statusBadge(item.status)}>{t(DOC_STATUS_LABELS, item.status)}</span></td>
                             <td>{item.ownerDepartment}</td>
                           </tr>
                         ))}
@@ -389,7 +403,7 @@ export function EventsPage() {
                         {detail.generatedDocuments.map((item) => (
                           <tr key={item.id}>
                             <td>{item.title}</td>
-                            <td><span className={statusBadge(item.status)}>{item.status}</span></td>
+                            <td><span className={statusBadge(item.status)}>{t(DOC_STATUS_LABELS, item.status)}</span></td>
                             <td>{item.ownerDepartment}</td>
                           </tr>
                         ))}
@@ -419,7 +433,7 @@ export function EventsPage() {
                               <div>{item.treatment}</div>
                               {item.basis && <div className="text-muted text-sm mt-4">{item.basis}</div>}
                             </td>
-                            <td><span className={statusBadge(item.status)}>{item.status}</span></td>
+                            <td><span className={statusBadge(item.status)}>{t(TAX_STATUS_LABELS, item.status)}</span></td>
                             <td>{item.filingPeriod}</td>
                           </tr>
                         ))}
@@ -435,7 +449,7 @@ export function EventsPage() {
                   <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
                     任务树
                   </div>
-                  {renderTaskTree(detail.taskTree)}
+                  <RenderTaskTree nodes={detail.taskTree} />
                 </div>
 
                 {/* 凭证草稿 */}
@@ -449,8 +463,8 @@ export function EventsPage() {
                         <div key={v.id} style={{ border: "1px solid var(--c-border)", borderRadius: "var(--r-md)", padding: 12 }}>
                           <div className="flex-row" style={{ marginBottom: 8 }}>
                             <span style={{ fontWeight: 600, fontSize: 13.5 }}>{v.summary}</span>
-                            <span className={statusBadge(v.status)}>{v.status}</span>
-                            <span className="badge badge-gray">{v.voucherType}</span>
+                            <span className={statusBadge(v.status)}>{t(VOUCHER_STATUS_LABELS, v.status)}</span>
+                            <span className="badge badge-gray">{t(VOUCHER_TYPE_LABELS, v.voucherType)}</span>
                           </div>
                           <table className="data-table">
                             <thead>

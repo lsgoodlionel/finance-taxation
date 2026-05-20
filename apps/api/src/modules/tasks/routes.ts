@@ -7,6 +7,8 @@ import { buildTaskTree, hasCompanyWideAccess, listCompanyTasks } from "../events
 import { writeAudit } from "../../services/audit.js";
 import { isTaskOverdue } from "./overdue.js";
 
+const VALID_STATUSES = new Set(["not_started", "in_progress", "completed", "blocked", "cancelled"]);
+
 function scopeTasks(rows: Task[], req: ApiRequest) {
   const companyRows = rows.filter((row) => row.companyId === req.auth!.companyId);
   if (hasCompanyWideAccess(req.auth!.roleCodes)) {
@@ -66,4 +68,51 @@ export async function remindTask(req: ApiRequest, res: ServerResponse, taskId: s
     resourceLabel: task.title
   });
   return json(res, 200, { ok: true, taskId, remindedAt: new Date().toISOString() });
+}
+
+export async function updateTask(req: ApiRequest, res: ServerResponse, taskId: string) {
+  const companyId = req.auth!.companyId;
+  const body = (req.body ?? {}) as { status?: string; notes?: string };
+
+  if (body.status !== undefined && !VALID_STATUSES.has(body.status)) {
+    return json(res, 400, { error: `无效状态，可选值：${[...VALID_STATUSES].join(", ")}` });
+  }
+
+  const existing = await queryOne<{ id: string; title: string; status: string }>(
+    "select id, title, status from tasks where id = $1 and company_id = $2",
+    [taskId, companyId]
+  );
+  if (!existing) {
+    return json(res, 404, { error: "Task not found" });
+  }
+
+  const sets: string[] = ["updated_at = now()"];
+  const params: unknown[] = [];
+  let idx = 1;
+
+  if (body.status !== undefined) {
+    sets.push(`status = $${idx++}`);
+    params.push(body.status);
+  }
+
+  params.push(taskId, companyId);
+
+  const updated = await queryOne<{ id: string; title: string; status: string; updated_at: string }>(
+    `update tasks set ${sets.join(", ")} where id = $${idx++} and company_id = $${idx++}
+     returning id, title, status, updated_at::text`,
+    params
+  );
+
+  writeAudit({
+    companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: "update",
+    resourceType: "task",
+    resourceId: taskId,
+    resourceLabel: existing.title,
+    changes: { status: { from: existing.status, to: body.status } }
+  });
+
+  return json(res, 200, updated);
 }

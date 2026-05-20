@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useI18n, type Lang } from "../lib/i18n";
 import {
   getCompanyProfile,
   updateCompanyProfile,
@@ -9,7 +10,7 @@ import {
 } from "../lib/api";
 import type { CompanyProfile, AiConfigResponse, AiProviderInfo } from "../lib/api";
 
-type Tab = "company" | "ai" | "about";
+type Tab = "company" | "ai" | "display" | "about";
 
 // ─── Shared layout helpers ────────────────────────────────────────────────────
 
@@ -426,7 +427,8 @@ function CompanyTab() {
         creditCode: editProfile.creditCode,
         legalRepresentative: editProfile.legalRepresentative,
         bankName: editProfile.bankName,
-        bankAccount: editProfile.bankAccount
+        bankAccount: editProfile.bankAccount,
+        financeApproverRole: editProfile.financeApproverRole
       });
       setProfile(updated);
       setEditProfile(updated);
@@ -485,6 +487,25 @@ function CompanyTab() {
         <input value={editProfile.bankAccount ?? ""} onChange={(e) => updateField("bankAccount", e.target.value)} placeholder="基本户账号" style={inputStyle()} />
       </FieldRow>
 
+      <div style={{ height: "20px" }} />
+      <SectionHeader>财务管理</SectionHeader>
+      <FieldRow label="财务负责人角色">
+        <div>
+          <select
+            value={editProfile.financeApproverRole ?? "role-chairman"}
+            onChange={(e) => updateField("financeApproverRole", e.target.value)}
+            style={{ ...inputStyle(), cursor: "pointer" }}
+          >
+            <option value="role-chairman">创始人/董事长</option>
+            <option value="role-finance-director">财务总监</option>
+            <option value="role-accountant">会计</option>
+          </select>
+          <p style={{ margin: "6px 0 0", fontSize: "12px", color: "#9aa5b4" }}>
+            该角色负责审核并最终确认凭证过账。默认为创始人/董事长。
+          </p>
+        </div>
+      </FieldRow>
+
       <div style={{ marginTop: "24px", display: "flex", alignItems: "center", gap: "16px" }}>
         <button onClick={() => void saveProfile()} disabled={saving} className="btn btn-primary">
           {saving ? "保存中…" : "保存公司信息"}
@@ -495,6 +516,87 @@ function CompanyTab() {
           </span>
         )}
       </div>
+    </article>
+  );
+}
+
+// ─── Display Tab ──────────────────────────────────────────────────────────────
+
+function DisplayTab() {
+  const { lang, setLang } = useI18n();
+  const [pendingLang, setPendingLang] = useState<Lang>(lang);
+  const [saved, setSaved] = useState(false);
+
+  function handleSave() {
+    setLang(pendingLang);
+    localStorage.setItem("ft-lang", pendingLang);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  const options: { value: Lang; label: string; description: string }[] = [
+    { value: "zh", label: "简体中文", description: "所有状态、类型等枚举值以中文显示（默认）" },
+    { value: "en", label: "English", description: "All enum values displayed in English" }
+  ];
+
+  return (
+    <article style={panelStyle()}>
+      <h3 style={{ marginTop: 0, marginBottom: "24px" }}>显示设置</h3>
+
+      <SectionHeader>界面语言</SectionHeader>
+      <FieldRow label="页面语言">
+        <div style={{ display: "grid", gap: "10px" }}>
+          {options.map((opt) => (
+            <label
+              key={opt.value}
+              style={{
+                display: "flex", alignItems: "center", gap: "12px",
+                cursor: "pointer", padding: "12px 16px",
+                border: `2px solid ${pendingLang === opt.value ? "rgba(79,142,247,0.6)" : "rgba(20,40,60,0.1)"}`,
+                borderRadius: "10px",
+                background: pendingLang === opt.value ? "rgba(79,142,247,0.06)" : "transparent"
+              }}
+            >
+              <input
+                type="radio"
+                name="lang"
+                value={opt.value}
+                checked={pendingLang === opt.value}
+                onChange={() => setPendingLang(opt.value)}
+                style={{ accentColor: "#4f8ef7" }}
+              />
+              <div>
+                <div style={{ fontWeight: 600, fontSize: "14px" }}>{opt.label}</div>
+                <div style={{ fontSize: "12px", color: "#9aa5b4", marginTop: "2px" }}>{opt.description}</div>
+              </div>
+            </label>
+          ))}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "8px" }}>
+            <button
+              onClick={handleSave}
+              disabled={saved}
+              style={{
+                padding: "8px 20px",
+                borderRadius: "8px",
+                border: "none",
+                cursor: saved ? "default" : "pointer",
+                background: saved ? "#1a7f5a" : "#1e2a37",
+                color: "#fff",
+                fontWeight: 600,
+                fontSize: "13px"
+              }}
+            >
+              {saved ? "已保存 ✓" : "保存显示设置"}
+            </button>
+            {pendingLang !== lang && !saved && (
+              <span style={{ fontSize: "12px", color: "#d97706" }}>尚未保存</span>
+            )}
+          </div>
+          <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#9aa5b4" }}>
+            保存后即时生效，刷新页面后保持设置。
+          </p>
+        </div>
+      </FieldRow>
     </article>
   );
 }
@@ -549,11 +651,13 @@ export function SettingsPage() {
       }}>
         {tabBtn(tab === "company", () => setTab("company"), "公司信息")}
         {tabBtn(tab === "ai", () => setTab("ai"), "AI 配置")}
+        {tabBtn(tab === "display", () => setTab("display"), "显示设置")}
         {tabBtn(tab === "about", () => setTab("about"), "关于系统")}
       </div>
 
       {tab === "company" && <CompanyTab />}
       {tab === "ai" && <AiConfigTab />}
+      {tab === "display" && <DisplayTab />}
       {tab === "about" && <AboutTab />}
     </div>
   );

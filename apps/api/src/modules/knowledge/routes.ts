@@ -1,8 +1,18 @@
+import { createRequire } from "node:module";
+import { readFile } from "node:fs/promises";
 import type { ServerResponse } from "node:http";
 import { query } from "../../db/client.js";
 import { writeAudit } from "../../services/audit.js";
+import { extractKnowledgeFromDocument } from "../../services/ai.js";
+import { parseMultipart } from "../../utils/multipart.js";
 import { json } from "../../utils/http.js";
 import type { ApiRequest } from "../../types.js";
+
+const _require = createRequire(import.meta.url);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mammoth = _require("mammoth") as {
+  extractRawText: (opts: { buffer: Buffer }) => Promise<{ value: string }>;
+};
 
 function mapRow(row: Record<string, unknown>) {
   return {
@@ -240,4 +250,85 @@ function categoryLabel(cat: string): string {
     template: "模板"
   };
   return map[cat] ?? cat;
+}
+
+export async function parseKnowledgeDocuments(req: ApiRequest, res: ServerResponse): Promise<void> {
+  if (!req.auth) { json(res, 401, { error: "Unauthorized" }); return; }
+
+  let files: Awaited<ReturnType<typeof parseMultipart>>;
+  try {
+    files = await parseMultipart(req as Parameters<typeof parseMultipart>[0]);
+  } catch {
+    json(res, 400, { error: "文件解析失败" });
+    return;
+  }
+
+  if (files.length === 0) {
+    json(res, 400, { error: "请上传至少一个文件" });
+    return;
+  }
+
+  const ALLOWED_TYPES = [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+    "application/octet-stream"
+  ];
+
+  const results: Array<{
+    fileName: string;
+    title: string;
+    category: string;
+    content: string;
+    tags: string[];
+    error?: string;
+  }> = [];
+
+  for (const file of files) {
+    const lowerName = file.fileName.toLowerCase();
+    const isPdf = file.mimeType === "application/pdf" || lowerName.endsWith(".pdf");
+    const isDocx = lowerName.endsWith(".docx") || lowerName.endsWith(".doc")
+      || file.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      || file.mimeType === "application/msword";
+
+    if (!isPdf && !isDocx && !ALLOWED_TYPES.includes(file.mimeType)) {
+      results.push({ fileName: file.fileName, title: "", category: "policy", content: "", tags: [], error: "不支持的文件类型，仅支持 PDF 和 Word 文档" });
+      continue;
+    }
+
+    try {
+      const buf = await readFile(file.savedPath);
+
+      let extractResult;
+      if (isPdf) {
+        extractResult = await extractKnowledgeFromDocument(
+          { type: "pdf", base64: buf.toString("base64") },
+          req.auth.companyId
+        );
+      } else {
+        const { value: text } = await mammoth.extractRawText({ buffer: buf });
+        if (!text.trim()) {
+          results.push({ fileName: file.fileName, title: file.fileName.replace(/\.[^.]+$/, ""), category: "policy", content: "", tags: [], error: "文件内容为空或无法提取文字" });
+          continue;
+        }
+        extractResult = await extractKnowledgeFromDocument(
+          { type: "text", text },
+          req.auth.companyId
+        );
+      }
+
+      results.push({ fileName: file.fileName, ...extractResult });
+    } catch (err) {
+      results.push({
+        fileName: file.fileName,
+        title: file.fileName.replace(/\.[^.]+$/, ""),
+        category: "policy",
+        content: "",
+        tags: [],
+        error: err instanceof Error ? err.message : "解析失败"
+      });
+    }
+  }
+
+  json(res, 200, { items: results });
 }

@@ -6,6 +6,7 @@ import {
   getContractDetail,
   listContracts
 } from "../lib/api";
+import { useI18n, EVENT_STATUS_LABELS } from "../lib/i18n";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   sales: "销售合同",
@@ -55,6 +56,7 @@ interface ContractDetailView {
 }
 
 export function ContractsPage() {
+  const { t } = useI18n();
   const [contracts, setContracts] = useState<ContractWithEventCount[]>([]);
   const [detail, setDetail] = useState<ContractDetailView | null>(null);
   const [filterType, setFilterType] = useState("");
@@ -354,7 +356,7 @@ export function ContractsPage() {
                   {detail.relatedEvents.map((e) => (
                     <tr key={e.id}>
                       <td style={cellStyle()}>{e.title}</td>
-                      <td style={cellStyle()}>{e.status}</td>
+                      <td style={cellStyle()}>{t(EVENT_STATUS_LABELS, e.status)}</td>
                       <td style={cellStyle()}>{e.createdAt ? new Date(e.createdAt).toLocaleDateString("zh-CN") : "—"}</td>
                     </tr>
                   ))}

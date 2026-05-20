@@ -59,7 +59,7 @@ import {
   listRiskFindings,
   runEventRiskCheck
 } from "./modules/risk/routes.js";
-import { handleTasksMeta, listTasks, remindTask } from "./modules/tasks/routes.js";
+import { handleTasksMeta, listTasks, remindTask, updateTask } from "./modules/tasks/routes.js";
 import {
   createTaxFilingBatch,
   getCorporateIncomeTaxPreparation,
@@ -110,7 +110,7 @@ import {
   updateEmployee,
   updatePayrollPolicy
 } from "./modules/payroll/routes.js";
-import { chat as assistantChat } from "./modules/assistant/routes.js";
+import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
   payrollPdf,
   payrollSlipPdf,
@@ -123,6 +123,7 @@ import {
   createKnowledgeItem,
   deleteKnowledgeItem,
   listKnowledgeItems,
+  parseKnowledgeDocuments,
   updateKnowledgeItem
 } from "./modules/knowledge/routes.js";
 import { getRndTrend } from "./modules/rnd/routes.js";
@@ -278,6 +279,16 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "POST") {
       if (!(await requirePermission("tasks.view", req, res))) return;
       return remindTask(req, res, taskRemindId);
+    }
+  }
+
+  const taskIdMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)$/);
+  const taskId = taskIdMatch?.[1];
+  if (taskId) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "PUT") {
+      if (!(await requirePermission("tasks.view", req, res))) return;
+      return updateTask(req, res, taskId);
     }
   }
 
@@ -927,6 +938,22 @@ async function router(req: ApiRequest, res: ServerResponse) {
     }
   }
 
+  if (url.pathname === "/api/assistant/ocr") {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization"
+      });
+      res.end();
+      return;
+    }
+    if (req.method === "POST") {
+      if (!(await requireAuth(req, res))) return;
+      return assistantOcr(req, res);
+    }
+  }
+
   if (req.method === "GET" && url.pathname === "/api/audit/logs") {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("audit.view", req, res))) return;
@@ -951,6 +978,14 @@ async function router(req: ApiRequest, res: ServerResponse) {
   }
 
   // ── Knowledge Base ──
+  if (url.pathname === "/api/knowledge/parse-documents") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") {
+      if (!(await requirePermission("knowledge.manage", req, res))) return;
+      return parseKnowledgeDocuments(req, res);
+    }
+  }
+
   if (url.pathname === "/api/knowledge") {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "GET") {

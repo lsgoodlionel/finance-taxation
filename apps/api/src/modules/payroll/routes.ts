@@ -457,12 +457,13 @@ export async function confirmPayroll(req: ApiRequest, res: ServerResponse, payro
 
 export async function getPayrollPeriods(req: ApiRequest, res: ServerResponse) {
   const companyId = req.auth!.companyId;
-  const rows = await query<{ period: string; headcount: string; total_gross: string; status_mix: string }>(
+  const rows = await query<{ period: string; headcount: string; total_gross: string; total_net: string; status_mix: string }>(
     `
       select
         period,
         count(*)::int as headcount,
         sum(gross_salary) as total_gross,
+        sum(net_pay) as total_net,
         case
           when bool_and(status = 'confirmed') then 'confirmed'
           when bool_or(status = 'confirmed') then 'mixed'
@@ -475,12 +476,12 @@ export async function getPayrollPeriods(req: ApiRequest, res: ServerResponse) {
     `,
     [companyId]
   );
-  return json(res, 200, {
-    periods: rows.map((r) => ({
-      period: r.period,
-      headcount: Number(r.headcount),
-      totalGross: Number(r.total_gross),
-      status: r.status_mix
-    }))
-  });
+  const items = rows.map((r) => ({
+    period: r.period,
+    headcount: Number(r.headcount),
+    totalGross: Number(r.total_gross),
+    totalNetPay: Number(r.total_net),
+    status: r.status_mix
+  }));
+  return json(res, 200, { items, total: items.length });
 }

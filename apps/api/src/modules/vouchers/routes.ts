@@ -167,7 +167,9 @@ export async function listCompanyVouchers(
         source, approved_at, posted_at, created_at, updated_at
       from vouchers
       ${where}
-      order by created_at desc
+      order by
+        CASE status WHEN 'draft' THEN 1 WHEN 'validated' THEN 2 WHEN 'approved' THEN 3 WHEN 'posted' THEN 4 ELSE 5 END,
+        created_at desc
     `,
     params
   );

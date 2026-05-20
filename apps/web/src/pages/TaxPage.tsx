@@ -1,4 +1,42 @@
 import { useEffect, useState } from "react";
+import { useI18n, TAX_STATUS_LABELS, TAX_BATCH_STATUS_LABELS, REVIEW_RESULT_LABELS } from "../lib/i18n";
+
+function TaxHelpModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "#fff", borderRadius: "16px", padding: "28px 32px", maxWidth: "560px", width: "92%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)", maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>财税中心 · 业务操作说明</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "#9aa5b4" }}>✕</button>
+        </div>
+        <div style={{ display: "grid", gap: "14px", fontSize: "13.5px", lineHeight: 1.75 }}>
+          <div style={{ background: "rgba(37,99,235,0.06)", borderRadius: "10px", padding: "14px 16px", border: "1px solid rgba(37,99,235,0.18)" }}>
+            <strong>核心概念</strong><br />
+            财税中心统一管理公司各类税种的申报工作。系统根据经营事项自动生成<strong>税务事项</strong>，再将同期同税种事项归集为<strong>申报批次</strong>，最终通过批次完成<strong>校验 → 复核 → 申报 → 留档</strong>的完整申报流程。
+          </div>
+          <div><strong>操作流程</strong>
+            <ol style={{ margin: "6px 0 0 18px", padding: 0 }}>
+              <li><strong>配置纳税人档案</strong>：设置税种、申报周期、税率等基本参数（右侧"纳税人档案"栏）</li>
+              <li><strong>查看税务事项</strong>：由 AI 分析经营事项后自动生成，含税种、申报期、处理建议</li>
+              <li><strong>组建申报批次</strong>：按税种和申报期将相关税务事项合并成批次，统一管理</li>
+              <li><strong>校验批次</strong>：系统自动核查批次内数据的完整性和合规性</li>
+              <li><strong>复核批次</strong>：由财务负责人审核批次内容并记录复核结论</li>
+              <li><strong>提交申报</strong>：标记申报完成，状态更新为「已申报」</li>
+              <li><strong>留档归档</strong>：将申报批次及相关凭证永久留档，完成闭环</li>
+            </ol>
+          </div>
+          <div><strong>税务事项状态</strong>
+            {[["待处理", "事项已生成，尚未处理"], ["需关注", "存在潜在风险，需人工复核"], ["已申报", "已完成本期申报"], ["已逾期", "申报期已过但未完成申报"], ["免申报", "本期免于申报（如小规模纳税人等）"]].map(([s, d]) => (
+              <div key={s} style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                <span style={{ fontWeight: 600, minWidth: "50px" }}>{s}</span><span style={{ color: "#4d5d6c" }}>{d}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 import type {
   CorporateIncomeTaxPreparation,
   IndividualIncomeTaxMaterial,
@@ -48,6 +86,7 @@ function cellStyle() {
 }
 
 export function TaxPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<TaxItem[]>([]);
   const [batches, setBatches] = useState<TaxFilingBatch[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
@@ -83,6 +122,7 @@ export function TaxPage() {
     notes: ""
   });
   const [message, setMessage] = useState("正在准备税务数据。");
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     async function bootstrap() {
@@ -122,9 +162,13 @@ export function TaxPage() {
 
   return (
     <section style={{ display: "grid", gap: "20px" }}>
+      {showHelp && <TaxHelpModal onClose={() => setShowHelp(false)} />}
       <article style={panelStyle()}>
-        <h2 style={{ marginTop: 0 }}>税务中心占位页</h2>
-        <p style={{ lineHeight: 1.8 }}>{message}</p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+          <h2 style={{ margin: 0 }}>税务中心</h2>
+          <button onClick={() => setShowHelp(true)} title="业务说明" style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid rgba(79,142,247,0.6)", background: "rgba(79,142,247,0.08)", color: "#4f8ef7", fontWeight: 700, fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>?</button>
+        </div>
+        <p style={{ margin: "0 0 12px", lineHeight: 1.8 }}>{message}</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "10px" }}>
           <select
             value={profileForm.taxpayerType}
@@ -237,7 +281,7 @@ export function TaxPage() {
                 <td style={cellStyle()}>{item.id}</td>
                 <td style={cellStyle()}>{item.taxType}</td>
                 <td style={cellStyle()}>{item.filingPeriod}</td>
-                <td style={cellStyle()}>{item.status}</td>
+                <td style={cellStyle()}>{t(TAX_STATUS_LABELS, item.status)}</td>
                 <td style={cellStyle()}>{item.treatment}</td>
               </tr>
             ))}
@@ -272,7 +316,7 @@ export function TaxPage() {
                 >
                   <td style={cellStyle()}>{item.id}</td>
                   <td style={cellStyle()}>{item.taxType}</td>
-                  <td style={cellStyle()}>{item.status}</td>
+                  <td style={cellStyle()}>{t(TAX_BATCH_STATUS_LABELS, item.status)}</td>
                   <td style={cellStyle()}>{item.itemIds.length}</td>
                 </tr>
               ))}
@@ -285,7 +329,7 @@ export function TaxPage() {
             <>
               <p>税种：{selectedBatchDetail.taxType}</p>
               <p>申报期：{selectedBatchDetail.filingPeriod}</p>
-              <p>状态：{selectedBatchDetail.status}</p>
+              <p>状态：{t(TAX_BATCH_STATUS_LABELS, selectedBatchDetail.status)}</p>
               <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
                 <button
                   onClick={() =>
@@ -352,8 +396,8 @@ export function TaxPage() {
                       }))
                     }
                   >
-                    <option value="approved">approved</option>
-                    <option value="rejected">rejected</option>
+                    <option value="approved">审核通过</option>
+                    <option value="rejected">审核驳回</option>
                   </select>
                   <input
                     value={reviewForm.reviewNotes}
@@ -390,7 +434,7 @@ export function TaxPage() {
               <ul style={{ paddingLeft: "22px", lineHeight: 1.8 }}>
                 {selectedBatchDetail.items.map((item) => (
                   <li key={item.id}>
-                    {item.taxType} | {item.filingPeriod} | {item.status} | {item.treatment}
+                    {item.taxType} | {item.filingPeriod} | {t(TAX_STATUS_LABELS, item.status)} | {item.treatment}
                   </li>
                 ))}
               </ul>
@@ -399,7 +443,7 @@ export function TaxPage() {
                 <ul style={{ paddingLeft: "22px", lineHeight: 1.8 }}>
                   {selectedBatchDetail.reviews.map((item) => (
                     <li key={item.id}>
-                      {item.reviewedAt.slice(0, 10)} | {item.reviewedByName} | {item.reviewResult} | {item.reviewNotes}
+                      {item.reviewedAt.slice(0, 10)} | {item.reviewedByName} | {t(REVIEW_RESULT_LABELS, item.reviewResult)} | {item.reviewNotes}
                     </li>
                   ))}
                 </ul>

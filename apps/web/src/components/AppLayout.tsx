@@ -51,8 +51,7 @@ const navGroups = [
   {
     label: "AI 与工具",
     items: [
-      { to: "/assistant", label: "AI 财税秘书", icon: "✦" },
-      { to: "/boss-qa", label: "老板专线", icon: "◈" },
+      { to: "/assistant", label: "AI 财税助手", icon: "✦" },
       { to: "/knowledge", label: "制度库", icon: "⊞" },
       { to: "/pdf-export", label: "PDF 导出", icon: "↓" }
     ]

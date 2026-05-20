@@ -1,4 +1,5 @@
 import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
+import { LanguageProvider } from "./lib/i18n";
 import { AppLayout } from "./components/AppLayout";
 import { ChairmanDashboardPage } from "./pages/ChairmanDashboardPage";
 import { AssistantPage } from "./pages/AssistantPage";
@@ -41,12 +42,16 @@ const router = createBrowserRouter([
       { path: "pdf-export", element: <PdfExportPage /> },
       { path: "audit", element: <AuditPage /> },
       { path: "knowledge", element: <KnowledgePage /> },
-      { path: "boss-qa", element: <BossQAPage /> },
+      { path: "boss-qa", element: <Navigate to="/assistant" replace /> },
       { path: "settings", element: <SettingsPage /> }
     ]
   }
 ]);
 
 export function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <LanguageProvider>
+      <RouterProvider router={router} />
+    </LanguageProvider>
+  );
 }

@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { createEvent } from "../lib/api";
+import { createEvent, analyzeEvent, getCurrentUser, getCompanyProfile, listDocuments, uploadDocumentFileRaw, refreshSession } from "../lib/api";
 import { useChatSessions } from "../lib/useChatSessions";
 import type { SessionMessage } from "../lib/useChatSessions";
+import { EVENT_TYPE_LABELS as EVENT_TYPE_LABELS_I18N } from "../lib/i18n";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
 const STORAGE_KEY = "ft-assistant-history";
+const BOSS_ROLES = new Set(["role-chairman", "role-finance-director"]);
+
+const ROLE_LABELS: Record<string, string> = {
+  "role-chairman": "创始人/董事长",
+  "role-finance-director": "财务负责人",
+  "role-accountant": "会计",
+  "role-viewer": "查看者"
+};
 
 interface SuggestedEvent {
   type: string;
@@ -16,13 +25,18 @@ interface SuggestedEvent {
   description: string;
 }
 
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  sales: "销售", procurement: "采购", expense: "费用",
-  payroll: "工资", tax: "税务", asset: "资产",
-  financing: "融资", rnd: "研发", general: "其他"
-};
+interface OcrPreview {
+  base64: string;
+  mimeType: string;
+  previewUrl: string;
+  recognizedText: string;
+  isPdf: boolean;
+  originalFile: File;
+}
 
-const QUICK_PROMPTS = [
+const EVENT_TYPE_LABELS = EVENT_TYPE_LABELS_I18N;
+
+const STAFF_QUICK_PROMPTS = [
   "本月工资已发放，请帮我整理工资相关的财税事项",
   "我们刚签了一笔采购合同，金额50万，请问需要做哪些财税处理？",
   "帮我看一下公司当前的税务风险",
@@ -30,14 +44,25 @@ const QUICK_PROMPTS = [
   "研发费用如何加计扣除？"
 ];
 
-function parseSuggestedEvent(text: string): SuggestedEvent | null {
-  const match = text.match(/```action\s*([\s\S]*?)```/);
-  if (!match) return null;
-  try {
-    return JSON.parse(match[1]!.trim()) as SuggestedEvent;
-  } catch {
-    return null;
+const BOSS_QUICK_PROMPTS = [
+  "本月资金状况如何？现金够用吗？",
+  "我们最大的财务风险是什么？",
+  "本月利润估算，与上月比如何？",
+  "目前有哪些税要缴？金额多少？",
+  "应收账款有多少？有逾期风险吗？"
+];
+
+function parseSuggestedEvents(text: string): SuggestedEvent[] {
+  const blocks = [...text.matchAll(/```action\s*([\s\S]*?)```/g)];
+  const results: SuggestedEvent[] = [];
+  for (const block of blocks) {
+    try {
+      results.push(JSON.parse(block[1]!.trim()) as SuggestedEvent);
+    } catch {
+      // skip malformed blocks
+    }
   }
+  return results;
 }
 
 function stripActionBlock(text: string): string {
@@ -47,6 +72,7 @@ function stripActionBlock(text: string): string {
 function formatMessage(text: string): string {
   return text
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#4f8ef7;text-decoration:underline;">$1</a>')
     .replace(/\n/g, "<br/>");
 }
 
@@ -69,9 +95,7 @@ function groupByDate(sessions: { id: string; title: string; updatedAt: string; m
     map.get(label)!.push(s);
   }
 
-  for (const [label, items] of map) {
-    groups.push({ label, items });
-  }
+  for (const [label, items] of map) groups.push({ label, items });
   return groups;
 }
 
@@ -81,59 +105,109 @@ export function AssistantPage() {
 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+
+  // Role / view mode
+  const [isBoss, setIsBoss] = useState(false);
+  const [companyId, setCompanyId] = useState("");
+  const [viewMode, setViewMode] = useState<"boss" | "staff">("staff");
+  const [approverRoleLabel, setApproverRoleLabel] = useState("创始人/董事长");
+
   const [status, setStatus] = useState(
-    messages.length > 0 ? "已恢复历史对话，可继续提问。" : "财税秘书已就绪，请输入您的问题或经营事项描述。"
+    messages.length > 0 ? "已恢复历史对话，可继续提问。" : "AI 助手已就绪，请输入您的问题。"
   );
-  const [suggestedEvent, setSuggestedEvent] = useState<SuggestedEvent | null>(null);
+  const [suggestedEvents, setSuggestedEvents] = useState<SuggestedEvent[]>([]);
   const [creating, setCreating] = useState(false);
+  const [ocrPreview, setOcrPreview] = useState<OcrPreview | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    getCurrentUser()
+      .then((user) => {
+        const boss = user.roleIds.some((r) => BOSS_ROLES.has(r));
+        setIsBoss(boss);
+        setCompanyId(user.companyId);
+        const savedMode = localStorage.getItem(`ft-view-mode-${user.companyId}`) as "boss" | "staff" | null;
+        setViewMode(boss ? (savedMode ?? "boss") : "staff");
+      })
+      .catch(() => {});
+
+    getCompanyProfile()
+      .then((p) => {
+        if (p.financeApproverRole) {
+          setApproverRoleLabel(ROLE_LABELS[p.financeApproverRole] ?? p.financeApproverRole);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-save on unmount if there are unsaved messages
   useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-    };
+    return () => { abortRef.current?.abort(); };
   }, []);
 
-  async function sendMessage(userText: string) {
+  function toggleViewMode() {
+    const next = viewMode === "boss" ? "staff" : "boss";
+    setViewMode(next);
+    if (companyId) localStorage.setItem(`ft-view-mode-${companyId}`, next);
+    setSuggestedEvents([]);
+    setStatus(next === "boss" ? "已切换为决策视角" : "已切换为操作视角");
+  }
+
+  const isOpMode = viewMode === "staff";
+
+  async function sendMessage(userText: string, modeOverride?: "boss" | "staff") {
     if (!userText.trim() || sending) return;
     setSending(true);
-    setSuggestedEvent(null);
+    setSuggestedEvents([]);
     setShowHistory(false);
+    setOcrPreview(null);
 
     const userMsg: SessionMessage = { role: "user", content: userText };
     const nextMessages = [...messages, userMsg];
-    const loadingMessages = [...nextMessages, { role: "assistant" as const, content: "", loading: true }];
-
-    setMessages(loadingMessages as SessionMessage[]);
+    setMessages([...nextMessages, { role: "assistant" as const, content: "", loading: true }] as SessionMessage[]);
     setInput("");
-    setStatus("财税秘书正在思考...");
+    setStatus("AI 助手正在思考...");
 
     const token = window.localStorage.getItem(TOKEN_KEY) ?? "";
     let accumulated = "";
-
     const controller = new AbortController();
     abortRef.current = controller;
+    const effectiveMode = modeOverride ?? viewMode;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/assistant/chat`, {
+      const chatBody = JSON.stringify({
+        messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
+        mode: effectiveMode
+      });
+      let chatToken = window.localStorage.getItem(TOKEN_KEY) ?? "";
+      let response = await fetch(`${API_BASE_URL}/api/assistant/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          messages: nextMessages.map((m) => ({ role: m.role, content: m.content }))
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${chatToken}` },
+        body: chatBody,
         signal: controller.signal
       });
+
+      if (response.status === 401) {
+        try {
+          await refreshSession();
+          chatToken = window.localStorage.getItem(TOKEN_KEY) ?? "";
+          response = await fetch(`${API_BASE_URL}/api/assistant/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${chatToken}` },
+            body: chatBody,
+            signal: controller.signal
+          });
+        } catch { /* refresh failed, fall through to error handling */ }
+      }
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({ error: "请求失败" })) as { error?: string };
@@ -177,7 +251,7 @@ export function AssistantPage() {
         }
       }
 
-      const suggested = parseSuggestedEvent(accumulated);
+      const suggestedList = parseSuggestedEvents(accumulated);
       const cleanContent = stripActionBlock(accumulated);
 
       setMessages((prev) => {
@@ -187,8 +261,8 @@ export function AssistantPage() {
         return updated;
       });
 
-      if (suggested) setSuggestedEvent(suggested);
-      setStatus("财税秘书已就绪，请继续提问。");
+      if (suggestedList.length > 0 && isOpMode) setSuggestedEvents(suggestedList);
+      setStatus("AI 助手已就绪，请继续提问。");
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
       const errMsg = err instanceof Error ? err.message : "发送失败";
@@ -206,26 +280,160 @@ export function AssistantPage() {
   }
 
   async function handleCreateEvent() {
-    if (!suggestedEvent) return;
+    if (suggestedEvents.length === 0) return;
     setCreating(true);
+    const captured = [...suggestedEvents];
+    const capturedOcrPreview = ocrPreview;
+    const isMulti = captured.length > 1;
     try {
-      await createEvent({
-        type: suggestedEvent.type as Parameters<typeof createEvent>[0]["type"],
-        title: suggestedEvent.title,
-        description: suggestedEvent.description,
-        department: "财务部",
-        occurredOn: suggestedEvent.occurredOn ?? new Date().toISOString().slice(0, 10),
-        amount: suggestedEvent.amount !== null ? String(suggestedEvent.amount) : null,
-        currency: suggestedEvent.currency || "CNY",
-        source: "ai"
+      const results: { id: string; title: string; amount: number | null; occurredOn: string | null }[] = [];
+      for (const ev of captured) {
+        const created = await createEvent({
+          type: ev.type as Parameters<typeof createEvent>[0]["type"],
+          title: ev.title,
+          description: ev.description,
+          department: "财务部",
+          occurredOn: ev.occurredOn ?? new Date().toISOString().slice(0, 10),
+          amount: ev.amount !== null ? String(ev.amount) : null,
+          currency: ev.currency || "CNY",
+          source: "ai"
+        });
+        results.push({ id: created.id, title: ev.title, amount: ev.amount, occurredOn: ev.occurredOn });
+      }
+      setSuggestedEvents([]);
+
+      // Auto-analyze all created events
+      let totalTasks = 0;
+      for (const r of results) {
+        try {
+          const analyzed = await analyzeEvent(r.id);
+          totalTasks += analyzed.generatedTasks;
+        } catch {
+          // analyze failure is non-critical
+        }
+      }
+
+      // Auto-attach OCR file to all generated documents
+      let attachedCount = 0;
+      if (capturedOcrPreview?.originalFile) {
+        for (const r of results) {
+          try {
+            const docs = await listDocuments({ businessEventId: r.id });
+            for (const doc of docs.items) {
+              await uploadDocumentFileRaw(doc.id, capturedOcrPreview.originalFile);
+              attachedCount++;
+            }
+          } catch {
+            // attachment is best-effort
+          }
+        }
+        if (capturedOcrPreview.previewUrl) URL.revokeObjectURL(capturedOcrPreview.previewUrl);
+        setOcrPreview(null);
+      }
+
+      const firstType = EVENT_TYPE_LABELS[captured[0]!.type] ?? captured[0]!.type;
+      const summaryLines = results.map((r, i) =>
+        `  ${i + 1}. ${r.title}${r.amount != null ? ` ¥${r.amount}` : ""}${r.occurredOn ? ` (${r.occurredOn})` : ""}`
+      );
+
+      const attachNote = attachedCount > 0
+        ? `**第3步 ✅** 已自动将上传文件作为原始凭证挂载到 **${attachedCount}** 份单据`
+        : `**第3步 📎** 原始凭证建议上传：银行电子发票/纸质发票/银行对账单/交易流水（证明扣款事实）`;
+
+      const confirmMsg = [
+        `✅ **全流程处理已启动**`,
+        ``,
+        isMulti
+          ? `**第1步 ✅** 已批量创建 **${results.length}** 条[${firstType}]经营事项（按月分拆）：\n${summaryLines.join("\n")}`
+          : `**第1步 ✅** 经营事项已创建：[${firstType}] ${results[0]!.title}`,
+        `**第2步 ✅** 自动分析完成：共生成 **${totalTasks}** 个执行任务 + ${results.length} 张凭证草稿`,
+        attachNote,
+        `**第4步 ⏳** 等待${approverRoleLabel}审核确认凭证`,
+        ``,
+        `**操作导航：**`,
+        `• [查看经营事项](/events)`,
+        `• [查看待处理任务](/tasks)`,
+        `• [审核并过账凭证](/vouchers)`,
+        `• [查看单据及附件](/documents)`,
+        ``,
+        `> 凭证草稿已就绪，请${approverRoleLabel}前往「凭证中心」逐一确认过账。`
+      ].join("\n");
+
+      setMessages((prev) => {
+        const updated = [...prev, { role: "assistant" as const, content: confirmMsg }];
+        persistMessages(updated);
+        return updated;
       });
-      setSuggestedEvent(null);
-      setStatus(`已创建经营事项：${suggestedEvent.title}`);
+      setStatus(isMulti ? `已批量创建 ${results.length} 条经营事项` : `已创建并自动分析：${captured[0]!.title}`);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "创建失败");
     } finally {
       setCreating(false);
     }
+  }
+
+  async function handleImageFile(file: File) {
+    const isPdf = file.type === "application/pdf";
+    if (file.size > 20 * 1024 * 1024) {
+      setStatus(`文件过大（最大 20MB）`);
+      return;
+    }
+    setOcrLoading(true);
+    setStatus(`正在识别${isPdf ? "PDF" : "图片"}中的凭证信息...`);
+
+    const objectUrl = isPdf ? "" : URL.createObjectURL(file);
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async () => {
+      try {
+        const dataUrl = reader.result as string;
+        const commaIdx = dataUrl.indexOf(",");
+        const base64 = dataUrl.slice(commaIdx + 1);
+        const mimeType = isPdf ? "application/pdf" : (dataUrl.slice(5, commaIdx).split(";")[0] ?? "image/jpeg");
+
+        let ocrToken = window.localStorage.getItem(TOKEN_KEY) ?? "";
+        let resp = await fetch(`${API_BASE_URL}/api/assistant/ocr`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${ocrToken}` },
+          body: JSON.stringify({ imageBase64: base64, mimeType })
+        });
+        if (resp.status === 401) {
+          try {
+            await refreshSession();
+            ocrToken = window.localStorage.getItem(TOKEN_KEY) ?? "";
+            resp = await fetch(`${API_BASE_URL}/api/assistant/ocr`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${ocrToken}` },
+              body: JSON.stringify({ imageBase64: base64, mimeType })
+            });
+          } catch { /* fall through */ }
+        }
+        const data = await resp.json() as { text?: string; error?: string };
+        if (data.error || !data.text) throw new Error(data.error ?? "识别失败");
+
+        setOcrPreview({ base64, mimeType, previewUrl: objectUrl, recognizedText: data.text, isPdf, originalFile: file });
+        setInput(`【${isPdf ? "PDF凭证" : "图片凭证"}识别结果】\n${data.text}\n\n请根据以上凭证信息，给出财税处理建议。`);
+        setStatus("识别完成，请确认内容后发送");
+      } catch (err) {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        setStatus(err instanceof Error ? err.message : "文件识别失败");
+      } finally {
+        setOcrLoading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    };
+    reader.onerror = () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setStatus("文件读取失败");
+      setOcrLoading(false);
+    };
+  }
+
+  function clearOcrPreview() {
+    if (ocrPreview?.previewUrl) URL.revokeObjectURL(ocrPreview.previewUrl);
+    setOcrPreview(null);
+    setInput("");
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -237,7 +445,8 @@ export function AssistantPage() {
 
   function handleNewSession() {
     abortRef.current?.abort();
-    setSuggestedEvent(null);
+    setSuggestedEvents([]);
+    setOcrPreview(null);
     newSession();
     setStatus("新对话已开始，请输入您的问题。");
     setShowHistory(false);
@@ -245,7 +454,7 @@ export function AssistantPage() {
 
   function handleLoadSession(id: string) {
     abortRef.current?.abort();
-    setSuggestedEvent(null);
+    setSuggestedEvents([]);
     loadSession(id);
     setStatus("已恢复历史对话，可继续提问。");
     setShowHistory(false);
@@ -257,14 +466,45 @@ export function AssistantPage() {
     border: "1px solid rgba(20,40,60,0.08)"
   } as const;
 
+  const quickPrompts = isOpMode ? STAFF_QUICK_PROMPTS : BOSS_QUICK_PROMPTS;
   const sessionGroups = groupByDate(sessions);
+  const isLoading = sending || ocrLoading;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", height: "calc(100vh - 180px)", maxHeight: "800px", position: "relative" }}>
+
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h2 style={{ margin: "0 0 4px", fontSize: "22px" }}>AI 财税秘书</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <h2 style={{ margin: "0 0 4px", fontSize: "22px" }}>AI 财税助手</h2>
+            {/* View mode toggle — visible only to boss users */}
+            {isBoss && (
+              <button
+                onClick={toggleViewMode}
+                title={isOpMode ? "切换到决策视角" : "切换到操作视角"}
+                style={{
+                  display: "flex", alignItems: "center", gap: "6px",
+                  padding: "4px 12px", borderRadius: "20px", border: "none", cursor: "pointer",
+                  fontWeight: 600, fontSize: "12px",
+                  background: isOpMode ? "rgba(26,127,90,0.12)" : "rgba(217,119,6,0.12)",
+                  color: isOpMode ? "#1a7f5a" : "#92400e",
+                  transition: "all 0.2s"
+                }}
+              >
+                {isOpMode ? "⚙ 操作视角" : "📊 决策视角"}
+                <span style={{ fontSize: "10px", opacity: 0.7 }}>（点击切换）</span>
+              </button>
+            )}
+            {!isBoss && (
+              <span style={{
+                fontSize: "11px", padding: "2px 8px", borderRadius: "10px", fontWeight: 600,
+                background: "rgba(26,127,90,0.12)", color: "#1a7f5a"
+              }}>
+                操作视角
+              </span>
+            )}
+          </div>
           <div style={{ color: "#6c7a89", fontSize: "13px" }}>{status}</div>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
@@ -276,7 +516,6 @@ export function AssistantPage() {
               border: "none", borderRadius: "8px", padding: "6px 14px",
               cursor: sessions.length > 0 ? "pointer" : "default", fontSize: "13px"
             }}
-            title={sessions.length === 0 ? "暂无历史记录" : undefined}
           >
             历史记录{sessions.length > 0 ? ` (${sessions.length})` : ""}
           </button>
@@ -306,7 +545,7 @@ export function AssistantPage() {
           ) : (
             sessionGroups.map((group) => (
               <div key={group.label} style={{ marginBottom: "12px" }}>
-                <div style={{ fontSize: "11px", color: "#aab5c0", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+                <div style={{ fontSize: "11px", color: "#aab5c0", fontWeight: 600, letterSpacing: "0.5px", marginBottom: "6px" }}>
                   {group.label}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -320,19 +559,13 @@ export function AssistantPage() {
                         padding: "8px 10px", borderRadius: "8px", cursor: "pointer",
                         background: activeId === s.id
                           ? "rgba(30,42,55,0.08)"
-                          : hoveredSession === s.id
-                            ? "rgba(30,42,55,0.04)"
-                            : "transparent",
+                          : hoveredSession === s.id ? "rgba(30,42,55,0.04)" : "transparent",
                         transition: "background 0.15s"
                       }}
                     >
-                      <div
-                        onClick={() => handleLoadSession(s.id)}
-                        style={{ flex: 1, overflow: "hidden" }}
-                      >
+                      <div onClick={() => handleLoadSession(s.id)} style={{ flex: 1, overflow: "hidden" }}>
                         <div style={{
-                          fontSize: "13px", color: "#1e2a37",
-                          fontWeight: activeId === s.id ? 600 : 400,
+                          fontSize: "13px", color: "#1e2a37", fontWeight: activeId === s.id ? 600 : 400,
                           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
                         }}>
                           {activeId === s.id && "● "}{s.title}
@@ -350,7 +583,6 @@ export function AssistantPage() {
                             color: "#c0392b", fontSize: "12px", padding: "2px 6px",
                             borderRadius: "4px", flexShrink: 0
                           }}
-                          title="删除此对话"
                         >
                           删除
                         </button>
@@ -364,10 +596,34 @@ export function AssistantPage() {
         </div>
       )}
 
+      {/* Decision mode hint */}
+      {!isOpMode && (
+        <div style={{
+          ...panelBg, padding: "10px 16px",
+          background: "rgba(255,249,235,0.8)",
+          border: "1px solid rgba(217,119,6,0.15)",
+          fontSize: "13px", color: "#92400e"
+        }}>
+          📊 决策视角：基于实时财务快照（资金/收支/税负/风险）回答，每次提问自动刷新。
+        </div>
+      )}
+
+      {/* Operation mode hint for boss */}
+      {isOpMode && isBoss && (
+        <div style={{
+          ...panelBg, padding: "10px 16px",
+          background: "rgba(240,247,255,0.8)",
+          border: "1px solid rgba(79,142,247,0.2)",
+          fontSize: "13px", color: "#1e4a8c"
+        }}>
+          ⚙ 操作视角：可处理报销、入账等实际财务操作，AI 将给出账务处理建议并自动生成凭证草稿。
+        </div>
+      )}
+
       {/* Quick prompts */}
       {messages.length === 0 && !showHistory && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          {QUICK_PROMPTS.map((p) => (
+          {quickPrompts.map((p) => (
             <button
               key={p}
               onClick={() => sendMessage(p)}
@@ -388,21 +644,17 @@ export function AssistantPage() {
         {messages.length === 0 && (
           <div style={{ textAlign: "center", color: "#aab5c0", fontSize: "14px", marginTop: "60px" }}>
             <div style={{ fontSize: "40px", marginBottom: "12px" }}>💬</div>
-            <div>描述您的经营事项或财税问题</div>
-            <div style={{ fontSize: "12px", marginTop: "6px" }}>我会提供会计建议、税务指导和风险提示</div>
+            <div>{isOpMode ? "描述您的经营事项或财税问题" : "直接提问财务经营问题"}</div>
+            <div style={{ fontSize: "12px", marginTop: "6px" }}>
+              {isOpMode
+                ? "可文字描述，也可点击 📎 上传发票/回单/收据（支持 PDF 直接识别，无需转图）"
+                : "我会基于实时财务数据给出简洁结论和行动建议"}
+            </div>
           </div>
         )}
 
         {messages.map((msg, i) => (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              flexDirection: msg.role === "user" ? "row-reverse" : "row",
-              gap: "10px",
-              alignItems: "flex-start"
-            }}
-          >
+          <div key={i} style={{ display: "flex", flexDirection: msg.role === "user" ? "row-reverse" : "row", gap: "10px", alignItems: "flex-start" }}>
             <div style={{
               width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
               background: msg.role === "user" ? "#1e2a37" : "#e8f4ef",
@@ -416,9 +668,7 @@ export function AssistantPage() {
               background: msg.role === "user" ? "#1e2a37" : "rgba(255,255,255,0.9)",
               color: msg.role === "user" ? "#fff" : "#1e2a37",
               borderRadius: msg.role === "user" ? "18px 4px 18px 18px" : "4px 18px 18px 18px",
-              padding: "12px 16px",
-              fontSize: "14px",
-              lineHeight: "1.6",
+              padding: "12px 16px", fontSize: "14px", lineHeight: "1.6",
               border: msg.role === "assistant" ? "1px solid rgba(20,40,60,0.08)" : "none"
             }}>
               {msg.content === "" ? (
@@ -432,25 +682,88 @@ export function AssistantPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Suggested event card */}
-      {suggestedEvent && (
+      {/* OCR preview card */}
+      {ocrPreview && (
+        <div style={{
+          ...panelBg, padding: "14px 16px",
+          background: "rgba(240,247,255,0.95)",
+          border: "1px solid rgba(79,142,247,0.25)",
+          display: "flex", gap: "14px", alignItems: "flex-start"
+        }}>
+          {ocrPreview.isPdf ? (
+            <div style={{
+              width: "64px", height: "64px", borderRadius: "8px", flexShrink: 0,
+              border: "1px solid rgba(20,40,60,0.1)", background: "#fff3f0",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              fontSize: "22px", gap: "2px"
+            }}>
+              📄
+              <span style={{ fontSize: "9px", color: "#c0392b", fontWeight: 700 }}>PDF</span>
+            </div>
+          ) : (
+            <img
+              src={ocrPreview.previewUrl}
+              alt="凭证预览"
+              style={{ width: "64px", height: "64px", objectFit: "cover", borderRadius: "8px", flexShrink: 0, border: "1px solid rgba(20,40,60,0.1)" }}
+            />
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "12px", fontWeight: 600, color: "#4f8ef7", marginBottom: "4px" }}>
+              {ocrPreview.isPdf ? "📄 PDF凭证已识别" : "📷 图片凭证已识别"} — 请确认内容后发送
+            </div>
+            <div style={{ fontSize: "12px", color: "#4d5d6c", lineHeight: "1.5", maxHeight: "48px", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {ocrPreview.recognizedText.split("\n").slice(0, 3).join(" · ")}
+            </div>
+            <div style={{ fontSize: "11px", color: "#1a7f5a", marginTop: "4px" }}>
+              ✓ 确认创建经营事项后，此文件将自动挂载为原始凭证附件
+            </div>
+          </div>
+          <button
+            onClick={clearOcrPreview}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#9aa5b4", fontSize: "16px", flexShrink: 0, padding: "0 4px" }}
+            title="清除"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Suggested event card — operation mode only */}
+      {suggestedEvents.length > 0 && isOpMode && (
         <div style={{
           ...panelBg, padding: "16px",
           background: "rgba(232,244,239,0.95)",
           border: "1px solid rgba(26,127,90,0.2)",
-          display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px"
+          display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px"
         }}>
-          <div style={{ fontSize: "13px" }}>
-            <span style={{ fontWeight: 600, color: "#1a7f5a" }}>📋 建议创建经营事项：</span>
-            <span style={{ marginLeft: "8px" }}>
-              [{EVENT_TYPE_LABELS[suggestedEvent.type] ?? suggestedEvent.type}] {suggestedEvent.title}
-              {suggestedEvent.amount !== null && ` · ¥${suggestedEvent.amount.toLocaleString()}`}
-              {suggestedEvent.occurredOn && ` · ${suggestedEvent.occurredOn}`}
+          <div style={{ fontSize: "13px", flex: 1 }}>
+            <span style={{ fontWeight: 600, color: "#1a7f5a" }}>
+              📋 建议创建经营事项{suggestedEvents.length > 1 ? `（共 ${suggestedEvents.length} 条，按月分拆）` : ""}：
             </span>
+            {suggestedEvents.length === 1 ? (
+              <span style={{ marginLeft: "8px" }}>
+                [{EVENT_TYPE_LABELS[suggestedEvents[0]!.type] ?? suggestedEvents[0]!.type}] {suggestedEvents[0]!.title}
+                {suggestedEvents[0]!.amount !== null && ` · ¥${suggestedEvents[0]!.amount.toLocaleString()}`}
+                {suggestedEvents[0]!.occurredOn && ` · ${suggestedEvents[0]!.occurredOn}`}
+              </span>
+            ) : (
+              <ul style={{ margin: "6px 0 0 0", paddingLeft: "20px", lineHeight: 1.8 }}>
+                {suggestedEvents.map((ev, i) => (
+                  <li key={i} style={{ fontSize: "12.5px" }}>
+                    [{EVENT_TYPE_LABELS[ev.type] ?? ev.type}] {ev.title}
+                    {ev.amount !== null && ` · ¥${ev.amount.toLocaleString()}`}
+                    {ev.occurredOn && ` · ${ev.occurredOn}`}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div style={{ fontSize: "12px", color: "#6c7a89", marginTop: "6px" }}>
+              确认后将分别自动生成执行任务和凭证草稿，由 <strong>{approverRoleLabel}</strong> 审核过账
+            </div>
           </div>
-          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0, paddingTop: "2px" }}>
             <button
-              onClick={handleCreateEvent}
+              onClick={() => void handleCreateEvent()}
               disabled={creating}
               style={{
                 background: "#1a7f5a", color: "#fff", border: "none",
@@ -458,10 +771,10 @@ export function AssistantPage() {
                 fontSize: "13px", opacity: creating ? 0.6 : 1
               }}
             >
-              {creating ? "创建中..." : "确认创建"}
+              {creating ? "处理中..." : suggestedEvents.length > 1 ? `批量创建 ${suggestedEvents.length} 条` : "一键处理"}
             </button>
             <button
-              onClick={() => setSuggestedEvent(null)}
+              onClick={() => setSuggestedEvents([])}
               style={{
                 background: "none", color: "#6c7a89", border: "1px solid rgba(20,40,60,0.15)",
                 borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "13px"
@@ -475,28 +788,57 @@ export function AssistantPage() {
 
       {/* Input area */}
       <div style={{ ...panelBg, padding: "12px 16px", display: "flex", gap: "10px", alignItems: "flex-end" }}>
+        {/* Image upload button — operation mode only */}
+        {isOpMode && (
+          <label
+            title="上传发票/回单/收据（PDF 直接识别，支持图片格式）"
+            style={{
+              flexShrink: 0, width: "38px", height: "38px", display: "flex",
+              alignItems: "center", justifyContent: "center",
+              borderRadius: "10px", cursor: ocrLoading ? "default" : "pointer",
+              background: ocrLoading ? "#eef0f3" : "rgba(255,255,255,0.9)",
+              border: "1px solid rgba(20,40,60,0.12)",
+              fontSize: "18px", opacity: ocrLoading ? 0.5 : 1
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              style={{ display: "none" }}
+              disabled={ocrLoading || sending}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleImageFile(file);
+              }}
+            />
+            {ocrLoading ? "⏳" : "📎"}
+          </label>
+        )}
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           rows={2}
-          placeholder="描述您的经营事项或财税问题（Enter 发送，Shift+Enter 换行）"
-          disabled={sending}
+          placeholder={isOpMode
+            ? "描述经营事项、报销内容等，或点击 📎 上传凭证图片/PDF 直接识别（Enter 发送）"
+            : "直接提问财务经营问题（Enter 发送，Shift+Enter 换行）"}
+          disabled={isLoading}
           style={{
             flex: 1, border: "1px solid rgba(20,40,60,0.12)", borderRadius: "12px",
             padding: "10px 14px", fontSize: "14px", resize: "none", outline: "none",
             fontFamily: "inherit", lineHeight: "1.5",
-            background: sending ? "#f8f9fa" : "#fff"
+            background: isLoading ? "#f8f9fa" : "#fff"
           }}
         />
         <button
           onClick={() => sendMessage(input)}
-          disabled={sending || !input.trim()}
+          disabled={isLoading || !input.trim()}
           style={{
             background: "#1e2a37", color: "#fff", border: "none",
             borderRadius: "12px", padding: "10px 20px", cursor: "pointer",
             fontSize: "14px", flexShrink: 0,
-            opacity: sending || !input.trim() ? 0.5 : 1
+            opacity: isLoading || !input.trim() ? 0.5 : 1
           }}
         >
           {sending ? "发送中" : "发送"}

@@ -14,6 +14,7 @@ interface CompanyRow {
   legal_representative: string | null;
   bank_name: string | null;
   bank_account: string | null;
+  finance_approver_role: string;
   updated_at: string;
 }
 
@@ -28,6 +29,7 @@ function rowToProfile(r: CompanyRow) {
     legalRepresentative: r.legal_representative ?? "",
     bankName: r.bank_name ?? "",
     bankAccount: r.bank_account ?? "",
+    financeApproverRole: r.finance_approver_role ?? "role-chairman",
     updatedAt: r.updated_at
   };
 }
@@ -36,6 +38,7 @@ const SELECT_COMPANY = `
   select id, name,
     registered_address, contact_email, contact_phone,
     credit_code, legal_representative, bank_name, bank_account,
+    finance_approver_role,
     updated_at::text
   from companies where id = $1
 `;
@@ -59,6 +62,7 @@ export async function updateCompanySettings(req: ApiRequest, res: ServerResponse
     legalRepresentative?: string;
     bankName?: string;
     bankAccount?: string;
+    financeApproverRole?: string;
   };
 
   const sets: string[] = [];
@@ -73,7 +77,8 @@ export async function updateCompanySettings(req: ApiRequest, res: ServerResponse
     ["creditCode", "credit_code"],
     ["legalRepresentative", "legal_representative"],
     ["bankName", "bank_name"],
-    ["bankAccount", "bank_account"]
+    ["bankAccount", "bank_account"],
+    ["financeApproverRole", "finance_approver_role"]
   ];
 
   for (const [jsKey, dbCol] of fieldMap) {
@@ -95,6 +100,7 @@ export async function updateCompanySettings(req: ApiRequest, res: ServerResponse
     `update companies set ${sets.join(", ")} where id = $${idx}
      returning id, name, registered_address, contact_email, contact_phone,
                credit_code, legal_representative, bank_name, bank_account,
+               finance_approver_role,
                updated_at::text`,
     params
   );

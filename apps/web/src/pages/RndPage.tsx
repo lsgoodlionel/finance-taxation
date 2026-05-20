@@ -1,5 +1,42 @@
 import { useEffect, useState } from "react";
 import type { RndProject, RndProjectSummary } from "@finance-taxation/domain-model";
+
+function RndHelpModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "#fff", borderRadius: "16px", padding: "28px 32px", maxWidth: "560px", width: "92%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)", maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>研发项目辅助账 · 业务说明</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "#9aa5b4" }}>✕</button>
+        </div>
+        <div style={{ display: "grid", gap: "14px", fontSize: "13.5px", lineHeight: 1.75 }}>
+          <div style={{ background: "rgba(26,127,90,0.06)", borderRadius: "10px", padding: "14px 16px", border: "1px solid rgba(26,127,90,0.2)" }}>
+            <strong>核心目的</strong><br />
+            研发辅助账是专为研发项目归集费用的子台账，旨在满足中国税法对<strong>研发费用加计扣除</strong>的归集要求。高新技术企业可按实际研发费用的 75%~100% 额外扣除，显著降低企业所得税负。
+          </div>
+          <div><strong>主要功能模块</strong>
+            <div style={{ marginTop: "8px", display: "grid", gap: "8px" }}>
+              {[
+                ["费用归集", "按人员、材料、设备、外包等维度录入研发成本，系统自动区分「费用化」（当期扣除）和「资本化」（形成无形资产分期摊销）"],
+                ["工时登记", "记录研发人员投入工时，用于计算人工费用分摊比例，是加计扣除合规申报的重要凭证"],
+                ["超额扣除测算", "基于已归集费用，系统自动计算可申报的加计扣除基数和建议扣除金额，并生成合规核查清单"],
+                ["政策合规检查", "对照现行研发费用加计扣除政策，检查项目归集方式是否符合规定，提示潜在合规风险"]
+              ].map(([title, desc]) => (
+                <div key={title} style={{ border: "1px solid rgba(20,40,60,0.1)", borderRadius: "8px", padding: "10px 12px" }}>
+                  <div style={{ fontWeight: 600, marginBottom: "4px" }}>{title}</div>
+                  <div style={{ fontSize: "13px", color: "#4d5d6c" }}>{desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ background: "rgba(255,165,0,0.08)", borderRadius: "8px", padding: "10px 14px", fontSize: "12.5px", color: "#b45309" }}>
+            ⚠️ 研发费用会计处理与税务归集口径可能存在差异，建议在年度汇算清缴前由专业人员复核辅助账与总账的一致性。
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 import {
   createRndCostLine,
   createRndProject,
@@ -10,6 +47,7 @@ import {
   listRndProjects,
   type RndProjectDetail
 } from "../lib/api";
+import { useI18n, RND_STATUS_LABELS, COST_TYPE_LABELS, ACCOUNTING_TREATMENT_LABELS } from "../lib/i18n";
 
 function panelStyle() {
   return {
@@ -30,10 +68,12 @@ function cellStyle() {
 }
 
 export function RndPage() {
+  const { t } = useI18n();
   const [projects, setProjects] = useState<Array<RndProject & { summary: RndProjectSummary }>>([]);
   const [selectedProject, setSelectedProject] = useState<RndProjectDetail | null>(null);
   const [projectName, setProjectName] = useState("AI 财税系统研发");
   const [message, setMessage] = useState("正在准备研发辅助账。");
+  const [showHelp, setShowHelp] = useState(false);
   const [deductionPackage, setDeductionPackage] = useState<{
     eligibleBase: string;
     suggestedDeductionAmount: string;
@@ -81,9 +121,13 @@ export function RndPage() {
 
   return (
     <section style={{ display: "grid", gap: "20px" }}>
+      {showHelp && <RndHelpModal onClose={() => setShowHelp(false)} />}
       <article style={panelStyle()}>
-        <h2 style={{ marginTop: 0 }}>研发项目辅助账</h2>
-        <p>{message}</p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+          <h2 style={{ margin: 0 }}>研发项目辅助账</h2>
+          <button onClick={() => setShowHelp(true)} title="业务说明" style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid rgba(79,142,247,0.6)", background: "rgba(79,142,247,0.08)", color: "#4f8ef7", fontWeight: 700, fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>?</button>
+        </div>
+        <p style={{ margin: "0 0 12px" }}>{message}</p>
         <div style={{ display: "flex", gap: "10px" }}>
           <input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="研发项目名称" style={{ flex: 1 }} />
           <button
@@ -116,7 +160,7 @@ export function RndPage() {
                 <tr key={project.id} onClick={() => void getRndProjectDetail(project.id).then(setSelectedProject)} style={{ cursor: "pointer" }}>
                   <td style={cellStyle()}>{project.code}</td>
                   <td style={cellStyle()}>{project.name}</td>
-                  <td style={cellStyle()}>{project.status}</td>
+                  <td style={cellStyle()}>{t(RND_STATUS_LABELS, project.status)}</td>
                   <td style={cellStyle()}>{project.summary.expenseAmount}</td>
                   <td style={cellStyle()}>{project.summary.capitalizedAmount}</td>
                 </tr>
@@ -183,12 +227,12 @@ export function RndPage() {
                       value={costForm.costType}
                       onChange={(event) => setCostForm((current) => ({ ...current, costType: event.target.value }))}
                     >
-                      <option value="payroll">payroll</option>
-                      <option value="materials">materials</option>
-                      <option value="service">service</option>
-                      <option value="software">software</option>
-                      <option value="equipment">equipment</option>
-                      <option value="other">other</option>
+                      <option value="payroll">{t(COST_TYPE_LABELS, "payroll")}</option>
+                      <option value="materials">{t(COST_TYPE_LABELS, "materials")}</option>
+                      <option value="service">{t(COST_TYPE_LABELS, "service")}</option>
+                      <option value="software">{t(COST_TYPE_LABELS, "software")}</option>
+                      <option value="equipment">{t(COST_TYPE_LABELS, "equipment")}</option>
+                      <option value="other">{t(COST_TYPE_LABELS, "other")}</option>
                     </select>
                     <select
                       value={costForm.accountingTreatment}
@@ -199,8 +243,8 @@ export function RndPage() {
                         }))
                       }
                     >
-                      <option value="expensed">expensed</option>
-                      <option value="capitalized">capitalized</option>
+                      <option value="expensed">{t(ACCOUNTING_TREATMENT_LABELS, "expensed")}</option>
+                      <option value="capitalized">{t(ACCOUNTING_TREATMENT_LABELS, "capitalized")}</option>
                     </select>
                     <input
                       value={costForm.amount}
@@ -316,8 +360,8 @@ export function RndPage() {
                   <tbody>
                     {selectedProject.costLines.map((item) => (
                       <tr key={item.id}>
-                        <td style={cellStyle()}>{item.costType}</td>
-                        <td style={cellStyle()}>{item.accountingTreatment}</td>
+                        <td style={cellStyle()}>{t(COST_TYPE_LABELS, item.costType)}</td>
+                        <td style={cellStyle()}>{t(ACCOUNTING_TREATMENT_LABELS, item.accountingTreatment)}</td>
                         <td style={cellStyle()}>{item.amount}</td>
                         <td style={cellStyle()}>{item.occurredOn}</td>
                         <td style={cellStyle()}>{item.notes || "—"}</td>

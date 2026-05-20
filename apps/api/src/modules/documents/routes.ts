@@ -162,9 +162,16 @@ export async function getDocumentDetail(req: ApiRequest, res: ServerResponse, do
   if (!target) {
     return json(res, 404, { error: "Document not found" });
   }
-  const attachments = await listCompanyDocumentAttachments(req.auth!.companyId, target.id);
+  const [attachments, mappingRow] = await Promise.all([
+    listCompanyDocumentAttachments(req.auth!.companyId, target.id),
+    queryOne<{ notes: string }>(
+      `select notes from event_document_mappings where id = $1 and company_id = $2`,
+      [target.mappingId, req.auth!.companyId]
+    )
+  ]);
   return json(res, 200, {
     ...target,
+    notes: mappingRow?.notes ?? null,
     attachments
   });
 }

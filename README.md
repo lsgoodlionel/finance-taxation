@@ -25,6 +25,7 @@
 | WS-SETTINGS（系统设置页） | ✅ 完成 | 2026-05-18 |
 | WS-AI-OLLAMA（Ollama 本地 AI 降级） | ✅ 完成 | 2026-05-18 |
 | WS-V1ALIGN（V1/V2 功能全对齐） | ✅ 完成 | 2026-05-18 |
+| WS-UX（单据/凭证正式表格 + AI 识别上传 + 审计修复 + 风险交互升级） | ✅ 完成 | 2026-05-20 |
 
 ## 功能概览（V2 最终版）
 
@@ -35,20 +36,20 @@
 | 董事长驾驶舱 | `/dashboard/chairman` | 银行余额 / 利润 / 税负 / 风险事项 / AI 摘要 |
 | 经营事项总线 | `/events` | 创建 / 编辑 / AI 拆任务 / 风险检查 / 跨页导航 |
 | 任务中心 | `/tasks` | 任务树 / 状态流 / 逾期高亮 / 催办徽章 |
-| 单据中心 | `/documents` | 附件上传（multipart）/ 归档 |
-| 凭证中心 | `/vouchers` | 模板生成 / 校验 / 审核 / 过账 / 摘要编辑 |
+| 单据中心 | `/documents` | 附件上传（multipart）/ 归档 / 正式财务单据格式展示（含单据说明） |
+| 凭证中心 | `/vouchers` | 模板生成 / 校验 / 审核 / 过账 / 摘要编辑 / 正式记账凭证表格（借贷合计） |
 | 总账中心 | `/ledger` | 分录列表 / 科目余额 / 过账批次 / 日记账 Tab / 期间锁账 |
 | 财务报表 | `/reports` | 三表 + 快照 + 差异分析 + 老板摘要 + 打印版 |
 | 税务中心 | `/tax` | 增值税底稿 / 企所税 / 个税 / 印花税 / 申报批次 / 复核留档 |
 | 研发辅助账 | `/rnd` | 研发项目 / 费用归集 / 加计扣除资料包 / 月度趋势 |
-| 风险勾稽 | `/risk` | 规则引擎 / 风险发现 / 异常关闭复盘 |
+| 风险勾稽 | `/risk` | 规则引擎 / 风险发现 / 异常关闭复盘 / 事项选择升级为可搜索下拉列表 |
 | 合同管理 | `/contracts` | 合同主数据 / 类型 / 状态流 / 关联事项 |
 | 工资管理 | `/payroll` | 员工档案 / IIT 七级计算 / 社保公积金 / 工资确认 |
-| AI 财税秘书 | `/assistant` | 流式对话 / 财税问答 / 建议事项一键创建 |
+| AI 财税秘书 | `/assistant` | 流式对话 / 财税问答 / 建议事项一键创建 / PDF 直传识别（无需转图） |
 | PDF 导出 | `/pdf-export` | 工资汇总 / 工资条 / 凭证 / 报表快照四类 PDF |
 | 审计日志 | `/audit` | 操作人 / 时间 / 模块 / 变更详情全量追踪 |
 | 老板专线 | `/boss-qa` | 实时财务快照注入 + SSE 流式问答 |
-| 企业知识库 | `/knowledge` | 制度条款 / 口径规则 / AI Prompt 关键词注入 |
+| 企业知识库 | `/knowledge` | 制度条款 / 口径规则 / AI Prompt 关键词注入 / PDF & Word 批量上传 + AI 自动提取结构化内容 |
 | 系统设置 | `/settings` | 公司信息 / AI 配置（Anthropic/Ollama）/ 关于系统 |
 
 ## V2 规划文档
@@ -296,6 +297,7 @@ npm run -w @finance-taxation/web dev
 
 - `GET /api/knowledge`、`POST /api/knowledge`
 - `GET /api/knowledge/:id`、`PUT /api/knowledge/:id`、`DELETE /api/knowledge/:id`
+- `POST /api/knowledge/parse-documents`（multipart，PDF/Word 批量上传 + AI 内容提取）
 
 ### 系统设置
 
@@ -451,6 +453,45 @@ psql $DATABASE_URL -f migrations/015_startup_year1_simulation.sql
 - `migration 014` companies 扩展字段（统一社会信用代码 / 法定代表人 / 开户银行 / 银行账号）
 - `GET /api/attachments/:id/download` — 磁盘文件读取并以正确 MIME 类型返回
 - SettingsPage 公司信息表单已补充上述新字段的编辑和保存支持
+
+### WS-UX：体验提升与 UI 精化（2026-05-20）
+
+**企业知识库 — PDF/Word 批量导入 + AI 内容识别**
+
+- 新增 `POST /api/knowledge/parse-documents` multipart 接口：接收 PDF 或 DOCX/DOC 文件（单个或批量）
+- PDF 文件以 base64 document block 直传 Anthropic API 识别；Word 文件通过 `mammoth` 提取纯文本后送 AI
+- AI 自动结构化提取：标题、分类、正文、关键词标签，结果以卡片形式展示
+- 支持「填入编辑表单」（预填并手动微调）或「直接创建」两种落库方式
+
+**单据中心 — 正式财务单据格式**
+
+- 单据详情从简单字段列表升级为正式财务单据卡片：居中标题、信息表格、单据说明区块（含蓝色左边框高亮）
+- 补全 `getDocumentDetail` JOIN `event_document_mappings` 返回 `notes` 字段
+- 修复单据类型 / 状态在中文模式下显示英文的问题（`DOC_TYPE_LABELS` 补全 12 类型，`DOC_STATUS_LABELS` 补全 `awaiting_upload` / `ready` 等缺失映射）
+
+**凭证中心 — 正式记账凭证格式**
+
+- 凭证详情从列表布局升级为标准记账凭证表格：居中"记 账 凭 证"大标题、日期/凭证号/类型/状态行
+- 分录行列：摘要 / 科目编码 / 会计科目 / 借方金额 / 贷方金额，底部合计行自动汇总
+- 制单人 / 审核日期 / 过账日期 / 关联事项独立展示于凭证底部
+
+**AI 财税秘书 — PDF 直接识别**
+
+- 文件上传改为 📎 图标；提示文案说明 PDF 可直接识别，无需转为图片
+- 底层已通过 Anthropic document block API 支持原生 PDF 理解
+
+**审计日志 — 变更详情修复**
+
+- 修复变更详情展开后仍显示原始 JSON 的问题
+- 新增 `{ fieldName: { from, to } }` 格式识别（任务状态变更等场景）
+- 新增通用 key-value 平铺回退，覆盖 `{ before, after }`、`{ data }` 及任意扁平对象格式
+- 扩充 `valueLabel` 映射，各模块状态值均以中文标注
+
+**风险勾稽 — 事项选择交互升级**
+
+- 事项 ID 输入框升级为可搜索下拉列表：展示经营事项名称（标题 + ID）
+- 支持键盘输入实时过滤，点击外部自动收起，已选事项以 `<code>` 标注显示
+- 页面加载时自动预填第一个可用事项
 
 ## GitHub Actions
 

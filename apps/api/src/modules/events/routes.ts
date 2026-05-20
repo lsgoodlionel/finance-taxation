@@ -849,7 +849,9 @@ export async function listCompanyTasks(companyId: string): Promise<Task[]> {
         updated_at
       from tasks
       where company_id = $1
-      order by created_at desc
+      order by
+        CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+        created_at desc
     `,
     [companyId]
   );
