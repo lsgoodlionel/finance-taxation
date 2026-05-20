@@ -59,7 +59,7 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
       { id: "deepseek-chat", name: "DeepSeek V3（推荐）" },
       { id: "deepseek-reasoner", name: "DeepSeek R1（推理）" }
     ],
-    defaultBaseUrl: "https://api.deepseek.com",
+    defaultBaseUrl: "https://api.deepseek.com/v1",
     keyPlaceholder: "sk-..."
   },
   {
@@ -108,6 +108,17 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
     keyPlaceholder: ""
   }
 ];
+
+// Build the full /chat/completions URL, appending /v1 when the base URL has no version segment.
+// This fixes providers like DeepSeek whose legacy stored base_url lacks /v1.
+function buildChatUrl(base: string): string {
+  const b = base.replace(/\/+$/, "");
+  // Already versioned: /v1, /v4, /compatible-mode/v1, /api/paas/v4, etc.
+  if (/\/v\d+$/.test(b) || /\/compatible-mode\/v\d+$/.test(b) || /\/paas\/v\d+$/.test(b)) {
+    return `${b}/chat/completions`;
+  }
+  return `${b}/v1/chat/completions`;
+}
 
 // ─── DB config ───────────────────────────────────────────────────────────────
 
@@ -203,7 +214,7 @@ async function streamOpenAiCompat(
   model: string,
   apiKey: string
 ): Promise<void> {
-  const url = `${baseUrl.replace(/\/$/, "")}/chat/completions`;
+  const url = buildChatUrl(baseUrl);
   const body = JSON.stringify({
     model,
     stream: true,
@@ -359,7 +370,7 @@ async function ocrOpenAiCompat(
   model: string,
   apiKey: string
 ): Promise<string> {
-  const url = `${baseUrl.replace(/\/$/, "")}/chat/completions`;
+  const url = buildChatUrl(baseUrl);
 
   let userContent: unknown[];
   if (mimeType === "application/pdf") {
@@ -476,16 +487,21 @@ export async function extractKnowledgeFromDocument(
       ? `${KNOWLEDGE_EXTRACT_PROMPT}\n\n（注：PDF 文件内容请通过文件中的文字提取）`
       : `${KNOWLEDGE_EXTRACT_PROMPT}\n\n文档内容：\n${input.text.slice(0, 8000)}`;
 
-    const response = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, {
+    const chatUrl = buildChatUrl(base);
+    const response = await fetch(chatUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: cfg.model,
         max_tokens: 1024,
         messages: [{ role: "user", content: userText }]
-      })
+      }),
+      signal: AbortSignal.timeout(180000)
     });
-    if (!response.ok) throw new Error(`AI 调用失败: ${response.status}`);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "");
+      throw new Error(`AI 调用失败 (${response.status})：${errText.slice(0, 200) || "请检查 AI 配置中的 Base URL 和 API Key"}`);
+    }
     const data = await response.json() as { choices?: { message?: { content?: string } }[] };
     rawJson = data.choices?.[0]?.message?.content ?? "";
   }
