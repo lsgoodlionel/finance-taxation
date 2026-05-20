@@ -121,6 +121,8 @@ export function AssistantPage() {
   const [ocrPreview, setOcrPreview] = useState<OcrPreview | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
+  const [uploadPhase, setUploadPhase] = useState<{ phase: "reading" | "uploading" | "ai"; pct: number } | null>(null);
+  const aiProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -372,50 +374,98 @@ export function AssistantPage() {
     }
   }
 
+  function clearAiProgress() {
+    if (aiProgressRef.current) { clearInterval(aiProgressRef.current); aiProgressRef.current = null; }
+    setUploadPhase(null);
+  }
+
+  function startAiProgressSimulation() {
+    setUploadPhase({ phase: "ai", pct: 0 });
+    aiProgressRef.current = setInterval(() => {
+      setUploadPhase((prev) => {
+        if (!prev || prev.phase !== "ai") return prev;
+        const next = prev.pct + 1;
+        return next >= 90 ? { phase: "ai", pct: 90 } : { phase: "ai", pct: next };
+      });
+    }, 400);
+  }
+
+  function xhrPost(url: string, token: string, body: string, onUploadPct: (pct: number) => void): Promise<{ status: number; data: unknown }> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      xhr.timeout = 180000;
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onUploadPct(Math.round(e.loaded / e.total * 100)); };
+      xhr.upload.onload = () => onUploadPct(100);
+      xhr.onload = () => {
+        try { resolve({ status: xhr.status, data: JSON.parse(xhr.responseText) }); }
+        catch { resolve({ status: xhr.status, data: { error: xhr.responseText } }); }
+      };
+      xhr.onerror = () => reject(new Error("网络连接失败"));
+      xhr.ontimeout = () => reject(new Error("请求超时（3分钟），请检查网络或 AI 配置后重试"));
+      xhr.send(body);
+    });
+  }
+
   async function handleImageFile(file: File) {
     const isPdf = file.type === "application/pdf";
     if (file.size > 20 * 1024 * 1024) {
-      setStatus(`文件过大（最大 20MB）`);
+      setStatus("文件过大（最大 20MB）");
       return;
     }
     setOcrLoading(true);
-    setStatus(`正在识别${isPdf ? "PDF" : "图片"}中的凭证信息...`);
+    setUploadPhase({ phase: "reading", pct: 0 });
+    setStatus(`正在读取${isPdf ? " PDF" : "图片"}文件...`);
 
     const objectUrl = isPdf ? "" : URL.createObjectURL(file);
 
     const reader = new FileReader();
+    reader.onprogress = (e) => {
+      if (e.lengthComputable) setUploadPhase({ phase: "reading", pct: Math.round(e.loaded / e.total * 100) });
+    };
     reader.readAsDataURL(file);
+
     reader.onload = async () => {
       try {
         const dataUrl = reader.result as string;
         const commaIdx = dataUrl.indexOf(",");
         const base64 = dataUrl.slice(commaIdx + 1);
         const mimeType = isPdf ? "application/pdf" : (dataUrl.slice(5, commaIdx).split(";")[0] ?? "image/jpeg");
+        const body = JSON.stringify({ imageBase64: base64, mimeType });
 
-        let ocrToken = window.localStorage.getItem(TOKEN_KEY) ?? "";
-        let resp = await fetch(`${API_BASE_URL}/api/assistant/ocr`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${ocrToken}` },
-          body: JSON.stringify({ imageBase64: base64, mimeType })
-        });
-        if (resp.status === 401) {
+        setUploadPhase({ phase: "uploading", pct: 0 });
+        setStatus("正在上传文件...");
+
+        let token = window.localStorage.getItem(TOKEN_KEY) ?? "";
+        let result = await xhrPost(`${API_BASE_URL}/api/assistant/ocr`, token, body,
+          (pct) => setUploadPhase({ phase: "uploading", pct })
+        );
+
+        if (result.status === 401) {
           try {
             await refreshSession();
-            ocrToken = window.localStorage.getItem(TOKEN_KEY) ?? "";
-            resp = await fetch(`${API_BASE_URL}/api/assistant/ocr`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${ocrToken}` },
-              body: JSON.stringify({ imageBase64: base64, mimeType })
-            });
+            token = window.localStorage.getItem(TOKEN_KEY) ?? "";
+            setUploadPhase({ phase: "uploading", pct: 0 });
+            result = await xhrPost(`${API_BASE_URL}/api/assistant/ocr`, token, body,
+              (pct) => setUploadPhase({ phase: "uploading", pct })
+            );
           } catch { /* fall through */ }
         }
-        const data = await resp.json() as { text?: string; error?: string };
+
+        startAiProgressSimulation();
+        setStatus(`AI 正在识别${isPdf ? " PDF" : "图片"}凭证...`);
+
+        const data = result.data as { text?: string; error?: string };
         if (data.error || !data.text) throw new Error(data.error ?? "识别失败");
 
+        clearAiProgress();
         setOcrPreview({ base64, mimeType, previewUrl: objectUrl, recognizedText: data.text, isPdf, originalFile: file });
         setInput(`【${isPdf ? "PDF凭证" : "图片凭证"}识别结果】\n${data.text}\n\n请根据以上凭证信息，给出财税处理建议。`);
         setStatus("识别完成，请确认内容后发送");
       } catch (err) {
+        clearAiProgress();
         if (objectUrl) URL.revokeObjectURL(objectUrl);
         setStatus(err instanceof Error ? err.message : "文件识别失败");
       } finally {
@@ -424,6 +474,7 @@ export function AssistantPage() {
       }
     };
     reader.onerror = () => {
+      clearAiProgress();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       setStatus("文件读取失败");
       setOcrLoading(false);
@@ -431,6 +482,7 @@ export function AssistantPage() {
   }
 
   function clearOcrPreview() {
+    clearAiProgress();
     if (ocrPreview?.previewUrl) URL.revokeObjectURL(ocrPreview.previewUrl);
     setOcrPreview(null);
     setInput("");
@@ -506,6 +558,29 @@ export function AssistantPage() {
             )}
           </div>
           <div style={{ color: "#6c7a89", fontSize: "13px" }}>{status}</div>
+          {uploadPhase && (
+            <div style={{ marginTop: "6px", width: "260px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#4f8ef7", marginBottom: "3px" }}>
+                <span>
+                  {uploadPhase.phase === "reading" && "读取文件"}
+                  {uploadPhase.phase === "uploading" && "上传中"}
+                  {uploadPhase.phase === "ai" && "AI 识别中"}
+                </span>
+                <span>{uploadPhase.pct}%</span>
+              </div>
+              <div style={{ height: "5px", background: "#e8ecf0", borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{
+                  height: "100%",
+                  width: `${uploadPhase.pct}%`,
+                  background: uploadPhase.phase === "ai"
+                    ? "linear-gradient(90deg, #4f8ef7, #1a7f5a)"
+                    : "#4f8ef7",
+                  borderRadius: "3px",
+                  transition: "width 0.3s ease"
+                }} />
+              </div>
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
           <button

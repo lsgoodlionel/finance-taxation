@@ -1,7 +1,11 @@
+import { createRequire } from "node:module";
 import type { ServerResponse } from "node:http";
 import Anthropic from "@anthropic-ai/sdk";
 import { queryOne } from "../db/client.js";
 import { env } from "../config/env.js";
+
+const _require = createRequire(import.meta.url);
+const pdfParse = _require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -355,24 +359,27 @@ async function ocrOpenAiCompat(
   model: string,
   apiKey: string
 ): Promise<string> {
-  if (mimeType === "application/pdf") {
-    throw new Error("当前 AI 提供商不支持 PDF 识别，请改用 Anthropic Claude 或将 PDF 转为图片后上传。");
-  }
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions`;
+
+  let userContent: unknown[];
+  if (mimeType === "application/pdf") {
+    // Extract text from PDF and send as plain text (works with all providers)
+    const buffer = Buffer.from(imageBase64, "base64");
+    const parsed = await pdfParse(buffer);
+    const pdfText = parsed.text.slice(0, 4000);
+    userContent = [{ type: "text", text: `${OCR_PROMPT}\n\n以下是从 PDF 提取的文字内容：\n${pdfText}` }];
+  } else {
+    userContent = [
+      { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+      { type: "text", text: OCR_PROMPT }
+    ];
+  }
+
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [{
-        role: "user",
-        content: [
-          { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-          { type: "text", text: OCR_PROMPT }
-        ]
-      }]
-    }),
-    signal: AbortSignal.timeout(60000)
+    body: JSON.stringify({ model, messages: [{ role: "user", content: userContent }] }),
+    signal: AbortSignal.timeout(180000)
   });
   if (!response.ok) {
     const errText = await response.text().catch(() => "");
