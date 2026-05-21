@@ -22,11 +22,13 @@ export const EVENT_STATUS_LABELS: Record<string, string> = {
 
 export const TASK_STATUS_LABELS: Record<string, string> = {
   not_started: "待开始",
-  pending: "待处理",
   in_progress: "进行中",
-  completed: "已完成",
+  in_review: "待复核",
+  done: "已完成",
   blocked: "已阻塞",
-  cancelled: "已取消"
+  cancelled: "已取消",
+  pending: "待处理",
+  completed: "已完成"
 };
 
 export const TASK_PRIORITY_LABELS: Record<string, string> = {

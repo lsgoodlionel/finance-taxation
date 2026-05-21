@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Task, TaskTreeNode } from "@finance-taxation/domain-model";
+import type { Task, TaskStatus, TaskTreeNode } from "@finance-taxation/domain-model";
 import { listTasks, remindTask, updateTaskStatus } from "../lib/api";
 import { useI18n, TASK_STATUS_LABELS, TASK_PRIORITY_SHORT } from "../lib/i18n";
 
@@ -57,11 +57,13 @@ type TaskWithOverdue = Task & { isOverdue?: boolean };
 
 const STATUS_BADGE: Record<string, string> = {
   not_started: "badge badge-gray",
-  pending: "badge badge-gray",
   in_progress: "badge badge-blue",
-  completed: "badge badge-green",
+  in_review: "badge badge-yellow",
+  done: "badge badge-green",
   blocked: "badge badge-red",
-  cancelled: "badge badge-gray"
+  cancelled: "badge badge-gray",
+  pending: "badge badge-gray",
+  completed: "badge badge-green"
 };
 
 const PRIORITY_BADGE: Record<string, string> = {
@@ -71,10 +73,10 @@ const PRIORITY_BADGE: Record<string, string> = {
 };
 
 // Next status transition for action buttons
-const NEXT_STATUS: Record<string, { status: string; label: string; className: string } | undefined> = {
+const NEXT_STATUS: Partial<Record<TaskStatus, { status: TaskStatus; label: string; className: string }>> = {
   not_started: { status: "in_progress", label: "开始执行", className: "btn btn-primary btn-xs" },
-  pending: { status: "in_progress", label: "开始执行", className: "btn btn-primary btn-xs" },
-  in_progress: { status: "completed", label: "标记完成", className: "btn btn-success btn-xs" },
+  in_progress: { status: "done", label: "标记完成", className: "btn btn-success btn-xs" },
+  in_review: { status: "done", label: "复核完成", className: "btn btn-success btn-xs" },
   blocked: { status: "in_progress", label: "解除阻塞", className: "btn btn-outline btn-xs" }
 };
 
@@ -84,13 +86,12 @@ function RenderTree({ nodes }: { nodes: TaskTreeNode[] }) {
     <ul style={{ paddingLeft: 20, lineHeight: 1.9, fontSize: 13.5 }}>
       {nodes.map((node) => {
         const overdue = (node as TaskWithOverdue).isOverdue;
-        const status = node.status as string;
         return (
           <li key={node.id} style={{ color: overdue ? "var(--c-danger)" : "inherit" }}>
             {overdue && <span className="badge badge-red" style={{ marginRight: 6 }}>逾期</span>}
             {node.title}
             <span className="text-muted">
-              {" · "}{t(TASK_STATUS_LABELS, status)}
+              {" · "}{t(TASK_STATUS_LABELS, node.status)}
               {" · "}{t(TASK_PRIORITY_SHORT, node.priority)}
             </span>
             {node.children.length ? <RenderTree nodes={node.children} /> : null}
@@ -142,7 +143,7 @@ export function TasksPage() {
     }
   }
 
-  async function handleStatusChange(taskId: string, newStatus: string) {
+  async function handleStatusChange(taskId: string, newStatus: TaskStatus) {
     setUpdatingId(taskId);
     try {
       await updateTaskStatus(taskId, newStatus);
@@ -166,7 +167,7 @@ export function TasksPage() {
 
   const { t } = useI18n();
   const overdueCount = tasks.filter((t) => t.isOverdue).length;
-  const notStartedCount = tasks.filter((t) => t.status === "not_started" || t.status === "pending").length;
+  const notStartedCount = tasks.filter((t) => t.status === "not_started").length;
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -263,7 +264,7 @@ export function TasksPage() {
                       </td>
                       <td>
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {next && task.status !== "completed" && task.status !== "cancelled" && (
+                          {next && task.status !== "done" && task.status !== "cancelled" && (
                             <button
                               className={next.className}
                               onClick={() => void handleStatusChange(task.id, next.status)}
