@@ -35,6 +35,20 @@ interface PrintableDocumentInput {
   vouchers: Voucher[];
 }
 
+export interface ExpenseDocumentTemplateModel {
+  documentType: "expense_claim" | "invoice_bundle";
+  title: string;
+  documentId: string;
+  businessEventId: string;
+  ownerDepartment: string;
+  status: string;
+  createdOn: string;
+  archivedOn: string | null;
+  notes: string | null;
+  attachments: DocumentAttachmentRecord[];
+  relationSummary: ReturnType<typeof buildDocumentRelations>;
+}
+
 export function buildDocumentRelations(input: BuildDocumentRelationsInput) {
   const { businessEventId } = input.document;
   return {
@@ -46,6 +60,24 @@ export function buildDocumentRelations(input: BuildDocumentRelationsInput) {
 
 export function supportsPrintableDocument(documentType: string) {
   return documentType === "expense_claim" || documentType === "invoice_bundle";
+}
+
+export function buildExpenseDocumentTemplateModel(
+  input: PrintableDocumentInput
+): ExpenseDocumentTemplateModel {
+  return {
+    documentType: input.document.documentType as "expense_claim" | "invoice_bundle",
+    title: input.document.title,
+    documentId: input.document.id,
+    businessEventId: input.document.businessEventId,
+    ownerDepartment: input.document.ownerDepartment || "—",
+    status: input.document.status,
+    createdOn: input.document.createdAt?.slice(0, 10) || "—",
+    archivedOn: input.document.archivedAt?.slice(0, 10) || null,
+    notes: input.document.notes || null,
+    attachments: input.document.attachments ?? [],
+    relationSummary: buildDocumentRelations(input)
+  };
 }
 
 function escapeHtml(value: string) {
@@ -65,24 +97,23 @@ function renderList(items: string[]) {
 }
 
 export function buildPrintableDocumentHtml(input: PrintableDocumentInput) {
-  const related = buildDocumentRelations(input);
-  const attachments = input.document.attachments ?? [];
+  const model = buildExpenseDocumentTemplateModel(input);
   const rows: Array<[string, string]> = [
-    ["单据编号", input.document.id],
-    ["单据名称", input.document.title],
-    ["单据类型", input.document.documentType],
-    ["责任部门", input.document.ownerDepartment || "—"],
-    ["状态", input.document.status],
-    ["关联事项", input.document.businessEventId || "—"],
-    ["创建日期", input.document.createdAt?.slice(0, 10) || "—"],
-    ["归档日期", input.document.archivedAt?.slice(0, 10) || "—"]
+    ["单据编号", model.documentId],
+    ["单据名称", model.title],
+    ["单据类型", model.documentType],
+    ["责任部门", model.ownerDepartment],
+    ["状态", model.status],
+    ["关联事项", model.businessEventId || "—"],
+    ["创建日期", model.createdOn],
+    ["归档日期", model.archivedOn || "—"]
   ];
 
   return `<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <title>${escapeHtml(input.document.title)}</title>
+    <title>${escapeHtml(model.title)}</title>
     <style>
       body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #1e2a37; margin: 32px; }
       h1 { text-align: center; margin: 0 0 6px; font-size: 22px; }
@@ -96,7 +127,7 @@ export function buildPrintableDocumentHtml(input: PrintableDocumentInput) {
     </style>
   </head>
   <body>
-    <h1>${escapeHtml(input.document.title)}</h1>
+    <h1>${escapeHtml(model.title)}</h1>
     <div class="muted">打印时间：${new Date().toLocaleString("zh-CN")}</div>
 
     <h2>单据信息</h2>
@@ -107,19 +138,19 @@ export function buildPrintableDocumentHtml(input: PrintableDocumentInput) {
     </table>
 
     <h2>单据说明</h2>
-    <div class="note">${escapeHtml(input.document.notes || "无")}</div>
+    <div class="note">${escapeHtml(model.notes || "无")}</div>
 
     <h2>原始凭证附件</h2>
-    <ul>${renderList(attachments.map((item) => `${item.fileName} (${item.fileType || "未知类型"})`))}</ul>
+    <ul>${renderList(model.attachments.map((item) => `${item.fileName} (${item.fileType || "未知类型"})`))}</ul>
 
     <h2>关联任务</h2>
-    <ul>${renderList(related.tasks.map((item) => `${item.title}｜${item.assigneeDepartment || "未分配部门"}｜${item.status}`))}</ul>
+    <ul>${renderList(model.relationSummary.tasks.map((item) => `${item.title}｜${item.assigneeDepartment || "未分配部门"}｜${item.status}`))}</ul>
 
     <h2>关联税务事项</h2>
-    <ul>${renderList(related.taxItems.map((item) => `${item.taxType}｜${item.filingPeriod}｜${item.treatment}`))}</ul>
+    <ul>${renderList(model.relationSummary.taxItems.map((item) => `${item.taxType}｜${item.filingPeriod}｜${item.treatment}`))}</ul>
 
     <h2>关联凭证</h2>
-    <ul>${renderList(related.vouchers.map((item) => `${item.id}｜${item.summary}｜${item.status}`))}</ul>
+    <ul>${renderList(model.relationSummary.vouchers.map((item) => `${item.id}｜${item.summary}｜${item.status}`))}</ul>
   </body>
 </html>`;
 }

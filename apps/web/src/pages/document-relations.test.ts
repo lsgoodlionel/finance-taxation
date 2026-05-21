@@ -1,4 +1,5 @@
 import type {
+  DocumentAttachmentRecord,
   GeneratedDocument,
   Task,
   TaxItem,
@@ -6,6 +7,8 @@ import type {
 } from "@finance-taxation/domain-model";
 import {
   buildDocumentRelations,
+  buildExpenseDocumentTemplateModel,
+  buildPrintableDocumentHtml,
   supportsPrintableDocument
 } from "./document-relations";
 
@@ -95,6 +98,15 @@ const vouchers: Voucher[] = [
   }
 ];
 
+const attachments: DocumentAttachmentRecord[] = [
+  {
+    fileName: "expense-receipt.pdf",
+    fileType: "application/pdf",
+    storageKey: "docs/expense-receipt.pdf",
+    uploadedAt: "2026-05-21T00:00:00.000Z"
+  }
+];
+
 function testBuildDocumentRelations() {
   const relations = buildDocumentRelations({
     document,
@@ -117,7 +129,45 @@ function testSupportsPrintableDocument() {
   console.assert(supportsPrintableDocument("supplier_invoice") === false, "supplier invoice should not be printable");
 }
 
+function testBuildExpenseDocumentTemplateModel() {
+  const model = buildExpenseDocumentTemplateModel({
+    document: {
+      ...document,
+      notes: "客户招待餐费与出租车费",
+      attachments
+    },
+    tasks,
+    taxItems,
+    vouchers
+  });
+
+  console.assert(model.documentType === "expense_claim", "expected expense claim template model");
+  console.assert(model.relationSummary.tasks.length === 1, "expected related tasks in template model");
+  console.assert(model.relationSummary.taxItems.length === 1, "expected related tax items in template model");
+  console.assert(model.relationSummary.vouchers.length === 1, "expected related vouchers in template model");
+}
+
+function testBuildPrintableDocumentHtmlUsesFormalSections() {
+  const html = buildPrintableDocumentHtml({
+    document: {
+      ...document,
+      notes: "客户招待餐费与出租车费",
+      attachments: []
+    },
+    tasks,
+    taxItems,
+    vouchers
+  });
+
+  console.assert(html.includes("单据信息"), "expected base info section");
+  console.assert(html.includes("关联任务"), "expected related tasks section");
+  console.assert(html.includes("关联税务事项"), "expected related tax section");
+  console.assert(html.includes("关联凭证"), "expected related vouchers section");
+}
+
 testBuildDocumentRelations();
 testSupportsPrintableDocument();
+testBuildExpenseDocumentTemplateModel();
+testBuildPrintableDocumentHtmlUsesFormalSections();
 
 console.log("document-relations-ok");
