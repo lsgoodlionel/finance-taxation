@@ -45,7 +45,7 @@
 | 风险勾稽 | `/risk` | 规则引擎 / 风险发现 / 异常关闭复盘 / 事项选择升级为可搜索下拉列表 |
 | 合同管理 | `/contracts` | 合同主数据 / 类型 / 状态流 / 关联事项 |
 | 工资管理 | `/payroll` | 员工档案 / IIT 七级计算 / 社保公积金 / 工资确认 |
-| AI 财税秘书 | `/assistant` | 流式对话 / 财税问答 / 建议事项一键创建 / PDF 直传识别（无需转图） |
+| AI 财税秘书 | `/assistant` | 流式对话 / 财税问答 / 建议事项一键创建 / PDF 直传识别（无需转图）/ 标准业务流程图回看 |
 | PDF 导出 | `/pdf-export` | 工资汇总 / 工资条 / 凭证 / 报表快照四类 PDF |
 | 审计日志 | `/audit` | 操作人 / 时间 / 模块 / 变更详情全量追踪 |
 | 老板专线 | `/boss-qa` | 实时财务快照注入 + SSE 流式问答 |
@@ -397,6 +397,14 @@ psql $DATABASE_URL -f migrations/015_startup_year1_simulation.sql
 - `@anthropic-ai/sdk` 接入，SSE 流式响应
 - 系统 Prompt：公司名称 + 今日日期 + 近期经营事项 + 待办任务
 - `AssistantPage.tsx` — 快捷提示 / 流式渲染 / 建议事项一键创建
+
+### WS-PROCESSFLOW：AI 财税秘书标准业务流程图（2026-05-21）
+
+- `docs/superpowers/specs/2026-05-20-assistant-business-process-flow-design.md` — 外购物品 / 业务招待通用主流程图设计
+- `apps/web/src/features/process-flow/*` — 流程节点定义、状态推导、通用流程图卡片、阶段回看组件
+- `AssistantPage.tsx` — 提交业务问题或附件时显示标准流程图，按会话保留流程位置，可反复回看
+- `EventsPage.tsx` — 事项详情页高亮当前事项所处流程位置
+- `DocumentsPage.tsx` / `TaxPage.tsx` / `VouchersPage.tsx` / `RiskPage.tsx` — 回看流程图并可点击节点穿透到上下游业务页
 
 ### Sprint P3-4：PDF 导出（2026-05-15）
 

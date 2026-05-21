@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { GeneratedDocument } from "@finance-taxation/domain-model";
 import {
   archiveDocument,
@@ -8,6 +8,8 @@ import {
   type DocumentDetail
 } from "../lib/api";
 import { useI18n, DOC_STATUS_LABELS, DOC_TYPE_LABELS } from "../lib/i18n";
+import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
+import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
@@ -118,6 +120,29 @@ export function DocumentsPage() {
     URL.revokeObjectURL(url);
   }
 
+  const documentFlowContext = useMemo(() => {
+    if (!detail) {
+      return null;
+    }
+
+    return resolveProcessFlowContext({
+      event: {
+        id: detail.businessEventId || detail.id,
+        type: "general",
+        title: detail.title,
+        description: detail.notes,
+        status: detail.status
+      },
+      detail: {
+        tasks: detail.status === "draft" ? [] : [{ id: `${detail.id}-task-stage` }],
+        generatedDocuments: [{ id: detail.id }],
+        vouchers: [],
+        taxItems: [],
+        hasArchivedArtifacts: detail.status === "archived"
+      }
+    });
+  }, [detail]);
+
   const panelStyle = {
     background: "rgba(255,255,255,0.82)",
     borderRadius: "24px",
@@ -199,6 +224,16 @@ export function DocumentsPage() {
         <div style={panelStyle}>
           {detail ? (
             <>
+              <div style={{ marginBottom: "16px" }}>
+                <ProcessFlowStageSection
+                  title="单据阶段流程回看"
+                  subtitle="当前页定位到单据生成或归档节点。若已关联具体事项，则会尽量使用该事项上下文高亮分支。"
+                  currentNodeId={documentFlowContext?.currentNodeId ?? "document_generation"}
+                  branch={documentFlowContext?.branch}
+                  businessEventId={detail.businessEventId}
+                />
+              </div>
+
               {/* 正式单据头部 */}
               <div style={{
                 border: "1.5px solid rgba(20,40,60,0.18)", borderRadius: "10px",

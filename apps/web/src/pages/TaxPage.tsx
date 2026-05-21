@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { useI18n, TAX_STATUS_LABELS, TAX_BATCH_STATUS_LABELS, REVIEW_RESULT_LABELS } from "../lib/i18n";
 
 function TaxHelpModal({ onClose }: { onClose: () => void }) {
@@ -211,6 +212,12 @@ export function TaxPage() {
           </button>
         </div>
       </article>
+      <ProcessFlowStageSection
+        title="税务阶段流程回看"
+        subtitle="当前页定位到税务复核与申报留档节点；如果当前批次已完成留档，则定位到归档查询节点。两类业务分支都可从这里回看并跳转到上下游页面。"
+        currentNodeId={selectedBatchDetail?.archives.length ? "archive_trace_query" : "tax_filing_archive"}
+        branch={null}
+      />
       <article style={panelStyle()}>
         <h3 style={{ marginTop: 0 }}>纳税人口径档案</h3>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>

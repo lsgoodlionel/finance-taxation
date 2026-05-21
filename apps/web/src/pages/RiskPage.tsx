@@ -8,6 +8,7 @@ import {
   runEventRiskCheck
 } from "../lib/api";
 import { useI18n, RISK_SEVERITY_LABELS, RISK_PRIORITY_LABELS, RISK_STATUS_LABELS } from "../lib/i18n";
+import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 
 function RiskHelpModal({ onClose }: { onClose: () => void }) {
   return (
@@ -213,6 +214,13 @@ export function RiskPage() {
           </div>
         </div>
       </article>
+      <ProcessFlowStageSection
+        title="风险检查流程回看"
+        subtitle="风险检查主要来源于 AI 初判与资料校验阶段，并会联动事项、凭证和税务处理结果。当前页可从两类业务主线回看风险来源并跳转到相关业务页面。"
+        currentNodeId="ai_precheck"
+        branch={null}
+        businessEventId={eventId || undefined}
+      />
       <article style={panelStyle()}>
         <h3 style={{ marginTop: 0 }}>风险发现</h3>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>

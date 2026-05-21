@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Voucher } from "@finance-taxation/domain-model";
 
 const VOUCHER_HELP = [
@@ -89,6 +89,8 @@ import {
   validateVoucher
 } from "../lib/api";
 import { useI18n, VOUCHER_STATUS_LABELS, VOUCHER_TYPE_LABELS } from "../lib/i18n";
+import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
+import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 
 function panelStyle() {
   return {
@@ -173,6 +175,28 @@ export function VouchersPage() {
     }
   }
 
+  const voucherFlowContext = useMemo(() => {
+    if (!detail) {
+      return null;
+    }
+
+    return resolveProcessFlowContext({
+      event: {
+        id: detail.businessEventId || detail.id,
+        type: "general",
+        title: detail.summary,
+        status: detail.status
+      },
+      detail: {
+        tasks: [{ id: `${detail.id}-task-stage` }],
+        generatedDocuments: [{ id: `${detail.businessEventId || detail.id}-document-stage` }],
+        vouchers: [{ id: detail.id }],
+        taxItems: [],
+        hasArchivedArtifacts: Boolean(detail.postedAt)
+      }
+    });
+  }, [detail]);
+
   return (
     <section style={{ display: "grid", gap: "20px" }}>
       {showHelp && <VoucherHelpModal onClose={() => setShowHelp(false)} />}
@@ -228,6 +252,15 @@ export function VouchersPage() {
           </button>
         </div>
       </article>
+      {detail && (
+        <ProcessFlowStageSection
+          title="凭证阶段流程回看"
+          subtitle="当前页定位到凭证处理或归档节点。若当前凭证已关联事项，则会尽量使用该事项上下文高亮分支。"
+          currentNodeId={voucherFlowContext?.currentNodeId ?? "voucher_tax_processing"}
+          branch={voucherFlowContext?.branch}
+          businessEventId={detail.businessEventId}
+        />
+      )}
       <section style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: "20px" }}>
         <article style={panelStyle()}>
           <h3 style={{ marginTop: 0 }}>凭证对象</h3>

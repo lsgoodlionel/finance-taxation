@@ -1,12 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createEvent, analyzeEvent, getCurrentUser, getCompanyProfile, listDocuments, uploadDocumentFileRaw, refreshSession } from "../lib/api";
 import { useChatSessions } from "../lib/useChatSessions";
 import type { SessionMessage } from "../lib/useChatSessions";
 import { EVENT_TYPE_LABELS as EVENT_TYPE_LABELS_I18N } from "../lib/i18n";
+import { ProcessFlowCard } from "../features/process-flow/ProcessFlowCard";
+import { buildProcessFlowPageContext } from "../features/process-flow/page-context";
+import { resolveProcessFlowContext } from "../features/process-flow/resolve";
+import type { ProcessFlowContext } from "../features/process-flow/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
 const STORAGE_KEY = "ft-assistant-history";
+const FLOW_CONTEXT_STORAGE_KEY = `${STORAGE_KEY}:flow-context`;
 const BOSS_ROLES = new Set(["role-chairman", "role-finance-director"]);
 
 const ROLE_LABELS: Record<string, string> = {
@@ -32,6 +37,11 @@ interface OcrPreview {
   recognizedText: string;
   isPdf: boolean;
   originalFile: File;
+}
+
+interface AssistantFlowContext extends ProcessFlowContext {
+  businessEventId?: string;
+  eventTitle?: string;
 }
 
 const EVENT_TYPE_LABELS = EVENT_TYPE_LABELS_I18N;
@@ -99,6 +109,66 @@ function groupByDate(sessions: { id: string; title: string; updatedAt: string; m
   return groups;
 }
 
+function buildAssistantFlowContext(input: {
+  id?: string;
+  type: string;
+  title: string;
+  description?: string;
+  detail?: {
+    tasks?: Array<{ id: string }>;
+    generatedDocuments?: Array<{ id: string }>;
+    vouchers?: Array<{ id: string }>;
+    taxItems?: Array<{ id: string }>;
+  };
+}): AssistantFlowContext {
+  const context = resolveProcessFlowContext({
+    event: {
+      id: input.id ?? "assistant-preview",
+      type: input.type,
+      title: input.title,
+      description: input.description ?? "",
+      status: "analyzed"
+    },
+    detail: {
+      tasks: input.detail?.tasks ?? [],
+      generatedDocuments: input.detail?.generatedDocuments ?? [],
+      vouchers: input.detail?.vouchers ?? [],
+      taxItems: input.detail?.taxItems ?? []
+    }
+  });
+
+  const pageContext = context.branch === "common"
+    ? buildProcessFlowPageContext({
+      currentNodeId: context.currentNodeId,
+      businessEventId: input.id
+    })
+    : null;
+
+  return {
+    ...context,
+    nodes: pageContext?.nodes ?? context.nodes,
+    businessEventId: input.id,
+    eventTitle: input.title
+  };
+}
+
+function readStoredFlowContexts() {
+  try {
+    const raw = localStorage.getItem(FLOW_CONTEXT_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, AssistantFlowContext>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredFlowContexts(contexts: Record<string, AssistantFlowContext>) {
+  try {
+    localStorage.setItem(FLOW_CONTEXT_STORAGE_KEY, JSON.stringify(contexts));
+  } catch {
+    // ignore storage quota errors for assistant flow snapshots
+  }
+}
+
 export function AssistantPage() {
   const { messages, setMessages, persistMessages, sessions, activeId, newSession, loadSession, deleteSession } =
     useChatSessions(STORAGE_KEY);
@@ -122,6 +192,7 @@ export function AssistantPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
   const [uploadPhase, setUploadPhase] = useState<{ phase: "reading" | "uploading" | "ai"; pct: number } | null>(null);
+  const [flowContext, setFlowContext] = useState<AssistantFlowContext | null>(null);
   const aiProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -153,6 +224,29 @@ export function AssistantPage() {
   }, [messages]);
 
   useEffect(() => {
+    if (!activeId) {
+      return;
+    }
+
+    const contexts = readStoredFlowContexts();
+    setFlowContext(contexts[activeId] ?? null);
+  }, [activeId]);
+
+  useEffect(() => {
+    if (!activeId) {
+      return;
+    }
+
+    const contexts = readStoredFlowContexts();
+    if (flowContext) {
+      contexts[activeId] = flowContext;
+    } else {
+      delete contexts[activeId];
+    }
+    writeStoredFlowContexts(contexts);
+  }, [activeId, flowContext]);
+
+  useEffect(() => {
     return () => { abortRef.current?.abort(); };
   }, []);
 
@@ -161,6 +255,7 @@ export function AssistantPage() {
     setViewMode(next);
     if (companyId) localStorage.setItem(`ft-view-mode-${companyId}`, next);
     setSuggestedEvents([]);
+    setFlowContext(null);
     setStatus(next === "boss" ? "已切换为决策视角" : "已切换为操作视角");
   }
 
@@ -170,6 +265,7 @@ export function AssistantPage() {
     if (!userText.trim() || sending) return;
     setSending(true);
     setSuggestedEvents([]);
+    setFlowContext(null);
     setShowHistory(false);
     setOcrPreview(null);
 
@@ -233,22 +329,26 @@ export function AssistantPage() {
           if (!line.startsWith("data: ")) continue;
           const raw = line.slice(6).trim();
           if (!raw) continue;
+
+          let event: { type: string; text?: string; fullText?: string; error?: string };
           try {
-            const event = JSON.parse(raw) as { type: string; text?: string; fullText?: string; error?: string };
-            if (event.type === "delta" && event.text) {
-              accumulated += event.text;
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = { role: "assistant", content: accumulated };
-                return updated;
-              });
-            } else if (event.type === "done") {
-              accumulated = event.fullText ?? accumulated;
-            } else if (event.type === "error") {
-              throw new Error(event.error ?? "AI 返回错误");
-            }
+            event = JSON.parse(raw) as { type: string; text?: string; fullText?: string; error?: string };
           } catch {
             // skip malformed SSE lines
+            continue;
+          }
+
+          if (event.type === "delta" && event.text) {
+            accumulated += event.text;
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { role: "assistant", content: accumulated };
+              return updated;
+            });
+          } else if (event.type === "done") {
+            accumulated = event.fullText ?? accumulated;
+          } else if (event.type === "error") {
+            throw new Error(event.error ?? "AI 返回错误");
           }
         }
       }
@@ -263,7 +363,10 @@ export function AssistantPage() {
         return updated;
       });
 
-      if (suggestedList.length > 0 && isOpMode) setSuggestedEvents(suggestedList);
+      if (suggestedList.length > 0 && isOpMode) {
+        setSuggestedEvents(suggestedList);
+        setFlowContext(buildAssistantFlowContext(suggestedList[0]!));
+      }
       setStatus("AI 助手已就绪，请继续提问。");
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
@@ -303,6 +406,12 @@ export function AssistantPage() {
         results.push({ id: created.id, title: ev.title, amount: ev.amount, occurredOn: ev.occurredOn });
       }
       setSuggestedEvents([]);
+      setFlowContext(buildAssistantFlowContext({
+        id: results[0]?.id,
+        type: captured[0]!.type,
+        title: captured[0]!.title,
+        description: captured[0]!.description
+      }));
 
       // Auto-analyze all created events
       let totalTasks = 0;
@@ -499,6 +608,7 @@ export function AssistantPage() {
     abortRef.current?.abort();
     setSuggestedEvents([]);
     setOcrPreview(null);
+    setFlowContext(null);
     newSession();
     setStatus("新对话已开始，请输入您的问题。");
     setShowHistory(false);
@@ -508,8 +618,17 @@ export function AssistantPage() {
     abortRef.current?.abort();
     setSuggestedEvents([]);
     loadSession(id);
-    setStatus("已恢复历史对话，可继续提问。");
+    const contexts = readStoredFlowContexts();
+    setFlowContext(contexts[id] ?? null);
+    setStatus(contexts[id] ? "已恢复历史对话和流程位置，可继续提问。" : "已恢复历史对话，可继续提问。");
     setShowHistory(false);
+  }
+
+  function handleDeleteSession(id: string) {
+    const contexts = readStoredFlowContexts();
+    delete contexts[id];
+    writeStoredFlowContexts(contexts);
+    deleteSession(id);
   }
 
   const panelBg = {
@@ -521,6 +640,18 @@ export function AssistantPage() {
   const quickPrompts = isOpMode ? STAFF_QUICK_PROMPTS : BOSS_QUICK_PROMPTS;
   const sessionGroups = groupByDate(sessions);
   const isLoading = sending || ocrLoading;
+  const flowTitle = useMemo(() => {
+    if (!flowContext?.eventTitle) {
+      return "标准业务处理流程";
+    }
+
+    return `当前事项流程：${flowContext.eventTitle}`;
+  }, [flowContext]);
+  const flowSubtitle = flowContext
+    ? "根据 AI 已识别的事项上下文高亮当前处理位置，可继续点击节点进入相关业务页。"
+    : "覆盖外购物品与业务招待，从事项识别到税务归档，可在提交前后持续查看。";
+  const currentFlowNode = flowContext?.nodes.find((node) => node.id === flowContext.currentNodeId);
+  const nextFlowNode = flowContext?.nodes.find((node) => node.status === "pending");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", height: "calc(100vh - 180px)", maxHeight: "800px", position: "relative" }}>
@@ -652,7 +783,7 @@ export function AssistantPage() {
                       </div>
                       {hoveredSession === s.id && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.id); }}
                           style={{
                             background: "none", border: "none", cursor: "pointer",
                             color: "#c0392b", fontSize: "12px", padding: "2px 6px",
@@ -692,6 +823,52 @@ export function AssistantPage() {
           fontSize: "13px", color: "#1e4a8c"
         }}>
           ⚙ 操作视角：可处理报销、入账等实际财务操作，AI 将给出账务处理建议并自动生成凭证草稿。
+        </div>
+      )}
+
+      <ProcessFlowCard
+        mode="compact"
+        title={flowTitle}
+        subtitle={flowSubtitle}
+        activeBranch={flowContext?.branch === "common" ? undefined : flowContext?.branch}
+        currentNodeId={flowContext?.currentNodeId}
+        nodes={flowContext?.nodes}
+        businessEventId={flowContext?.businessEventId}
+      />
+      {flowContext && currentFlowNode && (
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">本次事项摘要</span>
+          </div>
+          <div
+            className="card-body"
+            style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}
+          >
+            <div>
+              <div className="text-muted text-sm">当前步骤</div>
+              <div style={{ marginTop: 4, fontWeight: 700 }}>{currentFlowNode.title}</div>
+            </div>
+            <div>
+              <div className="text-muted text-sm">涉及部门</div>
+              <div style={{ marginTop: 4 }}>{currentFlowNode.departments.join(" / ") || "无"}</div>
+            </div>
+            <div>
+              <div className="text-muted text-sm">关键单据</div>
+              <div style={{ marginTop: 4 }}>{currentFlowNode.documents.join(" / ") || "无"}</div>
+            </div>
+            <div>
+              <div className="text-muted text-sm">税务要点</div>
+              <div style={{ marginTop: 4 }}>{currentFlowNode.taxes.join(" / ") || "无"}</div>
+            </div>
+            <div>
+              <div className="text-muted text-sm">凭证线索</div>
+              <div style={{ marginTop: 4 }}>{currentFlowNode.vouchers.join(" / ") || "无"}</div>
+            </div>
+            <div>
+              <div className="text-muted text-sm">下一步骤</div>
+              <div style={{ marginTop: 4 }}>{nextFlowNode?.title ?? "当前已到流程末端"}</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -849,7 +1026,10 @@ export function AssistantPage() {
               {creating ? "处理中..." : suggestedEvents.length > 1 ? `批量创建 ${suggestedEvents.length} 条` : "一键处理"}
             </button>
             <button
-              onClick={() => setSuggestedEvents([])}
+              onClick={() => {
+                setSuggestedEvents([]);
+                setFlowContext(null);
+              }}
               style={{
                 background: "none", color: "#6c7a89", border: "1px solid rgba(20,40,60,0.15)",
                 borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "13px"

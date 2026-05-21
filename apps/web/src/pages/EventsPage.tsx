@@ -23,6 +23,9 @@ import {
   VOUCHER_TYPE_LABELS,
   TAX_STATUS_LABELS
 } from "../lib/i18n";
+import { ProcessFlowCard } from "../features/process-flow/ProcessFlowCard";
+import { buildProcessFlowPageContext } from "../features/process-flow/page-context";
+import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 
 const EVENT_TYPE_KEYS = [
   "sales", "procurement", "expense", "payroll",
@@ -90,6 +93,9 @@ export function EventsPage() {
       if (first) {
         const d = await getEventDetail(first);
         setDetail(d);
+      } else {
+        setDetail(null);
+        setStatusDraft("draft");
       }
     } catch (err) {
       setMessage((err as Error).message);
@@ -99,6 +105,12 @@ export function EventsPage() {
   }
 
   useEffect(() => { void loadEvents(); }, []);
+
+  useEffect(() => {
+    if (detail) {
+      setStatusDraft(detail.status);
+    }
+  }, [detail]);
 
   async function refreshDetail(eventId: string) {
     const d = await getEventDetail(eventId);
@@ -168,6 +180,49 @@ export function EventsPage() {
     if (!detail) return null;
     return `${t(EVENT_TYPE_LABELS, detail.type)} · ${detail.department} · ${detail.amount || "—"} ${detail.currency}`;
   }, [detail, t]);
+  const processFlowContext = useMemo(() => {
+    if (!detail) return null;
+
+    const resolved = resolveProcessFlowContext({
+      event: {
+        id: detail.id,
+        type: detail.type,
+        title: detail.title,
+        description: detail.description,
+        status: detail.status
+      },
+      detail: {
+        tasks: detail.tasks.map((task) => ({ id: task.id })),
+        generatedDocuments: detail.generatedDocuments.map((document) => ({ id: document.id })),
+        vouchers: detail.vouchers.map((voucher) => ({ id: voucher.id })),
+        taxItems: detail.taxItems.map((taxItem) => ({ id: taxItem.id }))
+      }
+    });
+
+    if (resolved.branch === "common") {
+      return {
+        ...resolved,
+        nodes: buildProcessFlowPageContext({
+          currentNodeId: resolved.currentNodeId,
+          businessEventId: detail.id
+        }).nodes
+      };
+    }
+
+    return resolved;
+  }, [detail]);
+  const currentFlowNode = useMemo(
+    () => processFlowContext?.nodes.find((node) => node.id === processFlowContext.currentNodeId) ?? null,
+    [processFlowContext]
+  );
+  const nextFlowNode = useMemo(
+    () => processFlowContext?.nodes.find((node) => node.status === "pending") ?? null,
+    [processFlowContext]
+  );
+  const missingFlowDocuments = useMemo(
+    () => nextFlowNode?.documents ?? currentFlowNode?.documents ?? [],
+    [currentFlowNode, nextFlowNode]
+  );
 
   const isBusy = loading !== "done" && loading !== "idle";
 
@@ -273,6 +328,7 @@ export function EventsPage() {
                     key={evt.id}
                     onClick={() => {
                       setSelectedEventId(evt.id);
+                      setStatusDraft(evt.status);
                       void refreshDetail(evt.id);
                     }}
                     style={{
@@ -350,6 +406,37 @@ export function EventsPage() {
 
         {detail ? (
           <div className="card-body">
+            {processFlowContext && (
+              <div style={{ marginBottom: 24 }}>
+                <ProcessFlowCard
+                  mode="compact"
+                  title="当前事项流程位置"
+                  subtitle="根据当前事项详情自动高亮，可点击节点进入对应业务页继续处理。"
+                  activeBranch={processFlowContext.branch === "common" ? undefined : processFlowContext.branch}
+                  currentNodeId={processFlowContext.currentNodeId}
+                  nodes={processFlowContext.nodes}
+                  businessEventId={detail.id}
+                />
+                {(currentFlowNode || nextFlowNode) && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: "14px 16px",
+                      borderRadius: 16,
+                      border: "1px solid rgba(20,40,60,0.08)",
+                      background: "rgba(248,250,252,0.8)",
+                      display: "grid",
+                      gap: 8
+                    }}
+                  >
+                    <div><strong>当前步骤：</strong>{currentFlowNode?.title ?? "—"}</div>
+                    <div><strong>下一步骤：</strong>{nextFlowNode?.title ?? "当前已到流程末端"}</div>
+                    <div><strong>待补资料：</strong>{missingFlowDocuments.length ? missingFlowDocuments.join(" / ") : "当前无明显缺失资料"}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
               {/* 左列 */}
               <div style={{ display: "grid", gap: 20 }}>
