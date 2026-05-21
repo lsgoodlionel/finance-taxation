@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import type { Task, TaskStatus, TaskTreeNode } from "@finance-taxation/domain-model";
 import { listTasks, remindTask, updateTaskStatus } from "../lib/api";
 import { useI18n, TASK_STATUS_LABELS, TASK_PRIORITY_SHORT } from "../lib/i18n";
@@ -107,6 +108,8 @@ function RenderTree({ nodes }: { nodes: TaskTreeNode[] }) {
 }
 
 export function TasksPage() {
+  const location = useLocation();
+  const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
   const [tasks, setTasks] = useState<TaskWithOverdue[]>([]);
   const [taskTree, setTaskTree] = useState<TaskTreeNode[]>([]);
   const [message, setMessage] = useState("");
@@ -119,12 +122,12 @@ export function TasksPage() {
   async function loadTasks(onlyOverdue: boolean) {
     setLoading(true);
     try {
-      const payload = await listTasks(undefined, onlyOverdue);
+      const payload = await listTasks(navEventId || undefined, onlyOverdue);
       setTasks(payload.items);
       setTaskTree(payload.tree);
       const overdueCount = payload.items.filter((t) => t.isOverdue).length;
       setMessage(
-        `共 ${payload.total} 个任务${overdueCount > 0 ? `，${overdueCount} 个逾期` : ""}`
+        `${navEventId ? `当前事项 ${navEventId}：` : ""}共 ${payload.total} 个任务${overdueCount > 0 ? `，${overdueCount} 个逾期` : ""}`
       );
     } catch (err) {
       setMessage((err as Error).message);
@@ -133,7 +136,7 @@ export function TasksPage() {
     }
   }
 
-  useEffect(() => { void loadTasks(false); }, []);
+  useEffect(() => { void loadTasks(false); }, [navEventId]);
 
   async function handleRemind(taskId: string) {
     setRemindingId(taskId);
@@ -213,6 +216,19 @@ export function TasksPage() {
         }}>
           <strong>💡 操作提示：</strong>AI 已自动为您生成 <strong>{notStartedCount}</strong> 个待处理任务。
           点击「开始执行」按钮可将任务推进为进行中，处理完成后点击「标记完成」结束任务。
+        </div>
+      )}
+
+      {navEventId && (
+        <div style={{
+          background: "rgba(37,99,235,0.08)",
+          border: "1px solid rgba(37,99,235,0.2)",
+          borderRadius: 8,
+          padding: "10px 14px",
+          fontSize: 13,
+          color: "#2563eb"
+        }}>
+          当前仅显示事项 <strong>{navEventId}</strong> 的关联任务。
         </div>
       )}
 

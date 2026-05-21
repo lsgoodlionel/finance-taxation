@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { useI18n, TAX_STATUS_LABELS, TAX_BATCH_STATUS_LABELS, REVIEW_RESULT_LABELS } from "../lib/i18n";
 
@@ -91,6 +92,8 @@ function cellStyle() {
 }
 
 export function TaxPage() {
+  const location = useLocation();
+  const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
   const { t } = useI18n();
   const [items, setItems] = useState<TaxItem[]>([]);
   const [batches, setBatches] = useState<TaxFilingBatch[]>([]);
@@ -133,7 +136,7 @@ export function TaxPage() {
     async function bootstrap() {
       try {
         const [itemsPayload, batchesPayload, profilesPayload] = await Promise.all([
-          listTaxItems(),
+          listTaxItems(navEventId ? { businessEventId: navEventId } : undefined),
           listTaxFilingBatches(),
           listTaxpayerProfiles()
         ]);
@@ -146,14 +149,14 @@ export function TaxPage() {
           setSelectedBatchDetail(await getTaxFilingBatchDetail(first));
         }
         setMessage(
-          `已加载 ${itemsPayload.total} 条税务事项，${batchesPayload.total} 个申报批次。`
+          `${navEventId ? `当前事项 ${navEventId}：` : ""}已加载 ${itemsPayload.total} 条税务事项，${batchesPayload.total} 个申报批次。`
         );
       } catch (error) {
         setMessage((error as Error).message);
       }
     }
     void bootstrap();
-  }, []);
+  }, [navEventId]);
 
   async function refreshBatches(batchId?: string) {
     const batchesPayload = await listTaxFilingBatches();
@@ -276,6 +279,11 @@ export function TaxPage() {
       </article>
       <article style={panelStyle()}>
         <h3 style={{ marginTop: 0 }}>税务事项</h3>
+        {navEventId && (
+          <div style={{ marginBottom: "12px", padding: "10px 14px", borderRadius: "8px", background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.2)", color: "#2563eb", fontSize: "13px" }}>
+            当前仅显示事项 <strong>{navEventId}</strong> 的关联税务事项。
+          </div>
+        )}
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>

@@ -1,16 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
-import type { GeneratedDocument } from "@finance-taxation/domain-model";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import type { GeneratedDocument, Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import {
   archiveDocument,
   getDocumentDetail,
   listDocuments,
+  listTasks,
+  listTaxItems,
+  listVouchers,
   uploadDocumentFileRaw,
   type DocumentDetail
 } from "../lib/api";
 import { useI18n, DOC_STATUS_LABELS, DOC_TYPE_LABELS } from "../lib/i18n";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
+import {
+  buildDocumentRelations,
+  buildPrintableDocumentHtml,
+  supportsPrintableDocument
+} from "./document-relations";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
@@ -81,11 +89,20 @@ function DocumentsHelpModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function shortId(id: string): string {
+  return id.slice(-6).toUpperCase();
+}
+
 export function DocumentsPage() {
   const { t } = useI18n();
   const location = useLocation();
+  const navigate = useNavigate();
   const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
+  const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [relatedTasks, setRelatedTasks] = useState<(Task & { isOverdue?: boolean })[]>([]);
+  const [relatedTaxItems, setRelatedTaxItems] = useState<TaxItem[]>([]);
+  const [relatedVouchers, setRelatedVouchers] = useState<Voucher[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [detail, setDetail] = useState<DocumentDetail | null>(null);
   const [message, setMessage] = useState("正在加载单据数据...");
@@ -97,17 +114,44 @@ export function DocumentsPage() {
     void bootstrap();
   }, []);
 
+  async function loadRelations(businessEventId: string | null) {
+    if (!businessEventId) {
+      setRelatedTasks([]);
+      setRelatedTaxItems([]);
+      setRelatedVouchers([]);
+      return;
+    }
+    const [tasksPayload, taxPayload, voucherPayload] = await Promise.all([
+      listTasks(businessEventId),
+      listTaxItems({ businessEventId }),
+      listVouchers({ businessEventId })
+    ]);
+    setRelatedTasks(tasksPayload.items);
+    setRelatedTaxItems(taxPayload.items);
+    setRelatedVouchers(voucherPayload.items);
+  }
+
   async function bootstrap() {
     try {
-      const payload = await listDocuments();
-      setDocuments(payload.items);
+      const [docsPayload, vouchersPayload] = await Promise.all([
+        listDocuments(),
+        listVouchers()
+      ]);
+      setDocuments(docsPayload.items);
+      setVouchers(vouchersPayload.items);
       const linkedId = navEventId
-        ? payload.items.find((d) => d.businessEventId === navEventId)?.id ?? null
+        ? docsPayload.items.find((d) => d.businessEventId === navEventId)?.id ?? null
         : null;
-      const targetId = linkedId ?? payload.items[0]?.id ?? null;
+      const targetId = linkedId ?? docsPayload.items[0]?.id ?? null;
       setSelectedDocumentId(targetId);
-      if (targetId) setDetail(await getDocumentDetail(targetId));
-      setMessage(`已加载 ${payload.total} 个单据。`);
+      if (targetId) {
+        const nextDetail = await getDocumentDetail(targetId);
+        setDetail(nextDetail);
+        await loadRelations(nextDetail.businessEventId);
+      } else {
+        await loadRelations(null);
+      }
+      setMessage(`已加载 ${docsPayload.total} 个单据。`);
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -118,12 +162,21 @@ export function DocumentsPage() {
     setDocuments(payload.items);
     const targetId = documentId ?? selectedDocumentId ?? payload.items[0]?.id ?? null;
     setSelectedDocumentId(targetId);
-    if (targetId) setDetail(await getDocumentDetail(targetId));
+    if (targetId) {
+      const nextDetail = await getDocumentDetail(targetId);
+      setDetail(nextDetail);
+      await loadRelations(nextDetail.businessEventId);
+    } else {
+      setDetail(null);
+      await loadRelations(null);
+    }
   }
 
   async function handleSelectDocument(docId: string) {
     setSelectedDocumentId(docId);
-    setDetail(await getDocumentDetail(docId));
+    const nextDetail = await getDocumentDetail(docId);
+    setDetail(nextDetail);
+    await loadRelations(nextDetail.businessEventId);
   }
 
   async function handleUploadFile(file: File) {
@@ -168,6 +221,25 @@ export function DocumentsPage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  function handlePrintDocument() {
+    if (!detail) return;
+    const html = buildPrintableDocumentHtml({
+      document: detail,
+      tasks: relatedTasks,
+      taxItems: relatedTaxItems,
+      vouchers: relatedVouchers
+    });
+    const printableWindow = window.open("", "_blank", "noopener,noreferrer");
+    if (!printableWindow) {
+      setMessage("无法打开打印窗口");
+      return;
+    }
+    printableWindow.document.open();
+    printableWindow.document.write(html);
+    printableWindow.document.close();
+    setMessage(`已打开「${detail.title}」打印版。`);
   }
 
   const documentFlowContext = useMemo(() => {
@@ -223,50 +295,71 @@ export function DocumentsPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
                 <tr style={{ color: "#6c7a89" }}>
-                  {["名称", "类型", "状态", "附件"].map((h) => (
+                  {["名称", "类型", "关联事项", "凭证", "状态", "附件"].map((h) => (
                     <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {documents.map((item) => (
-                  <tr
-                    key={item.id}
-                    onClick={() => void handleSelectDocument(item.id)}
-                    style={{
-                      cursor: "pointer",
-                      background: item.id === selectedDocumentId ? "rgba(30,42,55,0.06)" : "transparent"
-                    }}
-                  >
-                    <td style={cellStyle()}>
-                      <div style={{ fontWeight: item.id === selectedDocumentId ? 600 : 400 }}>
-                        {item.title}
-                      </div>
-                      <div style={{ fontSize: "11px", color: "#9aa5b4", marginTop: "2px" }}>
-                        {new Date(item.createdAt).toLocaleDateString("zh-CN")}
-                      </div>
-                    </td>
-                    <td style={cellStyle()}>{t(DOC_TYPE_LABELS, item.documentType)}</td>
-                    <td style={cellStyle()}>
-                      <span style={{
-                        background: `${STATUS_COLOR[item.status] ?? "#8a9bb0"}22`,
-                        color: STATUS_COLOR[item.status] ?? "#8a9bb0",
-                        borderRadius: "999px", padding: "2px 8px", fontSize: "12px"
-                      }}>
-                        {t(DOC_STATUS_LABELS, item.status)}
-                      </span>
-                    </td>
-                    <td style={{ ...cellStyle(), textAlign: "center" as const }}>
-                      {item.attachmentIds.length > 0 ? (
-                        <span style={{ color: "#1a7f5a", fontWeight: 600 }}>
-                          {item.attachmentIds.length}
+                {documents.map((item) => {
+                  const rowRelatedVouchers = vouchers.filter((v) => v.businessEventId === item.businessEventId);
+                  return (
+                    <tr
+                      key={item.id}
+                      onClick={() => void handleSelectDocument(item.id)}
+                      style={{
+                        cursor: "pointer",
+                        background: item.id === selectedDocumentId ? "rgba(30,42,55,0.06)" : "transparent"
+                      }}
+                    >
+                      <td style={cellStyle()}>
+                        <div style={{ fontWeight: item.id === selectedDocumentId ? 600 : 400 }}>
+                          {item.title}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#9aa5b4", marginTop: "2px" }}>
+                          {new Date(item.createdAt).toLocaleDateString("zh-CN")}
+                        </div>
+                      </td>
+                      <td style={cellStyle()}>{t(DOC_TYPE_LABELS, item.documentType)}</td>
+                      <td style={cellStyle()}>
+                        {item.businessEventId ? (
+                          <span style={{ fontFamily: "monospace", fontSize: "11px", color: "#4f8ef7", background: "rgba(79,142,247,0.08)", borderRadius: "4px", padding: "1px 5px" }}>
+                            {shortId(item.businessEventId)}
+                          </span>
+                        ) : (
+                          <span style={{ color: "#c4cdd6", fontSize: "12px" }}>—</span>
+                        )}
+                      </td>
+                      <td style={{ ...cellStyle(), textAlign: "center" as const }}>
+                        {rowRelatedVouchers.length > 0 ? (
+                          <span style={{ color: "#1a7f5a", fontWeight: 600, fontSize: "12px" }}>
+                            {rowRelatedVouchers.length}张
+                          </span>
+                        ) : (
+                          <span style={{ color: "#c4cdd6", fontSize: "12px" }}>—</span>
+                        )}
+                      </td>
+                      <td style={cellStyle()}>
+                        <span style={{
+                          background: `${STATUS_COLOR[item.status] ?? "#8a9bb0"}22`,
+                          color: STATUS_COLOR[item.status] ?? "#8a9bb0",
+                          borderRadius: "999px", padding: "2px 8px", fontSize: "12px"
+                        }}>
+                          {t(DOC_STATUS_LABELS, item.status)}
                         </span>
-                      ) : (
-                        <span style={{ color: "#d97706", fontSize: "12px" }}>待上传</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td style={{ ...cellStyle(), textAlign: "center" as const }}>
+                        {item.attachmentIds.length > 0 ? (
+                          <span style={{ color: "#1a7f5a", fontWeight: 600 }}>
+                            {item.attachmentIds.length}
+                          </span>
+                        ) : (
+                          <span style={{ color: "#d97706", fontSize: "12px" }}>待上传</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -291,6 +384,16 @@ export function DocumentsPage() {
                 border: "1.5px solid rgba(20,40,60,0.18)", borderRadius: "10px",
                 padding: "18px 20px", background: "#fff", marginBottom: "16px"
               }}>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px", gap: "8px" }}>
+                  {supportsPrintableDocument(detail.documentType) && (
+                    <button
+                      onClick={handlePrintDocument}
+                      style={{ background: "#1e2a37", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 14px", cursor: "pointer", fontSize: "12px" }}
+                    >
+                      打印单据
+                    </button>
+                  )}
+                </div>
                 <div style={{ textAlign: "center", marginBottom: "14px", borderBottom: "1.5px solid rgba(20,40,60,0.12)", paddingBottom: "12px" }}>
                   <div style={{ fontSize: "15px", fontWeight: 700, letterSpacing: "2px" }}>{detail.title}</div>
                   <div style={{ fontSize: "12px", color: "#6c7a89", marginTop: "4px" }}>
@@ -299,24 +402,50 @@ export function DocumentsPage() {
                 </div>
 
                 {/* 基本信息表格 */}
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                  <tbody>
-                    {[
-                      ["单据编号", detail.id.slice(-12).toUpperCase()],
-                      ["单据类型", t(DOC_TYPE_LABELS, detail.documentType)],
-                      ["当前状态", t(DOC_STATUS_LABELS, detail.status)],
-                      ["责任部门", detail.ownerDepartment || "—"],
-                      ["关联事项", detail.businessEventId || "—"],
-                      ["创建日期", detail.createdAt?.slice(0, 10) ?? "—"],
-                      ...(detail.archivedAt ? [["归档日期", detail.archivedAt.slice(0, 10)]] : [])
-                    ].map(([label, value]) => (
-                      <tr key={label} style={{ borderBottom: "1px solid rgba(20,40,60,0.06)" }}>
-                        <td style={{ padding: "7px 10px", color: "#6c7a89", width: "80px", fontWeight: 500, fontSize: "12.5px" }}>{label}</td>
-                        <td style={{ padding: "7px 10px" }}>{value}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {(() => {
+                  const relations = buildDocumentRelations({
+                    document: detail,
+                    tasks: relatedTasks,
+                    taxItems: relatedTaxItems,
+                    vouchers: relatedVouchers
+                  });
+                  const rows: [string, React.ReactNode][] = [
+                    ["单据编号", `DOC-${shortId(detail.id)}`],
+                    ["单据类型", t(DOC_TYPE_LABELS, detail.documentType)],
+                    ["当前状态", t(DOC_STATUS_LABELS, detail.status)],
+                    ["责任部门", detail.ownerDepartment || "—"],
+                    ["关联事项", detail.businessEventId
+                      ? <span style={{ fontFamily: "monospace", fontSize: "11px", color: "#4f8ef7" }}>{shortId(detail.businessEventId)}</span>
+                      : "—"
+                    ],
+                    ["关联任务", relations.tasks.length > 0
+                      ? <span style={{ color: "#2563eb" }}>{relations.tasks.length} 个</span>
+                      : <span style={{ color: "#c4cdd6" }}>暂无任务</span>
+                    ],
+                    ["关联税务", relations.taxItems.length > 0
+                      ? <span style={{ color: "#d97706" }}>{relations.taxItems.length} 条</span>
+                      : <span style={{ color: "#c4cdd6" }}>暂无税务事项</span>
+                    ],
+                    ["关联凭证", relations.vouchers.length > 0
+                      ? <span style={{ color: "#1a7f5a" }}>{relations.vouchers.length} 张（{relations.vouchers.map((v) => `V-${shortId(v.id)}`).join("、")}）</span>
+                      : <span style={{ color: "#c4cdd6" }}>暂无凭证</span>
+                    ],
+                    ["创建日期", detail.createdAt?.slice(0, 10) ?? "—"],
+                    ...(detail.archivedAt ? [["归档日期", detail.archivedAt.slice(0, 10)] as [string, React.ReactNode]] : [])
+                  ];
+                  return (
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                      <tbody>
+                        {rows.map(([label, value]) => (
+                          <tr key={label} style={{ borderBottom: "1px solid rgba(20,40,60,0.06)" }}>
+                            <td style={{ padding: "7px 10px", color: "#6c7a89", width: "80px", fontWeight: 500, fontSize: "12.5px" }}>{label}</td>
+                            <td style={{ padding: "7px 10px" }}>{value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
 
                 {/* 单据说明/备注 */}
                 {detail.notes && (
@@ -330,6 +459,77 @@ export function DocumentsPage() {
                     {detail.notes}
                   </div>
                 )}
+              </div>
+
+              <div style={{ marginBottom: "16px", display: "grid", gap: "12px" }}>
+                <div style={{ border: "1px solid rgba(20,40,60,0.08)", borderRadius: "10px", padding: "12px 14px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <h4 style={{ margin: 0, fontSize: "13.5px" }}>关联任务</h4>
+                    <button
+                      onClick={() => navigate("/tasks", { state: { businessEventId: detail.businessEventId } })}
+                      style={{ color: "#2563eb", background: "none", border: "none", cursor: "pointer", fontSize: "12px", padding: 0 }}
+                    >
+                      查看任务中心
+                    </button>
+                  </div>
+                  {relatedTasks.length > 0 ? (
+                    <ul style={{ margin: 0, paddingLeft: "18px", lineHeight: 1.8, fontSize: "12.5px" }}>
+                      {relatedTasks.map((task) => (
+                        <li key={task.id}>
+                          {task.title}｜{task.assigneeDepartment || "未分配"}｜{task.status}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div style={{ color: "#9aa5b4", fontSize: "12px" }}>暂无关联任务</div>
+                  )}
+                </div>
+
+                <div style={{ border: "1px solid rgba(20,40,60,0.08)", borderRadius: "10px", padding: "12px 14px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <h4 style={{ margin: 0, fontSize: "13.5px" }}>关联税务事项</h4>
+                    <button
+                      onClick={() => navigate("/tax", { state: { businessEventId: detail.businessEventId } })}
+                      style={{ color: "#2563eb", background: "none", border: "none", cursor: "pointer", fontSize: "12px", padding: 0 }}
+                    >
+                      查看税务中心
+                    </button>
+                  </div>
+                  {relatedTaxItems.length > 0 ? (
+                    <ul style={{ margin: 0, paddingLeft: "18px", lineHeight: 1.8, fontSize: "12.5px" }}>
+                      {relatedTaxItems.map((item) => (
+                        <li key={item.id}>
+                          {item.taxType}｜{item.filingPeriod}｜{item.treatment}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div style={{ color: "#9aa5b4", fontSize: "12px" }}>暂无关联税务事项</div>
+                  )}
+                </div>
+
+                <div style={{ border: "1px solid rgba(20,40,60,0.08)", borderRadius: "10px", padding: "12px 14px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <h4 style={{ margin: 0, fontSize: "13.5px" }}>关联凭证</h4>
+                    <button
+                      onClick={() => navigate("/vouchers", { state: { businessEventId: detail.businessEventId } })}
+                      style={{ color: "#2563eb", background: "none", border: "none", cursor: "pointer", fontSize: "12px", padding: 0 }}
+                    >
+                      查看凭证中心
+                    </button>
+                  </div>
+                  {relatedVouchers.length > 0 ? (
+                    <ul style={{ margin: 0, paddingLeft: "18px", lineHeight: 1.8, fontSize: "12.5px" }}>
+                      {relatedVouchers.map((voucher) => (
+                        <li key={voucher.id}>
+                          V-{shortId(voucher.id)}｜{voucher.summary}｜{voucher.status}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div style={{ color: "#9aa5b4", fontSize: "12px" }}>暂无关联凭证</div>
+                  )}
+                </div>
               </div>
 
               {/* 原始凭证附件 */}

@@ -336,12 +336,18 @@ export async function uploadDocumentFileRaw(documentId: string, file: File) {
   return response.json() as Promise<DocumentDetail>;
 }
 
-export async function listTaxItems() {
-  return request<{ items: TaxItem[]; total: number }>("/api/tax-items");
+export async function listTaxItems(filters?: { businessEventId?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.businessEventId) params.set("businessEventId", filters.businessEventId);
+  const qs = params.toString();
+  return request<{ items: TaxItem[]; total: number }>(`/api/tax-items${qs ? "?" + qs : ""}`);
 }
 
-export async function listVouchers() {
-  return request<{ items: Voucher[]; total: number }>("/api/vouchers");
+export async function listVouchers(filters?: { businessEventId?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.businessEventId) params.set("businessEventId", filters.businessEventId);
+  const qs = params.toString();
+  return request<{ items: Voucher[]; total: number }>(`/api/vouchers${qs ? "?" + qs : ""}`);
 }
 
 export interface VoucherTemplate {
