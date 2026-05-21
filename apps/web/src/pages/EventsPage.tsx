@@ -62,6 +62,43 @@ function RenderTaskTree({ nodes }: { nodes: EventDetail["taskTree"] }) {
   );
 }
 
+function EventsHelpModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "#fff", borderRadius: "16px", padding: "28px 32px", maxWidth: "560px", width: "92%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)", maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>经营事项总线 · 业务关系与操作说明</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "#9aa5b4" }}>✕</button>
+        </div>
+        <div style={{ display: "grid", gap: "14px", fontSize: "13.5px", lineHeight: 1.75 }}>
+          <div style={{ background: "rgba(79,142,247,0.06)", borderRadius: "10px", padding: "14px 16px", border: "1px solid rgba(79,142,247,0.2)" }}>
+            <strong>相关页面的关系</strong><br />
+            <strong>经营事项页</strong>是整个流程的起点，负责记录业务背景和 AI 分析结果。后续会把事项拆到<strong>任务中心</strong>推进执行，沉淀到<strong>单据中心</strong>、<strong>凭证中心</strong>和<strong>税务中心</strong>，最终由<strong>风险勾稽中心</strong>做横向检查和闭环跟踪。
+          </div>
+          <div><strong>标准业务流程</strong>
+            <ol style={{ margin: "6px 0 0 18px", padding: 0 }}>
+              <li>录入业务描述、金额、部门和发生日期</li>
+              <li>执行 AI 分析，识别业务类型、生成任务和处理建议</li>
+              <li>根据分析结果补单据、做凭证、形成税务事项</li>
+              <li>由任务中心推进执行，必要时触发风险检查</li>
+              <li>业务完成后进入归档、申报和风险关闭阶段</li>
+            </ol>
+          </div>
+          <div><strong>本页负责什么</strong>
+            <div>这里负责定义“发生了什么业务”，并把业务转换成系统内可执行、可追踪的经营事项。它不直接代替单据归档、记账、申报，而是为下游页面提供统一来源。</div>
+          </div>
+          <div><strong>本页常见操作</strong>
+            <div>常见操作包括：新建事项、查看 AI 分析结果、更新事项状态、查看任务树、查看流程位置、执行风险检查。若本页描述、金额或类型录入错误，后续单据、凭证和税务结果都会偏移。</div>
+          </div>
+          <div style={{ background: "rgba(255,165,0,0.08)", borderRadius: "8px", padding: "10px 14px", fontSize: "12.5px", color: "#b45309" }}>
+            ⚠️ 事项页是业务源头。发现描述不完整、金额错误或类型判断不准时，应先在这里纠正，再继续后续单据、凭证和税务处理。
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EventsPage() {
   const navigate = useNavigate();
   const [events, setEvents] = useState<BusinessEvent[]>([]);
@@ -69,6 +106,7 @@ export function EventsPage() {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState("idle");
   const [message, setMessage] = useState("");
+  const [showHelp, setShowHelp] = useState(false);
   const [form, setForm] = useState({
     type: "general",
     title: "",
@@ -228,12 +266,33 @@ export function EventsPage() {
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
+      {showHelp ? <EventsHelpModal onClose={() => setShowHelp(false)} /> : null}
       <div className="page-header">
         <div>
           <div className="page-title">经营事项总线</div>
           <div className="page-subtitle">登记、分析与跟踪所有经营事项</div>
         </div>
-        {message && <span className="badge badge-blue">{message}</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {message ? <span className="badge badge-blue">{message}</span> : null}
+          <button
+            type="button"
+            onClick={() => setShowHelp(true)}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "999px",
+              border: "1px solid var(--line)",
+              background: "var(--panel)",
+              color: "var(--text-main)",
+              fontWeight: 700,
+              cursor: "pointer"
+            }}
+            aria-label="查看经营事项页说明"
+            title="查看经营事项页说明"
+          >
+            ?
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20 }}>
