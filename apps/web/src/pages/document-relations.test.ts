@@ -7,10 +7,13 @@ import type {
 } from "@finance-taxation/domain-model";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ExpenseClaimTemplate } from "./document-templates/ExpenseClaimTemplate";
+import { InvoiceBundleTemplate } from "./document-templates/InvoiceBundleTemplate";
 import {
   buildDocumentRelations,
   buildExpenseDocumentTemplateModel,
   buildPrintableDocumentHtml,
+  getExpenseDocumentTemplateKind,
   supportsPrintableDocument
 } from "./document-relations";
 import {
@@ -153,6 +156,21 @@ function testSupportsPrintableDocument() {
   assert(supportsPrintableDocument("supplier_invoice") === false, "supplier invoice should not be printable");
 }
 
+function testExpenseTemplateSelection() {
+  assert(
+    getExpenseDocumentTemplateKind("expense_claim") === "expense_claim",
+    "expected expense claim template"
+  );
+  assert(
+    getExpenseDocumentTemplateKind("invoice_bundle") === "invoice_bundle",
+    "expected invoice bundle template"
+  );
+  assert(
+    getExpenseDocumentTemplateKind("supporting_document") === null,
+    "expected no specialized template"
+  );
+}
+
 function testBuildExpenseDocumentTemplateModel() {
   const model = buildExpenseDocumentTemplateModel({
     document: {
@@ -240,10 +258,66 @@ function testSharedExpenseTemplatePrimitives() {
   assert(html.includes("<li>无</li>"), "expected shared empty list fallback in list");
 }
 
+function testExpenseClaimTemplateRendersReadOnlySections() {
+  const model = buildExpenseDocumentTemplateModel({
+    document: {
+      ...document,
+      documentType: "expense_claim",
+      notes: "客户接待与出行费用",
+      attachments
+    },
+    tasks,
+    taxItems,
+    vouchers
+  });
+
+  const html = renderToStaticMarkup(createElement(ExpenseClaimTemplate, { model }));
+
+  assert(html.includes("<h2>单据信息</h2>"), "expected expense claim base info section");
+  assert(html.includes("<h2>报销事由</h2>"), "expected expense claim notes section");
+  assert(html.includes("<h2>关联任务</h2>"), "expected expense claim tasks section");
+  assert(html.includes("<h2>关联税务事项</h2>"), "expected expense claim tax section");
+  assert(html.includes("<h2>关联凭证</h2>"), "expected expense claim voucher section");
+  assert(html.includes("客户接待与出行费用"), "expected expense claim notes content");
+  assert(!html.includes("<input"), "expected no input fields in expense claim template");
+  assert(!html.includes("<textarea"), "expected no textarea fields in expense claim template");
+  assert(!html.includes("<button"), "expected no button fields in expense claim template");
+}
+
+function testInvoiceBundleTemplateRendersReadOnlySections() {
+  const model = buildExpenseDocumentTemplateModel({
+    document: {
+      ...document,
+      documentType: "invoice_bundle",
+      title: "报销票据包",
+      notes: null,
+      attachments
+    },
+    tasks,
+    taxItems,
+    vouchers
+  });
+
+  const html = renderToStaticMarkup(createElement(InvoiceBundleTemplate, { model }));
+
+  assert(html.includes("<h2>票据包信息</h2>"), "expected invoice bundle base info section");
+  assert(html.includes("<h2>附件清单</h2>"), "expected invoice bundle attachment section");
+  assert(html.includes("<h2>关联任务</h2>"), "expected invoice bundle tasks section");
+  assert(html.includes("<h2>关联税务事项</h2>"), "expected invoice bundle tax section");
+  assert(html.includes("<h2>关联凭证</h2>"), "expected invoice bundle voucher section");
+  assert(html.includes("expense-receipt.pdf"), "expected invoice bundle attachment content");
+  assert(!html.includes("<input"), "expected no input fields in invoice bundle template");
+  assert(!html.includes("<textarea"), "expected no textarea fields in invoice bundle template");
+  assert(!html.includes("<button"), "expected no button fields in invoice bundle template");
+}
+
 testBuildDocumentRelations();
 testSupportsPrintableDocument();
+testExpenseTemplateSelection();
 testBuildExpenseDocumentTemplateModel();
 testBuildPrintableDocumentHtmlUsesFormalSections();
 testSharedExpenseTemplatePrimitives();
+testExpenseClaimTemplateRendersReadOnlySections();
+testInvoiceBundleTemplateRendersReadOnlySections();
 
 console.log("document-relations-ok");

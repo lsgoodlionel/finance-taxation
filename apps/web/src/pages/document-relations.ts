@@ -63,6 +63,18 @@ export function supportsPrintableDocument(documentType: string): documentType is
   return documentType === "expense_claim" || documentType === "invoice_bundle";
 }
 
+export function getExpenseDocumentTemplateKind(documentType: string): PrintableDocumentType | null {
+  if (documentType === "expense_claim") {
+    return "expense_claim";
+  }
+
+  if (documentType === "invoice_bundle") {
+    return "invoice_bundle";
+  }
+
+  return null;
+}
+
 export function buildExpenseDocumentTemplateModel(
   input: PrintableDocumentInput
 ): ExpenseDocumentTemplateModel {
