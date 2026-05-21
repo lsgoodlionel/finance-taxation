@@ -827,7 +827,7 @@ export function AssistantPage() {
       )}
 
       <ProcessFlowCard
-        mode="compact"
+        mode="inline"
         title={flowTitle}
         subtitle={flowSubtitle}
         activeBranch={flowContext?.branch === "common" ? undefined : flowContext?.branch}

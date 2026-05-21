@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import type { Voucher } from "@finance-taxation/domain-model";
 
 function VoucherHelpModal({ onClose }: { onClose: () => void }) {
@@ -98,6 +99,8 @@ function cellStyle() {
 
 export function VouchersPage() {
   const { t } = useI18n();
+  const location = useLocation();
+  const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [selectedVoucherId, setSelectedVoucherId] = useState<string | null>(null);
   const [detail, setDetail] = useState<VoucherDetail | null>(null);
@@ -126,16 +129,23 @@ export function VouchersPage() {
         ]);
         setVouchers(payload.items);
         setTemplates(templatePayload.items);
-        const first = payload.items[0]?.id || null;
-        setSelectedVoucherId(first);
-        if (first) {
-          const firstDetail = await getVoucherDetail(first);
+        // If navigated from a flow node, prefer the voucher linked to that event
+        const linkedId = navEventId
+          ? payload.items.find((v) => v.businessEventId === navEventId)?.id ?? null
+          : null;
+        const targetId = linkedId ?? payload.items[0]?.id ?? null;
+        setSelectedVoucherId(targetId);
+        if (targetId) {
+          const firstDetail = await getVoucherDetail(targetId);
           setDetail(firstDetail);
           setSummaryDraft(firstDetail.summary);
           setTemplateForm((current) => ({
             ...current,
-            businessEventId: firstDetail.businessEventId
+            businessEventId: firstDetail.businessEventId || navEventId || current.businessEventId
           }));
+        } else if (navEventId) {
+          // No existing voucher for this event — pre-fill form for creating one
+          setTemplateForm((current) => ({ ...current, businessEventId: navEventId }));
         }
         setMessage(`已加载 ${payload.total} 个凭证对象和 ${templatePayload.total} 个模板。`);
       } catch (error) {

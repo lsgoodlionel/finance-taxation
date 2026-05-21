@@ -20,7 +20,7 @@ export function ProcessFlowStageSection({
   if (branch && branch !== "common") {
     return (
       <ProcessFlowCard
-        mode="compact"
+        mode="inline"
         title={title}
         subtitle={subtitle}
         activeBranch={branch}
@@ -38,7 +38,7 @@ export function ProcessFlowStageSection({
 
   return (
     <ProcessFlowCard
-      mode="compact"
+      mode="inline"
       title={title}
       subtitle={subtitle}
       currentNodeId={pageContext.currentNodeId}

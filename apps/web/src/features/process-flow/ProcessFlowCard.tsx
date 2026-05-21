@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getMenu } from "../../lib/api";
 import {
@@ -50,6 +50,156 @@ const STATUS_STYLE: Record<
     shadow: "0 12px 24px rgba(220,38,38,0.14)"
   }
 };
+
+const STATUS_ICON: Record<ProcessFlowNodeStatus, string> = {
+  pending: "○",
+  current: "⬤",
+  done: "✓",
+  blocked: "✕"
+};
+
+// ─── Inline strip ─────────────────────────────────────────────────────────────
+
+function ProcessFlowInlineStrip({
+  nodes,
+  onNodeClick,
+  resolveTarget,
+  hasPermission
+}: {
+  nodes: ProcessFlowResolvedNode[];
+  onNodeClick: (node: ProcessFlowResolvedNode) => void;
+  resolveTarget: (node: ProcessFlowResolvedNode) => string | undefined;
+  hasPermission: (route?: string) => boolean;
+}) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showTooltip(id: string) {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setHoveredId(id);
+  }
+  function scheduleHide() {
+    hideTimer.current = setTimeout(() => setHoveredId(null), 160);
+  }
+  function cancelHide() {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", padding: "2px 0" }}>
+      {nodes.map((node, i) => {
+        const target = resolveTarget(node);
+        const canNav = hasPermission(target);
+        const isInteractive = Boolean(canNav && target);
+        const st = STATUS_STYLE[node.status];
+        const isHovered = hoveredId === node.id;
+        const openLeft = i <= nodes.length / 2;
+
+        const pillStyle: React.CSSProperties = {
+          padding: "3px 10px",
+          borderRadius: 999,
+          border: `1.5px solid ${st.borderColor}`,
+          background: st.background,
+          color: st.accent,
+          fontSize: 11.5,
+          fontWeight: 600,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          lineHeight: 1.4,
+          cursor: isInteractive ? "pointer" : "default",
+          whiteSpace: "nowrap" as const
+        };
+
+        return (
+          <Fragment key={node.id}>
+            {i > 0 && (
+              <span style={{ color: "rgba(20,40,60,0.22)", fontSize: 12, lineHeight: 1, flexShrink: 0 }}>→</span>
+            )}
+            <div
+              style={{ position: "relative", flexShrink: 0 }}
+              onMouseEnter={() => showTooltip(node.id)}
+              onMouseLeave={scheduleHide}
+            >
+              {isInteractive ? (
+                <button type="button" onClick={() => onNodeClick(node)} style={pillStyle}>
+                  <span style={{ fontSize: 9 }}>{STATUS_ICON[node.status]}</span>
+                  {node.title}
+                </button>
+              ) : (
+                <span style={pillStyle}>
+                  <span style={{ fontSize: 9 }}>{STATUS_ICON[node.status]}</span>
+                  {node.title}
+                </span>
+              )}
+
+              {isHovered && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 6px)",
+                    ...(openLeft ? { left: 0 } : { right: 0 }),
+                    zIndex: 400,
+                    width: 272,
+                    background: "rgba(255,255,255,0.98)",
+                    border: "1px solid rgba(20,40,60,0.12)",
+                    borderRadius: 14,
+                    padding: "12px 14px",
+                    boxShadow: "0 8px 28px rgba(0,0,0,0.14)",
+                    display: "grid",
+                    gap: 8
+                  }}
+                  onMouseEnter={cancelHide}
+                  onMouseLeave={scheduleHide}
+                >
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                    <span className={`badge ${getBranchBadgeClassName(node.branch)}`}>
+                      {getBranchLabel(node.branch)}
+                    </span>
+                    <span
+                      className="badge"
+                      style={{ background: "rgba(255,255,255,0.72)", color: st.accent, border: `1px solid ${st.borderColor}` }}
+                    >
+                      {STATUS_ICON[node.status]}{" "}
+                      {node.status === "current" ? "当前" : node.status === "done" ? "已完成" : node.status === "blocked" ? "阻塞" : "待处理"}
+                    </span>
+                    <span style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>{node.title}</span>
+                  </div>
+                  <div style={{ fontSize: 12, lineHeight: 1.65, color: "var(--c-text-muted)" }}>{node.description}</div>
+                  {node.departments.length > 0 && renderList("牵头部门", node.departments)}
+                  {node.documents.length > 0 && renderList("关键单据", node.documents)}
+                  {node.taxes.length > 0 && renderList("税务要点", node.taxes)}
+                  {node.vouchers.length > 0 && renderList("凭证线索", node.vouchers)}
+                  {isInteractive && target && (
+                    <button
+                      type="button"
+                      onClick={() => onNodeClick(node)}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: 999,
+                        background: st.accent,
+                        color: "#fff",
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textAlign: "center"
+                      }}
+                    >
+                      → 跳转 {target}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Full node card ────────────────────────────────────────────────────────────
 
 function nodeButtonLabel(target?: string) {
   if (!target) {
@@ -181,7 +331,7 @@ function ProcessFlowNodeCard({
 }
 
 export interface ProcessFlowCardProps {
-  mode?: "full" | "compact";
+  mode?: "full" | "compact" | "inline";
   title?: string;
   subtitle?: string;
   activeBranch?: ProcessFlowBranch;
@@ -296,6 +446,40 @@ export function ProcessFlowCard({
           );
         })}
       </div>
+    );
+  }
+
+  if (mode === "inline") {
+    const inlineNodes = activeBranch ? contextualNodes : overviewSections.flatMap((s) =>
+      s.nodes.map((n) => resolvedNodeMap.get(n.id) ?? { ...n, status: "pending" as const })
+    );
+    return (
+      <section className="card">
+        <div className="card-header" style={{ paddingBottom: 6 }}>
+          <div style={{ minWidth: 0 }}>
+            <span className="card-title" style={{ fontSize: 13.5 }}>{title}</span>
+            {subtitle && <div className="text-muted text-sm" style={{ marginTop: 2 }}>{subtitle}</div>}
+          </div>
+          <div className="flex-row" style={{ flexShrink: 0 }}>
+            {activeBranch && (
+              <span className={`badge ${getBranchBadgeClassName(activeBranch)}`}>{getBranchLabel(activeBranch)}</span>
+            )}
+            {(currentNodeId ?? contextualState?.currentNodeId) && (
+              <span className="badge badge-green" style={{ fontSize: 11 }}>
+                当前: {currentNodeTitle ?? currentNodeId ?? contextualState?.currentNodeId}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="card-body" style={{ paddingTop: 6, paddingBottom: 12 }}>
+          <ProcessFlowInlineStrip
+            nodes={inlineNodes}
+            onNodeClick={handleNodeClick}
+            resolveTarget={resolveNodeNavigationTarget}
+            hasPermission={hasRoutePermission}
+          />
+        </div>
+      </section>
     );
   }
 

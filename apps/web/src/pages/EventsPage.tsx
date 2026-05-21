@@ -125,11 +125,14 @@ export function EventsPage() {
     try {
       const payload = await listEvents();
       setEvents(payload.items);
-      const first = payload.items[0]?.id ?? null;
-      setSelectedEventId(first);
+      const savedId = sessionStorage.getItem("events_selectedEventId");
+      const targetId = (savedId && payload.items.some((e) => e.id === savedId))
+        ? savedId
+        : payload.items[0]?.id ?? null;
+      setSelectedEventId(targetId);
       setMessage(`已加载 ${payload.total} 条经营事项`);
-      if (first) {
-        const d = await getEventDetail(first);
+      if (targetId) {
+        const d = await getEventDetail(targetId);
         setDetail(d);
       } else {
         setDetail(null);
@@ -386,6 +389,7 @@ export function EventsPage() {
                   <button
                     key={evt.id}
                     onClick={() => {
+                      sessionStorage.setItem("events_selectedEventId", evt.id);
                       setSelectedEventId(evt.id);
                       setStatusDraft(evt.status);
                       void refreshDetail(evt.id);
@@ -468,9 +472,9 @@ export function EventsPage() {
             {processFlowContext && (
               <div style={{ marginBottom: 24 }}>
                 <ProcessFlowCard
-                  mode="compact"
+                  mode="inline"
                   title="当前事项流程位置"
-                  subtitle="根据当前事项详情自动高亮，可点击节点进入对应业务页继续处理。"
+                  subtitle="悬停节点查看详情，点击可跳转处理"
                   activeBranch={processFlowContext.branch === "common" ? undefined : processFlowContext.branch}
                   currentNodeId={processFlowContext.currentNodeId}
                   nodes={processFlowContext.nodes}

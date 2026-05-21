@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import type { GeneratedDocument } from "@finance-taxation/domain-model";
 import {
   archiveDocument,
@@ -82,6 +83,8 @@ function DocumentsHelpModal({ onClose }: { onClose: () => void }) {
 
 export function DocumentsPage() {
   const { t } = useI18n();
+  const location = useLocation();
+  const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [detail, setDetail] = useState<DocumentDetail | null>(null);
@@ -98,9 +101,12 @@ export function DocumentsPage() {
     try {
       const payload = await listDocuments();
       setDocuments(payload.items);
-      const first = payload.items[0]?.id ?? null;
-      setSelectedDocumentId(first);
-      if (first) setDetail(await getDocumentDetail(first));
+      const linkedId = navEventId
+        ? payload.items.find((d) => d.businessEventId === navEventId)?.id ?? null
+        : null;
+      const targetId = linkedId ?? payload.items[0]?.id ?? null;
+      setSelectedDocumentId(targetId);
+      if (targetId) setDetail(await getDocumentDetail(targetId));
       setMessage(`已加载 ${payload.total} 个单据。`);
     } catch (error) {
       setMessage((error as Error).message);
