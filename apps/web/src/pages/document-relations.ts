@@ -20,6 +20,7 @@ type DocumentLike = Pick<
   notes?: string | null;
   attachments?: DocumentAttachmentRecord[];
 };
+type PrintableDocumentType = "expense_claim" | "invoice_bundle";
 
 interface BuildDocumentRelationsInput {
   document: DocumentLike;
@@ -36,7 +37,7 @@ interface PrintableDocumentInput {
 }
 
 export interface ExpenseDocumentTemplateModel {
-  documentType: "expense_claim" | "invoice_bundle";
+  documentType: PrintableDocumentType;
   title: string;
   documentId: string;
   businessEventId: string;
@@ -58,15 +59,19 @@ export function buildDocumentRelations(input: BuildDocumentRelationsInput) {
   };
 }
 
-export function supportsPrintableDocument(documentType: string) {
+export function supportsPrintableDocument(documentType: string): documentType is PrintableDocumentType {
   return documentType === "expense_claim" || documentType === "invoice_bundle";
 }
 
 export function buildExpenseDocumentTemplateModel(
   input: PrintableDocumentInput
 ): ExpenseDocumentTemplateModel {
+  if (!supportsPrintableDocument(input.document.documentType)) {
+    throw new Error(`Unsupported printable document type: ${input.document.documentType}`);
+  }
+
   return {
-    documentType: input.document.documentType as "expense_claim" | "invoice_bundle",
+    documentType: input.document.documentType,
     title: input.document.title,
     documentId: input.document.id,
     businessEventId: input.document.businessEventId,
