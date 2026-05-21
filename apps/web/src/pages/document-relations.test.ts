@@ -5,12 +5,23 @@ import type {
   TaxItem,
   Voucher
 } from "@finance-taxation/domain-model";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildDocumentRelations,
   buildExpenseDocumentTemplateModel,
   buildPrintableDocumentHtml,
   supportsPrintableDocument
 } from "./document-relations";
+import {
+  TEMPLATE_EMPTY_LIST_TEXT,
+  TEMPLATE_EMPTY_VALUE,
+  TemplateBulletList,
+  TemplateCallout,
+  TemplateKeyValueTable,
+  TemplateSection,
+  normalizeTemplateText
+} from "./document-templates/shared";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -191,9 +202,41 @@ function testBuildPrintableDocumentHtmlUsesFormalSections() {
   assert(html.includes("voucher-1｜费用报销草稿｜review_required"), "expected related voucher content");
 }
 
+function testSharedExpenseTemplatePrimitives() {
+  assert(TEMPLATE_EMPTY_VALUE === "—", "expected shared empty field fallback");
+  assert(TEMPLATE_EMPTY_LIST_TEXT === "无", "expected shared empty list fallback");
+  assert(normalizeTemplateText("") === "—", "expected empty string to normalize to field fallback");
+  assert(
+    normalizeTemplateText("已补充说明", TEMPLATE_EMPTY_LIST_TEXT) === "已补充说明",
+    "expected non-empty text to be preserved"
+  );
+
+  const html = renderToStaticMarkup(
+    createElement(
+      TemplateSection,
+      { title: "模板基础块" },
+      createElement(TemplateKeyValueTable, {
+        rows: [
+          { label: "报销单号", value: normalizeTemplateText("EXP-001") },
+          { label: "归档日期", value: normalizeTemplateText(null) }
+        ]
+      }),
+      createElement(TemplateCallout, null, normalizeTemplateText("差旅与接待费用")),
+      createElement(TemplateBulletList, { items: [] })
+    )
+  );
+
+  assert(html.includes("<h2>模板基础块</h2>"), "expected shared section heading");
+  assert(html.includes("<td>报销单号</td><td>EXP-001</td>"), "expected key value rows to render");
+  assert(html.includes("<td>归档日期</td><td>—</td>"), "expected normalized fallback value in table");
+  assert(html.includes("差旅与接待费用"), "expected callout content");
+  assert(html.includes("<li>无</li>"), "expected shared empty list fallback in list");
+}
+
 testBuildDocumentRelations();
 testSupportsPrintableDocument();
 testBuildExpenseDocumentTemplateModel();
 testBuildPrintableDocumentHtmlUsesFormalSections();
+testSharedExpenseTemplatePrimitives();
 
 console.log("document-relations-ok");
