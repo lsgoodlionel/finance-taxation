@@ -29,6 +29,10 @@ function assert(condition: unknown, message: string): asserts condition {
   }
 }
 
+function countOccurrences(haystack: string, needle: string) {
+  return haystack.split(needle).length - 1;
+}
+
 const document: GeneratedDocument = {
   id: "doc-1",
   companyId: "company-1",
@@ -218,18 +222,21 @@ function testSharedExpenseTemplatePrimitives() {
       createElement(TemplateKeyValueTable, {
         rows: [
           { label: "报销单号", value: normalizeTemplateText("EXP-001") },
+          { label: "报销单号", value: normalizeTemplateText("EXP-001") },
           { label: "归档日期", value: normalizeTemplateText(null) }
         ]
       }),
       createElement(TemplateCallout, null, normalizeTemplateText("差旅与接待费用")),
+      createElement(TemplateBulletList, { items: ["发票", "发票"] }),
       createElement(TemplateBulletList, { items: [] })
     )
   );
 
   assert(html.includes("<h2>模板基础块</h2>"), "expected shared section heading");
-  assert(html.includes("<td>报销单号</td><td>EXP-001</td>"), "expected key value rows to render");
-  assert(html.includes("<td>归档日期</td><td>—</td>"), "expected normalized fallback value in table");
+  assert(countOccurrences(html, "<td>报销单号</td><td>EXP-001</td>") === 2, "expected duplicate rows to render");
+  assert(html.includes("归档日期</td><td>—</td>"), "expected normalized fallback value in table");
   assert(html.includes("差旅与接待费用"), "expected callout content");
+  assert(countOccurrences(html, "<li>发票</li>") === 2, "expected duplicate list items to render");
   assert(html.includes("<li>无</li>"), "expected shared empty list fallback in list");
 }
 
