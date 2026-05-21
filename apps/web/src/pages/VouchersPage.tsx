@@ -1,27 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Voucher } from "@finance-taxation/domain-model";
 
-const VOUCHER_HELP = [
-  {
-    title: "校验",
-    icon: "🔍",
-    summary: "自动核对借贷方是否平衡",
-    detail: "系统自动检查凭证的借方金额合计是否等于贷方金额合计，并验证科目编码是否合规。这是入账前的自我检查，不会修改任何数据。相当于核对计算结果是否正确。"
-  },
-  {
-    title: "审核",
-    icon: "✅",
-    summary: "财务负责人确认凭证真实合规",
-    detail: "由财务负责人（如董事长/财务总监）核实凭证内容的真实性、合理性和合规性，确认可以入账。审核通过后凭证进入「待过账」状态。相当于领导审核签字。审核后仍可撤回修改。"
-  },
-  {
-    title: "过账",
-    icon: "📒",
-    summary: "将凭证正式写入账簿（不可逆）",
-    detail: "将审核通过的凭证正式记录到总账和明细账，影响资产负债表、利润表等财务报表数据。过账后凭证不可修改或删除。请确认凭证内容无误后再执行此操作。相当于会计记账盖章。"
-  }
-];
-
 function VoucherHelpModal({ onClose }: { onClose: () => void }) {
   return (
     <div
@@ -40,7 +19,7 @@ function VoucherHelpModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>凭证操作说明</h3>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>凭证中心 · 业务关系与操作说明</h3>
           <button
             onClick={onClose}
             style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "#9aa5b4" }}
@@ -48,28 +27,35 @@ function VoucherHelpModal({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
-        <div style={{ display: "grid", gap: "16px" }}>
-          {VOUCHER_HELP.map((item) => (
-            <div key={item.title} style={{
-              border: "1px solid rgba(20,40,60,0.1)",
-              borderRadius: "10px", padding: "14px 16px"
-            }}>
-              <div style={{ fontWeight: 700, marginBottom: "6px", fontSize: "14px" }}>
-                {item.icon} {item.title}
-                <span style={{ fontWeight: 400, color: "#6c7a89", fontSize: "12.5px", marginLeft: "8px" }}>
-                  — {item.summary}
-                </span>
-              </div>
-              <div style={{ fontSize: "13px", color: "#4d5d6c", lineHeight: 1.7 }}>{item.detail}</div>
-            </div>
-          ))}
+        <div style={{ display: "grid", gap: "14px", fontSize: "13.5px", lineHeight: 1.75 }}>
+          <div style={{ background: "rgba(79,142,247,0.06)", borderRadius: "10px", padding: "14px 16px", border: "1px solid rgba(79,142,247,0.18)" }}>
+            <strong>三个中心的关系</strong><br />
+            <strong>任务中心</strong>负责分配执行动作，<strong>单据中心</strong>负责沉淀原始资料和业务单据，<strong>凭证中心</strong>负责把这些业务资料转成正式会计凭证并过账。凭证是三者中最靠后的财务结果层。
+          </div>
+          <div><strong>标准业务流程</strong>
+            <ol style={{ margin: "6px 0 0 18px", padding: 0 }}>
+              <li>事项分析后生成待执行任务</li>
+              <li>任务执行中补齐发票、回单、审批和附件</li>
+              <li>资料齐全后生成凭证草稿</li>
+              <li>在本页完成校验、审核、过账</li>
+              <li>过账后影响总账、报表和税务处理</li>
+            </ol>
+          </div>
+          <div><strong>本页负责什么</strong>
+            <div>凭证中心负责最终会计入账。这里关注的是摘要是否准确、分录是否平衡、科目是否正确、是否具备足够单据依据，以及是否已经可以正式过账。</div>
+          </div>
+          <div><strong>本页关键操作</strong>
+            <div><strong>校验</strong>：自动检查借贷平衡和基础格式。</div>
+            <div><strong>审核</strong>：由财务负责人确认业务真实、口径合理、资料充分。</div>
+            <div><strong>过账</strong>：把凭证正式写入账簿，影响总账和报表，属于不可逆关键动作。</div>
+          </div>
         </div>
         <div style={{
           marginTop: "20px", padding: "12px 14px",
           background: "rgba(255,165,0,0.08)", borderRadius: "8px",
           fontSize: "12.5px", color: "#b45309"
         }}>
-          ⚠️ <strong>注意：</strong>「过账」操作不可逆，请务必先「校验」和「审核」，确认无误后再执行过账。
+          ⚠️ <strong>注意：</strong>如果任务未完成或单据资料不完整，不应直接过账。请先回到任务中心或单据中心补齐依据，再在本页完成审核与过账。
         </div>
       </div>
     </div>
@@ -201,8 +187,11 @@ export function VouchersPage() {
     <section style={{ display: "grid", gap: "20px" }}>
       {showHelp && <VoucherHelpModal onClose={() => setShowHelp(false)} />}
       <article style={panelStyle()}>
-        <h2 style={{ marginTop: 0 }}>凭证中心</h2>
-        <p style={{ lineHeight: 1.8 }}>{message}</p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+          <h2 style={{ margin: 0 }}>凭证中心</h2>
+          <button onClick={() => setShowHelp(true)} title="业务说明" style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid rgba(79,142,247,0.6)", background: "rgba(79,142,247,0.08)", color: "#4f8ef7", fontWeight: 700, fontSize: "13px", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>?</button>
+        </div>
+        <p style={{ lineHeight: 1.8, marginTop: 0 }}>{message}</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: "10px", marginTop: "16px" }}>
           <select
             value={templateForm.templateKey}

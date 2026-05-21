@@ -8,21 +8,25 @@ function TasksHelpModal({ onClose }: { onClose: () => void }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
       <div style={{ background: "#fff", borderRadius: "16px", padding: "28px 32px", maxWidth: "560px", width: "92%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)", maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>任务中心 · 操作业务说明</h3>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>任务中心 · 业务关系与操作说明</h3>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "#9aa5b4" }}>✕</button>
         </div>
         <div style={{ display: "grid", gap: "14px", fontSize: "13.5px", lineHeight: 1.75 }}>
           <div style={{ background: "rgba(79,142,247,0.06)", borderRadius: "10px", padding: "14px 16px", border: "1px solid rgba(79,142,247,0.18)" }}>
-            <strong>任务从哪里来？</strong><br />
-            AI 财税助手在分析经营事项后，会自动拆解出需要执行的具体财务操作，以任务形式分配给对应岗位。例如：收到销售款 → AI 自动生成「开具增值税发票」「记录销售收入」等子任务。
+            <strong>三个中心的关系</strong><br />
+            <strong>任务中心</strong>是执行入口，负责把经营事项拆成可落地动作；<strong>单据中心</strong>负责补齐发票、回单、审批和附件；<strong>凭证中心</strong>负责最终入账。任务中心在三者中最靠前，决定后面该补哪些资料、由谁做、先做什么。
           </div>
-          <div><strong>任务执行流程</strong>
+          <div><strong>标准业务流程</strong>
             <ol style={{ margin: "6px 0 0 18px", padding: 0 }}>
-              <li>新任务默认为「待开始」状态</li>
-              <li>点击「开始执行」将任务推进为「进行中」</li>
-              <li>完成操作后点击「标记完成」关闭任务</li>
-              <li>若遇到阻碍（如缺少凭证），状态变为「已阻塞」，待问题解决后点击「解除阻塞」继续</li>
+              <li>AI 财税秘书或事项页分析业务后自动生成任务</li>
+              <li>任务中心分配责任部门和执行顺序</li>
+              <li>执行人根据任务要求前往单据中心补资料</li>
+              <li>资料齐全后前往凭证中心完成审核和过账</li>
+              <li>如有税务或归档要求，再进入税务、报表和归档流程</li>
             </ol>
+          </div>
+          <div><strong>本页负责什么</strong>
+            <div>这里不直接做会计入账，而是负责推进执行。任务做得好，后面的单据和凭证才能顺畅；任务卡住，通常意味着资料、审批或责任分工有问题。</div>
           </div>
           <div><strong>任务状态说明</strong>
             <div style={{ display: "grid", gap: "4px", marginTop: "6px" }}>
@@ -45,7 +49,7 @@ function TasksHelpModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           <div style={{ background: "rgba(255,165,0,0.08)", borderRadius: "8px", padding: "10px 14px", fontSize: "12.5px", color: "#b45309" }}>
-            ⚠️ 逾期任务（截止日已过但未完成）会以红色高亮显示，点击「仅逾期」按钮可快速筛选，优先处理高风险项。
+            ⚠️ 逾期任务（截止日已过但未完成）会以红色高亮显示。若任务长期阻塞，应先定位是“资料没补齐”还是“凭证无法推进”，再回到对应页面处理。
           </div>
         </div>
       </div>
