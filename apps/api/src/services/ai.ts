@@ -470,7 +470,7 @@ export async function extractKnowledgeFromDocument(
 
     const response = await client.messages.create({
       model: cfg.model,
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{ role: "user", content: contentBlocks as Parameters<typeof client.messages.create>[0]["messages"][0]["content"] }]
     });
     rawJson = (response.content.find((b) => b.type === "text") as { type: "text"; text: string } | undefined)?.text ?? "";
@@ -483,9 +483,16 @@ export async function extractKnowledgeFromDocument(
     const apiKey = cfg.provider === "ollama" ? "ollama" : cfg.apiKey;
     if (!apiKey) throw new Error(`${cfg.provider} API Key 未配置`);
 
-    const userText = input.type === "pdf"
-      ? `${KNOWLEDGE_EXTRACT_PROMPT}\n\n（注：PDF 文件内容请通过文件中的文字提取）`
-      : `${KNOWLEDGE_EXTRACT_PROMPT}\n\n文档内容：\n${input.text.slice(0, 8000)}`;
+    let userText: string;
+    if (input.type === "pdf") {
+      const buf = Buffer.from(input.base64, "base64");
+      const { text } = await pdfParse(buf);
+      const trimmed = text.trim();
+      if (!trimmed) throw new Error("PDF 无法提取文字内容（可能是扫描图片型 PDF，暂不支持）");
+      userText = `${KNOWLEDGE_EXTRACT_PROMPT}\n\n文档内容（PDF提取）：\n${trimmed.slice(0, 8000)}`;
+    } else {
+      userText = `${KNOWLEDGE_EXTRACT_PROMPT}\n\n文档内容：\n${input.text.slice(0, 8000)}`;
+    }
 
     const chatUrl = buildChatUrl(base);
     const response = await fetch(chatUrl, {
@@ -493,8 +500,11 @@ export async function extractKnowledgeFromDocument(
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: cfg.model,
-        max_tokens: 1024,
-        messages: [{ role: "user", content: userText }]
+        max_tokens: 2048,
+        messages: [
+          { role: "system", content: "你是文档分析助手。严格输出合法JSON对象，不添加任何其他文字、注释或Markdown格式。" },
+          { role: "user", content: userText }
+        ]
       }),
       signal: AbortSignal.timeout(180000)
     });
@@ -506,15 +516,16 @@ export async function extractKnowledgeFromDocument(
     rawJson = data.choices?.[0]?.message?.content ?? "";
   }
 
-  const jsonMatch = rawJson.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("AI 未返回有效 JSON");
+  const stripped = rawJson.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
+  const jsonMatch = stripped.match(/\{[\s\S]*\}/) ?? rawJson.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error(`AI 未返回有效 JSON。原始回复：${rawJson.slice(0, 300)}`);
 
-  const parsed = JSON.parse(jsonMatch[0]) as {
-    title?: string;
-    category?: string;
-    content?: string;
-    tags?: unknown;
-  };
+  let parsed: { title?: string; category?: string; content?: string; tags?: unknown };
+  try {
+    parsed = JSON.parse(jsonMatch[0]) as typeof parsed;
+  } catch {
+    throw new Error(`AI 返回了格式错误的 JSON。原始回复：${rawJson.slice(0, 300)}`);
+  }
 
   const validCategories = ["regulation", "policy", "faq", "template"];
   return {

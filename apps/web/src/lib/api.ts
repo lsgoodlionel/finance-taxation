@@ -185,7 +185,7 @@ async function requestText(path: string, init?: RequestInit): Promise<string> {
   return response.text();
 }
 
-async function requestMultipart<T>(path: string, formData: FormData): Promise<T> {
+async function requestMultipart<T>(path: string, formData: FormData, timeoutMs = 200000): Promise<T> {
   const token = getStoredToken();
   const headers = new Headers();
   if (token) {
@@ -194,7 +194,8 @@ async function requestMultipart<T>(path: string, formData: FormData): Promise<T>
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
     headers,
-    body: formData
+    body: formData,
+    signal: AbortSignal.timeout(timeoutMs)
   });
 
   if (!response.ok) {

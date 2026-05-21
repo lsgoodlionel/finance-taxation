@@ -278,31 +278,42 @@ export function KnowledgePage() {
 
     if (valid.length === 0) return;
 
-    const states: FileParseState[] = valid.map((f) => ({ file: f, status: "parsing" as const }));
-    setParseStates(states);
+    // Initialize all as "parsing", then process one by one
+    let currentStates: FileParseState[] = valid.map((f) => ({ file: f, status: "parsing" as const }));
+    setParseStates(currentStates);
     setShowParsePanel(true);
     setMessage(`正在解析 ${valid.length} 个文件，请稍候…`);
 
-    try {
-      const result = await parseKnowledgeDocuments(valid);
-      setParseStates(
-        result.items.map((item, i) => ({
-          file: valid[i]!,
-          status: (item.error ? "error" : "done") as FileParseState["status"],
-          result: item,
-          error: item.error
-        }))
-      );
-      const successCount = result.items.filter((i) => !i.error).length;
-      setMessage(`解析完成：${successCount} 个成功，${result.items.length - successCount} 个失败。`);
-    } catch (err) {
-      setParseStates(valid.map((f) => ({
-        file: f, status: "error" as FileParseState["status"],
-        result: { fileName: f.name, title: f.name, category: "policy" as const, content: "", tags: [], error: (err as Error).message }
-      })));
-      setMessage(`解析失败：${(err as Error).message}`);
+    let successCount = 0;
+    for (let i = 0; i < valid.length; i++) {
+      const file = valid[i]!;
+      let newEntry: FileParseState;
+      try {
+        const result = await parseKnowledgeDocuments([file]);
+        const item = result.items[0];
+        if (!item) throw new Error("服务器未返回解析结果");
+        const ok = !item.error;
+        if (ok) successCount++;
+        newEntry = { file, status: ok ? "done" : "error", result: item, error: item.error };
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const errorItem: ParsedKnowledgeItem = {
+          fileName: file.name,
+          title: file.name.replace(/\.[^.]+$/, ""),
+          category: "policy" as const,
+          content: "",
+          tags: [],
+          error: errMsg
+        };
+        newEntry = { file, status: "error", result: errorItem, error: errMsg };
+      }
+      // Update local array then set state with full snapshot — avoids React batching issues
+      currentStates = currentStates.map((s, idx) => (idx === i ? newEntry : s));
+      setParseStates([...currentStates]);
+      setMessage(`已完成 ${i + 1} / ${valid.length} 个文件…`);
     }
 
+    setMessage(`解析完成：${successCount} 个成功，${valid.length - successCount} 个失败。`);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
