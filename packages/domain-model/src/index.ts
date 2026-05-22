@@ -87,6 +87,7 @@ export interface BusinessEvent {
   currency: string;
   status: BusinessEventStatus;
   source: BusinessEventSource;
+  contractId?: string | null;
   counterpartyId?: string | null;
   projectId?: string | null;
   createdAt?: string;
@@ -451,6 +452,7 @@ export interface CreateBusinessEventInput {
   amount: string | null;
   currency: string;
   source: BusinessEventSource;
+  contractId?: string | null;
 }
 
 export interface CreateTaskInput {

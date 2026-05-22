@@ -265,6 +265,7 @@ export async function createEvent(input: {
   amount: string | null;
   currency: string;
   source: string;
+  contractId?: string | null;
 }) {
   return request<BusinessEvent>("/api/events", {
     method: "POST",

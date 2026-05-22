@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type {
   BalanceSheetReport,
   CashFlowReport,
@@ -48,6 +49,7 @@ function cellStyle() {
 }
 
 export function ReportsPage() {
+  const navigate = useNavigate();
   const [periodType, setPeriodType] = useState<"month" | "quarter" | "year">("month");
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(5);
@@ -97,6 +99,16 @@ export function ReportsPage() {
       <article style={panelStyle()}>
         <h2 style={{ marginTop: 0 }}>财务报表中心</h2>
         <p>{message}</p>
+        <div style={{ marginBottom: "12px", padding: "10px 14px", borderRadius: "10px", background: "rgba(79,142,247,0.08)", border: "1px solid rgba(79,142,247,0.18)", fontSize: "13px", color: "#355d8c" }}>
+          本页负责报表查看、快照和分析。若要统一导出工资、税务底稿、资料包、凭证和报表打印版，请前往
+          <button
+            onClick={() => navigate("/pdf-export")}
+            style={{ marginLeft: "6px", border: "none", background: "none", color: "#2563eb", cursor: "pointer", fontWeight: 600, padding: 0 }}
+          >
+            PDF 导出中心
+          </button>
+          。
+        </div>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <select value={periodType} onChange={(event) => setPeriodType(event.target.value as typeof periodType)}>
             <option value="month">月度</option>

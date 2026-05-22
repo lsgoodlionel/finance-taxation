@@ -36,6 +36,7 @@ interface BusinessEventRow {
   currency: string;
   status: BusinessEvent["status"];
   source: BusinessEvent["source"];
+  contract_id: string | null;
   counterparty_id: string | null;
   project_id: string | null;
   created_at: string | Date;
@@ -156,6 +157,7 @@ function mapEventRow(row: BusinessEventRow): BusinessEvent {
     currency: row.currency,
     status: row.status,
     source: row.source,
+    contractId: row.contract_id,
     counterpartyId: row.counterparty_id,
     projectId: row.project_id,
     createdAt: toIsoString(row.created_at) || undefined,
@@ -816,6 +818,7 @@ export async function listCompanyEvents(companyId: string): Promise<BusinessEven
         currency,
         status,
         source,
+        contract_id,
         counterparty_id,
         project_id,
         created_at,
@@ -1210,6 +1213,7 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
     currency: body.currency || "CNY",
     status: "draft",
     source: body.source,
+    contractId: body.contractId ?? null,
     counterpartyId: null,
     projectId: null,
     createdAt: now,
@@ -1233,11 +1237,12 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
           currency,
           status,
           source,
+          contract_id,
           counterparty_id,
           project_id,
           created_at,
           updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8::date, $9::numeric, $10, $11, $12, $13, $14, $15::timestamptz, $16::timestamptz)
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8::date, $9::numeric, $10, $11, $12, $13, $14, $15, $16::timestamptz, $17::timestamptz)
       `,
       [
         next.id,
@@ -1252,6 +1257,7 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
         next.currency,
         next.status,
         next.source,
+        next.contractId,
         next.counterpartyId,
         next.projectId,
         next.createdAt,

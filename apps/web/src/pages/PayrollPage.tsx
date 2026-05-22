@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Employee, PayrollPolicy, PayrollRecord, PayrollPeriodSummary } from "@finance-taxation/domain-model";
 import {
+  analyzeEvent,
+  createEvent,
   computePayroll,
   confirmPayroll,
   createEmployee,
   getPayrollPeriods,
   getPayrollPolicy,
   listEmployees,
+  listEvents,
   listPayroll,
+  runEventRiskCheck,
   updateEmployee,
   updatePayrollPolicy
 } from "../lib/api";
+import { buildPayrollEventInput } from "./payroll-event";
 
 type Tab = "employees" | "payroll" | "policy";
 
@@ -75,6 +81,7 @@ const EMPTY_EMP_FORM = {
 };
 
 export function PayrollPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("employees");
   const [message, setMessage] = useState("正在加载数据...");
 
@@ -93,6 +100,8 @@ export function PayrollPage() {
   });
   const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
   const [computing, setComputing] = useState(false);
+  const [linkedEventIds, setLinkedEventIds] = useState<Record<string, string>>({});
+  const [creatingEventPeriod, setCreatingEventPeriod] = useState<string | null>(null);
 
   // policy tab
   const [policy, setPolicy] = useState<PayrollPolicy | null>(null);
@@ -108,6 +117,17 @@ export function PayrollPage() {
       }
     }
     bootstrap();
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("payroll_linked_event_ids");
+      if (raw) {
+        setLinkedEventIds(JSON.parse(raw) as Record<string, string>);
+      }
+    } catch {
+      // ignore broken session payloads
+    }
   }, []);
 
   async function loadAll() {
@@ -220,6 +240,62 @@ export function PayrollPage() {
       setPayrollRecords(res.items);
     }
     setMessage("工资记录已确认。");
+  }
+
+  function rememberLinkedEvent(period: string, eventId: string) {
+    setLinkedEventIds((current) => {
+      const next = { ...current, [period]: eventId };
+      sessionStorage.setItem("payroll_linked_event_ids", JSON.stringify(next));
+      return next;
+    });
+  }
+
+  async function handleCreatePayrollEvent() {
+    if (!selectedPeriod || payrollRecords.length === 0) {
+      setMessage("请先选择并生成工资期间数据。");
+      return;
+    }
+
+    setCreatingEventPeriod(selectedPeriod);
+    try {
+      const input = buildPayrollEventInput(selectedPeriod, payrollRecords);
+      const existingEvents = await listEvents();
+      const existing = existingEvents.items.find(
+        (event) => event.type === "payroll" && event.title === input.title
+      );
+      const event = existing ?? await createEvent(input);
+      await analyzeEvent(event.id);
+      rememberLinkedEvent(selectedPeriod, event.id);
+      setMessage(`已将 ${selectedPeriod} 工资期接入事项主线，并完成任务/税务/凭证分析。`);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setCreatingEventPeriod(null);
+    }
+  }
+
+  function navigateWithEvent(path: string) {
+    const eventId = linkedEventIds[selectedPeriod];
+    if (!eventId) {
+      setMessage("请先生成工资事项，再进入任务、税务或凭证中心。");
+      return;
+    }
+    navigate(path, { state: { businessEventId: eventId } });
+  }
+
+  async function handlePayrollRiskCheck() {
+    const eventId = linkedEventIds[selectedPeriod];
+    if (!eventId) {
+      setMessage("请先生成工资事项，再执行风险检查。");
+      return;
+    }
+    try {
+      const result = await runEventRiskCheck(eventId);
+      setMessage(`工资事项风险检查完成，生成 ${result.total} 条发现。`);
+      navigate("/risk", { state: { businessEventId: eventId } });
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
   }
 
   async function handleSavePolicy() {
@@ -387,6 +463,13 @@ export function PayrollPage() {
               >
                 {computing ? "计算中..." : "计算/更新工资"}
               </button>
+              <button
+                style={{ ...btnSecondary(), opacity: creatingEventPeriod === customPeriod ? 0.6 : 1 }}
+                onClick={handleCreatePayrollEvent}
+                disabled={creatingEventPeriod === selectedPeriod || payrollRecords.length === 0 || !selectedPeriod}
+              >
+                {creatingEventPeriod === selectedPeriod ? "生成事项中..." : "生成工资事项并分析"}
+              </button>
             </div>
           </div>
 
@@ -417,9 +500,18 @@ export function PayrollPage() {
 
           {selectedPeriod && payrollRecords.length > 0 && (
             <div style={panelStyle()}>
-              <h3 style={{ margin: "0 0 12px", fontSize: "15px" }}>
-                {selectedPeriod} 工资明细（{payrollRecords.length} 人）
-              </h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "12px", flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0, fontSize: "15px" }}>
+                  {selectedPeriod} 工资明细（{payrollRecords.length} 人）
+                </h3>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <button style={btnSecondary()} onClick={() => navigateWithEvent("/events")}>事项总线</button>
+                  <button style={btnSecondary()} onClick={() => navigateWithEvent("/tasks")}>任务中心</button>
+                  <button style={btnSecondary()} onClick={() => navigateWithEvent("/tax")}>税务中心</button>
+                  <button style={btnSecondary()} onClick={() => navigateWithEvent("/vouchers")}>凭证中心</button>
+                  <button style={btnSecondary()} onClick={() => void handlePayrollRiskCheck()}>风险检查</button>
+                </div>
+              </div>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "900px" }}>
                   <thead>

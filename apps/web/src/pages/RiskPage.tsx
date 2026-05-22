@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import type { BusinessEvent, RiskClosureRecord, RiskFinding } from "@finance-taxation/domain-model";
 import {
   closeRiskFinding,
@@ -72,6 +73,8 @@ function cellStyle() {
 }
 
 export function RiskPage() {
+  const location = useLocation();
+  const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
   const { t } = useI18n();
   const [findings, setFindings] = useState<RiskFinding[]>([]);
   const [closureRecords, setClosureRecords] = useState<RiskClosureRecord[]>([]);
@@ -93,18 +96,26 @@ export function RiskPage() {
           listRiskFindings()
         ]);
         setEvents(eventsPayload.items);
-        const firstId = eventsPayload.items[0]?.id || "";
+        const preferredEvent = navEventId
+          ? eventsPayload.items.find((item) => item.id === navEventId) ?? null
+          : null;
+        const firstId = preferredEvent?.id || eventsPayload.items[0]?.id || "";
         setEventId(firstId);
-        setEventSearch(eventsPayload.items[0]?.title || firstId);
+        setEventSearch(preferredEvent?.title || eventsPayload.items[0]?.title || firstId);
         setFindings(findingsPayload.items);
-        setSelectedFindingId(findingsPayload.items[0]?.id || "");
-        setMessage(`已加载 ${findingsPayload.total} 条风险发现。`);
+        const preferredFinding = navEventId
+          ? findingsPayload.items.find((item) => item.businessEventId === navEventId) ?? null
+          : null;
+        setSelectedFindingId(preferredFinding?.id || findingsPayload.items[0]?.id || "");
+        setMessage(
+          `${navEventId ? `当前事项 ${navEventId}：` : ""}已加载 ${findingsPayload.total} 条风险发现。`
+        );
       } catch (error) {
         setMessage((error as Error).message);
       }
     }
     void bootstrap();
-  }, []);
+  }, [navEventId]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -120,7 +131,7 @@ export function RiskPage() {
   async function refreshFindings() {
     const payload = await listRiskFindings();
     setFindings(payload.items);
-    setMessage(`已刷新 ${payload.total} 条风险发现。`);
+    setMessage(`${navEventId ? `当前事项 ${navEventId}：` : ""}已刷新 ${payload.total} 条风险发现。`);
   }
 
   async function loadClosureRecords(findingId: string) {
@@ -128,6 +139,11 @@ export function RiskPage() {
     setClosureRecords(payload.items);
     setSelectedFindingId(findingId);
   }
+
+  const visibleFindings = useMemo(
+    () => (navEventId ? findings.filter((finding) => finding.businessEventId === navEventId) : findings),
+    [findings, navEventId]
+  );
 
   return (
     <section style={{ display: "grid", gap: "20px" }}>
@@ -227,7 +243,9 @@ export function RiskPage() {
         businessEventId={eventId || undefined}
       />
       <article style={panelStyle()}>
-        <h3 style={{ marginTop: 0 }}>风险发现</h3>
+        <h3 style={{ marginTop: 0 }}>
+          风险发现{navEventId ? `（当前事项 ${navEventId}）` : ""}
+        </h3>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
@@ -241,7 +259,7 @@ export function RiskPage() {
             </tr>
           </thead>
           <tbody>
-            {findings.map((finding) => (
+            {visibleFindings.map((finding) => (
               <tr key={finding.id}>
                 <td style={cellStyle()}>{finding.ruleCode}</td>
                 <td style={cellStyle()}>{t(RISK_SEVERITY_LABELS, finding.severity)}</td>
@@ -274,6 +292,13 @@ export function RiskPage() {
                 </td>
               </tr>
             ))}
+            {visibleFindings.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ ...cellStyle(), textAlign: "center", color: "#9aa5b4", padding: "24px" }}>
+                  当前筛选范围内暂无风险发现
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </article>

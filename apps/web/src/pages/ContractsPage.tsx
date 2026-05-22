@@ -1,12 +1,22 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Contract, ContractWithEventCount } from "@finance-taxation/domain-model";
 import {
+  analyzeEvent,
   closeContract,
+  createEvent,
   createContract,
   getContractDetail,
+  listEvents,
   listContracts
 } from "../lib/api";
 import { useI18n, EVENT_STATUS_LABELS } from "../lib/i18n";
+import {
+  type ContractFollowupAction,
+  buildContractEventInput,
+  buildContractFollowupEventInput,
+  getContractFollowupActions
+} from "./contract-event";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   sales: "销售合同",
@@ -30,6 +40,17 @@ const STATUS_COLOR: Record<string, string> = {
   fulfilled: "#4a7fc4",
   terminated: "#c0392b",
   expired: "#b0890a"
+};
+
+const FOLLOWUP_ACTION_LABELS: Record<ContractFollowupAction, string> = {
+  invoice: "开票",
+  collection: "回款/付款",
+  revenue: "收入确认",
+  procurement_execution: "采购执行",
+  payment_arrangement: "付款安排",
+  acceptance: "验收归档",
+  lease_payment: "租赁付款",
+  lease_accrual: "费用确认"
 };
 
 function panelStyle() {
@@ -56,6 +77,7 @@ interface ContractDetailView {
 }
 
 export function ContractsPage() {
+  const navigate = useNavigate();
   const { t } = useI18n();
   const [contracts, setContracts] = useState<ContractWithEventCount[]>([]);
   const [detail, setDetail] = useState<ContractDetailView | null>(null);
@@ -63,6 +85,7 @@ export function ContractsPage() {
   const [filterStatus, setFilterStatus] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [message, setMessage] = useState("正在加载合同数据...");
+  const [creatingEventContractId, setCreatingEventContractId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     contractType: "sales",
@@ -76,6 +99,7 @@ export function ContractsPage() {
     endDate: "",
     notes: ""
   });
+  const firstRelatedEvent = detail?.relatedEvents[0] ?? null;
 
   useEffect(() => {
     async function bootstrap() {
@@ -135,6 +159,57 @@ export function ContractsPage() {
   async function handleDetail(contractId: string) {
     const res = await getContractDetail(contractId);
     setDetail(res);
+  }
+
+  async function handleCreateEvent(contract: Contract) {
+    setCreatingEventContractId(contract.id);
+    try {
+      const input = buildContractEventInput(contract);
+      const existingEvents = await listEvents();
+      const existing = existingEvents.items.find((event) => event.title === input.title);
+      const created = existing ?? await createEvent(input);
+      if (!existing) {
+        await analyzeEvent(created.id);
+      }
+      await loadContracts();
+      await handleDetail(contract.id);
+      setMessage(
+        existing
+          ? `已存在同名合同事项：${created.title}，直接复用。`
+          : `已为合同生成并分析经营事项：${created.title}。`
+      );
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setCreatingEventContractId(null);
+    }
+  }
+
+  async function handleCreateFollowupEvent(contract: Contract, action: ContractFollowupAction) {
+    setCreatingEventContractId(contract.id);
+    try {
+      const input = buildContractFollowupEventInput(contract, action);
+      const existingEvent = detail?.relatedEvents.find((event) => event.title === input.title);
+      const targetEvent = existingEvent ?? await createEvent(input);
+      if (!existingEvent) {
+        await analyzeEvent(targetEvent.id);
+      }
+      await handleDetail(contract.id);
+      await loadContracts();
+      setMessage(
+        existingEvent
+          ? `已存在同名履约事项：${targetEvent.title}，直接复用。`
+          : `已创建并分析合同履约事项：${targetEvent.title}。`
+      );
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setCreatingEventContractId(null);
+    }
+  }
+
+  function navigateWithEvent(path: string, eventId: string) {
+    navigate(path, { state: { businessEventId: eventId } });
   }
 
   return (
@@ -288,8 +363,16 @@ export function ContractsPage() {
                   </td>
                   <td style={{ ...cellStyle(), textAlign: "center" as const }}>{c.relatedEventCount}</td>
                   <td style={cellStyle()}>
-                    {c.status === "active" && (
-                      <div style={{ display: "flex", gap: "6px" }}>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => handleCreateEvent(c)}
+                        disabled={creatingEventContractId === c.id}
+                        style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #2563eb", color: "#2563eb", background: "none", cursor: "pointer", opacity: creatingEventContractId === c.id ? 0.6 : 1 }}
+                      >
+                        {creatingEventContractId === c.id ? "生成中..." : "新增事项"}
+                      </button>
+                      {c.status === "active" && (
+                        <>
                         <button
                           onClick={() => handleClose(c.id, "fulfilled")}
                           style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #1a7f5a", color: "#1a7f5a", background: "none", cursor: "pointer" }}
@@ -302,8 +385,9 @@ export function ContractsPage() {
                         >
                           终止
                         </button>
-                      </div>
-                    )}
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -341,13 +425,45 @@ export function ContractsPage() {
               </div>
             ))}
           </div>
+          <div style={{ marginBottom: "16px" }}>
+            <div style={{ color: "#6c7a89", fontSize: "12px", marginBottom: "8px" }}>合同履约链动作</div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {getContractFollowupActions(detail.contract).map((action) => (
+                <button
+                  key={action}
+                  onClick={() => handleCreateFollowupEvent(detail.contract, action)}
+                  disabled={creatingEventContractId === detail.contract.id}
+                  style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", opacity: creatingEventContractId === detail.contract.id ? 0.6 : 1 }}
+                >
+                  {FOLLOWUP_ACTION_LABELS[action]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: detail.relatedEvents.length > 0 ? "16px" : 0 }}>
+            <button
+              onClick={() => handleCreateEvent(detail.contract)}
+              disabled={creatingEventContractId === detail.contract.id}
+              style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #2563eb", color: "#2563eb", background: "none", cursor: "pointer", opacity: creatingEventContractId === detail.contract.id ? 0.6 : 1 }}
+            >
+              {creatingEventContractId === detail.contract.id ? "生成事项中..." : "新增关联事项"}
+            </button>
+            {firstRelatedEvent ? (
+              <button
+                onClick={() => navigateWithEvent("/events", firstRelatedEvent.id)}
+                style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #1e2a37", color: "#1e2a37", background: "none", cursor: "pointer" }}
+              >
+                查看事项总线
+              </button>
+            ) : null}
+          </div>
           {detail.relatedEvents.length > 0 && (
             <>
               <h4 style={{ margin: "0 0 8px", fontSize: "14px" }}>关联经营事项（{detail.relatedEvents.length}）</h4>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                 <thead>
                   <tr style={{ color: "#6c7a89" }}>
-                    {["事项名称", "状态", "创建时间"].map((h) => (
+                    {["事项名称", "状态", "创建时间", "流转"].map((h) => (
                       <th key={h} style={{ ...cellStyle(), fontWeight: 400 }}>{h}</th>
                     ))}
                   </tr>
@@ -355,9 +471,38 @@ export function ContractsPage() {
                 <tbody>
                   {detail.relatedEvents.map((e) => (
                     <tr key={e.id}>
-                      <td style={cellStyle()}>{e.title}</td>
+                      <td style={cellStyle()}>
+                        <button
+                          onClick={() => navigateWithEvent("/events", e.id)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#2563eb", fontSize: "12px", padding: 0 }}
+                        >
+                          {e.title}
+                        </button>
+                      </td>
                       <td style={cellStyle()}>{t(EVENT_STATUS_LABELS, e.status)}</td>
                       <td style={cellStyle()}>{e.createdAt ? new Date(e.createdAt).toLocaleDateString("zh-CN") : "—"}</td>
+                      <td style={cellStyle()}>
+                        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                          <button
+                            onClick={() => navigateWithEvent("/tasks", e.id)}
+                            style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}
+                          >
+                            任务
+                          </button>
+                          <button
+                            onClick={() => navigateWithEvent("/tax", e.id)}
+                            style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}
+                          >
+                            税务
+                          </button>
+                          <button
+                            onClick={() => navigateWithEvent("/vouchers", e.id)}
+                            style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}
+                          >
+                            凭证
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

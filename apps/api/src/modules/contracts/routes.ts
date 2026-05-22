@@ -178,8 +178,8 @@ export async function getContractDetail(req: ApiRequest, res: ServerResponse, co
   if (!row) return json(res, 404, { error: "Contract not found" });
 
   const events = await query<{ id: string; title: string; status: string; created_at: Date }>(
-    `select id, title, status, created_at from business_events where contract_id = $1 order by created_at desc`,
-    [contractId]
+    `select id, title, status, created_at from business_events where contract_id = $1 and company_id = $2 order by created_at desc`,
+    [contractId, companyId]
   );
 
   return json(res, 200, {
@@ -287,21 +287,21 @@ export async function getContractEvents(req: ApiRequest, res: ServerResponse, co
   );
   if (!exists) return json(res, 404, { error: "Contract not found" });
 
-  const events = await query<{ id: string; title: string; event_type: string; status: string; amount: string; created_at: Date }>(
+  const events = await query<{ id: string; title: string; type: string; status: string; amount: string; created_at: Date }>(
     `
-      select id, title, event_type, status, amount, created_at
+      select id, title, type, status, amount, created_at
       from business_events
-      where contract_id = $1
+      where contract_id = $1 and company_id = $2
       order by created_at desc
     `,
-    [contractId]
+    [contractId, companyId]
   );
 
   return json(res, 200, {
     items: events.map((e) => ({
       id: e.id,
       title: e.title,
-      eventType: e.event_type,
+      eventType: e.type,
       status: e.status,
       amount: Number(e.amount),
       createdAt: toIso(e.created_at)
