@@ -7,9 +7,21 @@ import {
   TemplateSection
 } from "./shared";
 
+function formatAttachmentSize(fileSize: number) {
+  if (fileSize >= 1024 * 1024) {
+    return `${(fileSize / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  if (fileSize >= 1024) {
+    return `${(fileSize / 1024).toFixed(1)} KB`;
+  }
+
+  return `${fileSize.toLocaleString("zh-CN")} 字节`;
+}
+
 function buildAttachmentItems(model: ExpenseDocumentTemplateModel) {
   return model.attachments.map(
-    (item) => `${item.fileName}｜${item.fileType || "未知类型"}｜${item.fileSize} bytes`
+    (item) => `${item.fileName}｜${item.fileType || "未知类型"}｜${formatAttachmentSize(item.fileSize)}`
   );
 }
 

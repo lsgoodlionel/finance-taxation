@@ -217,11 +217,34 @@ function testBuildPrintableDocumentHtmlUsesFormalSections() {
   assert(html.includes("<td>责任部门</td><td>—</td>"), "expected normalized owner department fallback in html");
   assert(html.includes("<td>归档日期</td><td>—</td>"), "expected normalized archived date fallback in html");
   assert(html.includes("<div class=\"note\">无</div>"), "expected normalized notes fallback in html");
-  assert(html.includes("expense-receipt.pdf (application/pdf)"), "expected attachment content from normalized model");
+  assert(html.includes("<h2>原始凭证附件</h2>"), "expected expense claim attachment section");
+  assert(html.includes("expense-receipt.pdf｜application/pdf"), "expected attachment content from normalized model");
+  assert(!html.includes("附件清单"), "expected expense claim print to avoid invoice bundle attachment section");
   assert(html.includes("核对资料完整性｜财务部｜not_started"), "expected related task content");
   assert(!html.includes("无关任务"), "expected unrelated task to be excluded");
   assert(html.includes("企业所得税｜2026-05｜复核税前扣除凭证"), "expected related tax item content");
   assert(html.includes("voucher-1｜费用报销草稿｜review_required"), "expected related voucher content");
+}
+
+function testBuildPrintableDocumentHtmlUsesInvoiceBundleTemplate() {
+  const html = buildPrintableDocumentHtml({
+    document: {
+      ...document,
+      documentType: "invoice_bundle",
+      title: "报销票据包",
+      notes: null,
+      attachments
+    },
+    tasks,
+    taxItems,
+    vouchers
+  });
+
+  assert(html.includes("<h2>票据包信息</h2>"), "expected invoice bundle info section in print html");
+  assert(html.includes("<h2>附件清单</h2>"), "expected invoice bundle attachment section in print html");
+  assert(html.includes("expense-receipt.pdf"), "expected attachment file name in print html");
+  assert(html.includes("2.0 KB"), "expected localized attachment size in print html");
+  assert(!html.includes("<h2>报销事由</h2>"), "expected invoice bundle print to avoid expense claim note section");
 }
 
 function testSharedExpenseTemplatePrimitives() {
@@ -275,10 +298,12 @@ function testExpenseClaimTemplateRendersReadOnlySections() {
 
   assert(html.includes("<h2>单据信息</h2>"), "expected expense claim base info section");
   assert(html.includes("<h2>报销事由</h2>"), "expected expense claim notes section");
+  assert(html.includes("<h2>原始凭证附件</h2>"), "expected expense claim attachment section");
   assert(html.includes("<h2>关联任务</h2>"), "expected expense claim tasks section");
   assert(html.includes("<h2>关联税务事项</h2>"), "expected expense claim tax section");
   assert(html.includes("<h2>关联凭证</h2>"), "expected expense claim voucher section");
   assert(html.includes("客户接待与出行费用"), "expected expense claim notes content");
+  assert(html.includes("expense-receipt.pdf｜application/pdf"), "expected expense claim attachment content");
   assert(!html.includes("<input"), "expected no input fields in expense claim template");
   assert(!html.includes("<textarea"), "expected no textarea fields in expense claim template");
   assert(!html.includes("<button"), "expected no button fields in expense claim template");
@@ -316,6 +341,7 @@ testSupportsPrintableDocument();
 testExpenseTemplateSelection();
 testBuildExpenseDocumentTemplateModel();
 testBuildPrintableDocumentHtmlUsesFormalSections();
+testBuildPrintableDocumentHtmlUsesInvoiceBundleTemplate();
 testSharedExpenseTemplatePrimitives();
 testExpenseClaimTemplateRendersReadOnlySections();
 testInvoiceBundleTemplateRendersReadOnlySections();

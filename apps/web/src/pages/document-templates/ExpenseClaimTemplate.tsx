@@ -20,6 +20,10 @@ function buildTaxItems(model: ExpenseDocumentTemplateModel) {
   );
 }
 
+function buildAttachmentItems(model: ExpenseDocumentTemplateModel) {
+  return model.attachments.map((item) => `${item.fileName}｜${item.fileType || "未知类型"}`);
+}
+
 function buildVoucherItems(model: ExpenseDocumentTemplateModel) {
   return model.relationSummary.vouchers.map((item) => `${item.id}｜${item.summary}｜${item.status}`);
 }
@@ -45,6 +49,10 @@ export function ExpenseClaimTemplate(props: { model: ExpenseDocumentTemplateMode
 
       <TemplateSection title="报销事由">
         <TemplateCallout>{normalizeTemplateText(model.notes, "无")}</TemplateCallout>
+      </TemplateSection>
+
+      <TemplateSection title="原始凭证附件">
+        <TemplateBulletList items={buildAttachmentItems(model)} emptyText="暂无原始凭证附件" />
       </TemplateSection>
 
       <TemplateSection title="关联任务">
