@@ -18,8 +18,7 @@ import {
   buildExpenseDocumentTemplateModel,
   buildDocumentRelations,
   buildPrintableDocumentHtml,
-  getExpenseDocumentTemplateKind,
-  supportsPrintableDocument
+  getExpenseDocumentTemplateKind
 } from "./document-relations";
 import { ExpenseClaimTemplate } from "./document-templates/ExpenseClaimTemplate";
 import { InvoiceBundleTemplate } from "./document-templates/InvoiceBundleTemplate";
@@ -410,7 +409,7 @@ export function DocumentsPage() {
                 padding: "18px 20px", background: "#fff", marginBottom: "16px"
               }}>
                 <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px", gap: "8px" }}>
-                  {supportsPrintableDocument(detail.documentType) && (
+                  {expenseTemplateDetail && (
                     <button
                       onClick={handlePrintDocument}
                       style={{ background: "#1e2a37", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 14px", cursor: "pointer", fontSize: "12px" }}
@@ -428,9 +427,9 @@ export function DocumentsPage() {
 
                 {expenseTemplateDetail ? (
                   expenseTemplateDetail.templateKind === "invoice_bundle" ? (
-                    <InvoiceBundleTemplate model={expenseTemplateDetail.model} />
+                    <InvoiceBundleTemplate model={expenseTemplateDetail.model} mode="screen" />
                   ) : (
-                    <ExpenseClaimTemplate model={expenseTemplateDetail.model} />
+                    <ExpenseClaimTemplate model={expenseTemplateDetail.model} mode="screen" />
                   )
                 ) : (
                   <>

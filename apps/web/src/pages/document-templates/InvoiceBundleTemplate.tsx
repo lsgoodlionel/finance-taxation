@@ -2,6 +2,7 @@ import React from "react";
 import type { ExpenseDocumentTemplateModel } from "../document-relations";
 import {
   normalizeTemplateText,
+  TemplateCallout,
   TemplateBulletList,
   TemplateKeyValueTable,
   TemplateSection
@@ -41,8 +42,10 @@ function buildVoucherItems(model: ExpenseDocumentTemplateModel) {
   return model.relationSummary.vouchers.map((item) => `${item.id}｜${item.summary}｜${item.status}`);
 }
 
-export function InvoiceBundleTemplate(props: { model: ExpenseDocumentTemplateModel }) {
+export function InvoiceBundleTemplate(props: { model: ExpenseDocumentTemplateModel; mode?: "print" | "screen" }) {
   const { model } = props;
+  const mode = props.mode ?? "print";
+  const showExpandedSections = mode !== "screen";
 
   return (
     <div>
@@ -60,21 +63,29 @@ export function InvoiceBundleTemplate(props: { model: ExpenseDocumentTemplateMod
         />
       </TemplateSection>
 
-      <TemplateSection title="附件清单">
-        <TemplateBulletList items={buildAttachmentItems(model)} emptyText="暂无附件" />
+      <TemplateSection title="单据说明">
+        <TemplateCallout>{normalizeTemplateText(model.notes, "无")}</TemplateCallout>
       </TemplateSection>
 
-      <TemplateSection title="关联任务">
-        <TemplateBulletList items={buildTaskItems(model)} emptyText="暂无关联任务" />
-      </TemplateSection>
+      {showExpandedSections && (
+        <>
+          <TemplateSection title="附件清单">
+            <TemplateBulletList items={buildAttachmentItems(model)} emptyText="暂无附件" />
+          </TemplateSection>
 
-      <TemplateSection title="关联税务事项">
-        <TemplateBulletList items={buildTaxItems(model)} emptyText="暂无关联税务事项" />
-      </TemplateSection>
+          <TemplateSection title="关联任务">
+            <TemplateBulletList items={buildTaskItems(model)} emptyText="暂无关联任务" />
+          </TemplateSection>
 
-      <TemplateSection title="关联凭证">
-        <TemplateBulletList items={buildVoucherItems(model)} emptyText="暂无关联凭证" />
-      </TemplateSection>
+          <TemplateSection title="关联税务事项">
+            <TemplateBulletList items={buildTaxItems(model)} emptyText="暂无关联税务事项" />
+          </TemplateSection>
+
+          <TemplateSection title="关联凭证">
+            <TemplateBulletList items={buildVoucherItems(model)} emptyText="暂无关联凭证" />
+          </TemplateSection>
+        </>
+      )}
     </div>
   );
 }
