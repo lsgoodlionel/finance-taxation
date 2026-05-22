@@ -15,10 +15,14 @@ import { useI18n, DOC_STATUS_LABELS, DOC_TYPE_LABELS } from "../lib/i18n";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 import {
+  buildExpenseDocumentTemplateModel,
   buildDocumentRelations,
   buildPrintableDocumentHtml,
+  getExpenseDocumentTemplateKind,
   supportsPrintableDocument
 } from "./document-relations";
+import { ExpenseClaimTemplate } from "./document-templates/ExpenseClaimTemplate";
+import { InvoiceBundleTemplate } from "./document-templates/InvoiceBundleTemplate";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
@@ -265,6 +269,27 @@ export function DocumentsPage() {
     });
   }, [detail]);
 
+  const expenseTemplateDetail = useMemo(() => {
+    if (!detail) {
+      return null;
+    }
+
+    const templateKind = getExpenseDocumentTemplateKind(detail.documentType);
+    if (!templateKind) {
+      return null;
+    }
+
+    return {
+      templateKind,
+      model: buildExpenseDocumentTemplateModel({
+        document: detail,
+        tasks: relatedTasks,
+        taxItems: relatedTaxItems,
+        vouchers: relatedVouchers
+      })
+    };
+  }, [detail, relatedTasks, relatedTaxItems, relatedVouchers]);
+
   const panelStyle = {
     background: "rgba(255,255,255,0.82)",
     borderRadius: "24px",
@@ -401,63 +426,73 @@ export function DocumentsPage() {
                   </div>
                 </div>
 
-                {/* 基本信息表格 */}
-                {(() => {
-                  const relations = buildDocumentRelations({
-                    document: detail,
-                    tasks: relatedTasks,
-                    taxItems: relatedTaxItems,
-                    vouchers: relatedVouchers
-                  });
-                  const rows: [string, React.ReactNode][] = [
-                    ["单据编号", `DOC-${shortId(detail.id)}`],
-                    ["单据类型", t(DOC_TYPE_LABELS, detail.documentType)],
-                    ["当前状态", t(DOC_STATUS_LABELS, detail.status)],
-                    ["责任部门", detail.ownerDepartment || "—"],
-                    ["关联事项", detail.businessEventId
-                      ? <span style={{ fontFamily: "monospace", fontSize: "11px", color: "#4f8ef7" }}>{shortId(detail.businessEventId)}</span>
-                      : "—"
-                    ],
-                    ["关联任务", relations.tasks.length > 0
-                      ? <span style={{ color: "#2563eb" }}>{relations.tasks.length} 个</span>
-                      : <span style={{ color: "#c4cdd6" }}>暂无任务</span>
-                    ],
-                    ["关联税务", relations.taxItems.length > 0
-                      ? <span style={{ color: "#d97706" }}>{relations.taxItems.length} 条</span>
-                      : <span style={{ color: "#c4cdd6" }}>暂无税务事项</span>
-                    ],
-                    ["关联凭证", relations.vouchers.length > 0
-                      ? <span style={{ color: "#1a7f5a" }}>{relations.vouchers.length} 张（{relations.vouchers.map((v) => `V-${shortId(v.id)}`).join("、")}）</span>
-                      : <span style={{ color: "#c4cdd6" }}>暂无凭证</span>
-                    ],
-                    ["创建日期", detail.createdAt?.slice(0, 10) ?? "—"],
-                    ...(detail.archivedAt ? [["归档日期", detail.archivedAt.slice(0, 10)] as [string, React.ReactNode]] : [])
-                  ];
-                  return (
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                      <tbody>
-                        {rows.map(([label, value]) => (
-                          <tr key={label} style={{ borderBottom: "1px solid rgba(20,40,60,0.06)" }}>
-                            <td style={{ padding: "7px 10px", color: "#6c7a89", width: "80px", fontWeight: 500, fontSize: "12.5px" }}>{label}</td>
-                            <td style={{ padding: "7px 10px" }}>{value}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  );
-                })()}
+                {expenseTemplateDetail ? (
+                  expenseTemplateDetail.templateKind === "invoice_bundle" ? (
+                    <InvoiceBundleTemplate model={expenseTemplateDetail.model} />
+                  ) : (
+                    <ExpenseClaimTemplate model={expenseTemplateDetail.model} />
+                  )
+                ) : (
+                  <>
+                    {/* 基本信息表格 */}
+                    {(() => {
+                      const relations = buildDocumentRelations({
+                        document: detail,
+                        tasks: relatedTasks,
+                        taxItems: relatedTaxItems,
+                        vouchers: relatedVouchers
+                      });
+                      const rows: [string, React.ReactNode][] = [
+                        ["单据编号", `DOC-${shortId(detail.id)}`],
+                        ["单据类型", t(DOC_TYPE_LABELS, detail.documentType)],
+                        ["当前状态", t(DOC_STATUS_LABELS, detail.status)],
+                        ["责任部门", detail.ownerDepartment || "—"],
+                        ["关联事项", detail.businessEventId
+                          ? <span style={{ fontFamily: "monospace", fontSize: "11px", color: "#4f8ef7" }}>{shortId(detail.businessEventId)}</span>
+                          : "—"
+                        ],
+                        ["关联任务", relations.tasks.length > 0
+                          ? <span style={{ color: "#2563eb" }}>{relations.tasks.length} 个</span>
+                          : <span style={{ color: "#c4cdd6" }}>暂无任务</span>
+                        ],
+                        ["关联税务", relations.taxItems.length > 0
+                          ? <span style={{ color: "#d97706" }}>{relations.taxItems.length} 条</span>
+                          : <span style={{ color: "#c4cdd6" }}>暂无税务事项</span>
+                        ],
+                        ["关联凭证", relations.vouchers.length > 0
+                          ? <span style={{ color: "#1a7f5a" }}>{relations.vouchers.length} 张（{relations.vouchers.map((v) => `V-${shortId(v.id)}`).join("、")}）</span>
+                          : <span style={{ color: "#c4cdd6" }}>暂无凭证</span>
+                        ],
+                        ["创建日期", detail.createdAt?.slice(0, 10) ?? "—"],
+                        ...(detail.archivedAt ? [["归档日期", detail.archivedAt.slice(0, 10)] as [string, React.ReactNode]] : [])
+                      ];
+                      return (
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                          <tbody>
+                            {rows.map(([label, value]) => (
+                              <tr key={label} style={{ borderBottom: "1px solid rgba(20,40,60,0.06)" }}>
+                                <td style={{ padding: "7px 10px", color: "#6c7a89", width: "80px", fontWeight: 500, fontSize: "12.5px" }}>{label}</td>
+                                <td style={{ padding: "7px 10px" }}>{value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      );
+                    })()}
 
-                {/* 单据说明/备注 */}
-                {detail.notes && (
-                  <div style={{
-                    marginTop: "12px", padding: "10px 14px",
-                    background: "rgba(37,99,235,0.04)", borderRadius: "6px",
-                    borderLeft: "3px solid rgba(37,99,235,0.3)", fontSize: "13px",
-                    lineHeight: 1.7, color: "#1e2a37"
-                  }}>
-                    <div style={{ fontSize: "11.5px", color: "#6c7a89", marginBottom: "4px", fontWeight: 500 }}>单据说明</div>
-                    {detail.notes}
-                  </div>
+                    {/* 单据说明/备注 */}
+                    {detail.notes && (
+                      <div style={{
+                        marginTop: "12px", padding: "10px 14px",
+                        background: "rgba(37,99,235,0.04)", borderRadius: "6px",
+                        borderLeft: "3px solid rgba(37,99,235,0.3)", fontSize: "13px",
+                        lineHeight: 1.7, color: "#1e2a37"
+                      }}>
+                        <div style={{ fontSize: "11.5px", color: "#6c7a89", marginBottom: "4px", fontWeight: 500 }}>单据说明</div>
+                        {detail.notes}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
