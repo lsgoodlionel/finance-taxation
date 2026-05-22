@@ -180,11 +180,9 @@ export async function payrollSlipPdf(req: ApiRequest, res: ServerResponse): Prom
 
 interface VoucherRow {
   id: string;
-  voucher_no: string;
   voucher_type: string;
   summary: string;
   status: string;
-  voucher_date: string;
   created_at: string;
 }
 
@@ -201,7 +199,7 @@ export async function voucherPdf(req: ApiRequest, res: ServerResponse, voucherId
 
   const [voucher, lines, companyRes] = await Promise.all([
     queryOne<VoucherRow>(
-      "select id, voucher_no, voucher_type, summary, status, voucher_date::text, created_at from vouchers where id=$1 and company_id=$2",
+      "select id, voucher_type, summary, status, created_at from vouchers where id=$1 and company_id=$2",
       [voucherId, req.auth.companyId]
     ),
     query<LineRow>(
@@ -213,6 +211,9 @@ export async function voucherPdf(req: ApiRequest, res: ServerResponse, voucherId
 
   if (!voucher) { json(res, 404, { error: "凭证不存在" }); return; }
   const companyName = companyRes?.name ?? "";
+
+  const voucherNo = `V-${voucher.created_at.slice(0, 10).replace(/-/g, "")}-${voucher.id.slice(-6).toUpperCase()}`;
+  const voucherDate = voucher.created_at.slice(0, 10);
 
   let totalDebit = 0, totalCredit = 0;
   const lineRows = lines.map((l) => {
@@ -227,16 +228,16 @@ export async function voucherPdf(req: ApiRequest, res: ServerResponse, voucherId
     </tr>`;
   }).join("");
 
-  const title = `记账凭证 ${voucher.voucher_no}`;
+  const title = `记账凭证 ${voucherNo}`;
   const body = `
     <div class="doc-header">
       <div>
         <div class="doc-title">${escHtml(companyName)}</div>
-        <div style="font-size:14px;margin-top:4px;">记账凭证 &nbsp;|&nbsp; ${escHtml(voucher.voucher_no)}</div>
+        <div style="font-size:14px;margin-top:4px;">记账凭证 &nbsp;|&nbsp; ${escHtml(voucherNo)}</div>
       </div>
       <div class="doc-meta">
         <div>凭证类型：${escHtml(voucher.voucher_type)}</div>
-        <div>凭证日期：${voucher.voucher_date}</div>
+        <div>凭证日期：${voucherDate}</div>
         <div>状态：${voucher.status}</div>
       </div>
     </div>
