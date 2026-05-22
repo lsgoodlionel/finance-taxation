@@ -18,6 +18,17 @@ import {
   listReportSnapshots
 } from "../lib/api";
 
+const REPORT_TYPE_LABELS: Record<string, string> = {
+  balance_sheet: "资产负债表",
+  profit_statement: "利润表",
+  cash_flow: "现金流量表"
+};
+
+function snapshotLabel(snap: ReportSnapshot): string {
+  const type = REPORT_TYPE_LABELS[snap.reportType] ?? snap.reportType;
+  return `${snap.periodLabel} ${type}`;
+}
+
 function panelStyle() {
   return {
     background: "rgba(255,255,255,0.82)",
@@ -225,24 +236,61 @@ export function ReportsPage() {
       <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
         <article style={panelStyle()}>
           <h3 style={{ marginTop: 0 }}>报表快照</h3>
+          <div style={{ fontSize: "12px", color: "#9aa5b4", marginBottom: "10px" }}>
+            点击快照行可快速选为差异分析的基准或对比期
+          </div>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={cellStyle()}>编号</th>
-                <th style={cellStyle()}>类型</th>
-                <th style={cellStyle()}>期间</th>
+                <th style={cellStyle()}>快照</th>
                 <th style={cellStyle()}>日期</th>
+                <th style={cellStyle()}>选为</th>
               </tr>
             </thead>
             <tbody>
-              {snapshots.map((snapshot) => (
-                <tr key={snapshot.id}>
-                  <td style={cellStyle()}>{snapshot.id}</td>
-                  <td style={cellStyle()}>{snapshot.reportType}</td>
-                  <td style={cellStyle()}>{snapshot.periodLabel}</td>
-                  <td style={cellStyle()}>{snapshot.snapshotDate}</td>
+              {snapshots.map((snapshot, idx) => {
+                const label = snapshotLabel(snapshot);
+                const isFrom = fromSnapshotId === snapshot.id;
+                const isTo = toSnapshotId === snapshot.id;
+                return (
+                  <tr key={snapshot.id} style={{ background: isFrom ? "rgba(37,99,235,0.06)" : isTo ? "rgba(26,127,90,0.06)" : "transparent" }}>
+                    <td style={cellStyle()}>
+                      <div style={{ fontWeight: 500, fontSize: "13px" }}>{label}</div>
+                      <div style={{ fontSize: "11px", color: "#9aa5b4", fontFamily: "monospace" }}>
+                        SNP-{String(idx + 1).padStart(3, "0")}
+                      </div>
+                    </td>
+                    <td style={cellStyle()}>{snapshot.snapshotDate}</td>
+                    <td style={cellStyle()}>
+                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                        <button
+                          onClick={() => setFromSnapshotId(snapshot.id)}
+                          style={{
+                            padding: "2px 8px", fontSize: "11px", borderRadius: "4px", cursor: "pointer", border: "1px solid rgba(37,99,235,0.4)",
+                            background: isFrom ? "#2563eb" : "transparent",
+                            color: isFrom ? "#fff" : "#2563eb"
+                          }}
+                        >基准</button>
+                        <button
+                          onClick={() => setToSnapshotId(snapshot.id)}
+                          style={{
+                            padding: "2px 8px", fontSize: "11px", borderRadius: "4px", cursor: "pointer", border: "1px solid rgba(26,127,90,0.4)",
+                            background: isTo ? "#1a7f5a" : "transparent",
+                            color: isTo ? "#fff" : "#1a7f5a"
+                          }}
+                        >对比</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {snapshots.length === 0 && (
+                <tr>
+                  <td colSpan={3} style={{ ...cellStyle(), textAlign: "center", color: "#c4cdd6", padding: "24px" }}>
+                    暂无快照，请先保存资产负债表快照
+                  </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </article>
@@ -250,8 +298,24 @@ export function ReportsPage() {
         <article style={panelStyle()}>
           <h3 style={{ marginTop: 0 }}>报表差异分析</h3>
           <div style={{ display: "grid", gap: "10px" }}>
-            <input value={fromSnapshotId} onChange={(event) => setFromSnapshotId(event.target.value)} placeholder="起始快照编号" />
-            <input value={toSnapshotId} onChange={(event) => setToSnapshotId(event.target.value)} placeholder="对比快照编号" />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+              <div style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(37,99,235,0.3)", background: "rgba(37,99,235,0.04)", fontSize: "13px" }}>
+                <div style={{ fontSize: "11px", color: "#6c7a89", marginBottom: "2px" }}>基准期</div>
+                <div style={{ color: fromSnapshotId ? "#1e2a37" : "#c4cdd6" }}>
+                  {fromSnapshotId
+                    ? (snapshots.find((s) => s.id === fromSnapshotId) ? snapshotLabel(snapshots.find((s) => s.id === fromSnapshotId)!) : "已选")
+                    : "请在左侧点击「基准」"}
+                </div>
+              </div>
+              <div style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(26,127,90,0.3)", background: "rgba(26,127,90,0.04)", fontSize: "13px" }}>
+                <div style={{ fontSize: "11px", color: "#6c7a89", marginBottom: "2px" }}>对比期</div>
+                <div style={{ color: toSnapshotId ? "#1e2a37" : "#c4cdd6" }}>
+                  {toSnapshotId
+                    ? (snapshots.find((s) => s.id === toSnapshotId) ? snapshotLabel(snapshots.find((s) => s.id === toSnapshotId)!) : "已选")
+                    : "请在左侧点击「对比」"}
+                </div>
+              </div>
+            </div>
             <button
               onClick={() =>
                 void getReportDiff(fromSnapshotId, toSnapshotId)
