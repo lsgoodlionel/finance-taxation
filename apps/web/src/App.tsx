@@ -18,6 +18,7 @@ import { TasksPage } from "./pages/TasksPage";
 import { VouchersPage } from "./pages/VouchersPage";
 import { AuditPage } from "./pages/AuditPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
+import { LEGACY_ENTRY_ALIASES } from "./lib/entry-guidance";
 
 const router = createBrowserRouter([
   {
@@ -41,7 +42,7 @@ const router = createBrowserRouter([
       { path: "pdf-export", element: <PdfExportPage /> },
       { path: "audit", element: <AuditPage /> },
       { path: "knowledge", element: <KnowledgePage /> },
-      { path: "boss-qa", element: <Navigate to="/assistant" replace /> },
+      { path: "boss-qa", element: <Navigate to={LEGACY_ENTRY_ALIASES["boss-qa"]} replace /> },
       { path: "settings", element: <SettingsPage /> }
     ]
   }

@@ -1,6 +1,7 @@
 import { type FormEvent, useState, useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
+import { LOGIN_GATE_SUBTITLE, SIDEBAR_BRAND_SUBTITLE } from "../lib/entry-guidance";
 
 interface User {
   id: string;
@@ -103,7 +104,7 @@ function LoginGate({ onLogin }: { onLogin: (user: User) => void }) {
             Finance Taxation V2
           </div>
           <div className="sidebar-brand-sub" style={{ color: "var(--c-text-muted)", marginTop: 4 }}>
-            企业财税工作台 · 请登录
+            {LOGIN_GATE_SUBTITLE}
           </div>
         </div>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -192,7 +193,7 @@ export function AppLayout() {
       <aside className="app-sidebar">
         <div className="sidebar-brand">
           <div className="sidebar-brand-name">Finance Taxation V2</div>
-          <div className="sidebar-brand-sub">企业财税工作台</div>
+          <div className="sidebar-brand-sub">{SIDEBAR_BRAND_SUBTITLE}</div>
         </div>
 
         <nav className="sidebar-nav">

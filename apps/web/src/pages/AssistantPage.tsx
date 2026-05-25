@@ -7,6 +7,7 @@ import { ProcessFlowCard } from "../features/process-flow/ProcessFlowCard";
 import { buildProcessFlowPageContext } from "../features/process-flow/page-context";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 import type { ProcessFlowContext } from "../features/process-flow/types";
+import { ASSISTANT_ENTRY_SUBTITLE } from "../lib/entry-guidance";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
@@ -688,7 +689,8 @@ export function AssistantPage() {
               </span>
             )}
           </div>
-          <div style={{ color: "#6c7a89", fontSize: "13px" }}>{status}</div>
+          <div style={{ color: "#6c7a89", fontSize: "13px", fontWeight: 500 }}>{ASSISTANT_ENTRY_SUBTITLE}</div>
+          <div style={{ color: "#6c7a89", fontSize: "13px", marginTop: "2px" }}>{status}</div>
           {uploadPhase && (
             <div style={{ marginTop: "6px", width: "260px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#4f8ef7", marginBottom: "3px" }}>
