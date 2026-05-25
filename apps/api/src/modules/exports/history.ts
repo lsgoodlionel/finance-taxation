@@ -1,4 +1,4 @@
-import type { ExportArchiveEntry, ExportArtifactKind, ExportJob } from "@finance-taxation/domain-model";
+import type { ExportArchiveEntry, ExportArtifactKind, ExportJob, ExportJobStatus } from "@finance-taxation/domain-model";
 
 function nowIso() {
   return new Date().toISOString();
@@ -23,6 +23,7 @@ export function buildExportJob(input: {
   resourceType?: string | null;
   resourceId?: string | null;
   periodLabel?: string | null;
+  status?: ExportJobStatus;
 }): ExportJob {
   return {
     id: `export-job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -33,10 +34,17 @@ export function buildExportJob(input: {
     resourceType: input.resourceType ?? null,
     resourceId: input.resourceId ?? null,
     periodLabel: input.periodLabel ?? null,
-    status: "created",
+    status: input.status ?? "created",
     createdByUserId: input.userId,
     createdByName: input.userName,
     createdAt: nowIso()
+  };
+}
+
+export function markExportJobStatus(job: ExportJob, status: ExportJobStatus): ExportJob {
+  return {
+    ...job,
+    status
   };
 }
 
@@ -72,4 +80,27 @@ export function buildExportArchiveEntry(input: {
     periodLabel: input.periodLabel ?? null,
     createdAt: nowIso()
   };
+}
+
+export function filterArchiveEntries(
+  entries: ExportArchiveEntry[],
+  filters: {
+    keyword?: string;
+    kind?: ExportArtifactKind | "";
+  }
+) {
+  const keyword = filters.keyword?.trim().toLowerCase() ?? "";
+  return entries.filter((item) => {
+    if (filters.kind && item.kind !== filters.kind) {
+      return false;
+    }
+    if (!keyword) {
+      return true;
+    }
+    const haystack = [item.archiveKey, item.title, item.fileName, item.objectType, item.objectId, item.periodLabel]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(keyword);
+  });
 }

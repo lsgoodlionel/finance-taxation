@@ -787,12 +787,17 @@ export async function getClosingBundleHtml(kind: ClosingPackageExport["kind"], p
   );
 }
 
-export async function listExportJobs(limit = 20) {
-  return request<{ items: ExportJob[]; total: number }>(`/api/exports/jobs?limit=${limit}`);
+export async function listExportJobs(limit = 20, status?: ExportJob["status"]) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (status) params.set("status", status);
+  return request<{ items: ExportJob[]; total: number }>(`/api/exports/jobs?${params.toString()}`);
 }
 
-export async function listExportArchiveEntries(limit = 20) {
-  return request<{ items: ExportArchiveEntry[]; total: number }>(`/api/exports/archive-index?limit=${limit}`);
+export async function listExportArchiveEntries(limit = 20, filters?: { kind?: ExportArtifactKind | ""; keyword?: string }) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (filters?.kind) params.set("kind", filters.kind);
+  if (filters?.keyword) params.set("keyword", filters.keyword);
+  return request<{ items: ExportArchiveEntry[]; total: number }>(`/api/exports/archive-index?${params.toString()}`);
 }
 
 export async function createExportJob(input: {
@@ -802,6 +807,7 @@ export async function createExportJob(input: {
   resourceType?: string | null;
   resourceId?: string | null;
   periodLabel?: string | null;
+  status?: ExportJob["status"];
 }) {
   return request<{ job: ExportJob; archiveEntry: ExportArchiveEntry }>("/api/exports/jobs", {
     method: "POST",

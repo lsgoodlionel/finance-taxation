@@ -1,5 +1,5 @@
 import type { ServerResponse } from "node:http";
-import type { ExportArchiveEntry, ExportArtifactKind, ExportJob } from "@finance-taxation/domain-model";
+import type { ExportArchiveEntry, ExportArtifactKind, ExportJob, ExportJobStatus } from "@finance-taxation/domain-model";
 import { query, withTransaction } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
@@ -14,7 +14,7 @@ interface ExportJobRow {
   resource_type: string | null;
   resource_id: string | null;
   period_label: string | null;
-  status: "created" | "opened";
+  status: ExportJobStatus;
   created_by_user_id: string | null;
   created_by_name: string;
   created_at: string | Date;
@@ -74,14 +74,16 @@ function mapArchiveRow(row: ExportArchiveRow): ExportArchiveEntry {
 export async function listExportJobs(req: ApiRequest, res: ServerResponse) {
   const url = new URL(req.url!, "http://x");
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || "20"), 1), 100);
+  const status = url.searchParams.get("status");
   const rows = await query<ExportJobRow>(
     `select id, company_id, kind, label, file_name, resource_type, resource_id,
             period_label, status, created_by_user_id, created_by_name, created_at
      from export_jobs
      where company_id = $1
+       and ($3::text is null or status = $3)
      order by created_at desc
      limit $2`,
-    [req.auth!.companyId, limit]
+    [req.auth!.companyId, limit, status]
   );
 
   return json(res, 200, {
@@ -93,14 +95,26 @@ export async function listExportJobs(req: ApiRequest, res: ServerResponse) {
 export async function listExportArchiveEntries(req: ApiRequest, res: ServerResponse) {
   const url = new URL(req.url!, "http://x");
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || "20"), 1), 100);
+  const kind = url.searchParams.get("kind");
+  const keyword = url.searchParams.get("keyword");
   const rows = await query<ExportArchiveRow>(
     `select id, company_id, job_id, archive_key, kind, title, file_name,
             object_type, object_id, period_label, created_at
      from export_archive_entries
      where company_id = $1
+       and ($3::text is null or kind = $3)
+       and (
+         $4::text is null
+         or archive_key ilike $4
+         or title ilike $4
+         or file_name ilike $4
+         or coalesce(object_type, '') ilike $4
+         or coalesce(object_id, '') ilike $4
+         or coalesce(period_label, '') ilike $4
+       )
      order by created_at desc
      limit $2`,
-    [req.auth!.companyId, limit]
+    [req.auth!.companyId, limit, kind, keyword ? `%${keyword}%` : null]
   );
 
   return json(res, 200, {
@@ -121,6 +135,7 @@ export async function createExportJob(req: ApiRequest, res: ServerResponse) {
     resourceType?: string | null;
     resourceId?: string | null;
     periodLabel?: string | null;
+    status?: ExportJobStatus;
   };
 
   if (!body.kind || !body.label || !body.fileName) {
@@ -136,7 +151,8 @@ export async function createExportJob(req: ApiRequest, res: ServerResponse) {
     fileName: body.fileName,
     resourceType: body.resourceType,
     resourceId: body.resourceId,
-    periodLabel: body.periodLabel
+    periodLabel: body.periodLabel,
+    status: body.status
   });
 
   const archiveEntry = buildExportArchiveEntry({

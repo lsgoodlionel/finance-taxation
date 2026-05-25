@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildExportArchiveEntry, buildExportJob } from "./history.js";
+import { buildExportArchiveEntry, buildExportJob, filterArchiveEntries, markExportJobStatus } from "./history.js";
 
 const job = buildExportJob({
   companyId: "company-1",
@@ -36,5 +36,27 @@ assert.equal(archiveEntry.objectType, "report_snapshot");
 assert.equal(archiveEntry.objectId, "snapshot-1");
 assert.equal(archiveEntry.periodLabel, "2026-05");
 assert.match(archiveEntry.archiveKey, /^report:/);
+
+assert.equal(markExportJobStatus(job, "completed").status, "completed");
+
+const filtered = filterArchiveEntries(
+  [
+    archiveEntry,
+    {
+      ...archiveEntry,
+      id: "archive-2",
+      kind: "voucher",
+      title: "凭证 2026-05",
+      fileName: "凭证_2026-05.pdf",
+      objectType: "voucher",
+      objectId: "voucher-1",
+      archiveKey: "voucher:2026-05:voucher:voucher-1"
+    }
+  ],
+  { keyword: "利润表", kind: "report" }
+);
+
+assert.equal(filtered.length, 1);
+assert.equal(filtered[0]?.id, archiveEntry.id);
 
 console.log("export-history-ok");

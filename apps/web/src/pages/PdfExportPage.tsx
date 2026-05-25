@@ -121,6 +121,8 @@ export function PdfExportPage() {
   const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
   const [exportHistory, setExportHistory] = useState<ExportJob[]>([]);
   const [archiveEntries, setArchiveEntries] = useState<ExportArchiveEntry[]>([]);
+  const [archiveKindFilter, setArchiveKindFilter] = useState<ExportArtifactKind | "">("");
+  const [archiveKeyword, setArchiveKeyword] = useState("");
 
   useEffect(() => {
     async function bootstrap() {
@@ -170,7 +172,7 @@ export function PdfExportPage() {
     resourceId?: string | null;
     periodLabel?: string | null;
   }) {
-    void createExportJob(input)
+    void createExportJob({ ...input, status: "completed" })
       .then(({ job, archiveEntry }) => {
         setExportHistory((current) => [job, ...current].slice(0, 20));
         setArchiveEntries((current) => [archiveEntry, ...current].slice(0, 20));
@@ -179,6 +181,12 @@ export function PdfExportPage() {
         setMessage("导出已打开，但后端导出历史记录失败。");
       });
   }
+
+  useEffect(() => {
+    void listExportArchiveEntries(20, { kind: archiveKindFilter, keyword: archiveKeyword || undefined })
+      .then((res) => setArchiveEntries(res.items))
+      .catch(() => {});
+  }, [archiveKindFilter, archiveKeyword]);
 
   const batchButtonStyle = {
     fontSize: "12px",
@@ -285,7 +293,10 @@ export function PdfExportPage() {
                   <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
                   <td style={cellStyle()}>{item.kind}</td>
                   <td style={cellStyle()}>{item.label}</td>
-                  <td style={cellStyle()}>{item.fileName}</td>
+                  <td style={cellStyle()}>
+                    <div>{item.fileName}</div>
+                    <div style={{ fontSize: "11px", color: "#6c7a89", marginTop: "2px" }}>状态：{item.status}</div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -294,7 +305,28 @@ export function PdfExportPage() {
       </div>
 
       <div style={panelStyle()}>
-        <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>导出归档索引</h3>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-end", marginBottom: "16px", flexWrap: "wrap" }}>
+          <h3 style={{ margin: 0, fontSize: "15px" }}>导出归档索引</h3>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <select value={archiveKindFilter} onChange={(event) => setArchiveKindFilter(event.target.value as ExportArtifactKind | "")} style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", fontSize: "12px" }}>
+              <option value="">全部分类</option>
+              <option value="report">报表</option>
+              <option value="tax">税务</option>
+              <option value="package">资料包</option>
+              <option value="document">单据</option>
+              <option value="risk">风险</option>
+              <option value="rnd">研发</option>
+              <option value="payroll">工资</option>
+              <option value="voucher">凭证</option>
+            </select>
+            <input
+              value={archiveKeyword}
+              onChange={(event) => setArchiveKeyword(event.target.value)}
+              placeholder="搜索标题/文件名/归档键"
+              style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", fontSize: "12px", minWidth: "220px" }}
+            />
+          </div>
+        </div>
         {archiveEntries.length === 0 ? (
           <div style={{ color: "#aab5c0", textAlign: "center", padding: "24px" }}>暂无归档索引</div>
         ) : (
