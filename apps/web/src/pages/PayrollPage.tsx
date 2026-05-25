@@ -7,6 +7,7 @@ import {
   computePayroll,
   confirmPayroll,
   createEmployee,
+  getIndividualIncomeTaxMaterials,
   getPayrollPeriods,
   getPayrollPolicy,
   listEmployees,
@@ -20,6 +21,7 @@ import {
 } from "../lib/api";
 import { buildPayrollEventInput } from "./payroll-event";
 import { buildPayrollLinkageSummary } from "./payroll-linkage";
+import { buildPayrollTaxReviewSummary } from "./payroll-tax-review";
 import { buildPayrollWorkflow } from "./payroll-workflow";
 
 type Tab = "employees" | "payroll" | "policy";
@@ -108,6 +110,8 @@ export function PayrollPage() {
   const [creatingEventPeriod, setCreatingEventPeriod] = useState<string | null>(null);
   const [linkedTaxItemCount, setLinkedTaxItemCount] = useState(0);
   const [linkedVoucherCount, setLinkedVoucherCount] = useState(0);
+  const [iitChecklist, setIitChecklist] = useState<string[]>([]);
+  const [iitMaterialPeriod, setIitMaterialPeriod] = useState<string | null>(null);
 
   // policy tab
   const [policy, setPolicy] = useState<PayrollPolicy | null>(null);
@@ -306,29 +310,46 @@ export function PayrollPage() {
         linkedEventId
       })
     : null;
+  const payrollTaxReview = selectedPeriod
+    ? buildPayrollTaxReviewSummary({
+        period: selectedPeriod,
+        records: payrollRecords,
+        linkedEventId,
+        taxItemCount: linkedTaxItemCount,
+        iitMaterial: iitMaterialPeriod === selectedPeriod
+          ? {
+              companyId: "",
+              filingPeriod: iitMaterialPeriod,
+              payrollEventCount: linkedEventId ? 1 : 0,
+              withholdingItemCount: linkedTaxItemCount,
+              totalPayrollAmount: "0",
+              checklist: iitChecklist
+            }
+          : null
+      })
+    : null;
 
   useEffect(() => {
     let active = true;
 
     async function loadLinkedArtifacts() {
-      if (!linkedEventId) {
-        setLinkedTaxItemCount(0);
-        setLinkedVoucherCount(0);
-        return;
-      }
-
       try {
-        const [taxRes, voucherRes] = await Promise.all([
-          listTaxItems({ businessEventId: linkedEventId }),
-          listVouchers({ businessEventId: linkedEventId })
+        const [taxRes, voucherRes, iitRes] = await Promise.all([
+          linkedEventId ? listTaxItems({ businessEventId: linkedEventId }) : Promise.resolve({ items: [], total: 0 }),
+          linkedEventId ? listVouchers({ businessEventId: linkedEventId }) : Promise.resolve({ items: [], total: 0 }),
+          getIndividualIncomeTaxMaterials(selectedPeriod)
         ]);
         if (!active) return;
         setLinkedTaxItemCount(taxRes.total);
         setLinkedVoucherCount(voucherRes.total);
+        setIitChecklist(iitRes.checklist);
+        setIitMaterialPeriod(iitRes.filingPeriod);
       } catch {
         if (!active) return;
         setLinkedTaxItemCount(0);
         setLinkedVoucherCount(0);
+        setIitChecklist([]);
+        setIitMaterialPeriod(null);
       }
     }
 
@@ -336,7 +357,7 @@ export function PayrollPage() {
     return () => {
       active = false;
     };
-  }, [linkedEventId]);
+  }, [linkedEventId, selectedPeriod]);
 
   async function handlePayrollRiskCheck() {
     const eventId = linkedEventIds[selectedPeriod];
@@ -623,6 +644,51 @@ export function PayrollPage() {
                         {payrollLinkage.readiness === "pending_event" && "工资记录已基本就绪，但尚未生成工资事项。"}
                         {payrollLinkage.readiness === "ready_for_tax_review" && "工资事项已接入主线，可继续进入税务、凭证和风险复核。"}
                       </div>
+                    </div>
+                  )}
+                  {payrollTaxReview && (
+                    <div
+                      style={{
+                        border: "1px solid rgba(20,40,60,0.08)",
+                        borderRadius: "12px",
+                        padding: "12px 14px",
+                        background:
+                          payrollTaxReview.status === "ready"
+                            ? "rgba(37,99,235,0.06)"
+                            : "rgba(255,186,8,0.08)"
+                      }}
+                    >
+                      <div style={{ fontSize: "12px", color: "#6c7a89", marginBottom: "8px" }}>税务复核摘要</div>
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+                        {payrollTaxReview.highlights.map((item) => (
+                          <span
+                            key={item}
+                            style={{
+                              fontSize: "12px",
+                              padding: "6px 10px",
+                              borderRadius: "999px",
+                              background: "rgba(255,255,255,0.7)",
+                              color: "#1e2a37"
+                            }}
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                      {payrollTaxReview.pendingActions.length ? (
+                        <div style={{ marginBottom: "8px", fontSize: "12px", color: "#8a6200" }}>
+                          待补动作：{payrollTaxReview.pendingActions.join("；")}
+                        </div>
+                      ) : (
+                        <div style={{ marginBottom: "8px", fontSize: "12px", color: "#2563eb" }}>
+                          当前工资期间已具备进入个税复核的基础资料。
+                        </div>
+                      )}
+                      {payrollTaxReview.checklist.length ? (
+                        <div style={{ fontSize: "12px", color: "#6c7a89", lineHeight: 1.7 }}>
+                          个税资料清单：{payrollTaxReview.checklist.join("、")}
+                        </div>
+                      ) : null}
                     </div>
                   )}
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
