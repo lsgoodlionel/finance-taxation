@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { BusinessEvent, RiskClosureRecord, RiskFinding } from "@finance-taxation/domain-model";
 import {
   closeRiskFinding,
@@ -10,6 +10,7 @@ import {
 } from "../lib/api";
 import { useI18n, RISK_SEVERITY_LABELS, RISK_PRIORITY_LABELS, RISK_STATUS_LABELS } from "../lib/i18n";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
+import { buildRiskDrilldownTargets } from "./drilldown";
 
 function RiskHelpModal({ onClose }: { onClose: () => void }) {
   return (
@@ -73,8 +74,11 @@ function cellStyle() {
 }
 
 export function RiskPage() {
+  const navigate = useNavigate();
   const location = useLocation();
-  const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
+  const navState = (location.state as { businessEventId?: string; riskFindingId?: string } | null) ?? null;
+  const navEventId = navState?.businessEventId ?? null;
+  const navRiskFindingId = navState?.riskFindingId ?? null;
   const { t } = useI18n();
   const [findings, setFindings] = useState<RiskFinding[]>([]);
   const [closureRecords, setClosureRecords] = useState<RiskClosureRecord[]>([]);
@@ -105,17 +109,22 @@ export function RiskPage() {
         setFindings(findingsPayload.items);
         const preferredFinding = navEventId
           ? findingsPayload.items.find((item) => item.businessEventId === navEventId) ?? null
+          : navRiskFindingId
+            ? findingsPayload.items.find((item) => item.id === navRiskFindingId) ?? null
           : null;
         setSelectedFindingId(preferredFinding?.id || findingsPayload.items[0]?.id || "");
+        if (preferredFinding?.id) {
+          void loadClosureRecords(preferredFinding.id);
+        }
         setMessage(
-          `${navEventId ? `当前事项 ${navEventId}：` : ""}已加载 ${findingsPayload.total} 条风险发现。`
+          `${navEventId ? `当前事项 ${navEventId}：` : navRiskFindingId ? `当前风险 ${navRiskFindingId}：` : ""}已加载 ${findingsPayload.total} 条风险发现。`
         );
       } catch (error) {
         setMessage((error as Error).message);
       }
     }
     void bootstrap();
-  }, [navEventId]);
+  }, [navEventId, navRiskFindingId]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -141,8 +150,18 @@ export function RiskPage() {
   }
 
   const visibleFindings = useMemo(
-    () => (navEventId ? findings.filter((finding) => finding.businessEventId === navEventId) : findings),
-    [findings, navEventId]
+    () => (
+      navEventId
+        ? findings.filter((finding) => finding.businessEventId === navEventId)
+        : navRiskFindingId
+          ? findings.filter((finding) => finding.id === navRiskFindingId)
+          : findings
+    ),
+    [findings, navEventId, navRiskFindingId]
+  );
+  const eventMap = useMemo(
+    () => new Map(events.map((event) => [event.id, event])),
+    [events]
   );
 
   return (
@@ -259,7 +278,10 @@ export function RiskPage() {
             </tr>
           </thead>
           <tbody>
-            {visibleFindings.map((finding) => (
+            {visibleFindings.map((finding) => {
+              const linkedEvent = finding.businessEventId ? eventMap.get(finding.businessEventId) ?? null : null;
+              const targets = buildRiskDrilldownTargets(linkedEvent);
+              return (
               <tr key={finding.id}>
                 <td style={cellStyle()}>{finding.ruleCode}</td>
                 <td style={cellStyle()}>{t(RISK_SEVERITY_LABELS, finding.severity)}</td>
@@ -269,6 +291,19 @@ export function RiskPage() {
                 <td style={cellStyle()}>{finding.title}</td>
                 <td style={cellStyle()}>
                   <div>{finding.detail}</div>
+                  {targets.length ? (
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
+                      {targets.map((target) => (
+                        <button
+                          key={`${finding.id}-${target.path}-${target.label}`}
+                          style={{ fontSize: "11px", padding: "3px 10px" }}
+                          onClick={() => navigate(target.path, { state: target.state })}
+                        >
+                          {target.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                   <button
                     style={{ marginTop: "8px", marginRight: "8px" }}
                     onClick={() =>
@@ -291,7 +326,7 @@ export function RiskPage() {
                   ) : null}
                 </td>
               </tr>
-            ))}
+            );})}
             {visibleFindings.length === 0 ? (
               <tr>
                 <td colSpan={7} style={{ ...cellStyle(), textAlign: "center", color: "#9aa5b4", padding: "24px" }}>

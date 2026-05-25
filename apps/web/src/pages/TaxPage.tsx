@@ -93,7 +93,9 @@ function cellStyle() {
 
 export function TaxPage() {
   const location = useLocation();
-  const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
+  const navState = (location.state as { businessEventId?: string; taxItemId?: string } | null) ?? null;
+  const navEventId = navState?.businessEventId ?? null;
+  const navTaxItemId = navState?.taxItemId ?? null;
   const { t } = useI18n();
   const [items, setItems] = useState<TaxItem[]>([]);
   const [batches, setBatches] = useState<TaxFilingBatch[]>([]);
@@ -149,7 +151,7 @@ export function TaxPage() {
           setSelectedBatchDetail(await getTaxFilingBatchDetail(first));
         }
         setMessage(
-          `${navEventId ? `当前事项 ${navEventId}：` : ""}已加载 ${itemsPayload.total} 条税务事项，${batchesPayload.total} 个申报批次。`
+          `${navEventId ? `当前事项 ${navEventId}：` : navTaxItemId ? `当前税务事项 ${navTaxItemId}：` : ""}已加载 ${itemsPayload.total} 条税务事项，${batchesPayload.total} 个申报批次。`
         );
       } catch (error) {
         setMessage((error as Error).message);
@@ -279,9 +281,11 @@ export function TaxPage() {
       </article>
       <article style={panelStyle()}>
         <h3 style={{ marginTop: 0 }}>税务事项</h3>
-        {navEventId && (
+        {(navEventId || navTaxItemId) && (
           <div style={{ marginBottom: "12px", padding: "10px 14px", borderRadius: "8px", background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.2)", color: "#2563eb", fontSize: "13px" }}>
-            当前仅显示事项 <strong>{navEventId}</strong> 的关联税务事项。
+            {navEventId
+              ? <>当前仅显示事项 <strong>{navEventId}</strong> 的关联税务事项。</>
+              : <>当前高亮税务事项 <strong>{navTaxItemId}</strong>。</>}
           </div>
         )}
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -296,7 +300,12 @@ export function TaxPage() {
           </thead>
           <tbody>
             {items.map((item) => (
-              <tr key={item.id}>
+              <tr
+                key={item.id}
+                style={{
+                  background: navTaxItemId === item.id ? "rgba(37,99,235,0.08)" : "transparent"
+                }}
+              >
                 <td style={cellStyle()}>{item.id}</td>
                 <td style={cellStyle()}>{item.taxType}</td>
                 <td style={cellStyle()}>{item.filingPeriod}</td>

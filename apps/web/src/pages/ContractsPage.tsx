@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { Contract, ContractWithEventCount, GeneratedDocument, Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import {
   analyzeEvent,
@@ -84,7 +84,9 @@ interface ContractDetailView {
 }
 
 export function ContractsPage() {
+  const location = useLocation();
   const navigate = useNavigate();
+  const navContractId = (location.state as { contractId?: string } | null)?.contractId ?? null;
   const { t } = useI18n();
   const [contracts, setContracts] = useState<ContractWithEventCount[]>([]);
   const [detail, setDetail] = useState<ContractDetailView | null>(null);
@@ -130,6 +132,13 @@ export function ContractsPage() {
     }
     bootstrap();
   }, []);
+
+  useEffect(() => {
+    if (!navContractId) {
+      return;
+    }
+    void handleDetail(navContractId).catch((error) => setMessage((error as Error).message));
+  }, [navContractId]);
 
   async function loadContracts() {
     const filters = {

@@ -100,7 +100,9 @@ export function DocumentsPage() {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
-  const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
+  const navState = (location.state as { businessEventId?: string; documentId?: string } | null) ?? null;
+  const navEventId = navState?.businessEventId ?? null;
+  const navDocumentId = navState?.documentId ?? null;
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [relatedTasks, setRelatedTasks] = useState<(Task & { isOverdue?: boolean })[]>([]);
@@ -112,10 +114,6 @@ export function DocumentsPage() {
   const [uploading, setUploading] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    void bootstrap();
-  }, []);
 
   async function loadRelations(businessEventId: string | null) {
     if (!businessEventId) {
@@ -142,7 +140,9 @@ export function DocumentsPage() {
       ]);
       setDocuments(docsPayload.items);
       setVouchers(vouchersPayload.items);
-      const linkedId = navEventId
+      const linkedId = navDocumentId
+        ? docsPayload.items.find((d) => d.id === navDocumentId)?.id ?? null
+        : navEventId
         ? docsPayload.items.find((d) => d.businessEventId === navEventId)?.id ?? null
         : null;
       const targetId = linkedId ?? docsPayload.items[0]?.id ?? null;
@@ -159,6 +159,10 @@ export function DocumentsPage() {
       setMessage((error as Error).message);
     }
   }
+
+  useEffect(() => {
+    void bootstrap();
+  }, [navDocumentId, navEventId]);
 
   async function refreshListAndDetail(documentId?: string) {
     const payload = await listDocuments();
