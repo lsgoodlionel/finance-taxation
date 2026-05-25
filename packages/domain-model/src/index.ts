@@ -709,7 +709,7 @@ export type ExportArtifactKind =
   | "rnd"
   | "voucher";
 
-export type ExportJobStatus = "created" | "opened";
+export type ExportJobStatus = "created" | "opened" | "completed" | "failed";
 
 export interface ExportJob {
   id: string;
