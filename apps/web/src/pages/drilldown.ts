@@ -6,6 +6,20 @@ export interface DrilldownTarget {
   label: string;
 }
 
+export interface DrilldownState {
+  businessEventId?: string;
+  contractId?: string;
+  documentId?: string;
+  voucherId?: string;
+  taxItemId?: string;
+  riskFindingId?: string;
+  employeeId?: string;
+  payrollPeriod?: string;
+  tab?: string;
+  resourceType?: string;
+  resourceId?: string;
+}
+
 export function derivePayrollPeriodFromEvent(event: Pick<BusinessEvent, "type" | "occurredOn">): string | null {
   if (event.type !== "payroll") {
     return null;
@@ -39,6 +53,70 @@ export function buildRiskDrilldownTargets(event: BusinessEvent | null): Drilldow
   return targets;
 }
 
+export function buildRiskClosureTargetChain({
+  findingId,
+  event
+}: {
+  findingId: string;
+  event: BusinessEvent | null;
+}): DrilldownTarget[] {
+  const targets = buildRiskDrilldownTargets(event);
+  return [
+    ...targets,
+    {
+      path: "/audit",
+      state: { resourceType: "risk_finding", resourceId: findingId, riskFindingId: findingId },
+      label: "审计日志"
+    }
+  ];
+}
+
+export function normalizeDrilldownState(state: unknown): DrilldownState {
+  if (!state || typeof state !== "object") {
+    return {};
+  }
+  const source = state as Record<string, unknown>;
+  const pick = (key: string) => typeof source[key] === "string" ? source[key] : undefined;
+  return {
+    businessEventId: pick("businessEventId"),
+    contractId: pick("contractId"),
+    documentId: pick("documentId"),
+    voucherId: pick("voucherId"),
+    taxItemId: pick("taxItemId"),
+    riskFindingId: pick("riskFindingId"),
+    employeeId: pick("employeeId"),
+    payrollPeriod: pick("payrollPeriod"),
+    tab: pick("tab"),
+    resourceType: pick("resourceType"),
+    resourceId: pick("resourceId")
+  };
+}
+
+export function resolveAuditContextFromState(state: DrilldownState) {
+  if (state.resourceType && state.resourceId) {
+    return { resourceType: state.resourceType, resourceId: state.resourceId };
+  }
+  if (state.taxItemId) {
+    return { resourceType: "tax_item", resourceId: state.taxItemId } as const;
+  }
+  if (state.documentId) {
+    return { resourceType: "document", resourceId: state.documentId } as const;
+  }
+  if (state.voucherId) {
+    return { resourceType: "voucher", resourceId: state.voucherId } as const;
+  }
+  if (state.contractId) {
+    return { resourceType: "contract", resourceId: state.contractId } as const;
+  }
+  if (state.businessEventId) {
+    return { resourceType: "business_event", resourceId: state.businessEventId } as const;
+  }
+  if (state.riskFindingId) {
+    return { resourceType: "risk_finding", resourceId: state.riskFindingId } as const;
+  }
+  return null;
+}
+
 export function resolveAuditLogTarget(log: AuditLog): DrilldownTarget | null {
   if (!log.resourceId) {
     return null;
@@ -53,6 +131,8 @@ export function resolveAuditLogTarget(log: AuditLog): DrilldownTarget | null {
       return { path: "/documents", state: { documentId: log.resourceId }, label: "查看单据" };
     case "contract":
       return { path: "/contracts", state: { contractId: log.resourceId }, label: "查看合同" };
+    case "employee":
+      return { path: "/payroll", state: { employeeId: log.resourceId, tab: "employees" }, label: "查看员工" };
     case "tax_item":
       return { path: "/tax", state: { taxItemId: log.resourceId }, label: "查看税务事项" };
     case "risk_finding":

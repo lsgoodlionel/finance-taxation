@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { AuditLog } from "@finance-taxation/domain-model";
 import { listAuditLogs } from "../lib/api";
-import { resolveAuditLogTarget } from "./drilldown";
+import { normalizeDrilldownState, resolveAuditContextFromState, resolveAuditLogTarget } from "./drilldown";
+import { resolveInitialAuditExpansion } from "./risk-scope";
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   business_event: "经营事项",
@@ -53,9 +54,10 @@ const RESOURCE_TYPES = [
 export function AuditPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const navState = (location.state as { resourceType?: string; resourceId?: string; contractId?: string } | null) ?? null;
-  const navResourceType = navState?.resourceType ?? "";
-  const navResourceId = navState?.resourceId ?? navState?.contractId ?? "";
+  const navState = normalizeDrilldownState(location.state);
+  const navAuditContext = resolveAuditContextFromState(navState);
+  const navResourceType = navAuditContext?.resourceType ?? "";
+  const navResourceId = navAuditContext?.resourceId ?? "";
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -88,6 +90,10 @@ export function AuditPage() {
         offset: off
       });
       setLogs(res.items);
+      setExpandedId(resolveInitialAuditExpansion(
+        res.items.map((item) => ({ id: item.id, resourceId: item.resourceId })),
+        resourceId ?? navResourceId ?? null
+      ));
       setTotal(res.total);
       setOffset(off);
       setMessage(`${rid ? `当前对象 ${rid}：` : ""}共 ${res.total} 条审计记录`);

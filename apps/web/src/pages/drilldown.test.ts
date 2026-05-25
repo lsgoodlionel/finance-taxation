@@ -1,5 +1,12 @@
 import type { AuditLog, BusinessEvent } from "@finance-taxation/domain-model";
-import { buildRiskDrilldownTargets, derivePayrollPeriodFromEvent, resolveAuditLogTarget } from "./drilldown";
+import {
+  buildRiskClosureTargetChain,
+  buildRiskDrilldownTargets,
+  derivePayrollPeriodFromEvent,
+  normalizeDrilldownState,
+  resolveAuditContextFromState,
+  resolveAuditLogTarget
+} from "./drilldown";
 
 function assert(condition: unknown, message: string) {
   if (!condition) {
@@ -65,5 +72,41 @@ const payrollLog: AuditLog = {
 const payrollTarget = resolveAuditLogTarget(payrollLog);
 assert(payrollTarget?.path === "/payroll", "expected payroll log to resolve to payroll page");
 assert(payrollTarget?.state?.payrollPeriod === "2026-05", "expected payroll period to be extracted");
+
+const employeeLog: AuditLog = {
+  ...voucherLog,
+  id: "audit-3",
+  resourceType: "employee",
+  resourceId: "emp-1",
+  resourceLabel: "张三",
+  changes: { data: { employeeId: "emp-1" } }
+};
+
+const employeeTarget = resolveAuditLogTarget(employeeLog);
+assert(employeeTarget?.path === "/payroll", "expected employee log to resolve to payroll page");
+assert(employeeTarget?.state?.employeeId === "emp-1", "expected employee drilldown to preserve employee id");
+assert(employeeTarget?.state?.tab === "employees", "expected employee drilldown to open employee tab");
+
+const normalized = normalizeDrilldownState({
+  voucherId: "voucher-2",
+  payrollPeriod: "2026-05",
+  tab: "payroll"
+});
+assert(normalized.voucherId === "voucher-2", "expected voucher id to be normalized");
+assert(normalized.payrollPeriod === "2026-05", "expected payroll period to be normalized");
+
+const taxAuditContext = resolveAuditContextFromState({ taxItemId: "tax-1" });
+assert(taxAuditContext?.resourceType === "tax_item", "expected tax item context to derive resource type");
+assert(taxAuditContext?.resourceId === "tax-1", "expected tax item context to derive resource id");
+
+const closureTargets = buildRiskClosureTargetChain({
+  findingId: "risk-1",
+  event: {
+    ...payrollEvent,
+    contractId: "contract-1"
+  }
+});
+assert(closureTargets[0]?.path === "/contracts", "expected closure chain to include contract first");
+assert(closureTargets.some((item) => item.path === "/audit"), "expected closure chain to keep audit target");
 
 console.log("drilldown-ok");

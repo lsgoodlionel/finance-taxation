@@ -94,7 +94,10 @@ const EMPTY_EMP_FORM = {
 export function PayrollPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const navPayrollPeriod = (location.state as { payrollPeriod?: string } | null)?.payrollPeriod ?? null;
+  const navState = (location.state as { payrollPeriod?: string; employeeId?: string; tab?: Tab } | null) ?? {};
+  const navPayrollPeriod = navState.payrollPeriod ?? null;
+  const navEmployeeId = navState.employeeId ?? null;
+  const navTab = navState.tab ?? null;
   const [tab, setTab] = useState<Tab>("employees");
   const [message, setMessage] = useState("正在加载数据...");
 
@@ -150,6 +153,15 @@ export function PayrollPage() {
       // ignore broken session payloads
     }
   }, []);
+
+  useEffect(() => {
+    if (navTab === "employees" || navEmployeeId) {
+      setTab("employees");
+      if (navEmployeeId) {
+        setMessage(`已按员工 ${navEmployeeId} 恢复工资管理上下文。`);
+      }
+    }
+  }, [navEmployeeId, navTab]);
 
   useEffect(() => {
     if (!navPayrollPeriod) {
@@ -564,14 +576,19 @@ export function PayrollPage() {
                 ) : (
                   employees.map((emp) => (
                     <tr key={emp.id}>
-                      <td style={cellStyle()}>
+                      <td
+                        style={{
+                          ...cellStyle(),
+                          background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined
+                        }}
+                      >
                         <div>{emp.name}</div>
                         <div style={{ color: "#8a9bb0", fontSize: "11px" }}>{emp.idCard}</div>
                       </td>
-                      <td style={cellStyle()}>{emp.position || "—"}</td>
-                      <td style={cellStyle()}>{emp.hireDate ?? "—"}</td>
-                      <td style={cellStyle()}>¥ {fmt(emp.baseSalary)}</td>
-                      <td style={cellStyle()}>
+                      <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>{emp.position || "—"}</td>
+                      <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>{emp.hireDate ?? "—"}</td>
+                      <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>¥ {fmt(emp.baseSalary)}</td>
+                      <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>
                         <span style={{
                           background: emp.status === "active" ? "#1a7f5a22" : "#8a9bb022",
                           color: emp.status === "active" ? "#1a7f5a" : "#8a9bb0",
@@ -580,7 +597,7 @@ export function PayrollPage() {
                           {EMPLOYEE_STATUS_LABELS[emp.status] ?? emp.status}
                         </span>
                       </td>
-                      <td style={cellStyle()}>
+                      <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>
                         <button
                           onClick={() => startEditEmployee(emp)}
                           style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #1e2a37", color: "#1e2a37", background: "none", cursor: "pointer" }}
