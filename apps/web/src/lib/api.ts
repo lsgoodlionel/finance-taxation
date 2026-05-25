@@ -26,6 +26,7 @@ import type {
   PayrollPeriodSummary,
   PayrollPolicy,
   PayrollRecord,
+  PayrollTaxReviewLedger,
   ProfitStatementReport,
   ReportDiffResult,
   ReportSnapshot,
@@ -1024,6 +1025,19 @@ export async function computePayroll(period: string) {
 
 export async function listPayroll(period: string) {
   return request<{ items: PayrollRecord[]; total: number }>(`/api/payroll?period=${encodeURIComponent(period)}`);
+}
+
+export async function listPayrollReviewLedgers(period: string) {
+  return request<{ items: PayrollTaxReviewLedger[]; total: number }>(
+    `/api/payroll/review-ledgers?period=${encodeURIComponent(period)}`
+  );
+}
+
+export async function syncPayrollReviewLedgers(input: { period: string; businessEventId?: string | null }) {
+  return request<{ items: PayrollTaxReviewLedger[]; total: number }>("/api/payroll/review-ledgers", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
 }
 
 export async function confirmPayroll(recordId: string) {

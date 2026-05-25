@@ -812,6 +812,23 @@ export interface PayrollPeriodSummary {
   status: "draft" | "confirmed" | "mixed";
 }
 
+export type PayrollTaxReviewType = "iit" | "social_security" | "housing_fund";
+export type PayrollTaxReviewStatus = "pending" | "ready" | "reviewed";
+
+export interface PayrollTaxReviewLedger {
+  id: string;
+  companyId: string;
+  period: string;
+  reviewType: PayrollTaxReviewType;
+  businessEventId: string | null;
+  taxItemIds: string[];
+  totalEmployeeAmount: string;
+  totalEmployerAmount: string;
+  status: PayrollTaxReviewStatus;
+  notes: string;
+  updatedAt: string;
+}
+
 export type ContractType = "sales" | "procurement" | "lease" | "service" | "other";
 export type ContractStatus = "draft" | "active" | "fulfilled" | "terminated" | "expired";
 

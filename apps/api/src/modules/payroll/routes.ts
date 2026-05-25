@@ -3,12 +3,15 @@ import type {
   Employee,
   PayrollPolicy,
   PayrollPeriodSummary,
-  PayrollRecord
+  PayrollRecord,
+  PayrollTaxReviewLedger,
+  TaxItem
 } from "@finance-taxation/domain-model";
 import { query, queryOne } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
+import { buildPayrollTaxReviewLedgers } from "./review-ledgers.js";
 
 interface EmployeeRow {
   id: string;
@@ -64,6 +67,22 @@ interface PayrollRecordRow {
   created_at: string | Date;
   updated_at: string | Date;
 }
+
+interface PayrollTaxReviewLedgerRow {
+  id: string;
+  company_id: string;
+  period: string;
+  review_type: PayrollTaxReviewLedger["reviewType"];
+  business_event_id: string | null;
+  tax_item_ids: string[];
+  total_employee_amount: string | number;
+  total_employer_amount: string | number;
+  status: PayrollTaxReviewLedger["status"];
+  notes: string;
+  updated_at: string | Date;
+}
+
+interface PayrollTaxItemRow extends TaxItem {}
 
 function toIso(v: string | Date | null | undefined): string | null {
   if (!v) return null;
@@ -127,6 +146,22 @@ function mapRecord(row: PayrollRecordRow): PayrollRecord {
     confirmedByName: row.confirmed_by_name,
     notes: row.notes,
     createdAt: toIso(row.created_at) ?? "",
+    updatedAt: toIso(row.updated_at) ?? ""
+  };
+}
+
+function mapReviewLedger(row: PayrollTaxReviewLedgerRow): PayrollTaxReviewLedger {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    period: row.period,
+    reviewType: row.review_type,
+    businessEventId: row.business_event_id,
+    taxItemIds: row.tax_item_ids ?? [],
+    totalEmployeeAmount: Number(row.total_employee_amount).toFixed(2),
+    totalEmployerAmount: Number(row.total_employer_amount).toFixed(2),
+    status: row.status,
+    notes: row.notes,
     updatedAt: toIso(row.updated_at) ?? ""
   };
 }
@@ -484,4 +519,122 @@ export async function getPayrollPeriods(req: ApiRequest, res: ServerResponse) {
     status: r.status_mix
   }));
   return json(res, 200, { items, total: items.length });
+}
+
+export async function listPayrollReviewLedgers(req: ApiRequest, res: ServerResponse) {
+  const companyId = req.auth!.companyId;
+  const url = new URL(req.url!, "http://x");
+  const period = url.searchParams.get("period");
+  if (!period) return json(res, 400, { error: "period is required" });
+
+  const rows = await query<PayrollTaxReviewLedgerRow>(
+    `
+      select *
+      from payroll_tax_review_ledgers
+      where company_id = $1 and period = $2
+      order by review_type asc
+    `,
+    [companyId, period]
+  );
+
+  return json(res, 200, { items: rows.map(mapReviewLedger), total: rows.length });
+}
+
+export async function syncPayrollReviewLedgers(req: ApiRequest, res: ServerResponse) {
+  const companyId = req.auth!.companyId;
+  const body = req.body as { period?: string; businessEventId?: string | null };
+  const period = body.period;
+
+  if (!period) return json(res, 400, { error: "period is required" });
+
+  const recordRows = await query<PayrollRecordRow>(
+    `select * from payroll_records where company_id = $1 and period = $2 order by employee_name asc`,
+    [companyId, period]
+  );
+  if (!recordRows.length) return json(res, 404, { error: "Payroll records not found for period" });
+
+  const taxRows = body.businessEventId
+    ? await query<PayrollTaxItemRow>(
+        `
+          select
+            id,
+            company_id as "companyId",
+            business_event_id as "businessEventId",
+            mapping_id as "mappingId",
+            tax_type as "taxType",
+            treatment,
+            basis,
+            filing_period as "filingPeriod",
+            status,
+            source,
+            created_at as "createdAt",
+            updated_at as "updatedAt"
+          from tax_items
+          where company_id = $1 and business_event_id = $2
+        `,
+        [companyId, body.businessEventId]
+      )
+    : [];
+
+  const ledgers = buildPayrollTaxReviewLedgers({
+    companyId,
+    period,
+    businessEventId: body.businessEventId ?? null,
+    records: recordRows.map(mapRecord),
+    taxItems: taxRows
+  });
+
+  for (const item of ledgers) {
+    await query(
+      `
+        insert into payroll_tax_review_ledgers (
+          id,
+          company_id,
+          period,
+          review_type,
+          business_event_id,
+          tax_item_ids,
+          total_employee_amount,
+          total_employer_amount,
+          status,
+          notes,
+          updated_at
+        ) values ($1,$2,$3,$4,$5,$6,$7::numeric,$8::numeric,$9,$10,$11::timestamptz)
+        on conflict (company_id, period, review_type) do update set
+          business_event_id = excluded.business_event_id,
+          tax_item_ids = excluded.tax_item_ids,
+          total_employee_amount = excluded.total_employee_amount,
+          total_employer_amount = excluded.total_employer_amount,
+          status = excluded.status,
+          notes = excluded.notes,
+          updated_at = excluded.updated_at
+      `,
+      [
+        item.id,
+        item.companyId,
+        item.period,
+        item.reviewType,
+        item.businessEventId,
+        item.taxItemIds,
+        item.totalEmployeeAmount,
+        item.totalEmployerAmount,
+        item.status,
+        item.notes,
+        item.updatedAt
+      ]
+    );
+  }
+
+  writeAudit({
+    companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: "sync",
+    resourceType: "payroll_tax_review_ledger",
+    resourceId: period,
+    resourceLabel: `工资税务复核台账 ${period}`,
+    changes: { data: { ledgerCount: ledgers.length, businessEventId: body.businessEventId ?? null } }
+  });
+
+  return json(res, 200, { items: ledgers, total: ledgers.length });
 }
