@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { AuditLog } from "@finance-taxation/domain-model";
 import { listAuditLogs } from "../lib/api";
 import { resolveAuditLogTarget } from "./drilldown";
@@ -51,7 +51,11 @@ const RESOURCE_TYPES = [
 ];
 
 export function AuditPage() {
+  const location = useLocation();
   const navigate = useNavigate();
+  const navState = (location.state as { resourceType?: string; resourceId?: string } | null) ?? null;
+  const navResourceType = navState?.resourceType ?? "";
+  const navResourceId = navState?.resourceId ?? "";
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -64,14 +68,18 @@ export function AuditPage() {
   const LIMIT = 50;
 
   useEffect(() => {
-    void load(0, resourceType, fromDate, toDate);
+    if (navResourceType) {
+      setResourceType(navResourceType);
+    }
+    void load(0, navResourceType || resourceType, fromDate, toDate, navResourceId || undefined);
   }, []);
 
-  async function load(off: number, rt: string, fd: string, td: string) {
+  async function load(off: number, rt: string, fd: string, td: string, resourceId?: string) {
     setLoading(true);
     try {
       const res = await listAuditLogs({
         resourceType: rt || undefined,
+        resourceId: resourceId || undefined,
         from: fd || undefined,
         to: td ? td + "T23:59:59Z" : undefined,
         limit: LIMIT,
@@ -80,7 +88,7 @@ export function AuditPage() {
       setLogs(res.items);
       setTotal(res.total);
       setOffset(off);
-      setMessage(`共 ${res.total} 条审计记录`);
+      setMessage(`${resourceId ? `当前对象 ${resourceId}：` : ""}共 ${res.total} 条审计记录`);
     } catch {
       setMessage("加载失败，请检查后端连接。");
     } finally {
@@ -89,7 +97,7 @@ export function AuditPage() {
   }
 
   function handleSearch() {
-    load(0, resourceType, fromDate, toDate);
+    load(0, resourceType, fromDate, toDate, navResourceId || undefined);
   }
 
   function fmtDate(iso: string) {
@@ -283,6 +291,12 @@ export function AuditPage() {
         )}
       </div>
 
+      {navResourceId && (
+        <div style={{ ...panelStyle(), padding: "12px 16px", fontSize: "13px", color: "#2563eb", background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.16)" }}>
+          当前按对象 <strong>{navResourceId}</strong> 恢复审计上下文。
+        </div>
+      )}
+
       {/* 日志表格 */}
       <div style={panelStyle()}>
         {loading ? (
@@ -311,7 +325,7 @@ export function AuditPage() {
                     <td style={cell}>{log.userName ?? log.userId ?? "-"}</td>
                     <td style={cell}>{actionTag(log.action)}</td>
                     <td style={cell}>{RESOURCE_TYPE_LABELS[log.resourceType] ?? log.resourceType}</td>
-                    <td style={cell}>
+                    <td style={{ ...cell, background: navResourceId === log.resourceId ? "rgba(37,99,235,0.06)" : "transparent" }}>
                       <div style={{ maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
                         {log.resourceLabel ?? log.resourceId ?? "-"}
                       </div>

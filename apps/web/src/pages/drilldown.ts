@@ -21,8 +21,10 @@ export function buildRiskDrilldownTargets(event: BusinessEvent | null): Drilldow
   const targets: DrilldownTarget[] = [
     { path: "/events", state: { businessEventId: event.id }, label: "事项总线" },
     { path: "/tasks", state: { businessEventId: event.id }, label: "任务中心" },
+    { path: "/documents", state: { businessEventId: event.id }, label: "单据中心" },
     { path: "/tax", state: { businessEventId: event.id }, label: "税务中心" },
-    { path: "/vouchers", state: { businessEventId: event.id }, label: "凭证中心" }
+    { path: "/vouchers", state: { businessEventId: event.id }, label: "凭证中心" },
+    { path: "/audit", state: { resourceType: "business_event", resourceId: event.id }, label: "审计日志" }
   ];
 
   if (event.contractId) {

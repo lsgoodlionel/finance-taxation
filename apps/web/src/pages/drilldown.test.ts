@@ -32,6 +32,8 @@ const contractTargets = buildRiskDrilldownTargets({
 });
 assert(contractTargets[0]?.path === "/contracts", "expected contract target to be first when contractId exists");
 assert(contractTargets.some((item) => item.path === "/tax"), "expected tax drilldown target");
+assert(contractTargets.some((item) => item.path === "/documents"), "expected documents drilldown target");
+assert(contractTargets.some((item) => item.path === "/audit"), "expected audit drilldown target");
 
 const payrollTargets = buildRiskDrilldownTargets(payrollEvent);
 assert(payrollTargets[0]?.path === "/payroll", "expected payroll target to be present for payroll event");

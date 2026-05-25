@@ -124,7 +124,7 @@ export function RiskPage() {
       }
     }
     void bootstrap();
-  }, [navEventId]);
+  }, [navEventId, navRiskFindingId]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -150,8 +150,14 @@ export function RiskPage() {
   }
 
   const visibleFindings = useMemo(
-    () => (navEventId ? findings.filter((finding) => finding.businessEventId === navEventId) : findings),
-    [findings, navEventId]
+    () => (
+      navEventId
+        ? findings.filter((finding) => finding.businessEventId === navEventId)
+        : navRiskFindingId
+          ? findings.filter((finding) => finding.id === navRiskFindingId)
+          : findings
+    ),
+    [findings, navEventId, navRiskFindingId]
   );
   const eventMap = useMemo(
     () => new Map(events.map((event) => [event.id, event])),
