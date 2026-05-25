@@ -18,14 +18,13 @@ import { TasksPage } from "./pages/TasksPage";
 import { VouchersPage } from "./pages/VouchersPage";
 import { AuditPage } from "./pages/AuditPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
-import { BossQAPage } from "./pages/BossQAPage";
 
 const router = createBrowserRouter([
   {
     path: "/",
     element: <AppLayout />,
     children: [
-      { index: true, element: <Navigate to="/dashboard/chairman" replace /> },
+      { index: true, element: <Navigate to="/assistant" replace /> },
       { path: "dashboard/chairman", element: <ChairmanDashboardPage /> },
       { path: "events", element: <EventsPage /> },
       { path: "tasks", element: <TasksPage /> },

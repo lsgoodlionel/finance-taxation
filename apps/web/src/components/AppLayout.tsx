@@ -11,18 +11,19 @@ interface User {
 
 const navGroups = [
   {
-    label: "概览",
+    label: "业务入口",
     items: [
+      { to: "/assistant", label: "AI 财税助手", icon: "✦" },
+      { to: "/events", label: "经营事项总线", icon: "⋯" },
+      { to: "/tasks", label: "任务中心", icon: "◎" },
       { to: "/dashboard/chairman", label: "董事长驾驶舱", icon: "◈" }
     ]
   },
   {
     label: "经营管理",
     items: [
-      { to: "/events", label: "经营事项总线", icon: "⋯" },
       { to: "/contracts", label: "合同管理", icon: "◻" },
-      { to: "/payroll", label: "工资管理", icon: "◑" },
-      { to: "/tasks", label: "任务中心", icon: "◎" }
+      { to: "/payroll", label: "工资管理", icon: "◑" }
     ]
   },
   {
@@ -51,7 +52,6 @@ const navGroups = [
   {
     label: "AI 与工具",
     items: [
-      { to: "/assistant", label: "AI 财税助手", icon: "✦" },
       { to: "/knowledge", label: "制度库", icon: "⊞" },
       { to: "/pdf-export", label: "PDF 导出", icon: "↓" }
     ]
