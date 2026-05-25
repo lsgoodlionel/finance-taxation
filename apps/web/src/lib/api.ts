@@ -13,6 +13,9 @@ import type {
   CorporateIncomeTaxPreparation,
   DocumentAttachmentRecord,
   Employee,
+  ExportArchiveEntry,
+  ExportArtifactKind,
+  ExportJob,
   EventDocumentMapping,
   EventTaxMapping,
   EventVoucherDraft,
@@ -781,6 +784,28 @@ export async function getClosingBundleHtml(kind: ClosingPackageExport["kind"], p
   return requestText(
     `/api/packages/closing-bundle?kind=${encodeURIComponent(kind)}&period=${encodeURIComponent(period)}`
   );
+}
+
+export async function listExportJobs(limit = 20) {
+  return request<{ items: ExportJob[]; total: number }>(`/api/exports/jobs?limit=${limit}`);
+}
+
+export async function listExportArchiveEntries(limit = 20) {
+  return request<{ items: ExportArchiveEntry[]; total: number }>(`/api/exports/archive-index?limit=${limit}`);
+}
+
+export async function createExportJob(input: {
+  kind: ExportArtifactKind;
+  label: string;
+  fileName: string;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  periodLabel?: string | null;
+}) {
+  return request<{ job: ExportJob; archiveEntry: ExportArchiveEntry }>("/api/exports/jobs", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
 }
 
 export interface DashboardCard {
