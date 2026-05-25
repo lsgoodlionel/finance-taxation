@@ -1,6 +1,7 @@
 import { type FormEvent, useState, useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
+import { LOGIN_GATE_SUBTITLE, SIDEBAR_BRAND_SUBTITLE } from "../lib/entry-guidance";
 
 interface User {
   id: string;
@@ -11,18 +12,19 @@ interface User {
 
 const navGroups = [
   {
-    label: "概览",
+    label: "业务入口",
     items: [
+      { to: "/assistant", label: "AI 财税助手", icon: "✦" },
+      { to: "/events", label: "经营事项总线", icon: "⋯" },
+      { to: "/tasks", label: "任务中心", icon: "◎" },
       { to: "/dashboard/chairman", label: "董事长驾驶舱", icon: "◈" }
     ]
   },
   {
     label: "经营管理",
     items: [
-      { to: "/events", label: "经营事项总线", icon: "⋯" },
       { to: "/contracts", label: "合同管理", icon: "◻" },
-      { to: "/payroll", label: "工资管理", icon: "◑" },
-      { to: "/tasks", label: "任务中心", icon: "◎" }
+      { to: "/payroll", label: "工资管理", icon: "◑" }
     ]
   },
   {
@@ -51,7 +53,6 @@ const navGroups = [
   {
     label: "AI 与工具",
     items: [
-      { to: "/assistant", label: "AI 财税助手", icon: "✦" },
       { to: "/knowledge", label: "制度库", icon: "⊞" },
       { to: "/pdf-export", label: "PDF 导出", icon: "↓" }
     ]
@@ -103,7 +104,7 @@ function LoginGate({ onLogin }: { onLogin: (user: User) => void }) {
             Finance Taxation V2
           </div>
           <div className="sidebar-brand-sub" style={{ color: "var(--c-text-muted)", marginTop: 4 }}>
-            企业财税工作台 · 请登录
+            {LOGIN_GATE_SUBTITLE}
           </div>
         </div>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -192,7 +193,7 @@ export function AppLayout() {
       <aside className="app-sidebar">
         <div className="sidebar-brand">
           <div className="sidebar-brand-name">Finance Taxation V2</div>
-          <div className="sidebar-brand-sub">企业财税工作台</div>
+          <div className="sidebar-brand-sub">{SIDEBAR_BRAND_SUBTITLE}</div>
         </div>
 
         <nav className="sidebar-nav">

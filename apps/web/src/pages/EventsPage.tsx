@@ -23,6 +23,7 @@ import {
   VOUCHER_TYPE_LABELS,
   TAX_STATUS_LABELS
 } from "../lib/i18n";
+import { EVENTS_ENTRY_SUBTITLE } from "../lib/entry-guidance";
 import { ProcessFlowCard } from "../features/process-flow/ProcessFlowCard";
 import { buildProcessFlowPageContext } from "../features/process-flow/page-context";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
@@ -273,7 +274,7 @@ export function EventsPage() {
       <div className="page-header">
         <div>
           <div className="page-title">经营事项总线</div>
-          <div className="page-subtitle">登记、分析与跟踪所有经营事项</div>
+          <div className="page-subtitle">{EVENTS_ENTRY_SUBTITLE}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {message ? <span className="badge badge-blue">{message}</span> : null}

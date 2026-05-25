@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getDashboardChairman, type DashboardData } from "../lib/api";
 import { Link } from "react-router-dom";
+import { CHAIRMAN_DASHBOARD_SUBTITLE } from "../lib/entry-guidance";
 
 function trendClass(trend: string) {
   if (trend.startsWith("+")) return "stat-trend up";
@@ -39,7 +40,7 @@ export function ChairmanDashboardPage() {
       <div className="page-header">
         <div>
           <div className="page-title">董事长驾驶舱</div>
-          <div className="page-subtitle">实时经营数据一览</div>
+          <div className="page-subtitle">{CHAIRMAN_DASHBOARD_SUBTITLE}</div>
         </div>
         <div className="flex-row">
           <span className="badge badge-blue">{aiSummary.date}</span>
