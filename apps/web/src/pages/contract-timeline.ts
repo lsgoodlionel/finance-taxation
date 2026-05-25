@@ -1,4 +1,5 @@
 import type { Contract } from "@finance-taxation/domain-model";
+import { resolveContractProgressState, type ContractProgressState } from "./contract-automation";
 
 interface RelatedContractEvent {
   id: string;
@@ -12,7 +13,7 @@ export interface ContractTimelineItem {
   date: string;
   title: string;
   kind: "contract" | "event";
-  status: string;
+  status: ContractProgressState;
   relatedEventId?: string;
 }
 
@@ -57,7 +58,7 @@ export function buildContractTimeline({
       date: event.createdAt.slice(0, 10),
       title: normalizeEventTitle(event.title),
       kind: "event",
-      status: event.status,
+      status: resolveContractProgressState(event.status),
       relatedEventId: event.id
     });
   }

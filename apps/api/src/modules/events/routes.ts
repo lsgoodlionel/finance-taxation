@@ -4,6 +4,7 @@ import type {
   BusinessEventActivity,
   BusinessEventMappingBundle,
   BusinessEventRelation,
+  ContractObjectLink,
   CreateBusinessEventInput,
   EventDocumentMapping,
   EventTaxMapping,
@@ -23,6 +24,7 @@ import { listCompanyVouchers } from "../vouchers/routes.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { buildGeneratedTasksForEvent } from "./task-chain.js";
+import { buildContractObjectLinks } from "../contracts/links.js";
 
 interface BusinessEventRow {
   id: string;
@@ -1178,6 +1180,42 @@ async function insertVouchers(executor: DbExecutor, rows: Voucher[]) {
   }
 }
 
+async function insertContractObjectLinks(executor: DbExecutor, rows: ContractObjectLink[]) {
+  for (const row of rows) {
+    await executor.query(
+      `
+        insert into contract_object_links (
+          id,
+          company_id,
+          contract_id,
+          business_event_id,
+          object_type,
+          object_id,
+          relation_kind,
+          created_at,
+          updated_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9::timestamptz)
+        on conflict (contract_id, object_type, object_id)
+        do update set
+          business_event_id = excluded.business_event_id,
+          relation_kind = excluded.relation_kind,
+          updated_at = excluded.updated_at
+      `,
+      [
+        row.id,
+        row.companyId,
+        row.contractId,
+        row.businessEventId,
+        row.objectType,
+        row.objectId,
+        row.relationKind,
+        row.createdAt,
+        row.updatedAt
+      ]
+    );
+  }
+}
+
 export function handleEventsMeta(_req: ApiRequest, res: ServerResponse) {
   return json(res, 200, {
     module: "events",
@@ -1503,6 +1541,17 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
   const nextVouchers = [
     ...toVouchers(bundle, now)
   ];
+  const contractObjectLinks = analyzedEvent.contractId
+    ? buildContractObjectLinks({
+        companyId: analyzedEvent.companyId,
+        contractId: analyzedEvent.contractId,
+        businessEventId: analyzedEvent.id,
+        tasks: generatedTasks,
+        documents: nextDocuments,
+        taxItems: nextTaxItems,
+        vouchers: nextVouchers
+      })
+    : [];
 
   const analysisActivities = [
     buildActivity(
@@ -1646,6 +1695,13 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
       `,
       [target.companyId, target.id]
     );
+    await client.query(
+      `
+        delete from contract_object_links
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
 
     await insertDocumentMappings(client, bundle.documentMappings);
     await insertTaxMappings(client, bundle.taxMappings);
@@ -1653,6 +1709,7 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
     await insertGeneratedDocuments(client, nextDocuments);
     await insertTaxItems(client, nextTaxItems);
     await insertVouchers(client, nextVouchers);
+    await insertContractObjectLinks(client, contractObjectLinks);
     await insertActivities(client, analysisActivities);
   });
 

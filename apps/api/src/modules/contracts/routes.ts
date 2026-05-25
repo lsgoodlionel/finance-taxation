@@ -1,10 +1,11 @@
 import type { ServerResponse } from "node:http";
-import type { Contract, ContractWithEventCount, GeneratedDocument, Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
+import type { Contract, ContractObjectLinkType, ContractWithEventCount, GeneratedDocument, Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import { query, queryOne } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { buildContractWorkspaceSummary } from "./summary.js";
+import { getContractCloseEventStatus } from "./status-sync.js";
 
 interface ContractRow {
   id: string;
@@ -51,6 +52,10 @@ interface ContractTaxItemSummaryRow extends TaxItem {}
 
 interface ContractVoucherSummaryRow extends Omit<Voucher, "lines"> {}
 interface ContractTaskSummaryRow extends Task {}
+interface ContractObjectLinkRow {
+  objectType: ContractObjectLinkType;
+  objectId: string;
+}
 
 function toIso(value: string | Date | null | undefined): string | null {
   if (!value) return null;
@@ -204,7 +209,20 @@ export async function getContractDetail(req: ApiRequest, res: ServerResponse, co
     [contractId, companyId]
   );
   const eventIds = events.map((event) => event.id);
-  const documents = eventIds.length
+  const links = await query<ContractObjectLinkRow>(
+    `
+      select object_type as "objectType", object_id as "objectId"
+      from contract_object_links
+      where contract_id = $1 and company_id = $2
+    `,
+    [contractId, companyId]
+  );
+  const linkedDocumentIds = links.filter((item) => item.objectType === "document").map((item) => item.objectId);
+  const linkedTaxItemIds = links.filter((item) => item.objectType === "tax_item").map((item) => item.objectId);
+  const linkedVoucherIds = links.filter((item) => item.objectType === "voucher").map((item) => item.objectId);
+  const linkedTaskIds = links.filter((item) => item.objectType === "task").map((item) => item.objectId);
+
+  const documents = eventIds.length || linkedDocumentIds.length
     ? await query<ContractDocumentSummaryRow>(
         `
           select
@@ -222,12 +240,16 @@ export async function getContractDetail(req: ApiRequest, res: ServerResponse, co
             created_at as "createdAt",
             updated_at as "updatedAt"
           from generated_documents
-          where company_id = $1 and business_event_id = any($2::text[])
+          where company_id = $1
+            and (
+              business_event_id = any($2::text[])
+              or id = any($3::text[])
+            )
         `,
-        [companyId, eventIds]
+        [companyId, eventIds, linkedDocumentIds]
       )
     : [];
-  const taxItems = eventIds.length
+  const taxItems = eventIds.length || linkedTaxItemIds.length
     ? await query<ContractTaxItemSummaryRow>(
         `
           select
@@ -244,12 +266,16 @@ export async function getContractDetail(req: ApiRequest, res: ServerResponse, co
             created_at as "createdAt",
             updated_at as "updatedAt"
           from tax_items
-          where company_id = $1 and business_event_id = any($2::text[])
+          where company_id = $1
+            and (
+              business_event_id = any($2::text[])
+              or id = any($3::text[])
+            )
         `,
-        [companyId, eventIds]
+        [companyId, eventIds, linkedTaxItemIds]
       )
     : [];
-  const vouchers = eventIds.length
+  const vouchers = eventIds.length || linkedVoucherIds.length
     ? await query<ContractVoucherSummaryRow>(
         `
           select
@@ -266,12 +292,16 @@ export async function getContractDetail(req: ApiRequest, res: ServerResponse, co
             created_at as "createdAt",
             updated_at as "updatedAt"
           from vouchers
-          where company_id = $1 and business_event_id = any($2::text[])
+          where company_id = $1
+            and (
+              business_event_id = any($2::text[])
+              or id = any($3::text[])
+            )
         `,
-        [companyId, eventIds]
+        [companyId, eventIds, linkedVoucherIds]
       )
     : [];
-  const tasks = eventIds.length
+  const tasks = eventIds.length || linkedTaskIds.length
     ? await query<ContractTaskSummaryRow>(
         `
           select
@@ -290,14 +320,24 @@ export async function getContractDetail(req: ApiRequest, res: ServerResponse, co
             created_at as "createdAt",
             updated_at as "updatedAt"
           from tasks
-          where company_id = $1 and business_event_id = any($2::text[])
+          where company_id = $1
+            and (
+              business_event_id = any($2::text[])
+              or id = any($3::text[])
+            )
           order by created_at desc
         `,
-        [companyId, eventIds]
+        [companyId, eventIds, linkedTaskIds]
       )
     : [];
   const workspaceSummary = buildContractWorkspaceSummary({
     relatedEventIds: eventIds,
+    linkedObjectIds: {
+      documentIds: linkedDocumentIds,
+      taxItemIds: linkedTaxItemIds,
+      voucherIds: linkedVoucherIds,
+      taskIds: linkedTaskIds
+    },
     documents,
     taxItems,
     vouchers: vouchers.map((voucher) => ({ ...voucher, lines: [] })),
@@ -379,6 +419,7 @@ export async function closeContract(req: ApiRequest, res: ServerResponse, contra
   const companyId = req.auth!.companyId;
   const body = req.body as { status?: "fulfilled" | "terminated" };
   const newStatus = body.status ?? "fulfilled";
+  const nextEventStatus = getContractCloseEventStatus(newStatus);
 
   const row = await queryOne<ContractRow>(
     `
@@ -389,6 +430,17 @@ export async function closeContract(req: ApiRequest, res: ServerResponse, contra
     [newStatus, contractId, companyId]
   );
   if (!row) return json(res, 404, { error: "Contract not found" });
+
+  await query(
+    `
+      update business_events
+      set status = $1, updated_at = now()
+      where contract_id = $2
+        and company_id = $3
+        and status in ('draft', 'analyzed', 'awaiting_documents', 'awaiting_approval')
+    `,
+    [nextEventStatus, contractId, companyId]
+  );
 
   const closed = mapRow(row);
   writeAudit({
