@@ -24,6 +24,7 @@ import {
 } from "../lib/api";
 import { buildPayrollEventInput } from "./payroll-event";
 import { buildPayrollArtifactSummary, resolvePayrollLinkedEventId } from "./payroll-closure";
+import { buildPayrollRiskBuckets, buildPayrollVoucherSuggestions } from "./payroll-guidance";
 import { buildPayrollLinkageSummary } from "./payroll-linkage";
 import { buildPayrollTaxReviewSummary } from "./payroll-tax-review";
 import { buildPayrollWorkflow } from "./payroll-workflow";
@@ -292,8 +293,13 @@ export function PayrollPage() {
       );
       const event = existing ?? await createEvent(input);
       await analyzeEvent(event.id);
+      const ledgers = await syncPayrollReviewLedgers({
+        period: selectedPeriod,
+        businessEventId: event.id
+      });
+      setReviewLedgers(ledgers.items);
       rememberLinkedEvent(selectedPeriod, event.id);
-      setMessage(`已将 ${selectedPeriod} 工资期接入事项主线，并完成任务/税务/凭证分析。`);
+      setMessage(`已将 ${selectedPeriod} 工资期接入事项主线，并同步 ${ledgers.total} 本税务复核台账。`);
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -301,13 +307,13 @@ export function PayrollPage() {
     }
   }
 
-  function navigateWithEvent(path: string) {
+  function navigateWithEvent(path: string, extraState?: Record<string, string>) {
     const eventId = linkedEventIds[selectedPeriod];
     if (!eventId) {
       setMessage("请先生成工资事项，再进入任务、税务或凭证中心。");
       return;
     }
-    navigate(path, { state: { businessEventId: eventId } });
+    navigate(path, { state: { businessEventId: eventId, payrollPeriod: selectedPeriod, ...extraState } });
   }
 
   const linkedEventId = selectedPeriod ? linkedEventIds[selectedPeriod] ?? null : null;
@@ -350,6 +356,8 @@ export function PayrollPage() {
     vouchers: linkedVouchers,
     risks: linkedRisks
   });
+  const payrollVoucherSuggestions = buildPayrollVoucherSuggestions(payrollRecords, linkedVouchers);
+  const payrollRiskBuckets = buildPayrollRiskBuckets(linkedRisks);
 
   useEffect(() => {
     let active = true;
@@ -361,7 +369,12 @@ export function PayrollPage() {
           linkedEventId ? listVouchers({ businessEventId: linkedEventId }) : Promise.resolve({ items: [], total: 0 }),
           linkedEventId ? listRiskFindings() : Promise.resolve({ items: [], total: 0 }),
           getIndividualIncomeTaxMaterials(selectedPeriod),
-          listPayrollReviewLedgers(selectedPeriod).catch(() => ({ items: [], total: 0 }))
+          linkedEventId
+            ? syncPayrollReviewLedgers({
+                period: selectedPeriod,
+                businessEventId: linkedEventId
+              }).catch(() => ({ items: [], total: 0 }))
+            : listPayrollReviewLedgers(selectedPeriod).catch(() => ({ items: [], total: 0 }))
         ]);
         if (!active) return;
         setLinkedTaxItemCount(taxRes.total);
@@ -635,8 +648,8 @@ export function PayrollPage() {
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <button style={btnSecondary()} onClick={() => navigateWithEvent("/events")}>事项总线</button>
                   <button style={btnSecondary()} onClick={() => navigateWithEvent("/tasks")}>任务中心</button>
-                  <button style={btnSecondary()} onClick={() => navigateWithEvent("/tax")}>税务中心</button>
-                  <button style={btnSecondary()} onClick={() => navigateWithEvent("/vouchers")}>凭证中心</button>
+                  <button style={btnSecondary()} onClick={() => navigateWithEvent("/tax", { focus: "payroll-tax" })}>工资税务复核</button>
+                  <button style={btnSecondary()} onClick={() => navigateWithEvent("/vouchers", { focus: "payroll-voucher" })}>工资凭证</button>
                   <button style={btnSecondary()} onClick={() => void handlePayrollRiskCheck()}>风险检查</button>
                 </div>
               </div>
@@ -748,6 +761,11 @@ export function PayrollPage() {
                         <span style={{ fontSize: "12px", color: "#6c7a89" }}>
                           当前已落地 {reviewLedgers.length} 本：个税 / 社保 / 公积金
                         </span>
+                        {linkedEventId ? (
+                          <button style={btnSecondary()} onClick={() => navigateWithEvent("/tax", { focus: "payroll-ledgers" })}>
+                            查看工资税务事项
+                          </button>
+                        ) : null}
                       </div>
                       {reviewLedgers.length ? (
                         <div style={{ marginTop: "10px", overflowX: "auto" }}>
@@ -796,6 +814,56 @@ export function PayrollPage() {
                       ) : (
                         <div style={{ color: "#2563eb" }}>工资事项、税务事项、凭证建议和风险结果已形成闭环摘要。</div>
                       )}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      border: "1px solid rgba(20,40,60,0.08)",
+                      borderRadius: "12px",
+                      padding: "12px 14px",
+                      background: "rgba(142,68,173,0.06)"
+                    }}
+                  >
+                    <div style={{ fontSize: "12px", color: "#6c7a89", marginBottom: "8px" }}>工资凭证建议</div>
+                    <div style={{ display: "grid", gap: "8px" }}>
+                      {payrollVoucherSuggestions.map((item) => (
+                        <div key={item.key} style={{ fontSize: "12px", color: "#1e2a37", lineHeight: 1.7 }}>
+                          <strong>{item.title}</strong>：{item.summary}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <button style={btnSecondary()} onClick={() => navigateWithEvent("/vouchers", { focus: "payroll-voucher" })}>
+                        查看工资凭证中心
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      border: "1px solid rgba(20,40,60,0.08)",
+                      borderRadius: "12px",
+                      padding: "12px 14px",
+                      background: "rgba(192,57,43,0.06)"
+                    }}
+                  >
+                    <div style={{ fontSize: "12px", color: "#6c7a89", marginBottom: "8px" }}>工资风险专门视图</div>
+                    <div style={{ display: "grid", gap: "8px", fontSize: "12px", color: "#1e2a37" }}>
+                      <div>个税风险：{payrollRiskBuckets.iit.length ? payrollRiskBuckets.iit.map((risk) => risk.title).join("；") : "无"}</div>
+                      <div>社保风险：{payrollRiskBuckets.socialSecurity.length ? payrollRiskBuckets.socialSecurity.map((risk) => risk.title).join("；") : "无"}</div>
+                      <div>公积金风险：{payrollRiskBuckets.housingFund.length ? payrollRiskBuckets.housingFund.map((risk) => risk.title).join("；") : "无"}</div>
+                      {payrollRiskBuckets.other.length ? (
+                        <div>其他风险：{payrollRiskBuckets.other.map((risk) => risk.title).join("；")}</div>
+                      ) : null}
+                    </div>
+                    <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <button style={btnSecondary()} onClick={() => void handlePayrollRiskCheck()}>
+                        刷新工资风险
+                      </button>
+                      {linkedEventId ? (
+                        <button style={btnSecondary()} onClick={() => navigate("/risk", { state: { businessEventId: linkedEventId, payrollPeriod: selectedPeriod, focus: "payroll-risk" } })}>
+                          查看工资风险详情
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
