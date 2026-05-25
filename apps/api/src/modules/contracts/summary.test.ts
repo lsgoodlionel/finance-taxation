@@ -111,3 +111,24 @@ test("buildContractWorkspaceSummary excludes objects outside the contract events
   assert.equal(summary.vouchers.length, 0);
   assert.equal(summary.tasks.length, 1);
 });
+
+test("buildContractWorkspaceSummary includes explicitly linked objects and de-duplicates them", () => {
+  const summary = buildContractWorkspaceSummary({
+    relatedEventIds: [],
+    linkedObjectIds: {
+      documentIds: ["doc-1"],
+      taxItemIds: ["tax-1"],
+      voucherIds: ["vou-1"],
+      taskIds: ["task-1"]
+    },
+    documents,
+    taxItems,
+    vouchers,
+    tasks
+  });
+
+  assert.equal(summary.documents.length, 1);
+  assert.equal(summary.taxItems.length, 1);
+  assert.equal(summary.vouchers.length, 1);
+  assert.equal(summary.tasks.length, 1);
+});

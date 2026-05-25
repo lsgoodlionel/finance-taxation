@@ -799,6 +799,20 @@ export interface ContractWithEventCount extends Contract {
   relatedEventCount: number;
 }
 
+export type ContractObjectLinkType = "task" | "document" | "tax_item" | "voucher";
+
+export interface ContractObjectLink {
+  id: string;
+  companyId: string;
+  contractId: string;
+  businessEventId: string;
+  objectType: ContractObjectLinkType;
+  objectId: string;
+  relationKind: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface KnowledgeItem {
   id: string;
   companyId: string;
