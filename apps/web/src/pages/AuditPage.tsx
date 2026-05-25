@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { AuditLog } from "@finance-taxation/domain-model";
 import { listAuditLogs } from "../lib/api";
-import { resolveAuditLogTarget } from "./drilldown";
+import { normalizeDrilldownState, resolveAuditContextFromState, resolveAuditLogTarget } from "./drilldown";
 import { resolveInitialAuditExpansion } from "./risk-scope";
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
@@ -54,9 +54,10 @@ const RESOURCE_TYPES = [
 export function AuditPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const navState = (location.state as { resourceType?: string; resourceId?: string } | null) ?? null;
-  const navResourceType = navState?.resourceType ?? "";
-  const navResourceId = navState?.resourceId ?? "";
+  const navState = normalizeDrilldownState(location.state);
+  const navAuditContext = resolveAuditContextFromState(navState);
+  const navResourceType = navAuditContext?.resourceType ?? "";
+  const navResourceId = navAuditContext?.resourceId ?? "";
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
