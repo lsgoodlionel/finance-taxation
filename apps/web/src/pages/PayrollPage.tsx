@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Employee, PayrollPolicy, PayrollRecord, PayrollPeriodSummary } from "@finance-taxation/domain-model";
+import type { Employee, PayrollPolicy, PayrollRecord, PayrollPeriodSummary, RiskFinding, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import {
   analyzeEvent,
   createEvent,
@@ -13,6 +13,7 @@ import {
   listEmployees,
   listEvents,
   listPayroll,
+  listRiskFindings,
   listTaxItems,
   listVouchers,
   runEventRiskCheck,
@@ -20,6 +21,7 @@ import {
   updatePayrollPolicy
 } from "../lib/api";
 import { buildPayrollEventInput } from "./payroll-event";
+import { buildPayrollArtifactSummary, resolvePayrollLinkedEventId } from "./payroll-closure";
 import { buildPayrollLinkageSummary } from "./payroll-linkage";
 import { buildPayrollTaxReviewSummary } from "./payroll-tax-review";
 import { buildPayrollWorkflow } from "./payroll-workflow";
@@ -110,6 +112,9 @@ export function PayrollPage() {
   const [creatingEventPeriod, setCreatingEventPeriod] = useState<string | null>(null);
   const [linkedTaxItemCount, setLinkedTaxItemCount] = useState(0);
   const [linkedVoucherCount, setLinkedVoucherCount] = useState(0);
+  const [linkedTaxItems, setLinkedTaxItems] = useState<TaxItem[]>([]);
+  const [linkedVouchers, setLinkedVouchers] = useState<Voucher[]>([]);
+  const [linkedRisks, setLinkedRisks] = useState<RiskFinding[]>([]);
   const [iitChecklist, setIitChecklist] = useState<string[]>([]);
   const [iitMaterialPeriod, setIitMaterialPeriod] = useState<string | null>(null);
 
@@ -240,6 +245,15 @@ export function PayrollPage() {
     setSelectedPeriod(period);
     const res = await listPayroll(period);
     setPayrollRecords(res.items);
+    try {
+      const eventsRes = await listEvents();
+      const restoredEventId = resolvePayrollLinkedEventId(period, linkedEventIds, eventsRes.items);
+      if (restoredEventId) {
+        rememberLinkedEvent(period, restoredEventId);
+      }
+    } catch {
+      // keep manual linkage only
+    }
     setMessage(`已加载 ${period} 工资数据，共 ${res.total} 条。`);
   }
 
@@ -328,26 +342,41 @@ export function PayrollPage() {
           : null
       })
     : null;
+  const payrollArtifactSummary = buildPayrollArtifactSummary({
+    taxItems: linkedTaxItems,
+    vouchers: linkedVouchers,
+    risks: linkedRisks
+  });
 
   useEffect(() => {
     let active = true;
 
     async function loadLinkedArtifacts() {
       try {
-        const [taxRes, voucherRes, iitRes] = await Promise.all([
+        const [taxRes, voucherRes, riskRes, iitRes] = await Promise.all([
           linkedEventId ? listTaxItems({ businessEventId: linkedEventId }) : Promise.resolve({ items: [], total: 0 }),
           linkedEventId ? listVouchers({ businessEventId: linkedEventId }) : Promise.resolve({ items: [], total: 0 }),
+          linkedEventId ? listRiskFindings() : Promise.resolve({ items: [], total: 0 }),
           getIndividualIncomeTaxMaterials(selectedPeriod)
         ]);
         if (!active) return;
         setLinkedTaxItemCount(taxRes.total);
         setLinkedVoucherCount(voucherRes.total);
+        setLinkedTaxItems(taxRes.items);
+        setLinkedVouchers(voucherRes.items);
+        setLinkedRisks(
+          riskRes.items
+            .filter((item) => item.businessEventId === linkedEventId)
+        );
         setIitChecklist(iitRes.checklist);
         setIitMaterialPeriod(iitRes.filingPeriod);
       } catch {
         if (!active) return;
         setLinkedTaxItemCount(0);
         setLinkedVoucherCount(0);
+        setLinkedTaxItems([]);
+        setLinkedVouchers([]);
+        setLinkedRisks([]);
         setIitChecklist([]);
         setIitMaterialPeriod(null);
       }
@@ -691,6 +720,26 @@ export function PayrollPage() {
                       ) : null}
                     </div>
                   )}
+                  <div
+                    style={{
+                      border: "1px solid rgba(20,40,60,0.08)",
+                      borderRadius: "12px",
+                      padding: "12px 14px",
+                      background: "rgba(79,142,247,0.06)"
+                    }}
+                  >
+                    <div style={{ fontSize: "12px", color: "#6c7a89", marginBottom: "8px" }}>对象联动摘要</div>
+                    <div style={{ display: "grid", gap: "8px", fontSize: "12px", color: "#1e2a37" }}>
+                      <div>税务事项：{payrollArtifactSummary.taxHighlights.length ? payrollArtifactSummary.taxHighlights.join("；") : "—"}</div>
+                      <div>凭证建议：{payrollArtifactSummary.voucherHighlights.length ? payrollArtifactSummary.voucherHighlights.join("；") : "—"}</div>
+                      <div>风险结果：{payrollArtifactSummary.riskHighlights.length ? payrollArtifactSummary.riskHighlights.join("；") : "—"}</div>
+                      {payrollArtifactSummary.pendingActions.length ? (
+                        <div style={{ color: "#8a6200" }}>待补动作：{payrollArtifactSummary.pendingActions.join("；")}</div>
+                      ) : (
+                        <div style={{ color: "#2563eb" }}>工资事项、税务事项、凭证建议和风险结果已形成闭环摘要。</div>
+                      )}
+                    </div>
+                  </div>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     {payrollWorkflow.recommendedActions.includes("confirm_records") && (
                       <span style={{ fontSize: "12px", padding: "6px 10px", borderRadius: "999px", background: "rgba(176,137,10,0.12)", color: "#8a6200" }}>
