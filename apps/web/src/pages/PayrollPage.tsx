@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Employee, PayrollPolicy, PayrollRecord, PayrollPeriodSummary, RiskFinding, TaxItem, Voucher } from "@finance-taxation/domain-model";
+import type { Employee, PayrollPolicy, PayrollRecord, PayrollPeriodSummary, PayrollTaxReviewLedger, RiskFinding, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import {
   analyzeEvent,
   createEvent,
@@ -13,10 +13,12 @@ import {
   listEmployees,
   listEvents,
   listPayroll,
+  listPayrollReviewLedgers,
   listRiskFindings,
   listTaxItems,
   listVouchers,
   runEventRiskCheck,
+  syncPayrollReviewLedgers,
   updateEmployee,
   updatePayrollPolicy
 } from "../lib/api";
@@ -115,6 +117,7 @@ export function PayrollPage() {
   const [linkedTaxItems, setLinkedTaxItems] = useState<TaxItem[]>([]);
   const [linkedVouchers, setLinkedVouchers] = useState<Voucher[]>([]);
   const [linkedRisks, setLinkedRisks] = useState<RiskFinding[]>([]);
+  const [reviewLedgers, setReviewLedgers] = useState<PayrollTaxReviewLedger[]>([]);
   const [iitChecklist, setIitChecklist] = useState<string[]>([]);
   const [iitMaterialPeriod, setIitMaterialPeriod] = useState<string | null>(null);
 
@@ -353,11 +356,12 @@ export function PayrollPage() {
 
     async function loadLinkedArtifacts() {
       try {
-        const [taxRes, voucherRes, riskRes, iitRes] = await Promise.all([
+        const [taxRes, voucherRes, riskRes, iitRes, ledgerRes] = await Promise.all([
           linkedEventId ? listTaxItems({ businessEventId: linkedEventId }) : Promise.resolve({ items: [], total: 0 }),
           linkedEventId ? listVouchers({ businessEventId: linkedEventId }) : Promise.resolve({ items: [], total: 0 }),
           linkedEventId ? listRiskFindings() : Promise.resolve({ items: [], total: 0 }),
-          getIndividualIncomeTaxMaterials(selectedPeriod)
+          getIndividualIncomeTaxMaterials(selectedPeriod),
+          listPayrollReviewLedgers(selectedPeriod).catch(() => ({ items: [], total: 0 }))
         ]);
         if (!active) return;
         setLinkedTaxItemCount(taxRes.total);
@@ -370,6 +374,7 @@ export function PayrollPage() {
         );
         setIitChecklist(iitRes.checklist);
         setIitMaterialPeriod(iitRes.filingPeriod);
+        setReviewLedgers(ledgerRes.items);
       } catch {
         if (!active) return;
         setLinkedTaxItemCount(0);
@@ -377,6 +382,7 @@ export function PayrollPage() {
         setLinkedTaxItems([]);
         setLinkedVouchers([]);
         setLinkedRisks([]);
+        setReviewLedgers([]);
         setIitChecklist([]);
         setIitMaterialPeriod(null);
       }
@@ -398,6 +404,23 @@ export function PayrollPage() {
       const result = await runEventRiskCheck(eventId);
       setMessage(`工资事项风险检查完成，生成 ${result.total} 条发现。`);
       navigate("/risk", { state: { businessEventId: eventId } });
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  }
+
+  async function handleSyncReviewLedgers() {
+    if (!selectedPeriod) {
+      setMessage("请先选择工资期间。");
+      return;
+    }
+    try {
+      const res = await syncPayrollReviewLedgers({
+        period: selectedPeriod,
+        businessEventId: linkedEventId
+      });
+      setReviewLedgers(res.items);
+      setMessage(`已同步 ${res.total} 本工资税务复核台账。`);
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -716,6 +739,41 @@ export function PayrollPage() {
                       {payrollTaxReview.checklist.length ? (
                         <div style={{ fontSize: "12px", color: "#6c7a89", lineHeight: 1.7 }}>
                           个税资料清单：{payrollTaxReview.checklist.join("、")}
+                        </div>
+                      ) : null}
+                      <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                        <button style={btnSecondary()} onClick={() => void handleSyncReviewLedgers()}>
+                          同步复核台账
+                        </button>
+                        <span style={{ fontSize: "12px", color: "#6c7a89" }}>
+                          当前已落地 {reviewLedgers.length} 本：个税 / 社保 / 公积金
+                        </span>
+                      </div>
+                      {reviewLedgers.length ? (
+                        <div style={{ marginTop: "10px", overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "640px" }}>
+                            <thead>
+                              <tr style={{ color: "#6c7a89" }}>
+                                {["台账类型", "关联事项", "个人金额", "单位金额", "状态", "税务事项数"].map((h) => (
+                                  <th key={h} style={{ ...cellStyle(), fontWeight: 500, whiteSpace: "nowrap" }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {reviewLedgers.map((item) => (
+                                <tr key={item.id}>
+                                  <td style={cellStyle()}>
+                                    {item.reviewType === "iit" ? "个税" : item.reviewType === "social_security" ? "社保" : "公积金"}
+                                  </td>
+                                  <td style={cellStyle()}>{item.businessEventId ?? "未绑定事项"}</td>
+                                  <td style={cellStyle()}>¥{item.totalEmployeeAmount}</td>
+                                  <td style={cellStyle()}>¥{item.totalEmployerAmount}</td>
+                                  <td style={cellStyle()}>{item.status === "ready" ? "待复核" : item.status === "reviewed" ? "已复核" : "待同步"}</td>
+                                  <td style={cellStyle()}>{item.taxItemIds.length}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       ) : null}
                     </div>

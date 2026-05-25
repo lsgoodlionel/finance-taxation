@@ -107,6 +107,8 @@ import {
   getPayrollPolicy,
   listEmployees,
   listPayroll,
+  listPayrollReviewLedgers,
+  syncPayrollReviewLedgers,
   updateEmployee,
   updatePayrollPolicy
 } from "./modules/payroll/routes.js";
@@ -832,6 +834,18 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("payroll.manage", req, res))) return;
     if (req.method === "POST") return computePayroll(req, res);
+  }
+
+  if (url.pathname === "/api/payroll/review-ledgers") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") {
+      if (!(await requirePermission("payroll.view", req, res))) return;
+      return listPayrollReviewLedgers(req, res);
+    }
+    if (req.method === "POST") {
+      if (!(await requirePermission("payroll.manage", req, res))) return;
+      return syncPayrollReviewLedgers(req, res);
+    }
   }
 
   if (url.pathname === "/api/payroll") {
