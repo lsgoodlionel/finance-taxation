@@ -22,6 +22,7 @@ import { listCompanyTaxItems } from "../tax/routes.js";
 import { listCompanyVouchers } from "../vouchers/routes.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
+import { buildGeneratedTasksForEvent } from "./task-chain.js";
 
 interface BusinessEventRow {
   id: string;
@@ -1480,57 +1481,11 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
   }
 
   const now = new Date().toISOString();
-  const parentTaskId = `task-${eventId}-root`;
-  const generatedTasks: Task[] = [
-    {
-      id: parentTaskId,
-      companyId: target.companyId,
-      businessEventId: target.id,
-      parentTaskId: null,
-      title: "经营事项执行主任务",
-      description: "统筹当前经营事项的资料、税务、记账和归档动作。",
-      status: "not_started",
-      priority: "high",
-      ownerId: req.auth!.userId,
-      dueAt: null,
-      assigneeDepartment: "财务部",
-      source: "ai",
-      createdAt: now,
-      updatedAt: now
-    },
-    {
-      id: `task-${eventId}-finance`,
-      companyId: target.companyId,
-      businessEventId: target.id,
-      parentTaskId,
-      title: "核对资料完整性",
-      description: "检查合同、发票、回单、验收资料是否齐备。",
-      status: "not_started",
-      priority: "high",
-      ownerId: req.auth!.userId,
-      dueAt: null,
-      assigneeDepartment: "财务部",
-      source: "ai",
-      createdAt: now,
-      updatedAt: now
-    },
-    {
-      id: `task-${eventId}-tax`,
-      companyId: target.companyId,
-      businessEventId: target.id,
-      parentTaskId,
-      title: "生成税务处理建议",
-      description: "输出税种影响、申报批次和风险提示。",
-      status: "not_started",
-      priority: "medium",
-      ownerId: req.auth!.userId,
-      dueAt: null,
-      assigneeDepartment: "财务部",
-      source: "ai",
-      createdAt: now,
-      updatedAt: now
-    }
-  ];
+  const generatedTasks: Task[] = buildGeneratedTasksForEvent({
+    event: target,
+    now,
+    actorUserId: req.auth!.userId
+  });
 
   const analyzedEvent: BusinessEvent = {
     ...target,

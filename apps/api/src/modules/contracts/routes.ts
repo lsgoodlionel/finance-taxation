@@ -1,9 +1,10 @@
 import type { ServerResponse } from "node:http";
-import type { Contract, ContractWithEventCount } from "@finance-taxation/domain-model";
+import type { Contract, ContractWithEventCount, GeneratedDocument, Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import { query, queryOne } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
+import { buildContractWorkspaceSummary } from "./summary.js";
 
 interface ContractRow {
   id: string;
@@ -29,6 +30,27 @@ interface ContractRow {
 interface ContractRowWithCount extends ContractRow {
   related_event_count: string | number;
 }
+
+interface ContractDocumentSummaryRow {
+  id: string;
+  companyId: string;
+  businessEventId: string;
+  mappingId: string;
+  documentType: string;
+  title: string;
+  ownerDepartment: string;
+  status: GeneratedDocument["status"];
+  attachmentIds: string[];
+  archivedAt: string | null;
+  source: GeneratedDocument["source"];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ContractTaxItemSummaryRow extends TaxItem {}
+
+interface ContractVoucherSummaryRow extends Omit<Voucher, "lines"> {}
+interface ContractTaskSummaryRow extends Task {}
 
 function toIso(value: string | Date | null | undefined): string | null {
   if (!value) return null;
@@ -181,6 +203,106 @@ export async function getContractDetail(req: ApiRequest, res: ServerResponse, co
     `select id, title, status, created_at from business_events where contract_id = $1 and company_id = $2 order by created_at desc`,
     [contractId, companyId]
   );
+  const eventIds = events.map((event) => event.id);
+  const documents = eventIds.length
+    ? await query<ContractDocumentSummaryRow>(
+        `
+          select
+            id,
+            company_id as "companyId",
+            business_event_id as "businessEventId",
+            mapping_id as "mappingId",
+            document_type as "documentType",
+            title,
+            owner_department as "ownerDepartment",
+            status,
+            attachment_ids as "attachmentIds",
+            archived_at as "archivedAt",
+            source,
+            created_at as "createdAt",
+            updated_at as "updatedAt"
+          from generated_documents
+          where company_id = $1 and business_event_id = any($2::text[])
+        `,
+        [companyId, eventIds]
+      )
+    : [];
+  const taxItems = eventIds.length
+    ? await query<ContractTaxItemSummaryRow>(
+        `
+          select
+            id,
+            company_id as "companyId",
+            business_event_id as "businessEventId",
+            mapping_id as "mappingId",
+            tax_type as "taxType",
+            treatment,
+            basis,
+            filing_period as "filingPeriod",
+            status,
+            source,
+            created_at as "createdAt",
+            updated_at as "updatedAt"
+          from tax_items
+          where company_id = $1 and business_event_id = any($2::text[])
+        `,
+        [companyId, eventIds]
+      )
+    : [];
+  const vouchers = eventIds.length
+    ? await query<ContractVoucherSummaryRow>(
+        `
+          select
+            id,
+            company_id as "companyId",
+            business_event_id as "businessEventId",
+            mapping_id as "mappingId",
+            voucher_type as "voucherType",
+            summary,
+            status,
+            approved_at as "approvedAt",
+            posted_at as "postedAt",
+            source,
+            created_at as "createdAt",
+            updated_at as "updatedAt"
+          from vouchers
+          where company_id = $1 and business_event_id = any($2::text[])
+        `,
+        [companyId, eventIds]
+      )
+    : [];
+  const tasks = eventIds.length
+    ? await query<ContractTaskSummaryRow>(
+        `
+          select
+            id,
+            company_id as "companyId",
+            business_event_id as "businessEventId",
+            parent_task_id as "parentTaskId",
+            title,
+            description,
+            status,
+            priority,
+            owner_id as "ownerId",
+            due_at as "dueAt",
+            assignee_department as "assigneeDepartment",
+            source,
+            created_at as "createdAt",
+            updated_at as "updatedAt"
+          from tasks
+          where company_id = $1 and business_event_id = any($2::text[])
+          order by created_at desc
+        `,
+        [companyId, eventIds]
+      )
+    : [];
+  const workspaceSummary = buildContractWorkspaceSummary({
+    relatedEventIds: eventIds,
+    documents,
+    taxItems,
+    vouchers: vouchers.map((voucher) => ({ ...voucher, lines: [] })),
+    tasks
+  });
 
   return json(res, 200, {
     contract: mapRow(row),
@@ -189,7 +311,11 @@ export async function getContractDetail(req: ApiRequest, res: ServerResponse, co
       title: e.title,
       status: e.status,
       createdAt: toIso(e.created_at)
-    }))
+    })),
+    relatedTasks: workspaceSummary.tasks,
+    relatedDocuments: workspaceSummary.documents,
+    relatedTaxItems: workspaceSummary.taxItems,
+    relatedVouchers: workspaceSummary.vouchers
   });
 }
 

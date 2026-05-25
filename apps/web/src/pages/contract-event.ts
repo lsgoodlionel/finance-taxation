@@ -10,6 +10,8 @@ export type ContractFollowupAction =
   | "lease_payment"
   | "lease_accrual";
 
+export type ContractTerminalStatus = "fulfilled" | "terminated";
+
 function resolveEventType(contract: Contract): CreateBusinessEventInput["type"] {
   switch (contract.contractType) {
     case "sales":
@@ -182,4 +184,26 @@ export function buildContractFollowupEventInput(
   };
 
   return mapping[action];
+}
+
+export function buildContractTerminalEventInput(
+  contract: Contract,
+  status: ContractTerminalStatus,
+  occurredOn: string
+): CreateBusinessEventInput {
+  return {
+    type: resolveEventType(contract),
+    title: `${contract.title} 合同${status === "fulfilled" ? "已履行" : "已终止"}事项`,
+    description: [
+      `合同编号：${contract.contractNo}`,
+      `交易方：${contract.counterpartyName}`,
+      `合同已标记为${status === "fulfilled" ? "已履行" : "已终止"}，请补齐终态说明、结算资料和归档结果。`
+    ].join("\n"),
+    department: resolveDepartment(contract),
+    occurredOn,
+    amount: Number.isFinite(contract.amount) && contract.amount > 0 ? contract.amount.toFixed(2) : null,
+    currency: contract.currency || "CNY",
+    source: "manual",
+    contractId: contract.id
+  };
 }
