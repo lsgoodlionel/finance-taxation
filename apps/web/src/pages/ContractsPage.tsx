@@ -18,6 +18,8 @@ import {
   buildContractTerminalEventInput,
   getContractFollowupActions
 } from "./contract-event";
+import { buildContractAutoDerivationPlan } from "./contract-automation";
+import { resolveContractAuditContext } from "./contract-drilldown";
 import { buildContractTimeline } from "./contract-timeline";
 import { buildContractWorkflow } from "./contract-workflow";
 
@@ -56,6 +58,20 @@ const FOLLOWUP_ACTION_LABELS: Record<ContractFollowupAction, string> = {
   lease_accrual: "费用确认"
 };
 
+const WORKFLOW_STATE_LABELS = {
+  done: "已完成",
+  in_progress: "处理中",
+  blocked: "已阻塞",
+  pending: "待推进"
+} as const;
+
+const WORKFLOW_STATE_STYLES = {
+  done: { border: "rgba(26,127,90,0.16)", bg: "rgba(26,127,90,0.06)", tagBg: "rgba(26,127,90,0.12)", color: "#1a7f5a" },
+  in_progress: { border: "rgba(37,99,235,0.16)", bg: "rgba(37,99,235,0.06)", tagBg: "rgba(37,99,235,0.12)", color: "#2563eb" },
+  blocked: { border: "rgba(192,57,43,0.16)", bg: "rgba(192,57,43,0.06)", tagBg: "rgba(192,57,43,0.12)", color: "#c0392b" },
+  pending: { border: "rgba(176,137,10,0.16)", bg: "rgba(255,186,8,0.08)", tagBg: "rgba(176,137,10,0.12)", color: "#b0890a" }
+} as const;
+
 function panelStyle() {
   return {
     background: "rgba(255,255,255,0.82)",
@@ -82,6 +98,8 @@ interface ContractDetailView {
   relatedTaxItems: TaxItem[];
   relatedVouchers: Voucher[];
 }
+
+type RelatedEventView = ContractDetailView["relatedEvents"][number];
 
 export function ContractsPage() {
   const navigate = useNavigate();
@@ -113,6 +131,12 @@ export function ContractsPage() {
         relatedEvents: detail.relatedEvents
       })
     : [];
+  const autoDerivationPlan = detail
+    ? buildContractAutoDerivationPlan({
+        contract: detail.contract,
+        relatedEvents: detail.relatedEvents
+      })
+    : null;
   const workflow = detail
     ? buildContractWorkflow({
         contract: detail.contract,
@@ -199,12 +223,24 @@ export function ContractsPage() {
       if (!existing) {
         await analyzeEvent(created.id);
       }
+      const latestEvents = await listEvents();
+      const autoCreated = await autoDeriveContractFollowups(
+        contract,
+        latestEvents.items
+          .filter((event) => event.contractId === contract.id)
+          .map((event) => ({
+            id: event.id,
+            title: event.title,
+            status: event.status,
+            createdAt: event.createdAt ?? ""
+          }))
+      );
       await loadContracts();
       await handleDetail(contract.id);
       setMessage(
         existing
-          ? `已存在同名合同事项：${created.title}，直接复用。`
-          : `已为合同生成并分析经营事项：${created.title}。`
+          ? `已存在同名合同事项：${created.title}，直接复用${autoCreated > 0 ? `，并自动补齐 ${autoCreated} 个履约事项` : ""}。`
+          : `已为合同生成并分析经营事项：${created.title}${autoCreated > 0 ? `，并自动补齐 ${autoCreated} 个履约事项` : ""}。`
       );
     } catch (error) {
       setMessage((error as Error).message);
@@ -229,6 +265,43 @@ export function ContractsPage() {
           ? `已存在同名履约事项：${targetEvent.title}，直接复用。`
           : `已创建并分析合同履约事项：${targetEvent.title}。`
       );
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setCreatingEventContractId(null);
+    }
+  }
+
+  async function autoDeriveContractFollowups(contract: Contract, relatedEvents: RelatedEventView[]) {
+    const plan = buildContractAutoDerivationPlan({ contract, relatedEvents });
+    if (plan.autoCreateActions.length === 0) {
+      return 0;
+    }
+
+    let createdCount = 0;
+    const knownTitles = new Set(relatedEvents.map((event) => event.title));
+
+    for (const action of plan.autoCreateActions) {
+      const input = buildContractFollowupEventInput(contract, action);
+      if (knownTitles.has(input.title)) {
+        continue;
+      }
+      const created = await createEvent(input);
+      await analyzeEvent(created.id);
+      knownTitles.add(input.title);
+      createdCount += 1;
+    }
+
+    return createdCount;
+  }
+
+  async function handleAutoDeriveFollowups(contract: Contract) {
+    setCreatingEventContractId(contract.id);
+    try {
+      const count = await autoDeriveContractFollowups(contract, detail?.relatedEvents ?? []);
+      await handleDetail(contract.id);
+      await loadContracts();
+      setMessage(count > 0 ? `已按规则自动补齐 ${count} 个履约事项。` : "当前合同没有可自动补齐的履约事项。");
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -473,6 +546,9 @@ export function ContractsPage() {
               <div style={{ color: "#6c7a89", fontSize: "12px", marginBottom: "8px" }}>履约步骤清单</div>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 {workflow.steps.map((step) => (
+                  (() => {
+                    const style = WORKFLOW_STATE_STYLES[step.state];
+                    return (
                   <div
                     key={step.title}
                     style={{
@@ -482,18 +558,18 @@ export function ContractsPage() {
                       alignItems: "center",
                       padding: "8px 12px",
                       borderRadius: "10px",
-                      border: "1px solid rgba(20,40,60,0.08)",
-                      background: step.state === "done" ? "rgba(26,127,90,0.06)" : "rgba(255,186,8,0.08)"
+                      border: `1px solid ${style.border}`,
+                      background: style.bg
                     }}
                   >
                     <span style={{
                       fontSize: "11px",
                       padding: "4px 10px",
                       borderRadius: "999px",
-                      background: step.state === "done" ? "rgba(26,127,90,0.12)" : "rgba(176,137,10,0.12)",
-                      color: step.state === "done" ? "#1a7f5a" : "#b0890a"
+                      background: style.tagBg,
+                      color: style.color
                     }}>
-                      {step.state === "done" ? "已完成" : "待推进"}
+                      {WORKFLOW_STATE_LABELS[step.state]}
                     </span>
                     <span style={{ fontSize: "13px", color: "#1e2a37" }}>{step.title}</span>
                     {step.relatedEventId ? (
@@ -505,11 +581,22 @@ export function ContractsPage() {
                       </button>
                     ) : null}
                   </div>
+                    );
+                  })()
                 ))}
               </div>
               <div style={{ marginTop: "8px", fontSize: "12px", color: "#6c7a89" }}>{workflow.summary}</div>
-              {workflow.recommendedActions.length > 0 && (
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
+              {(workflow.recommendedActions.length > 0 || (autoDerivationPlan?.autoCreateActions.length ?? 0) > 0) && (
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px", alignItems: "center" }}>
+                  {(autoDerivationPlan?.autoCreateActions.length ?? 0) > 0 ? (
+                    <button
+                      onClick={() => handleAutoDeriveFollowups(detail.contract)}
+                      disabled={creatingEventContractId === detail.contract.id}
+                      style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "999px", border: "1px solid #2563eb", color: "#2563eb", background: "#eff6ff", cursor: "pointer" }}
+                    >
+                      规则自动补齐履约链
+                    </button>
+                  ) : null}
                   {workflow.recommendedActions.map((action) => (
                     <button
                       key={action}
@@ -555,13 +642,13 @@ export function ContractsPage() {
                       <span
                         style={{
                           fontSize: "11px",
-                          color: item.status === "done" ? "#1a7f5a" : "#8a9bb0",
-                          background: item.status === "done" ? "rgba(26,127,90,0.08)" : "rgba(138,155,176,0.1)",
+                          color: WORKFLOW_STATE_STYLES[item.status].color,
+                          background: WORKFLOW_STATE_STYLES[item.status].tagBg,
                           padding: "4px 10px",
                           borderRadius: "999px"
                         }}
                       >
-                        {item.status === "done" ? "已完成" : "待推进"}
+                        {WORKFLOW_STATE_LABELS[item.status]}
                       </span>
                     )}
                   </div>
@@ -625,6 +712,18 @@ export function ContractsPage() {
                 查看凭证
               </button>
             ) : null}
+            <button
+              onClick={() => navigate("/risk", { state: { contractId: detail.contract.id } })}
+              style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #c0392b", color: "#c0392b", background: "none", cursor: "pointer" }}
+            >
+              查看合同风险
+            </button>
+            <button
+              onClick={() => navigate("/audit", { state: { ...resolveContractAuditContext(detail.contract.id), contractId: detail.contract.id } })}
+              style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #4a5568", color: "#4a5568", background: "none", cursor: "pointer" }}
+            >
+              查看合同审计
+            </button>
           </div>
           {detail.relatedEvents.length > 0 && (
             <>

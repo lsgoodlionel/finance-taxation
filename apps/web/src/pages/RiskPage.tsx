@@ -10,6 +10,7 @@ import {
 } from "../lib/api";
 import { useI18n, RISK_SEVERITY_LABELS, RISK_PRIORITY_LABELS, RISK_STATUS_LABELS } from "../lib/i18n";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
+import { filterContractRiskFindings } from "./contract-drilldown";
 
 function RiskHelpModal({ onClose }: { onClose: () => void }) {
   return (
@@ -74,7 +75,9 @@ function cellStyle() {
 
 export function RiskPage() {
   const location = useLocation();
-  const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
+  const navState = (location.state as { businessEventId?: string; contractId?: string } | null) ?? null;
+  const navEventId = navState?.businessEventId ?? null;
+  const navContractId = navState?.contractId ?? null;
   const { t } = useI18n();
   const [findings, setFindings] = useState<RiskFinding[]>([]);
   const [closureRecords, setClosureRecords] = useState<RiskClosureRecord[]>([]);
@@ -96,26 +99,32 @@ export function RiskPage() {
           listRiskFindings()
         ]);
         setEvents(eventsPayload.items);
+        const scopedEvents = navContractId
+          ? eventsPayload.items.filter((item) => item.contractId === navContractId)
+          : eventsPayload.items;
         const preferredEvent = navEventId
           ? eventsPayload.items.find((item) => item.id === navEventId) ?? null
           : null;
-        const firstId = preferredEvent?.id || eventsPayload.items[0]?.id || "";
+        const firstId = preferredEvent?.id || scopedEvents[0]?.id || eventsPayload.items[0]?.id || "";
         setEventId(firstId);
-        setEventSearch(preferredEvent?.title || eventsPayload.items[0]?.title || firstId);
+        setEventSearch(preferredEvent?.title || scopedEvents[0]?.title || eventsPayload.items[0]?.title || firstId);
         setFindings(findingsPayload.items);
+        const scopedFindings = navContractId
+          ? filterContractRiskFindings(findingsPayload.items, eventsPayload.items, navContractId)
+          : findingsPayload.items;
         const preferredFinding = navEventId
           ? findingsPayload.items.find((item) => item.businessEventId === navEventId) ?? null
-          : null;
+          : scopedFindings[0] ?? null;
         setSelectedFindingId(preferredFinding?.id || findingsPayload.items[0]?.id || "");
         setMessage(
-          `${navEventId ? `当前事项 ${navEventId}：` : ""}已加载 ${findingsPayload.total} 条风险发现。`
+          `${navContractId ? `当前合同 ${navContractId}：` : navEventId ? `当前事项 ${navEventId}：` : ""}已加载 ${findingsPayload.total} 条风险发现。`
         );
       } catch (error) {
         setMessage((error as Error).message);
       }
     }
     void bootstrap();
-  }, [navEventId]);
+  }, [navContractId, navEventId]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -131,7 +140,7 @@ export function RiskPage() {
   async function refreshFindings() {
     const payload = await listRiskFindings();
     setFindings(payload.items);
-    setMessage(`${navEventId ? `当前事项 ${navEventId}：` : ""}已刷新 ${payload.total} 条风险发现。`);
+    setMessage(`${navContractId ? `当前合同 ${navContractId}：` : navEventId ? `当前事项 ${navEventId}：` : ""}已刷新 ${payload.total} 条风险发现。`);
   }
 
   async function loadClosureRecords(findingId: string) {
@@ -140,9 +149,16 @@ export function RiskPage() {
     setSelectedFindingId(findingId);
   }
 
-  const visibleFindings = useMemo(
-    () => (navEventId ? findings.filter((finding) => finding.businessEventId === navEventId) : findings),
-    [findings, navEventId]
+  const visibleFindings = useMemo(() => {
+    const scopedByContract = navContractId
+      ? filterContractRiskFindings(findings, events, navContractId)
+      : findings;
+    return navEventId ? scopedByContract.filter((finding) => finding.businessEventId === navEventId) : scopedByContract;
+  }, [events, findings, navContractId, navEventId]);
+
+  const visibleEvents = useMemo(
+    () => (navContractId ? events.filter((event) => event.contractId === navContractId) : events),
+    [events, navContractId]
   );
 
   return (
@@ -172,7 +188,7 @@ export function RiskPage() {
                 boxShadow: "0 4px 20px rgba(0,0,0,0.12)", maxHeight: "220px", overflowY: "auto",
                 marginTop: "4px"
               }}>
-                {events
+                {visibleEvents
                   .filter((ev) => {
                     const q = eventSearch.toLowerCase();
                     return !q || ev.title.toLowerCase().includes(q) || ev.id.toLowerCase().includes(q);
@@ -199,7 +215,7 @@ export function RiskPage() {
                     </div>
                   ))
                 }
-                {events.filter((ev) => {
+                {visibleEvents.filter((ev) => {
                   const q = eventSearch.toLowerCase();
                   return !q || ev.title.toLowerCase().includes(q) || ev.id.toLowerCase().includes(q);
                 }).length === 0 && (

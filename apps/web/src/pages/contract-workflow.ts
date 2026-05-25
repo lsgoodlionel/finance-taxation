@@ -1,5 +1,6 @@
 import type { Contract } from "@finance-taxation/domain-model";
 import type { ContractFollowupAction } from "./contract-event";
+import { resolveContractProgressState, type ContractProgressState } from "./contract-automation";
 
 interface RelatedContractEvent {
   id: string;
@@ -10,7 +11,7 @@ interface RelatedContractEvent {
 
 interface WorkflowStep {
   title: string;
-  state: "done" | "pending";
+  state: ContractProgressState;
   action: ContractFollowupAction | "base";
   relatedEventId: string | null;
 }
@@ -62,7 +63,7 @@ export function buildContractWorkflow({
     return {
       title: step.title,
       action: step.action,
-      state: event ? "done" : "pending",
+      state: event ? resolveContractProgressState(event.status) : "pending",
       relatedEventId: event?.id ?? null
     };
   });
@@ -74,9 +75,19 @@ export function buildContractWorkflow({
   return {
     steps,
     recommendedActions,
-    summary:
-      recommendedActions.length > 0
-        ? `待补 ${recommendedActions.length} 个履约步骤，请优先补齐 ${steps.find((step) => step.state === "pending")?.title ?? "后续动作"}。`
-        : "当前合同履约主线已补齐，下一步可继续跟踪归档或终态处理。"
+    summary: (() => {
+      const blocked = steps.find((step) => step.state === "blocked");
+      if (blocked) {
+        return `${blocked.title} 当前处于阻塞状态，请先解除阻塞再继续推进合同履约。`;
+      }
+      const inProgress = steps.find((step) => step.state === "in_progress");
+      if (recommendedActions.length > 0) {
+        return `待补 ${recommendedActions.length} 个履约步骤，请优先补齐 ${steps.find((step) => step.state === "pending")?.title ?? "后续动作"}。`;
+      }
+      if (inProgress) {
+        return `${inProgress.title} 正在处理中，当前合同履约主线已进入执行阶段。`;
+      }
+      return "当前合同履约主线已补齐，下一步可继续跟踪归档或终态处理。";
+    })()
   };
 }

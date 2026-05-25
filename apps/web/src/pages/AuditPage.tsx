@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import type { AuditLog } from "@finance-taxation/domain-model";
 import { listAuditLogs } from "../lib/api";
 
@@ -49,11 +50,14 @@ const RESOURCE_TYPES = [
 ];
 
 export function AuditPage() {
+  const location = useLocation();
+  const navState = (location.state as { resourceType?: string; resourceId?: string; contractId?: string } | null) ?? null;
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("正在加载审计日志...");
   const [resourceType, setResourceType] = useState("");
+  const [resourceId, setResourceId] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [offset, setOffset] = useState(0);
@@ -61,14 +65,19 @@ export function AuditPage() {
   const LIMIT = 50;
 
   useEffect(() => {
-    void load(0, resourceType, fromDate, toDate);
+    const initialResourceType = navState?.resourceType ?? "";
+    const initialResourceId = navState?.resourceId ?? navState?.contractId ?? "";
+    setResourceType(initialResourceType);
+    setResourceId(initialResourceId);
+    void load(0, initialResourceType, initialResourceId, fromDate, toDate);
   }, []);
 
-  async function load(off: number, rt: string, fd: string, td: string) {
+  async function load(off: number, rt: string, rid: string, fd: string, td: string) {
     setLoading(true);
     try {
       const res = await listAuditLogs({
         resourceType: rt || undefined,
+        resourceId: rid || undefined,
         from: fd || undefined,
         to: td ? td + "T23:59:59Z" : undefined,
         limit: LIMIT,
@@ -77,7 +86,7 @@ export function AuditPage() {
       setLogs(res.items);
       setTotal(res.total);
       setOffset(off);
-      setMessage(`共 ${res.total} 条审计记录`);
+      setMessage(`${rid ? `当前对象 ${rid}：` : ""}共 ${res.total} 条审计记录`);
     } catch {
       setMessage("加载失败，请检查后端连接。");
     } finally {
@@ -86,7 +95,7 @@ export function AuditPage() {
   }
 
   function handleSearch() {
-    load(0, resourceType, fromDate, toDate);
+    load(0, resourceType, resourceId, fromDate, toDate);
   }
 
   function fmtDate(iso: string) {
@@ -241,6 +250,15 @@ export function AuditPage() {
           </select>
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
+          资源编号
+          <input
+            value={resourceId}
+            onChange={(e) => setResourceId(e.target.value)}
+            placeholder="例如 contract-xxx / voucher-xxx"
+            style={{ fontSize: "13px", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", minWidth: "240px" }}
+          />
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
           开始日期
           <input
             type="date"
@@ -267,9 +285,9 @@ export function AuditPage() {
         >
           查询
         </button>
-        {(resourceType || fromDate || toDate) && (
+        {(resourceType || resourceId || fromDate || toDate) && (
           <button
-            onClick={() => { setResourceType(""); setFromDate(""); setToDate(""); load(0, "", "", ""); }}
+            onClick={() => { setResourceType(""); setResourceId(""); setFromDate(""); setToDate(""); load(0, "", "", "", ""); }}
             style={{
               padding: "8px 16px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)",
               background: "none", color: "#6c7a89", fontSize: "13px", cursor: "pointer"
@@ -341,7 +359,7 @@ export function AuditPage() {
           <div style={{ display: "flex", gap: "8px", marginTop: "16px", justifyContent: "center", alignItems: "center", fontSize: "13px" }}>
             <button
               disabled={offset === 0}
-              onClick={() => load(Math.max(0, offset - LIMIT), resourceType, fromDate, toDate)}
+              onClick={() => load(Math.max(0, offset - LIMIT), resourceType, resourceId, fromDate, toDate)}
               style={{ padding: "6px 16px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: offset === 0 ? "default" : "pointer", color: offset === 0 ? "#aab5c0" : "#1e2a37" }}
             >
               上一页
@@ -349,7 +367,7 @@ export function AuditPage() {
             <span style={{ color: "#6c7a89" }}>{offset + 1} – {Math.min(offset + LIMIT, total)} / {total}</span>
             <button
               disabled={offset + LIMIT >= total}
-              onClick={() => load(offset + LIMIT, resourceType, fromDate, toDate)}
+              onClick={() => load(offset + LIMIT, resourceType, resourceId, fromDate, toDate)}
               style={{ padding: "6px 16px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: offset + LIMIT >= total ? "default" : "pointer", color: offset + LIMIT >= total ? "#aab5c0" : "#1e2a37" }}
             >
               下一页
