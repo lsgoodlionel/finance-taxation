@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  createExportJob,
   getDocumentDetail,
   getClosingBundleHtml,
   getRndProjectDetail,
@@ -7,6 +8,8 @@ import {
   getStoredToken,
   getPayrollPeriods,
   getTaxPrintableHtml,
+  listExportArchiveEntries,
+  listExportJobs,
   listDocuments,
   listRiskClosureRecords,
   listRiskFindings,
@@ -17,6 +20,9 @@ import {
   listVouchers
 } from "../lib/api";
 import type {
+  ExportArchiveEntry,
+  ExportArtifactKind,
+  ExportJob,
   GeneratedDocument,
   PayrollPeriodSummary,
   ReportSnapshot,
@@ -29,11 +35,9 @@ import type {
   Voucher
 } from "@finance-taxation/domain-model";
 import { buildPrintableDocumentHtml } from "./document-relations";
-import { appendExportHistory, type ExportHistoryItem } from "./export-history";
 import { buildExportFileName } from "./pdf-export-utils";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
-const EXPORT_HISTORY_KEY = "finance-taxation-export-history";
 
 function openPdf(path: string) {
   const token = getStoredToken();
@@ -115,29 +119,21 @@ export function PdfExportPage() {
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
-  const [exportHistory, setExportHistory] = useState<ExportHistoryItem[]>([]);
-
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(EXPORT_HISTORY_KEY);
-      if (raw) {
-        setExportHistory(JSON.parse(raw) as ExportHistoryItem[]);
-      }
-    } catch {
-      // ignore broken history payloads
-    }
-  }, []);
+  const [exportHistory, setExportHistory] = useState<ExportJob[]>([]);
+  const [archiveEntries, setArchiveEntries] = useState<ExportArchiveEntry[]>([]);
 
   useEffect(() => {
     async function bootstrap() {
       try {
-        const [perRes, snapRes, vcRes, docsRes, riskRes, rndRes] = await Promise.all([
+        const [perRes, snapRes, vcRes, docsRes, riskRes, rndRes, historyRes, archiveRes] = await Promise.all([
           getPayrollPeriods(),
           listReportSnapshots(),
           listVouchers(),
           listDocuments(),
           listRiskFindings(),
-          listRndProjects()
+          listRndProjects(),
+          listExportJobs(),
+          listExportArchiveEntries()
         ]);
         setPeriods(perRes.items);
         setSnapshots(snapRes.items);
@@ -145,6 +141,8 @@ export function PdfExportPage() {
         setDocuments(docsRes.items.slice(0, 50));
         setFindings(riskRes.items.slice(0, 50));
         setRndProjects(rndRes.items);
+        setExportHistory(historyRes.items);
+        setArchiveEntries(archiveRes.items);
         setMessage("这里是最终导出中心。下方统一汇总工资、报表、税务底稿、资料包和凭证的打印版入口。");
       } catch {
         setMessage("加载失败，请检查后端连接。");
@@ -164,12 +162,22 @@ export function PdfExportPage() {
     setter((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
 
-  function rememberExport(item: Omit<ExportHistoryItem, "id" | "createdAt">) {
-    setExportHistory((current) => {
-      const next = appendExportHistory(current, item);
-      window.localStorage.setItem(EXPORT_HISTORY_KEY, JSON.stringify(next));
-      return next;
-    });
+  function rememberExport(input: {
+    kind: ExportArtifactKind;
+    label: string;
+    fileName: string;
+    resourceType?: string | null;
+    resourceId?: string | null;
+    periodLabel?: string | null;
+  }) {
+    void createExportJob(input)
+      .then(({ job, archiveEntry }) => {
+        setExportHistory((current) => [job, ...current].slice(0, 20));
+        setArchiveEntries((current) => [archiveEntry, ...current].slice(0, 20));
+      })
+      .catch(() => {
+        setMessage("导出已打开，但后端导出历史记录失败。");
+      });
   }
 
   const batchButtonStyle = {
@@ -189,7 +197,10 @@ export function PdfExportPage() {
       rememberExport({
         kind: "report",
         label: `${REPORT_TYPE_LABELS[snapshot.reportType] ?? snapshot.reportType} ${snapshot.periodLabel}`,
-        fileName: buildExportFileName([REPORT_TYPE_LABELS[snapshot.reportType] ?? snapshot.reportType, snapshot.periodLabel, "快照"])
+        fileName: buildExportFileName([REPORT_TYPE_LABELS[snapshot.reportType] ?? snapshot.reportType, snapshot.periodLabel, "快照"]),
+        resourceType: "report_snapshot",
+        resourceId: snapshot.id,
+        periodLabel: snapshot.periodLabel
       });
     }
     openPdfNoToken(`/api/pdf/report?snapshotId=${snapshotId}`);
@@ -211,7 +222,9 @@ export function PdfExportPage() {
     rememberExport({
       kind: "document",
       label: document.title,
-      fileName: buildExportFileName([document.title, document.documentType, document.businessEventId])
+      fileName: buildExportFileName([document.title, document.documentType, document.businessEventId]),
+      resourceType: "document",
+      resourceId: document.id
     });
     openHtmlPreview(document.title, html);
   }
@@ -222,7 +235,9 @@ export function PdfExportPage() {
       rememberExport({
         kind: "voucher",
         label: voucher.summary,
-        fileName: buildExportFileName(["凭证", voucher.id.slice(-8).toUpperCase(), voucher.voucherType])
+        fileName: buildExportFileName(["凭证", voucher.id.slice(-8).toUpperCase(), voucher.voucherType]),
+        resourceType: "voucher",
+        resourceId: voucher.id
       });
     }
     openPdfNoToken(`/api/pdf/voucher/${voucherId}`);
@@ -278,6 +293,35 @@ export function PdfExportPage() {
         )}
       </div>
 
+      <div style={panelStyle()}>
+        <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>导出归档索引</h3>
+        {archiveEntries.length === 0 ? (
+          <div style={{ color: "#aab5c0", textAlign: "center", padding: "24px" }}>暂无归档索引</div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+            <thead>
+              <tr style={{ color: "#6c7a89" }}>
+                {["归档键", "分类", "标题", "对象", "建议文件名", "时间"].map((h) => (
+                  <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {archiveEntries.map((item) => (
+                <tr key={item.id}>
+                  <td style={cellStyle()}>{item.archiveKey}</td>
+                  <td style={cellStyle()}>{item.kind}</td>
+                  <td style={cellStyle()}>{item.title}</td>
+                  <td style={cellStyle()}>{item.objectId || item.objectType}</td>
+                  <td style={cellStyle()}>{item.fileName}</td>
+                  <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
       {/* ── 工资导出 ── */}
       {activeTab === "payroll" && (
         <div style={panelStyle()}>
@@ -307,8 +351,28 @@ export function PdfExportPage() {
                       </span>
                     </td>
                     <td style={{ ...cellStyle(), display: "flex", gap: "6px" }}>
-                      {btnExport(() => openPdf(`/api/pdf/payroll?period=${p.period}`), "工资汇总")}
-                      {btnExport(() => openPdf(`/api/pdf/payroll-slip?period=${p.period}`), "全员工资条")}
+                      {btnExport(() => {
+                        rememberExport({
+                          kind: "payroll",
+                          label: `${p.period} 工资汇总表`,
+                          fileName: buildExportFileName([p.period, "工资汇总表"]),
+                          resourceType: "payroll_period",
+                          resourceId: p.period,
+                          periodLabel: p.period
+                        });
+                        openPdf(`/api/pdf/payroll?period=${p.period}`);
+                      }, "工资汇总")}
+                      {btnExport(() => {
+                        rememberExport({
+                          kind: "payroll",
+                          label: `${p.period} 全员工资条`,
+                          fileName: buildExportFileName([p.period, "全员工资条"]),
+                          resourceType: "payroll_period",
+                          resourceId: `${p.period}:slips`,
+                          periodLabel: p.period
+                        });
+                        openPdf(`/api/pdf/payroll-slip?period=${p.period}`);
+                      }, "全员工资条")}
                     </td>
                   </tr>
                 ))}
@@ -388,6 +452,14 @@ export function PdfExportPage() {
             {btnExport(
               () =>
                 void getTaxPrintableHtml("vat", vatFilingPeriod).then((html) => {
+                  rememberExport({
+                    kind: "tax",
+                    label: `增值税底稿 ${vatFilingPeriod}`,
+                    fileName: buildExportFileName(["增值税底稿", vatFilingPeriod]),
+                    resourceType: "tax_working_paper",
+                    resourceId: `vat:${vatFilingPeriod}`,
+                    periodLabel: vatFilingPeriod
+                  });
                   openHtmlPreview(`增值税底稿 ${vatFilingPeriod}`, html);
                 }),
               "打开增值税底稿"
@@ -406,6 +478,14 @@ export function PdfExportPage() {
             {btnExport(
               () =>
                 void getTaxPrintableHtml("corporate_income_tax", citFilingPeriod).then((html) => {
+                  rememberExport({
+                    kind: "tax",
+                    label: `企业所得税准备 ${citFilingPeriod}`,
+                    fileName: buildExportFileName(["企业所得税准备", citFilingPeriod]),
+                    resourceType: "corporate_income_tax_preparation",
+                    resourceId: `cit:${citFilingPeriod}`,
+                    periodLabel: citFilingPeriod
+                  });
                   openHtmlPreview(`企业所得税准备 ${citFilingPeriod}`, html);
                 }),
               "打开企业所得税准备稿"
@@ -431,6 +511,14 @@ export function PdfExportPage() {
               {btnExport(
                 () =>
                   void getClosingBundleHtml("month_end", closingPeriod).then((html) => {
+                    rememberExport({
+                      kind: "package",
+                      label: `月结资料包 ${closingPeriod}`,
+                      fileName: buildExportFileName(["月结资料包", closingPeriod]),
+                      resourceType: "closing_bundle",
+                      resourceId: `month_end:${closingPeriod}`,
+                      periodLabel: closingPeriod
+                    });
                     openHtmlPreview(`月结资料包 ${closingPeriod}`, html);
                   }),
                 "打开月结资料包"
@@ -449,6 +537,14 @@ export function PdfExportPage() {
               {btnExport(
                 () =>
                   void getClosingBundleHtml("audit", inspectionPeriod).then((html) => {
+                    rememberExport({
+                      kind: "package",
+                      label: `审计资料包 ${inspectionPeriod}`,
+                      fileName: buildExportFileName(["审计资料包", inspectionPeriod]),
+                      resourceType: "closing_bundle",
+                      resourceId: `audit:${inspectionPeriod}`,
+                      periodLabel: inspectionPeriod
+                    });
                     openHtmlPreview(`审计资料包 ${inspectionPeriod}`, html);
                   }),
                 "打开审计资料包"
@@ -456,6 +552,14 @@ export function PdfExportPage() {
               {btnExport(
                 () =>
                   void getClosingBundleHtml("inspection", inspectionPeriod).then((html) => {
+                    rememberExport({
+                      kind: "package",
+                      label: `稽核资料包 ${inspectionPeriod}`,
+                      fileName: buildExportFileName(["稽核资料包", inspectionPeriod]),
+                      resourceType: "closing_bundle",
+                      resourceId: `inspection:${inspectionPeriod}`,
+                      periodLabel: inspectionPeriod
+                    });
                     openHtmlPreview(`稽核资料包 ${inspectionPeriod}`, html);
                   }),
                 "打开稽核资料包"
@@ -555,6 +659,14 @@ export function PdfExportPage() {
                         () =>
                           void listRiskClosureRecords(finding.id).then((payload) => {
                             const closures = payload.items as RiskClosureRecord[];
+                            rememberExport({
+                              kind: "risk",
+                              label: `风险复盘 ${finding.ruleCode}`,
+                              fileName: buildExportFileName(["风险复盘", finding.ruleCode, finding.id]),
+                              resourceType: "risk_finding",
+                              resourceId: finding.id,
+                              periodLabel: null
+                            });
                             const html = `
                               <html><head><meta charset="utf-8"><title>${escHtml(finding.title)}</title></head>
                               <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;color:#1f2937;">
@@ -610,6 +722,14 @@ export function PdfExportPage() {
                             getRndProjectDetail(project.id),
                             getRndSuperDeductionPackage(project.id)
                           ]).then(([detail, pkg]) => {
+                            rememberExport({
+                              kind: "rnd",
+                              label: `研发资料包 ${project.code}`,
+                              fileName: buildExportFileName(["研发资料包", project.code, project.name]),
+                              resourceType: "rnd_project",
+                              resourceId: project.id,
+                              periodLabel: null
+                            });
                             const html = `
                               <html><head><meta charset="utf-8"><title>${escHtml(detail.name)}</title></head>
                               <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;color:#1f2937;">

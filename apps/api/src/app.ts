@@ -117,6 +117,11 @@ import {
   reportPdf,
   voucherPdf
 } from "./modules/pdf/routes.js";
+import {
+  createExportJob,
+  listExportArchiveEntries,
+  listExportJobs
+} from "./modules/exports/routes.js";
 import { listAuditLogs } from "./modules/audit/routes.js";
 import { bossChat } from "./modules/boss-qa/routes.js";
 import {
@@ -892,6 +897,17 @@ async function router(req: ApiRequest, res: ServerResponse) {
       if (!(await requirePermission("contracts.manage", req, res))) return;
       return updateContract(req, res, contractDetailId);
     }
+  }
+
+  if (url.pathname === "/api/exports/jobs") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return listExportJobs(req, res);
+    if (req.method === "POST") return createExportJob(req, res);
+  }
+
+  if (url.pathname === "/api/exports/archive-index") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return listExportArchiveEntries(req, res);
   }
 
   // ── PDF Export ──

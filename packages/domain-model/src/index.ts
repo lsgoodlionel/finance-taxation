@@ -699,6 +699,47 @@ export interface ClosingPackageExport {
   }>;
 }
 
+export type ExportArtifactKind =
+  | "payroll"
+  | "report"
+  | "tax"
+  | "package"
+  | "document"
+  | "risk"
+  | "rnd"
+  | "voucher";
+
+export type ExportJobStatus = "created" | "opened";
+
+export interface ExportJob {
+  id: string;
+  companyId: string;
+  kind: ExportArtifactKind;
+  label: string;
+  fileName: string;
+  resourceType: string | null;
+  resourceId: string | null;
+  periodLabel: string | null;
+  status: ExportJobStatus;
+  createdByUserId: string | null;
+  createdByName: string;
+  createdAt: string;
+}
+
+export interface ExportArchiveEntry {
+  id: string;
+  companyId: string;
+  jobId: string;
+  archiveKey: string;
+  kind: ExportArtifactKind;
+  title: string;
+  fileName: string;
+  objectType: string;
+  objectId: string | null;
+  periodLabel: string | null;
+  createdAt: string;
+}
+
 export type EmployeeStatus = "active" | "on_leave" | "resigned";
 
 export interface Employee {
