@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import type { AuditLog } from "@finance-taxation/domain-model";
 import { listAuditLogs } from "../lib/api";
 import { resolveAuditLogTarget } from "./drilldown";
+import { resolveInitialAuditExpansion } from "./risk-scope";
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   business_event: "经营事项",
@@ -86,6 +87,10 @@ export function AuditPage() {
         offset: off
       });
       setLogs(res.items);
+      setExpandedId(resolveInitialAuditExpansion(
+        res.items.map((item) => ({ id: item.id, resourceId: item.resourceId })),
+        resourceId ?? navResourceId ?? null
+      ));
       setTotal(res.total);
       setOffset(off);
       setMessage(`${resourceId ? `当前对象 ${resourceId}：` : ""}共 ${res.total} 条审计记录`);

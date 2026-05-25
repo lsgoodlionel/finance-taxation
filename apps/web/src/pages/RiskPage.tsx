@@ -11,6 +11,7 @@ import {
 import { useI18n, RISK_SEVERITY_LABELS, RISK_PRIORITY_LABELS, RISK_STATUS_LABELS } from "../lib/i18n";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { buildRiskDrilldownTargets } from "./drilldown";
+import { filterRiskFindingsByScope, type RiskScopeFilter } from "./risk-scope";
 
 function RiskHelpModal({ onClose }: { onClose: () => void }) {
   return (
@@ -89,6 +90,7 @@ export function RiskPage() {
   const [showEventDropdown, setShowEventDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [resolution, setResolution] = useState("已复核并完成整改。");
+  const [scopeFilter, setScopeFilter] = useState<RiskScopeFilter>("all");
   const [message, setMessage] = useState("正在准备风险勾稽。");
   const [showHelp, setShowHelp] = useState(false);
 
@@ -149,20 +151,18 @@ export function RiskPage() {
     setSelectedFindingId(findingId);
   }
 
-  const visibleFindings = useMemo(
-    () => (
-      navEventId
-        ? findings.filter((finding) => finding.businessEventId === navEventId)
-        : navRiskFindingId
-          ? findings.filter((finding) => finding.id === navRiskFindingId)
-          : findings
-    ),
-    [findings, navEventId, navRiskFindingId]
-  );
   const eventMap = useMemo(
     () => new Map(events.map((event) => [event.id, event])),
     [events]
   );
+  const visibleFindings = useMemo(() => {
+    const scopedBase = navEventId
+      ? findings.filter((finding) => finding.businessEventId === navEventId)
+      : navRiskFindingId
+        ? findings.filter((finding) => finding.id === navRiskFindingId)
+        : findings;
+    return filterRiskFindingsByScope(scopedBase, eventMap, scopeFilter);
+  }, [eventMap, findings, navEventId, navRiskFindingId, scopeFilter]);
 
   return (
     <section style={{ display: "grid", gap: "20px" }}>
@@ -236,6 +236,19 @@ export function RiskPage() {
           <div style={{ flex: 2, minWidth: "160px" }}>
             <label style={{ fontSize: "12px", color: "#6c7a89", display: "block", marginBottom: "4px" }}>关闭说明</label>
             <input value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="关闭说明" style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.2)", boxSizing: "border-box", fontSize: "13px" }} />
+          </div>
+
+          <div style={{ minWidth: "140px" }}>
+            <label style={{ fontSize: "12px", color: "#6c7a89", display: "block", marginBottom: "4px" }}>风险对象</label>
+            <select
+              value={scopeFilter}
+              onChange={(event) => setScopeFilter(event.target.value as RiskScopeFilter)}
+              style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.2)", boxSizing: "border-box", fontSize: "13px" }}
+            >
+              <option value="all">全部</option>
+              <option value="contract">合同链</option>
+              <option value="payroll">工资链</option>
+            </select>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
