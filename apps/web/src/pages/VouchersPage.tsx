@@ -100,7 +100,9 @@ function cellStyle() {
 export function VouchersPage() {
   const { t } = useI18n();
   const location = useLocation();
-  const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
+  const navState = (location.state as { businessEventId?: string; voucherId?: string } | null) ?? null;
+  const navEventId = navState?.businessEventId ?? null;
+  const navVoucherId = navState?.voucherId ?? null;
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [selectedVoucherId, setSelectedVoucherId] = useState<string | null>(null);
   const [detail, setDetail] = useState<VoucherDetail | null>(null);
@@ -130,7 +132,9 @@ export function VouchersPage() {
         setVouchers(payload.items);
         setTemplates(templatePayload.items);
         // If navigated from a flow node, prefer the voucher linked to that event
-        const linkedId = navEventId
+        const linkedId = navVoucherId
+          ? payload.items.find((v) => v.id === navVoucherId)?.id ?? null
+          : navEventId
           ? payload.items.find((v) => v.businessEventId === navEventId)?.id ?? null
           : null;
         const targetId = linkedId ?? payload.items[0]?.id ?? null;
@@ -153,7 +157,7 @@ export function VouchersPage() {
       }
     }
     void bootstrap();
-  }, []);
+  }, [navEventId, navVoucherId]);
 
   async function refreshVoucherState(voucherId?: string) {
     const payload = await listVouchers();

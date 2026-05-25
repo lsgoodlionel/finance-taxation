@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { AuditLog } from "@finance-taxation/domain-model";
 import { listAuditLogs } from "../lib/api";
+import { resolveAuditLogTarget } from "./drilldown";
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   business_event: "经营事项",
@@ -49,6 +51,7 @@ const RESOURCE_TYPES = [
 ];
 
 export function AuditPage() {
+  const navigate = useNavigate();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -290,7 +293,7 @@ export function AuditPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ color: "#6c7a89", fontSize: "12px", letterSpacing: "0.04em" }}>
-                {["时间", "操作人", "操作类型", "对象类型", "对象标签", "变更详情"].map((h) => (
+                {["时间", "操作人", "操作类型", "对象类型", "对象标签", "变更详情", "跳转"].map((h) => (
                   <th key={h} style={{ ...cell, fontWeight: 500 }}>{h}</th>
                 ))}
               </tr>
@@ -299,6 +302,7 @@ export function AuditPage() {
               {logs.map((log) => {
                 const isExpanded = expandedId === log.id;
                 const hasChanges = !!log.changes;
+                const target = resolveAuditLogTarget(log);
                 return (
                   <tr key={log.id}>
                     <td style={{ ...cell, whiteSpace: "nowrap" as const, color: "#6c7a89" }}>
@@ -327,6 +331,18 @@ export function AuditPage() {
                         <div style={{ marginTop: "6px", padding: "8px", background: "rgba(20,40,60,0.04)", borderRadius: "6px", maxWidth: "300px" }}>
                           {renderChanges(log.changes)}
                         </div>
+                      )}
+                    </td>
+                    <td style={cell}>
+                      {target ? (
+                        <button
+                          onClick={() => navigate(target.path, { state: target.state })}
+                          style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "4px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: "pointer" }}
+                        >
+                          {target.label}
+                        </button>
+                      ) : (
+                        <span style={{ color: "#aab5c0" }}>-</span>
                       )}
                     </td>
                   </tr>

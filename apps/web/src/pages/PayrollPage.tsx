@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { Employee, PayrollPolicy, PayrollRecord, PayrollPeriodSummary } from "@finance-taxation/domain-model";
 import {
   analyzeEvent,
@@ -81,7 +81,9 @@ const EMPTY_EMP_FORM = {
 };
 
 export function PayrollPage() {
+  const location = useLocation();
   const navigate = useNavigate();
+  const navPayrollPeriod = (location.state as { payrollPeriod?: string } | null)?.payrollPeriod ?? null;
   const [tab, setTab] = useState<Tab>("employees");
   const [message, setMessage] = useState("正在加载数据...");
 
@@ -129,6 +131,19 @@ export function PayrollPage() {
       // ignore broken session payloads
     }
   }, []);
+
+  useEffect(() => {
+    if (!navPayrollPeriod) {
+      return;
+    }
+    setTab("payroll");
+    setCustomPeriod(navPayrollPeriod);
+    void handleLoadPeriod(navPayrollPeriod).catch(() => {
+      setSelectedPeriod(navPayrollPeriod);
+      setPayrollRecords([]);
+      setMessage(`已切换到工资期间 ${navPayrollPeriod}，请先生成或加载工资记录。`);
+    });
+  }, [navPayrollPeriod]);
 
   async function loadAll() {
     const [empRes, perRes, polRes] = await Promise.all([
