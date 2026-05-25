@@ -29,6 +29,7 @@ import type {
   Voucher
 } from "@finance-taxation/domain-model";
 import { buildPrintableDocumentHtml } from "./document-relations";
+import { buildExportFileName } from "./pdf-export-utils";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 
@@ -67,14 +68,15 @@ function cellStyle() {
 }
 
 function btnExport(onClick: () => void, label = "导出 PDF") {
+  const style = {
+    fontSize: "12px", padding: "4px 12px", borderRadius: "6px",
+    border: "1px solid rgba(20,40,60,0.15)", color: "#1e2a37",
+    background: "none", cursor: "pointer", whiteSpace: "nowrap" as const
+  };
   return (
     <button
       onClick={onClick}
-      style={{
-        fontSize: "12px", padding: "4px 12px", borderRadius: "6px",
-        border: "1px solid rgba(20,40,60,0.15)", color: "#1e2a37",
-        background: "none", cursor: "pointer", whiteSpace: "nowrap" as const
-      }}
+      style={style}
     >
       {label}
     </button>
@@ -108,6 +110,9 @@ export function PdfExportPage() {
   const [inspectionPeriod, setInspectionPeriod] = useState("2026-Q2");
   const [message, setMessage] = useState("正在加载导出列表...");
   const [activeTab, setActiveTab] = useState<"payroll" | "reports" | "tax" | "packages" | "documents" | "risk" | "rnd" | "vouchers">("reports");
+  const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
 
   useEffect(() => {
     async function bootstrap() {
@@ -140,6 +145,45 @@ export function PdfExportPage() {
     background: activeTab === t ? "#1e2a37" : "rgba(255,255,255,0.72)",
     color: activeTab === t ? "#fff" : "#1e2a37"
   } as const);
+
+  function toggleSelection(id: string, setter: (updater: (current: string[]) => string[]) => void) {
+    setter((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+  const batchButtonStyle = {
+    fontSize: "12px",
+    padding: "4px 12px",
+    borderRadius: "6px",
+    border: "1px solid rgba(20,40,60,0.15)",
+    color: "#1e2a37",
+    background: "none",
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const
+  };
+
+  function openReportSnapshot(snapshotId: string) {
+    openPdfNoToken(`/api/pdf/report?snapshotId=${snapshotId}`);
+  }
+
+  async function openDocumentTemplate(document: GeneratedDocument) {
+    const [detail, tasksPayload, taxPayload, voucherPayload] = await Promise.all([
+      getDocumentDetail(document.id),
+      listTasks(document.businessEventId),
+      listTaxItems({ businessEventId: document.businessEventId }),
+      listVouchers({ businessEventId: document.businessEventId })
+    ]);
+    const html = buildPrintableDocumentHtml({
+      document: detail,
+      tasks: tasksPayload.items as Task[],
+      taxItems: taxPayload.items as TaxItem[],
+      vouchers: voucherPayload.items
+    });
+    openHtmlPreview(document.title, html);
+  }
+
+  function openVoucherPdf(voucherId: string) {
+    openPdfNoToken(`/api/pdf/voucher/${voucherId}`);
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -207,14 +251,26 @@ export function PdfExportPage() {
       {/* ── 报表导出 ── */}
       {activeTab === "reports" && (
         <div style={panelStyle()}>
-          <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>财务报表快照导出</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", gap: "12px", flexWrap: "wrap" }}>
+            <h3 style={{ margin: 0, fontSize: "15px" }}>财务报表快照导出</h3>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <span style={{ fontSize: "12px", color: "#6c7a89" }}>已选 {selectedReportIds.length} 项</span>
+              <button
+                disabled={selectedReportIds.length === 0}
+                onClick={() => selectedReportIds.forEach((id) => openReportSnapshot(id))}
+                style={{ ...batchButtonStyle, opacity: selectedReportIds.length ? 1 : 0.5 }}
+              >
+                批量打开
+              </button>
+            </div>
+          </div>
           {snapshots.length === 0 ? (
             <div style={{ color: "#aab5c0", textAlign: "center", padding: "32px" }}>暂无报表快照，请先在「财务报表」页生成快照</div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
                 <tr style={{ color: "#6c7a89" }}>
-                  {["报表类型", "期间", "快照日期", "操作"].map((h) => (
+                  {["选择", "报表类型", "期间", "快照日期", "建议文件名", "操作"].map((h) => (
                     <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
                   ))}
                 </tr>
@@ -222,11 +278,21 @@ export function PdfExportPage() {
               <tbody>
                 {snapshots.map((s) => (
                   <tr key={s.id}>
+                    <td style={cellStyle()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedReportIds.includes(s.id)}
+                        onChange={() => toggleSelection(s.id, setSelectedReportIds)}
+                      />
+                    </td>
                     <td style={cellStyle()}>{REPORT_TYPE_LABELS[s.reportType] ?? s.reportType}</td>
                     <td style={cellStyle()}>{s.periodLabel}</td>
                     <td style={cellStyle()}>{s.snapshotDate}</td>
                     <td style={cellStyle()}>
-                      {btnExport(() => openPdfNoToken(`/api/pdf/report?snapshotId=${s.id}`))}
+                      {buildExportFileName([REPORT_TYPE_LABELS[s.reportType] ?? s.reportType, s.periodLabel, "快照"])}
+                    </td>
+                    <td style={cellStyle()}>
+                      {btnExport(() => openReportSnapshot(s.id))}
                     </td>
                   </tr>
                 ))}
@@ -331,14 +397,33 @@ export function PdfExportPage() {
 
       {activeTab === "documents" && (
         <div style={panelStyle()}>
-          <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>单据正式模板导出</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", gap: "12px", flexWrap: "wrap" }}>
+            <h3 style={{ margin: 0, fontSize: "15px" }}>单据正式模板导出</h3>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <span style={{ fontSize: "12px", color: "#6c7a89" }}>已选 {selectedDocumentIds.length} 项</span>
+              <button
+                disabled={selectedDocumentIds.length === 0}
+                onClick={() => {
+                  selectedDocumentIds.forEach((id) => {
+                    const document = documents.find((item) => item.id === id);
+                    if (document) {
+                      void openDocumentTemplate(document);
+                    }
+                  });
+                }}
+                style={{ ...batchButtonStyle, opacity: selectedDocumentIds.length ? 1 : 0.5 }}
+              >
+                批量打开
+              </button>
+            </div>
+          </div>
           {documents.length === 0 ? (
             <div style={{ color: "#aab5c0", textAlign: "center", padding: "32px" }}>暂无单据数据</div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
                 <tr style={{ color: "#6c7a89" }}>
-                  {["单据名称", "类型", "状态", "事项", "操作"].map((h) => (
+                  {["选择", "单据名称", "类型", "状态", "事项", "建议文件名", "操作"].map((h) => (
                     <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
                   ))}
                 </tr>
@@ -346,27 +431,23 @@ export function PdfExportPage() {
               <tbody>
                 {documents.map((document) => (
                   <tr key={document.id}>
+                    <td style={cellStyle()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedDocumentIds.includes(document.id)}
+                        onChange={() => toggleSelection(document.id, setSelectedDocumentIds)}
+                      />
+                    </td>
                     <td style={cellStyle()}>{document.title}</td>
                     <td style={cellStyle()}>{document.documentType}</td>
                     <td style={cellStyle()}>{document.status}</td>
                     <td style={cellStyle()}>{document.businessEventId}</td>
                     <td style={cellStyle()}>
+                      {buildExportFileName([document.title, document.documentType, document.businessEventId])}
+                    </td>
+                    <td style={cellStyle()}>
                       {btnExport(
-                        () =>
-                          void Promise.all([
-                            getDocumentDetail(document.id),
-                            listTasks(document.businessEventId),
-                            listTaxItems({ businessEventId: document.businessEventId }),
-                            listVouchers({ businessEventId: document.businessEventId })
-                          ]).then(([detail, tasksPayload, taxPayload, voucherPayload]) => {
-                            const html = buildPrintableDocumentHtml({
-                              document: detail,
-                              tasks: tasksPayload.items as Task[],
-                              taxItems: taxPayload.items as TaxItem[],
-                              vouchers: voucherPayload.items
-                            });
-                            openHtmlPreview(document.title, html);
-                          }),
+                        () => void openDocumentTemplate(document),
                         "打开单据模板"
                       )}
                     </td>
@@ -489,14 +570,26 @@ export function PdfExportPage() {
       {/* ── 凭证导出 ── */}
       {activeTab === "vouchers" && (
         <div style={panelStyle()}>
-          <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>凭证导出（最近 50 条）</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", gap: "12px", flexWrap: "wrap" }}>
+            <h3 style={{ margin: 0, fontSize: "15px" }}>凭证导出（最近 50 条）</h3>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <span style={{ fontSize: "12px", color: "#6c7a89" }}>已选 {selectedVoucherIds.length} 项</span>
+              <button
+                disabled={selectedVoucherIds.length === 0}
+                onClick={() => selectedVoucherIds.forEach((id) => openVoucherPdf(id))}
+                style={{ ...batchButtonStyle, opacity: selectedVoucherIds.length ? 1 : 0.5 }}
+              >
+                批量打开
+              </button>
+            </div>
+          </div>
           {vouchers.length === 0 ? (
             <div style={{ color: "#aab5c0", textAlign: "center", padding: "32px" }}>暂无凭证数据</div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
                 <tr style={{ color: "#6c7a89" }}>
-                  {["凭证编号", "类型", "摘要", "状态", "操作"].map((h) => (
+                  {["选择", "凭证编号", "类型", "摘要", "状态", "建议文件名", "操作"].map((h) => (
                     <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
                   ))}
                 </tr>
@@ -504,12 +597,22 @@ export function PdfExportPage() {
               <tbody>
                 {vouchers.map((v) => (
                   <tr key={v.id}>
+                    <td style={cellStyle()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedVoucherIds.includes(v.id)}
+                        onChange={() => toggleSelection(v.id, setSelectedVoucherIds)}
+                      />
+                    </td>
                     <td style={cellStyle()}>{v.id.slice(-8).toUpperCase()}</td>
                     <td style={cellStyle()}>{v.voucherType}</td>
                     <td style={cellStyle()}>{v.summary}</td>
                     <td style={cellStyle()}>{v.status}</td>
                     <td style={cellStyle()}>
-                      {btnExport(() => openPdfNoToken(`/api/pdf/voucher/${v.id}`))}
+                      {buildExportFileName(["凭证", v.id.slice(-8).toUpperCase(), v.voucherType])}
+                    </td>
+                    <td style={cellStyle()}>
+                      {btnExport(() => openVoucherPdf(v.id))}
                     </td>
                   </tr>
                 ))}
