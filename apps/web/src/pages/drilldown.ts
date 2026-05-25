@@ -53,6 +53,8 @@ export function resolveAuditLogTarget(log: AuditLog): DrilldownTarget | null {
       return { path: "/documents", state: { documentId: log.resourceId }, label: "查看单据" };
     case "contract":
       return { path: "/contracts", state: { contractId: log.resourceId }, label: "查看合同" };
+    case "employee":
+      return { path: "/payroll", state: { employeeId: log.resourceId, tab: "employees" }, label: "查看员工" };
     case "tax_item":
       return { path: "/tax", state: { taxItemId: log.resourceId }, label: "查看税务事项" };
     case "risk_finding":

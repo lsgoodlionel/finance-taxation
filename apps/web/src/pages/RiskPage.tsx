@@ -312,6 +312,19 @@ export function RiskPage() {
                   >
                     查看复盘
                   </button>
+                  <button
+                    style={{ marginTop: "8px", marginRight: "8px" }}
+                    onClick={() =>
+                      navigate("/audit", {
+                        state: {
+                          resourceType: "risk_finding",
+                          resourceId: finding.id
+                        }
+                      })
+                    }
+                  >
+                    查看审计
+                  </button>
                   {finding.status !== "resolved" ? (
                     <button
                       style={{ marginTop: "8px" }}

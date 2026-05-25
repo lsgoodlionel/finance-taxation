@@ -66,4 +66,18 @@ const payrollTarget = resolveAuditLogTarget(payrollLog);
 assert(payrollTarget?.path === "/payroll", "expected payroll log to resolve to payroll page");
 assert(payrollTarget?.state?.payrollPeriod === "2026-05", "expected payroll period to be extracted");
 
+const employeeLog: AuditLog = {
+  ...voucherLog,
+  id: "audit-3",
+  resourceType: "employee",
+  resourceId: "emp-1",
+  resourceLabel: "张三",
+  changes: { data: { employeeId: "emp-1" } }
+};
+
+const employeeTarget = resolveAuditLogTarget(employeeLog);
+assert(employeeTarget?.path === "/payroll", "expected employee log to resolve to payroll page");
+assert(employeeTarget?.state?.employeeId === "emp-1", "expected employee drilldown to preserve employee id");
+assert(employeeTarget?.state?.tab === "employees", "expected employee drilldown to open employee tab");
+
 console.log("drilldown-ok");
