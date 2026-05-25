@@ -12,11 +12,15 @@ import {
   listEmployees,
   listEvents,
   listPayroll,
+  listTaxItems,
+  listVouchers,
   runEventRiskCheck,
   updateEmployee,
   updatePayrollPolicy
 } from "../lib/api";
 import { buildPayrollEventInput } from "./payroll-event";
+import { buildPayrollLinkageSummary } from "./payroll-linkage";
+import { buildPayrollWorkflow } from "./payroll-workflow";
 
 type Tab = "employees" | "payroll" | "policy";
 
@@ -102,6 +106,8 @@ export function PayrollPage() {
   const [computing, setComputing] = useState(false);
   const [linkedEventIds, setLinkedEventIds] = useState<Record<string, string>>({});
   const [creatingEventPeriod, setCreatingEventPeriod] = useState<string | null>(null);
+  const [linkedTaxItemCount, setLinkedTaxItemCount] = useState(0);
+  const [linkedVoucherCount, setLinkedVoucherCount] = useState(0);
 
   // policy tab
   const [policy, setPolicy] = useState<PayrollPolicy | null>(null);
@@ -282,6 +288,55 @@ export function PayrollPage() {
     }
     navigate(path, { state: { businessEventId: eventId } });
   }
+
+  const linkedEventId = selectedPeriod ? linkedEventIds[selectedPeriod] ?? null : null;
+  const payrollWorkflow = selectedPeriod
+    ? buildPayrollWorkflow({
+        period: selectedPeriod,
+        records: payrollRecords,
+        linkedEventId
+      })
+    : null;
+  const payrollLinkage = selectedPeriod
+    ? buildPayrollLinkageSummary({
+        taxItemCount: linkedTaxItemCount,
+        voucherCount: linkedVoucherCount,
+        confirmedCount: payrollRecords.filter((record) => record.status === "confirmed").length,
+        totalCount: payrollRecords.length,
+        linkedEventId
+      })
+    : null;
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadLinkedArtifacts() {
+      if (!linkedEventId) {
+        setLinkedTaxItemCount(0);
+        setLinkedVoucherCount(0);
+        return;
+      }
+
+      try {
+        const [taxRes, voucherRes] = await Promise.all([
+          listTaxItems({ businessEventId: linkedEventId }),
+          listVouchers({ businessEventId: linkedEventId })
+        ]);
+        if (!active) return;
+        setLinkedTaxItemCount(taxRes.total);
+        setLinkedVoucherCount(voucherRes.total);
+      } catch {
+        if (!active) return;
+        setLinkedTaxItemCount(0);
+        setLinkedVoucherCount(0);
+      }
+    }
+
+    void loadLinkedArtifacts();
+    return () => {
+      active = false;
+    };
+  }, [linkedEventId]);
 
   async function handlePayrollRiskCheck() {
     const eventId = linkedEventIds[selectedPeriod];
@@ -512,6 +567,88 @@ export function PayrollPage() {
                   <button style={btnSecondary()} onClick={() => void handlePayrollRiskCheck()}>风险检查</button>
                 </div>
               </div>
+              {payrollWorkflow && (
+                <div style={{ marginBottom: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ color: "#6c7a89", fontSize: "12px" }}>工资工作流</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "10px" }}>
+                    {payrollWorkflow.steps.map((step) => (
+                      <div
+                        key={step.title}
+                        style={{
+                          border: "1px solid rgba(20,40,60,0.08)",
+                          borderRadius: "12px",
+                          padding: "10px 12px",
+                          background: step.state === "done" ? "rgba(26,127,90,0.06)" : "rgba(255,186,8,0.08)"
+                        }}
+                      >
+                        <div style={{ fontSize: "11px", color: step.state === "done" ? "#1a7f5a" : "#b0890a", marginBottom: "6px" }}>
+                          {step.state === "done" ? "已完成" : "待推进"}
+                        </div>
+                        <div style={{ fontSize: "13px", color: "#1e2a37" }}>{step.title}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#6c7a89" }}>{payrollWorkflow.summary}</div>
+                  {payrollLinkage && (
+                    <div
+                      style={{
+                        border: "1px solid rgba(20,40,60,0.08)",
+                        borderRadius: "12px",
+                        padding: "12px 14px",
+                        background:
+                          payrollLinkage.readiness === "ready_for_tax_review"
+                            ? "rgba(26,127,90,0.06)"
+                            : "rgba(255,186,8,0.08)"
+                      }}
+                    >
+                      <div style={{ fontSize: "12px", color: "#6c7a89", marginBottom: "8px" }}>联动摘要</div>
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+                        {payrollLinkage.highlights.map((item) => (
+                          <span
+                            key={item}
+                            style={{
+                              fontSize: "12px",
+                              padding: "6px 10px",
+                              borderRadius: "999px",
+                              background: "rgba(255,255,255,0.7)",
+                              color: "#1e2a37"
+                            }}
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#6c7a89" }}>
+                        {payrollLinkage.readiness === "pending_confirmation" && "仍有工资记录未确认，暂不适合进入税务复核。"}
+                        {payrollLinkage.readiness === "pending_event" && "工资记录已基本就绪，但尚未生成工资事项。"}
+                        {payrollLinkage.readiness === "ready_for_tax_review" && "工资事项已接入主线，可继续进入税务、凭证和风险复核。"}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {payrollWorkflow.recommendedActions.includes("confirm_records") && (
+                      <span style={{ fontSize: "12px", padding: "6px 10px", borderRadius: "999px", background: "rgba(176,137,10,0.12)", color: "#8a6200" }}>
+                        优先完成工资确认
+                      </span>
+                    )}
+                    {payrollWorkflow.recommendedActions.includes("create_event") && (
+                      <button
+                        style={{ ...btnSecondary(), background: "#fff7ed", color: "#b45309" }}
+                        onClick={handleCreatePayrollEvent}
+                        disabled={creatingEventPeriod === selectedPeriod}
+                      >
+                        补生成工资事项
+                      </button>
+                    )}
+                    {payrollWorkflow.recommendedActions.includes("review_tax") && (
+                      <button style={btnSecondary()} onClick={() => navigateWithEvent("/tax")}>进入税务复核</button>
+                    )}
+                    {payrollWorkflow.recommendedActions.includes("run_risk_check") && (
+                      <button style={btnSecondary()} onClick={() => void handlePayrollRiskCheck()}>执行风险检查</button>
+                    )}
+                  </div>
+                </div>
+              )}
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "900px" }}>
                   <thead>
