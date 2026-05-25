@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Contract, ContractWithEventCount } from "@finance-taxation/domain-model";
+import type { Contract, ContractWithEventCount, GeneratedDocument, Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import {
   analyzeEvent,
   closeContract,
@@ -15,8 +15,11 @@ import {
   type ContractFollowupAction,
   buildContractEventInput,
   buildContractFollowupEventInput,
+  buildContractTerminalEventInput,
   getContractFollowupActions
 } from "./contract-event";
+import { buildContractTimeline } from "./contract-timeline";
+import { buildContractWorkflow } from "./contract-workflow";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   sales: "销售合同",
@@ -74,6 +77,10 @@ function cellStyle() {
 interface ContractDetailView {
   contract: Contract;
   relatedEvents: { id: string; title: string; status: string; createdAt: string }[];
+  relatedTasks: Task[];
+  relatedDocuments: GeneratedDocument[];
+  relatedTaxItems: TaxItem[];
+  relatedVouchers: Voucher[];
 }
 
 export function ContractsPage() {
@@ -100,6 +107,18 @@ export function ContractsPage() {
     notes: ""
   });
   const firstRelatedEvent = detail?.relatedEvents[0] ?? null;
+  const timeline = detail
+    ? buildContractTimeline({
+        contract: detail.contract,
+        relatedEvents: detail.relatedEvents
+      })
+    : [];
+  const workflow = detail
+    ? buildContractWorkflow({
+        contract: detail.contract,
+        relatedEvents: detail.relatedEvents
+      })
+    : null;
 
   useEffect(() => {
     async function bootstrap() {
@@ -149,10 +168,19 @@ export function ContractsPage() {
     setMessage("合同已创建。");
   }
 
-  async function handleClose(contractId: string, status: "fulfilled" | "terminated") {
-    await closeContract(contractId, status);
+  async function handleClose(contract: Contract, status: "fulfilled" | "terminated") {
+    await closeContract(contract.id, status);
+    const terminalInput = buildContractTerminalEventInput(contract, status, new Date().toISOString().slice(0, 10));
+    const existingEvents = await listEvents();
+    const existing = existingEvents.items.find((event) => event.title === terminalInput.title);
+    const created = existing ?? await createEvent(terminalInput);
+    if (!existing) {
+      await analyzeEvent(created.id);
+    }
     await loadContracts();
-    if (detail?.contract.id === contractId) setDetail(null);
+    if (detail?.contract.id === contract.id) {
+      await handleDetail(contract.id);
+    }
     setMessage(`合同已标记为${STATUS_LABELS[status]}。`);
   }
 
@@ -374,13 +402,13 @@ export function ContractsPage() {
                       {c.status === "active" && (
                         <>
                         <button
-                          onClick={() => handleClose(c.id, "fulfilled")}
+                          onClick={() => handleClose(c, "fulfilled")}
                           style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #1a7f5a", color: "#1a7f5a", background: "none", cursor: "pointer" }}
                         >
                           已履行
                         </button>
                         <button
-                          onClick={() => handleClose(c.id, "terminated")}
+                          onClick={() => handleClose(c, "terminated")}
                           style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #c0392b", color: "#c0392b", background: "none", cursor: "pointer" }}
                         >
                           终止
@@ -440,6 +468,123 @@ export function ContractsPage() {
               ))}
             </div>
           </div>
+          {workflow && (
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ color: "#6c7a89", fontSize: "12px", marginBottom: "8px" }}>履约步骤清单</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {workflow.steps.map((step) => (
+                  <div
+                    key={step.title}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "auto 1fr auto",
+                      gap: "12px",
+                      alignItems: "center",
+                      padding: "8px 12px",
+                      borderRadius: "10px",
+                      border: "1px solid rgba(20,40,60,0.08)",
+                      background: step.state === "done" ? "rgba(26,127,90,0.06)" : "rgba(255,186,8,0.08)"
+                    }}
+                  >
+                    <span style={{
+                      fontSize: "11px",
+                      padding: "4px 10px",
+                      borderRadius: "999px",
+                      background: step.state === "done" ? "rgba(26,127,90,0.12)" : "rgba(176,137,10,0.12)",
+                      color: step.state === "done" ? "#1a7f5a" : "#b0890a"
+                    }}>
+                      {step.state === "done" ? "已完成" : "待推进"}
+                    </span>
+                    <span style={{ fontSize: "13px", color: "#1e2a37" }}>{step.title}</span>
+                    {step.relatedEventId ? (
+                      <button
+                        onClick={() => navigateWithEvent("/events", step.relatedEventId!)}
+                        style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}
+                      >
+                        查看事项
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "#6c7a89" }}>{workflow.summary}</div>
+              {workflow.recommendedActions.length > 0 && (
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
+                  {workflow.recommendedActions.map((action) => (
+                    <button
+                      key={action}
+                      onClick={() => handleCreateFollowupEvent(detail.contract, action)}
+                      disabled={creatingEventContractId === detail.contract.id}
+                      style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "999px", border: "1px solid #f59e0b", color: "#b45309", background: "#fff7ed", cursor: "pointer" }}
+                    >
+                      补 {FOLLOWUP_ACTION_LABELS[action]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {timeline.length > 0 && (
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ color: "#6c7a89", fontSize: "12px", marginBottom: "8px" }}>合同履约时间轴</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {timeline.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "96px 1fr auto",
+                      gap: "12px",
+                      alignItems: "center",
+                      padding: "8px 12px",
+                      borderRadius: "10px",
+                      background: item.kind === "contract" ? "rgba(37,99,235,0.06)" : "rgba(20,40,60,0.04)",
+                      border: "1px solid rgba(20,40,60,0.08)"
+                    }}
+                  >
+                    <div style={{ fontSize: "12px", color: "#6c7a89" }}>{item.date}</div>
+                    <div style={{ fontSize: "13px", color: "#1e2a37" }}>{item.title}</div>
+                    {item.relatedEventId ? (
+                      <button
+                        onClick={() => navigateWithEvent("/events", item.relatedEventId!)}
+                        style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}
+                      >
+                        查看事项
+                      </button>
+                    ) : (
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: item.status === "done" ? "#1a7f5a" : "#8a9bb0",
+                          background: item.status === "done" ? "rgba(26,127,90,0.08)" : "rgba(138,155,176,0.1)",
+                          padding: "4px 10px",
+                          borderRadius: "999px"
+                        }}
+                      >
+                        {item.status === "done" ? "已完成" : "待推进"}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{ marginBottom: "16px" }}>
+            <div style={{ color: "#6c7a89", fontSize: "12px", marginBottom: "8px" }}>合同关联对象概览</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px" }}>
+              {[
+                ["关联任务", detail.relatedTasks.length, "#1e2a37"],
+                ["关联单据", detail.relatedDocuments.length, "#2563eb"],
+                ["税务事项", detail.relatedTaxItems.length, "#1a7f5a"],
+                ["关联凭证", detail.relatedVouchers.length, "#8e44ad"]
+              ].map(([label, count, color]) => (
+                <div key={String(label)} style={{ border: "1px solid rgba(20,40,60,0.08)", borderRadius: "12px", padding: "12px 14px", background: "rgba(255,255,255,0.8)" }}>
+                  <div style={{ color: "#6c7a89", fontSize: "12px", marginBottom: "6px" }}>{label}</div>
+                  <div style={{ fontSize: "20px", fontWeight: 700, color: String(color) }}>{count}</div>
+                </div>
+              ))}
+            </div>
+          </div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: detail.relatedEvents.length > 0 ? "16px" : 0 }}>
             <button
               onClick={() => handleCreateEvent(detail.contract)}
@@ -454,6 +599,30 @@ export function ContractsPage() {
                 style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #1e2a37", color: "#1e2a37", background: "none", cursor: "pointer" }}
               >
                 查看事项总线
+              </button>
+            ) : null}
+            {detail.relatedTasks[0] ? (
+              <button
+                onClick={() => navigateWithEvent("/tasks", detail.relatedTasks[0]!.businessEventId!)}
+                style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #1e2a37", color: "#1e2a37", background: "none", cursor: "pointer" }}
+              >
+                查看任务链
+              </button>
+            ) : null}
+            {detail.relatedTaxItems[0] ? (
+              <button
+                onClick={() => navigateWithEvent("/tax", detail.relatedTaxItems[0]!.businessEventId)}
+                style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #1a7f5a", color: "#1a7f5a", background: "none", cursor: "pointer" }}
+              >
+                查看税务事项
+              </button>
+            ) : null}
+            {detail.relatedVouchers[0] ? (
+              <button
+                onClick={() => navigateWithEvent("/vouchers", detail.relatedVouchers[0]!.businessEventId)}
+                style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #8e44ad", color: "#8e44ad", background: "none", cursor: "pointer" }}
+              >
+                查看凭证
               </button>
             ) : null}
           </div>

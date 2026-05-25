@@ -885,6 +885,10 @@ export async function getContractDetail(contractId: string) {
   return request<{
     contract: Contract;
     relatedEvents: { id: string; title: string; status: string; createdAt: string }[];
+    relatedTasks: Task[];
+    relatedDocuments: GeneratedDocument[];
+    relatedTaxItems: TaxItem[];
+    relatedVouchers: Voucher[];
   }>(`/api/contracts/${contractId}`);
 }
 

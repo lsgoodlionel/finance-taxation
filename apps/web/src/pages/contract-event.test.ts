@@ -1,6 +1,7 @@
 import {
   buildContractEventInput,
   buildContractFollowupEventInput,
+  buildContractTerminalEventInput,
   getContractFollowupActions
 } from "./contract-event";
 
@@ -99,3 +100,8 @@ const paymentInput = buildContractFollowupEventInput(procurementContract, "payme
 expectEqual(paymentInput.type, "procurement", "payment arrangement should remain procurement type");
 expectEqual(paymentInput.department, "财务部", "payment arrangement should route to finance");
 expectMatch(paymentInput.description, /安排付款、发票和资金计划/, "payment arrangement description should mention payment flow");
+
+const fulfilledInput = buildContractTerminalEventInput(procurementContract, "fulfilled", "2026-05-30");
+expectEqual(fulfilledInput.title, "服务器采购合同 合同已履行事项", "fulfilled contract should create terminal event title");
+expectEqual(fulfilledInput.department, "采购部", "fulfilled procurement contract should stay with procurement department");
+expectMatch(fulfilledInput.description, /合同已标记为已履行/, "fulfilled terminal event should explain final status");
