@@ -29,9 +29,11 @@ import type {
   Voucher
 } from "@finance-taxation/domain-model";
 import { buildPrintableDocumentHtml } from "./document-relations";
+import { appendExportHistory, type ExportHistoryItem } from "./export-history";
 import { buildExportFileName } from "./pdf-export-utils";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
+const EXPORT_HISTORY_KEY = "finance-taxation-export-history";
 
 function openPdf(path: string) {
   const token = getStoredToken();
@@ -113,6 +115,18 @@ export function PdfExportPage() {
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
+  const [exportHistory, setExportHistory] = useState<ExportHistoryItem[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(EXPORT_HISTORY_KEY);
+      if (raw) {
+        setExportHistory(JSON.parse(raw) as ExportHistoryItem[]);
+      }
+    } catch {
+      // ignore broken history payloads
+    }
+  }, []);
 
   useEffect(() => {
     async function bootstrap() {
@@ -150,6 +164,14 @@ export function PdfExportPage() {
     setter((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
 
+  function rememberExport(item: Omit<ExportHistoryItem, "id" | "createdAt">) {
+    setExportHistory((current) => {
+      const next = appendExportHistory(current, item);
+      window.localStorage.setItem(EXPORT_HISTORY_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
   const batchButtonStyle = {
     fontSize: "12px",
     padding: "4px 12px",
@@ -162,6 +184,14 @@ export function PdfExportPage() {
   };
 
   function openReportSnapshot(snapshotId: string) {
+    const snapshot = snapshots.find((item) => item.id === snapshotId);
+    if (snapshot) {
+      rememberExport({
+        kind: "report",
+        label: `${REPORT_TYPE_LABELS[snapshot.reportType] ?? snapshot.reportType} ${snapshot.periodLabel}`,
+        fileName: buildExportFileName([REPORT_TYPE_LABELS[snapshot.reportType] ?? snapshot.reportType, snapshot.periodLabel, "快照"])
+      });
+    }
     openPdfNoToken(`/api/pdf/report?snapshotId=${snapshotId}`);
   }
 
@@ -178,10 +208,23 @@ export function PdfExportPage() {
       taxItems: taxPayload.items as TaxItem[],
       vouchers: voucherPayload.items
     });
+    rememberExport({
+      kind: "document",
+      label: document.title,
+      fileName: buildExportFileName([document.title, document.documentType, document.businessEventId])
+    });
     openHtmlPreview(document.title, html);
   }
 
   function openVoucherPdf(voucherId: string) {
+    const voucher = vouchers.find((item) => item.id === voucherId);
+    if (voucher) {
+      rememberExport({
+        kind: "voucher",
+        label: voucher.summary,
+        fileName: buildExportFileName(["凭证", voucher.id.slice(-8).toUpperCase(), voucher.voucherType])
+      });
+    }
     openPdfNoToken(`/api/pdf/voucher/${voucherId}`);
   }
 
@@ -206,6 +249,33 @@ export function PdfExportPage() {
 
       <div style={{ ...panelStyle(), background: "rgba(232,244,239,0.6)", border: "1px solid rgba(26,127,90,0.15)", fontSize: "13px", color: "#1a7f5a" }}>
         💡 打开导出链接后，在浏览器中按 <strong>Ctrl+P</strong>（Mac: <strong>⌘+P</strong>），选择「另存为 PDF」即可保存 PDF 文件。
+      </div>
+
+      <div style={panelStyle()}>
+        <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>最近导出记录</h3>
+        {exportHistory.length === 0 ? (
+          <div style={{ color: "#aab5c0", textAlign: "center", padding: "24px" }}>暂无导出记录</div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+            <thead>
+              <tr style={{ color: "#6c7a89" }}>
+                {["时间", "类型", "名称", "建议文件名"].map((h) => (
+                  <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {exportHistory.map((item) => (
+                <tr key={item.id}>
+                  <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
+                  <td style={cellStyle()}>{item.kind}</td>
+                  <td style={cellStyle()}>{item.label}</td>
+                  <td style={cellStyle()}>{item.fileName}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* ── 工资导出 ── */}
