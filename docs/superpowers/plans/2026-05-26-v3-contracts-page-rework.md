@@ -47,9 +47,18 @@
 - [x] Verify typecheck and focused tests
 - [x] Commit
 
+### Task 5: Extract create form and contracts table body
+
+- [x] Extract contract create form
+- [x] Extract contracts table body
+- [x] Keep existing actions and drilldown behavior intact
+- [x] Verify typecheck and focused tests
+- [ ] Commit
+
 ## Progress Update
 
 - `Task 1` 已完成并提交。
 - `Task 2` 已完成列表面板、详情工作台壳拆分，以及对象概览、履约动作、关联事项表的受控子组件下沉，现有 drilldown 和合同业务逻辑保持不变。
 - `Task 3` 已完成第一轮合同页 V3 摘要优先展示，并已通过 focused test 与前端 typecheck。
 - `Task 4` 已完成合同元信息区和履约时间轴区的受控子组件下沉，`ContractsPage` 继续变薄，现有导航和履约逻辑保持不变。
+- `Task 5` 已完成新建合同表单和合同列表表格本体的受控子组件下沉，创建、关闭、生成事项和 drilldown 行为保持不变。

@@ -33,6 +33,8 @@ import { ContractObjectOverview, ContractWorkbenchActions } from "./contracts/Co
 import { ContractRelatedEventsTable } from "./contracts/ContractRelatedEventsTable";
 import { ContractMetadataGrid } from "./contracts/ContractMetadataGrid";
 import { ContractTimelinePanel } from "./contracts/ContractTimelinePanel";
+import { ContractCreateForm } from "./contracts/ContractCreateForm";
+import { ContractsTable } from "./contracts/ContractsTable";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   sales: "销售合同",
@@ -90,15 +92,6 @@ function panelStyle() {
     border: "1px solid rgba(20,40,60,0.08)",
     padding: "24px"
   } as const;
-}
-
-function cellStyle() {
-  return {
-    borderBottom: "1px solid rgba(20,40,60,0.08)",
-    padding: "10px 8px",
-    textAlign: "left" as const,
-    verticalAlign: "top" as const
-  };
 }
 
 interface ContractDetailView {
@@ -342,63 +335,14 @@ export function ContractsPage() {
 
   const createForm = showForm ? (
     <div style={panelStyle()}>
-      <h3 style={{ margin: "0 0 16px", fontSize: "16px" }}>新建合同</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        {[
-          { label: "合同类型", key: "contractType", type: "select", options: Object.entries(CONTRACT_TYPE_LABELS) },
-          { label: "合同标题*", key: "title", type: "text" },
-          { label: "交易方名称*", key: "counterpartyName", type: "text" },
-          { label: "交易方类型", key: "counterpartyType", type: "select", options: [["external", "外部"], ["internal", "内部"]] },
-          { label: "合同金额", key: "amount", type: "number" },
-          { label: "币种", key: "currency", type: "text" },
-          { label: "签订日期", key: "signedDate", type: "date" },
-          { label: "起始日期", key: "startDate", type: "date" },
-          { label: "到期日期", key: "endDate", type: "date" }
-        ].map(({ label, key, type, options }) => (
-          <label key={key} style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-            <span style={{ color: "#6c7a89" }}>{label}</span>
-            {type === "select" ? (
-              <select
-                value={form[key as keyof typeof form]}
-                onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                style={{ padding: "8px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px" }}
-              >
-                {options?.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
-            ) : (
-              <input
-                type={type}
-                value={form[key as keyof typeof form]}
-                onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                style={{ padding: "8px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px" }}
-              />
-            )}
-          </label>
-        ))}
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px", gridColumn: "1 / -1" }}>
-          <span style={{ color: "#6c7a89" }}>备注</span>
-          <textarea
-            rows={2}
-            value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            style={{ padding: "8px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px", resize: "vertical" }}
-          />
-        </label>
-      </div>
-      <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
-        <button
-          onClick={handleCreate}
-          style={{ background: "#1e2a37", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 20px", cursor: "pointer" }}
-        >
-          确认创建
-        </button>
-        <button
-          onClick={() => setShowForm(false)}
-          style={{ background: "#eef0f3", color: "#1e2a37", border: "none", borderRadius: "6px", padding: "8px 16px", cursor: "pointer" }}
-        >
-          取消
-        </button>
-      </div>
+      <ContractCreateForm
+        value={form}
+        contractTypeOptions={Object.entries(CONTRACT_TYPE_LABELS)}
+        counterpartyTypeOptions={[["external", "外部"], ["internal", "内部"]]}
+        onChange={setForm}
+        onSubmit={() => void handleCreate()}
+        onCancel={() => setShowForm(false)}
+      />
     </div>
   ) : null;
 
@@ -417,80 +361,16 @@ export function ContractsPage() {
   const list = (
     <ContractsListPanel>
       <div style={panelStyle()}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-          <thead>
-            <tr style={{ color: "#6c7a89" }}>
-              {["合同标题", "类型", "交易方", "金额", "状态", "关联事项", "操作"].map((h) => (
-                <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {contracts.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ ...cellStyle(), color: "#aab5c0", textAlign: "center", padding: "32px" }}>
-                  暂无合同数据，请点击"新建合同"添加
-                </td>
-              </tr>
-            ) : (
-              contracts.map((c) => (
-                <tr key={c.id}>
-                  <td style={cellStyle()}>
-                    <button
-                      onClick={() => handleDetail(c.id)}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "#2563eb", fontSize: "13px", padding: 0 }}
-                    >
-                      {c.title}
-                    </button>
-                    <div style={{ color: "#8a9bb0", fontSize: "11px" }}>{c.contractNo}</div>
-                  </td>
-                  <td style={cellStyle()}>{CONTRACT_TYPE_LABELS[c.contractType] ?? c.contractType}</td>
-                  <td style={cellStyle()}>{c.counterpartyName}</td>
-                  <td style={cellStyle()}>
-                    {c.amount.toLocaleString("zh-CN", { style: "currency", currency: c.currency || "CNY" })}
-                  </td>
-                  <td style={cellStyle()}>
-                    <span style={{
-                      background: `${STATUS_COLOR[c.status]}22`,
-                      color: STATUS_COLOR[c.status],
-                      borderRadius: "999px", padding: "2px 10px", fontSize: "12px"
-                    }}>
-                      {STATUS_LABELS[c.status] ?? c.status}
-                    </span>
-                  </td>
-                  <td style={{ ...cellStyle(), textAlign: "center" as const }}>{c.relatedEventCount}</td>
-                  <td style={cellStyle()}>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      <button
-                        onClick={() => handleCreateEvent(c)}
-                        disabled={creatingEventContractId === c.id}
-                        style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #2563eb", color: "#2563eb", background: "none", cursor: "pointer", opacity: creatingEventContractId === c.id ? 0.6 : 1 }}
-                      >
-                        {creatingEventContractId === c.id ? "生成中..." : "新增事项"}
-                      </button>
-                      {c.status === "active" && (
-                        <>
-                        <button
-                          onClick={() => handleClose(c, "fulfilled")}
-                          style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #1a7f5a", color: "#1a7f5a", background: "none", cursor: "pointer" }}
-                        >
-                          已履行
-                        </button>
-                        <button
-                          onClick={() => handleClose(c, "terminated")}
-                          style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #c0392b", color: "#c0392b", background: "none", cursor: "pointer" }}
-                        >
-                          终止
-                        </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        <ContractsTable
+          contracts={contracts}
+          creatingEventContractId={creatingEventContractId}
+          contractTypeLabels={CONTRACT_TYPE_LABELS}
+          statusLabels={STATUS_LABELS}
+          statusColor={STATUS_COLOR}
+          onOpenDetail={(contractId) => void handleDetail(contractId)}
+          onCreateEvent={(contract) => void handleCreateEvent(contract)}
+          onClose={(contract, status) => void handleClose(contract, status)}
+        />
       </div>
     </ContractsListPanel>
   );
