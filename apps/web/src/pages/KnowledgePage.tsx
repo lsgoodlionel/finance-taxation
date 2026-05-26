@@ -8,6 +8,7 @@ import {
   updateKnowledgeItem,
   type ParsedKnowledgeItem
 } from "../lib/api";
+import { buildResultPageSubtitle } from "../lib/entry-guidance";
 
 type Category = "regulation" | "policy" | "faq" | "template";
 
@@ -359,6 +360,9 @@ export function KnowledgePage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
           <div>
             <h2 style={{ margin: "0 0 4px" }}>企业制度库</h2>
+            <div style={{ marginBottom: "4px", color: "#6c7a89", fontSize: "13px" }}>
+              {buildResultPageSubtitle("制度库")}
+            </div>
             <p style={{ margin: 0, color: "#6c7a89", fontSize: "14px" }}>{message}</p>
           </div>
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>

@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import type { Task, TaskStatus, TaskTreeNode } from "@finance-taxation/domain-model";
 import { listTasks, remindTask, updateTaskStatus } from "../lib/api";
 import { useI18n, TASK_STATUS_LABELS, TASK_PRIORITY_SHORT } from "../lib/i18n";
+import { buildResultPageSubtitle } from "../lib/entry-guidance";
 
 function TasksHelpModal({ onClose }: { onClose: () => void }) {
   return (
@@ -182,7 +183,7 @@ export function TasksPage() {
       <div className="page-header">
         <div>
           <div className="page-title">任务中心</div>
-          <div className="page-subtitle">查看与管理所有财务任务，点击「开始执行」推进进度</div>
+          <div className="page-subtitle">{buildResultPageSubtitle("任务中心")}</div>
         </div>
         <div className="flex-row">
           {notStartedCount > 0 && (

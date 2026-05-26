@@ -9,6 +9,7 @@ import {
   testAiConnection
 } from "../lib/api";
 import type { CompanyProfile, AiConfigResponse, AiProviderInfo } from "../lib/api";
+import { buildResultPageSubtitle } from "../lib/entry-guidance";
 
 type Tab = "company" | "ai" | "display" | "about";
 
@@ -637,7 +638,7 @@ export function SettingsPage() {
       <div className="page-header">
         <div>
           <div className="page-title">系统设置</div>
-          <div className="page-subtitle">管理公司信息、AI 配置与系统参数</div>
+          <div className="page-subtitle">{buildResultPageSubtitle("系统设置")}</div>
         </div>
       </div>
 

@@ -18,6 +18,7 @@ import {
   getProfitStatementReport,
   listReportSnapshots
 } from "../lib/api";
+import { buildResultPageSubtitle } from "../lib/entry-guidance";
 
 const REPORT_TYPE_LABELS: Record<string, string> = {
   balance_sheet: "资产负债表",
@@ -97,7 +98,10 @@ export function ReportsPage() {
   return (
     <section style={{ display: "grid", gap: "20px" }}>
       <article style={panelStyle()}>
-        <h2 style={{ marginTop: 0 }}>财务报表中心</h2>
+        <h2 style={{ marginTop: 0, marginBottom: "4px" }}>财务报表中心</h2>
+        <div style={{ color: "#6c7a89", fontSize: "13px", marginBottom: "10px" }}>
+          {buildResultPageSubtitle("财务报表")}
+        </div>
         <p>{message}</p>
         <div style={{ marginBottom: "12px", padding: "10px 14px", borderRadius: "10px", background: "rgba(79,142,247,0.08)", border: "1px solid rgba(79,142,247,0.18)", fontSize: "13px", color: "#355d8c" }}>
           本页负责报表查看、快照和分析。若要统一导出工资、税务底稿、资料包、凭证和报表打印版，请前往
