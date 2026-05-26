@@ -30,14 +30,14 @@
 - [x] Extract detail workbench container
 - [x] Keep existing actions and drilldown behavior intact
 - [x] Verify typecheck and focused tests
-- [ ] Commit
+- [x] Commit
 
 ### Task 3: Normalize V3 entry/result guidance for contracts
 
 - [x] Add V3 header/subtitle and next-step cues
 - [x] Make detail view show workflow summary first
 - [x] Verify typecheck and focused tests
-- [ ] Commit
+- [x] Commit
 
 ## Progress Update
 
