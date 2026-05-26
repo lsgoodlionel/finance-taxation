@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import {
   buildExportArchiveBatchNo,
   buildExportArchiveEntry,
+  buildExportReuseKey,
   buildExportJob,
+  canTransitionExportJobStatus,
   filterArchiveEntries,
+  getExportJobAuditAction,
   groupArchiveEntries,
   markExportJobStatus
 } from "./history.js";
@@ -46,6 +49,19 @@ assert.match(archiveEntry.archiveKey, /^REPORT-2026-05-\d{8}:report:/);
 
 assert.equal(markExportJobStatus(job, "completed").status, "completed");
 assert.match(buildExportArchiveBatchNo("report", "2026-05"), /^REPORT-2026-05-/);
+assert.equal(
+  buildExportReuseKey({
+    kind: "report",
+    resourceType: "report_snapshot",
+    resourceId: "snapshot-1",
+    periodLabel: "2026-05",
+    fileName: "利润表_2026-05_快照.pdf"
+  }),
+  "report:report-snapshot:snapshot-1:2026-05:利润表-2026-05-快照-pdf"
+);
+assert.equal(canTransitionExportJobStatus("opened", "completed"), true);
+assert.equal(canTransitionExportJobStatus("completed", "failed"), false);
+assert.equal(getExportJobAuditAction("failed", "opened"), "retry");
 
 const filtered = filterArchiveEntries(
   [

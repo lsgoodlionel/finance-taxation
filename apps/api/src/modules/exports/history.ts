@@ -19,6 +19,24 @@ export function buildExportArchiveBatchNo(kind: ExportArtifactKind, periodLabel?
   return `${prefix}-${period}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
 }
 
+export function buildExportReuseKey(input: {
+  kind: ExportArtifactKind;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  periodLabel?: string | null;
+  fileName: string;
+}) {
+  return [
+    normalizeArchiveSegment(input.kind),
+    normalizeArchiveSegment(input.resourceType),
+    normalizeArchiveSegment(input.resourceId),
+    normalizeArchiveSegment(input.periodLabel),
+    normalizeArchiveSegment(input.fileName)
+  ]
+    .filter(Boolean)
+    .join(":");
+}
+
 export function buildExportJob(input: {
   companyId: string;
   userId: string | null;
@@ -52,6 +70,29 @@ export function markExportJobStatus(job: ExportJob, status: ExportJobStatus): Ex
     ...job,
     status
   };
+}
+
+export function canTransitionExportJobStatus(current: ExportJobStatus, next: ExportJobStatus) {
+  if (current === next) {
+    return true;
+  }
+  if (current === "created") {
+    return next === "opened" || next === "completed" || next === "failed";
+  }
+  if (current === "opened") {
+    return next === "completed" || next === "failed";
+  }
+  if (current === "completed" || current === "failed") {
+    return next === "opened";
+  }
+  return false;
+}
+
+export function getExportJobAuditAction(current: ExportJobStatus, next: ExportJobStatus) {
+  if ((current === "completed" || current === "failed") && next === "opened") {
+    return "retry";
+  }
+  return "update_status";
 }
 
 export function buildExportArchiveEntry(input: {

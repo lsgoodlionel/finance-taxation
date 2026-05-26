@@ -10,6 +10,7 @@ import {
   getTaxPrintableHtml,
   listExportArchiveEntries,
   listExportJobs,
+  listAuditLogs,
   listDocuments,
   listRiskClosureRecords,
   listRiskFindings,
@@ -17,10 +18,11 @@ import {
   listTasks,
   listReportSnapshots,
   listTaxItems,
-  listVouchers
+  listVouchers,
+  updateExportJobStatus
 } from "../lib/api";
-import { updateExportJobStatus } from "../lib/api";
 import type {
+  AuditLog,
   ExportArchiveEntry,
   ExportArtifactKind,
   ExportJob,
@@ -122,13 +124,14 @@ export function PdfExportPage() {
   const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
   const [exportHistory, setExportHistory] = useState<ExportJob[]>([]);
   const [archiveEntries, setArchiveEntries] = useState<ExportArchiveEntry[]>([]);
+  const [exportAuditLogs, setExportAuditLogs] = useState<AuditLog[]>([]);
   const [archiveKindFilter, setArchiveKindFilter] = useState<ExportArtifactKind | "">("");
   const [archiveKeyword, setArchiveKeyword] = useState("");
 
   useEffect(() => {
     async function bootstrap() {
       try {
-        const [perRes, snapRes, vcRes, docsRes, riskRes, rndRes, historyRes, archiveRes] = await Promise.all([
+        const [perRes, snapRes, vcRes, docsRes, riskRes, rndRes, historyRes, archiveRes, auditRes] = await Promise.all([
           getPayrollPeriods(),
           listReportSnapshots(),
           listVouchers(),
@@ -136,7 +139,8 @@ export function PdfExportPage() {
           listRiskFindings(),
           listRndProjects(),
           listExportJobs(),
-          listExportArchiveEntries()
+          listExportArchiveEntries(),
+          listAuditLogs({ resourceType: "export_job", limit: 20 })
         ]);
         setPeriods(perRes.items);
         setSnapshots(snapRes.items);
@@ -146,6 +150,7 @@ export function PdfExportPage() {
         setRndProjects(rndRes.items);
         setExportHistory(historyRes.items);
         setArchiveEntries(archiveRes.items);
+        setExportAuditLogs(auditRes.items);
         setMessage("这里是最终导出中心。下方统一汇总工资、报表、税务底稿、资料包和凭证的打印版入口。");
       } catch {
         setMessage("加载失败，请检查后端连接。");
@@ -174,9 +179,14 @@ export function PdfExportPage() {
     periodLabel?: string | null;
   }) {
     void createExportJob({ ...input, status: "opened" })
-      .then(({ job, archiveEntry }) => {
+      .then(async ({ job, archiveEntry, reused }) => {
         setExportHistory((current) => [job, ...current].slice(0, 20));
         setArchiveEntries((current) => [archiveEntry, ...current].slice(0, 20));
+        const auditRes = await listAuditLogs({ resourceType: "export_job", limit: 20 });
+        setExportAuditLogs(auditRes.items);
+        if (reused) {
+          setMessage(`已复用现有导出任务：${job.label}`);
+        }
       })
       .catch(() => {
         setMessage("导出已打开，但后端导出历史记录失败。");
@@ -187,6 +197,8 @@ export function PdfExportPage() {
     try {
       const { job } = await updateExportJobStatus(jobId, status);
       setExportHistory((current) => current.map((item) => item.id === job.id ? job : item));
+      const auditRes = await listAuditLogs({ resourceType: "export_job", limit: 20 });
+      setExportAuditLogs(auditRes.items);
       setMessage(`已将导出任务更新为 ${status}。`);
     } catch {
       setMessage("导出任务状态更新失败。");
@@ -310,11 +322,38 @@ export function PdfExportPage() {
                   </td>
                   <td style={cellStyle()}>
                     <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      {item.status !== "completed" ? btnExport(() => void handleUpdateExportStatus(item.id, "completed"), "标记完成") : null}
-                      {item.status !== "failed" ? btnExport(() => void handleUpdateExportStatus(item.id, "failed"), "标记失败") : null}
-                      {item.status === "failed" ? btnExport(() => void handleUpdateExportStatus(item.id, "opened"), "重试") : null}
+                      {(item.status === "created" || item.status === "opened") ? btnExport(() => void handleUpdateExportStatus(item.id, "completed"), "标记完成") : null}
+                      {(item.status === "created" || item.status === "opened") ? btnExport(() => void handleUpdateExportStatus(item.id, "failed"), "标记失败") : null}
+                      {(item.status === "failed" || item.status === "completed") ? btnExport(() => void handleUpdateExportStatus(item.id, "opened"), "重试") : null}
                     </div>
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div style={panelStyle()}>
+        <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>导出审计轨迹</h3>
+        {exportAuditLogs.length === 0 ? (
+          <div style={{ color: "#aab5c0", textAlign: "center", padding: "24px" }}>暂无导出审计记录</div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+            <thead>
+              <tr style={{ color: "#6c7a89" }}>
+                {["时间", "动作", "对象", "操作人"].map((h) => (
+                  <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {exportAuditLogs.map((item) => (
+                <tr key={item.id}>
+                  <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
+                  <td style={cellStyle()}>{item.action}</td>
+                  <td style={cellStyle()}>{item.resourceLabel || item.resourceId || "—"}</td>
+                  <td style={cellStyle()}>{item.userName || "系统"}</td>
                 </tr>
               ))}
             </tbody>
@@ -348,28 +387,46 @@ export function PdfExportPage() {
         {archiveEntries.length === 0 ? (
           <div style={{ color: "#aab5c0", textAlign: "center", padding: "24px" }}>暂无归档索引</div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-            <thead>
-              <tr style={{ color: "#6c7a89" }}>
-                {["批次号", "归档键", "分类", "标题", "对象", "建议文件名", "时间"].map((h) => (
-                  <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {archiveEntries.map((item) => (
-                <tr key={item.id}>
-                  <td style={cellStyle()}>{item.archiveKey.split(":")[0]}</td>
-                  <td style={cellStyle()}>{item.archiveKey}</td>
-                  <td style={cellStyle()}>{item.kind}</td>
-                  <td style={cellStyle()}>{item.title}</td>
-                  <td style={cellStyle()}>{item.objectId || item.objectType}</td>
-                  <td style={cellStyle()}>{item.fileName}</td>
-                  <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div style={{ display: "grid", gap: "16px" }}>
+            {Object.values(
+              archiveEntries.reduce<Record<string, ExportArchiveEntry[]>>((groups, entry) => {
+                const batchNo = entry.archiveKey.split(":")[0] ?? entry.archiveKey;
+                groups[batchNo] = groups[batchNo] ?? [];
+                groups[batchNo].push(entry);
+                return groups;
+              }, {})
+            ).map((items) => {
+              const batchNo = items[0]!.archiveKey.split(":")[0];
+              return (
+                <div key={batchNo} style={{ border: "1px solid rgba(20,40,60,0.08)", borderRadius: "14px", overflow: "hidden" }}>
+                  <div style={{ padding: "10px 14px", background: "rgba(20,40,60,0.04)", fontSize: "12px", fontWeight: 700, color: "#4d5d6c" }}>
+                    批次号：{batchNo} · 共 {items.length} 项
+                  </div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                    <thead>
+                      <tr style={{ color: "#6c7a89" }}>
+                        {["归档键", "分类", "标题", "对象", "建议文件名", "时间"].map((h) => (
+                          <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item) => (
+                        <tr key={item.id}>
+                          <td style={cellStyle()}>{item.archiveKey}</td>
+                          <td style={cellStyle()}>{item.kind}</td>
+                          <td style={cellStyle()}>{item.title}</td>
+                          <td style={cellStyle()}>{item.objectId || item.objectType}</td>
+                          <td style={cellStyle()}>{item.fileName}</td>
+                          <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 

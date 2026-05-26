@@ -808,7 +808,7 @@ export async function createExportJob(input: {
   periodLabel?: string | null;
   status?: ExportJob["status"];
 }) {
-  return request<{ job: ExportJob; archiveEntry: ExportArchiveEntry }>("/api/exports/jobs", {
+  return request<{ job: ExportJob; archiveEntry: ExportArchiveEntry; reused: boolean }>("/api/exports/jobs", {
     method: "POST",
     body: JSON.stringify(input)
   });
