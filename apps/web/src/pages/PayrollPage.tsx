@@ -107,6 +107,18 @@ function normalizePayrollNavState(state: unknown) {
   };
 }
 
+function buildPayrollNavigationState(
+  period: string,
+  businessEventId: string,
+  extra?: Record<string, string>
+) {
+  return {
+    payrollPeriod: period,
+    businessEventId,
+    ...extra
+  };
+}
+
 export function PayrollPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -352,7 +364,7 @@ export function PayrollPage() {
       setMessage("请先生成工资事项，再进入任务、税务或凭证中心。");
       return;
     }
-    navigate(path, { state: { businessEventId: eventId, payrollPeriod: selectedPeriod, ...extraState } });
+    navigate(path, { state: buildPayrollNavigationState(selectedPeriod, eventId, extraState) });
   }
 
   const linkedEventId = selectedPeriod ? linkedEventIds[selectedPeriod] ?? null : null;
@@ -470,7 +482,12 @@ export function PayrollPage() {
     try {
       const result = await runEventRiskCheck(eventId);
       setMessage(`工资事项风险检查完成，生成 ${result.total} 条发现。`);
-      navigate("/risk", { state: { businessEventId: eventId } });
+      navigate("/risk", {
+        state: buildPayrollNavigationState(selectedPeriod, eventId, {
+          focus: "payroll-risk",
+          riskScope: "payroll"
+        })
+      });
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -815,6 +832,11 @@ export function PayrollPage() {
                         <span style={{ fontSize: "12px", color: "#6c7a89" }}>
                           当前已落地 {reviewLedgers.length} 本：个税 / 社保 / 公积金
                         </span>
+                        <span style={{ fontSize: "12px", color: reviewLedgers.every((item) => item.status === "reviewed") && reviewLedgers.length > 0 ? "#1a7f5a" : "#b0890a" }}>
+                          {reviewLedgers.length > 0 && reviewLedgers.every((item) => item.status === "reviewed")
+                            ? "税务复核状态已回写完成"
+                            : "税务复核状态待进一步确认"}
+                        </span>
                         {linkedEventId ? (
                           <button style={btnSecondary()} onClick={() => navigateWithEvent("/tax", { focus: "payroll-ledgers" })}>
                             查看工资税务事项
@@ -886,6 +908,9 @@ export function PayrollPage() {
                         </div>
                       ))}
                     </div>
+                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#6c7a89" }}>
+                      已关联工资凭证 {linkedVoucherCount} 张。若摘要、科目或金额口径仍需调整，应先在凭证中心修正后再进入过账。
+                    </div>
                     <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
                       <button style={btnSecondary()} onClick={() => navigateWithEvent("/vouchers", { focus: "payroll-voucher" })}>
                         查看工资凭证中心
@@ -914,8 +939,23 @@ export function PayrollPage() {
                         刷新工资风险
                       </button>
                       {linkedEventId ? (
-                        <button style={btnSecondary()} onClick={() => navigate("/risk", { state: { businessEventId: linkedEventId, payrollPeriod: selectedPeriod, focus: "payroll-risk" } })}>
+                        <button style={btnSecondary()} onClick={() => navigate("/risk", { state: buildPayrollNavigationState(selectedPeriod, linkedEventId, { focus: "payroll-risk", riskScope: "payroll" }) })}>
                           查看工资风险详情
+                        </button>
+                      ) : null}
+                      {linkedEventId && payrollRiskBuckets.iit.length > 0 ? (
+                        <button style={btnSecondary()} onClick={() => navigate("/risk", { state: buildPayrollNavigationState(selectedPeriod, linkedEventId, { focus: "payroll-risk-iit", riskScope: "payroll-iit" }) })}>
+                          仅看个税风险
+                        </button>
+                      ) : null}
+                      {linkedEventId && payrollRiskBuckets.socialSecurity.length > 0 ? (
+                        <button style={btnSecondary()} onClick={() => navigate("/risk", { state: buildPayrollNavigationState(selectedPeriod, linkedEventId, { focus: "payroll-risk-social", riskScope: "payroll-social" }) })}>
+                          仅看社保风险
+                        </button>
+                      ) : null}
+                      {linkedEventId && payrollRiskBuckets.housingFund.length > 0 ? (
+                        <button style={btnSecondary()} onClick={() => navigate("/risk", { state: buildPayrollNavigationState(selectedPeriod, linkedEventId, { focus: "payroll-risk-housing", riskScope: "payroll-housing" }) })}>
+                          仅看公积金风险
                         </button>
                       ) : null}
                     </div>
