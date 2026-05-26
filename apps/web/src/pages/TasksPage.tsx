@@ -4,6 +4,7 @@ import type { Task, TaskStatus, TaskTreeNode } from "@finance-taxation/domain-mo
 import { listTasks, remindTask, updateTaskStatus } from "../lib/api";
 import { useI18n, TASK_STATUS_LABELS, TASK_PRIORITY_SHORT } from "../lib/i18n";
 import { buildResultPageSubtitle } from "../lib/entry-guidance";
+import { normalizeDrilldownState } from "./drilldown";
 
 function TasksHelpModal({ onClose }: { onClose: () => void }) {
   return (
@@ -110,7 +111,7 @@ function RenderTree({ nodes }: { nodes: TaskTreeNode[] }) {
 
 export function TasksPage() {
   const location = useLocation();
-  const navEventId = (location.state as { businessEventId?: string } | null)?.businessEventId ?? null;
+  const navEventId = normalizeDrilldownState(location.state).businessEventId ?? null;
   const [tasks, setTasks] = useState<TaskWithOverdue[]>([]);
   const [taskTree, setTaskTree] = useState<TaskTreeNode[]>([]);
   const [message, setMessage] = useState("");

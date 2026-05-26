@@ -20,6 +20,7 @@ import {
 } from "./contract-event";
 import { buildContractAutoDerivationPlan } from "./contract-automation";
 import { buildContractNavigationState, resolveContractAuditContext } from "./contract-drilldown";
+import { normalizeDrilldownState } from "./drilldown";
 import { buildContractTimeline } from "./contract-timeline";
 import { buildContractWorkflow } from "./contract-workflow";
 
@@ -104,7 +105,7 @@ type RelatedEventView = ContractDetailView["relatedEvents"][number];
 export function ContractsPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const navContractId = (location.state as { contractId?: string } | null)?.contractId ?? null;
+  const navContractId = normalizeDrilldownState(location.state).contractId ?? null;
   const { t } = useI18n();
   const [contracts, setContracts] = useState<ContractWithEventCount[]>([]);
   const [detail, setDetail] = useState<ContractDetailView | null>(null);

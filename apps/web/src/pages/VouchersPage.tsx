@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { Voucher } from "@finance-taxation/domain-model";
+import { normalizeDrilldownState } from "./drilldown";
 
 function VoucherHelpModal({ onClose }: { onClose: () => void }) {
   return (
@@ -100,9 +101,9 @@ function cellStyle() {
 export function VouchersPage() {
   const { t } = useI18n();
   const location = useLocation();
-  const navState = (location.state as { businessEventId?: string; voucherId?: string } | null) ?? null;
-  const navEventId = navState?.businessEventId ?? null;
-  const navVoucherId = navState?.voucherId ?? null;
+  const navState = normalizeDrilldownState(location.state);
+  const navEventId = navState.businessEventId ?? null;
+  const navVoucherId = navState.voucherId ?? null;
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [selectedVoucherId, setSelectedVoucherId] = useState<string | null>(null);
   const [detail, setDetail] = useState<VoucherDetail | null>(null);

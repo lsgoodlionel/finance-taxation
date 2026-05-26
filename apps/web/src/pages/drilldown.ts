@@ -16,8 +16,22 @@ export interface DrilldownState {
   employeeId?: string;
   payrollPeriod?: string;
   tab?: string;
+  focus?: string;
+  riskScope?: string;
   resourceType?: string;
   resourceId?: string;
+}
+
+function buildAuditState(
+  resourceType: string,
+  resourceId: string,
+  extra?: Record<string, string>
+) {
+  return {
+    resourceType,
+    resourceId,
+    ...extra
+  };
 }
 
 export function derivePayrollPeriodFromEvent(event: Pick<BusinessEvent, "type" | "occurredOn">): string | null {
@@ -60,12 +74,19 @@ export function buildRiskClosureTargetChain({
   findingId: string;
   event: BusinessEvent | null;
 }): DrilldownTarget[] {
-  const targets = buildRiskDrilldownTargets(event);
+  const baseTargets = buildRiskDrilldownTargets(event);
+  const contractTarget = baseTargets.find((target) => target.path === "/contracts");
+  const otherTargets = baseTargets.filter((target) => target.path !== "/contracts");
+  const targets = contractTarget ? [contractTarget, ...otherTargets] : baseTargets;
   return [
     ...targets,
     {
       path: "/audit",
-      state: { resourceType: "risk_finding", resourceId: findingId, riskFindingId: findingId },
+      state: buildAuditState("risk_finding", findingId, {
+        riskFindingId: findingId,
+        ...(event?.contractId ? { contractId: event.contractId } : {}),
+        ...(event?.id ? { businessEventId: event.id } : {})
+      }),
       label: "审计日志"
     }
   ];
@@ -87,6 +108,8 @@ export function normalizeDrilldownState(state: unknown): DrilldownState {
     employeeId: pick("employeeId"),
     payrollPeriod: pick("payrollPeriod"),
     tab: pick("tab"),
+    focus: pick("focus"),
+    riskScope: pick("riskScope"),
     resourceType: pick("resourceType"),
     resourceId: pick("resourceId")
   };
@@ -124,22 +147,22 @@ export function resolveAuditLogTarget(log: AuditLog): DrilldownTarget | null {
 
   switch (log.resourceType) {
     case "business_event":
-      return { path: "/events", state: { businessEventId: log.resourceId }, label: "查看事项" };
+      return { path: "/events", state: buildAuditState("business_event", log.resourceId, { businessEventId: log.resourceId }), label: "查看事项" };
     case "voucher":
-      return { path: "/vouchers", state: { voucherId: log.resourceId }, label: "查看凭证" };
+      return { path: "/vouchers", state: buildAuditState("voucher", log.resourceId, { voucherId: log.resourceId }), label: "查看凭证" };
     case "document":
-      return { path: "/documents", state: { documentId: log.resourceId }, label: "查看单据" };
+      return { path: "/documents", state: buildAuditState("document", log.resourceId, { documentId: log.resourceId }), label: "查看单据" };
     case "contract":
-      return { path: "/contracts", state: { contractId: log.resourceId }, label: "查看合同" };
+      return { path: "/contracts", state: buildAuditState("contract", log.resourceId, { contractId: log.resourceId }), label: "查看合同" };
     case "employee":
-      return { path: "/payroll", state: { employeeId: log.resourceId, tab: "employees" }, label: "查看员工" };
+      return { path: "/payroll", state: buildAuditState("employee", log.resourceId, { employeeId: log.resourceId, tab: "employees" }), label: "查看员工" };
     case "tax_item":
-      return { path: "/tax", state: { taxItemId: log.resourceId }, label: "查看税务事项" };
+      return { path: "/tax", state: buildAuditState("tax_item", log.resourceId, { taxItemId: log.resourceId }), label: "查看税务事项" };
     case "risk_finding":
-      return { path: "/risk", state: { riskFindingId: log.resourceId }, label: "查看风险发现" };
+      return { path: "/risk", state: buildAuditState("risk_finding", log.resourceId, { riskFindingId: log.resourceId }), label: "查看风险发现" };
     case "payroll": {
       const period = extractPayrollPeriod(log);
-      return period ? { path: "/payroll", state: { payrollPeriod: period }, label: "查看工资期间" } : null;
+      return period ? { path: "/payroll", state: buildAuditState("payroll", log.resourceId, { payrollPeriod: period, tab: "payroll" }), label: "查看工资期间" } : null;
     }
     default:
       return null;

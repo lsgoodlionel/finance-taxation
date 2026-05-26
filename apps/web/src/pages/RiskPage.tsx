@@ -10,9 +10,8 @@ import {
 } from "../lib/api";
 import { useI18n, RISK_SEVERITY_LABELS, RISK_PRIORITY_LABELS, RISK_STATUS_LABELS } from "../lib/i18n";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
-import { buildRiskDrilldownTargets } from "./drilldown";
-import { filterContractRiskFindings } from "./contract-drilldown";
-import { filterRiskFindingsByScope, type RiskScopeFilter } from "./risk-scope";
+import { buildRiskClosureTargetChain, buildRiskDrilldownTargets, normalizeDrilldownState } from "./drilldown";
+import { filterContractRiskFindings, filterRiskFindingsByScope, type RiskScopeFilter } from "./risk-scope";
 
 function RiskHelpModal({ onClose }: { onClose: () => void }) {
   return (
@@ -78,10 +77,10 @@ function cellStyle() {
 export function RiskPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const navState = (location.state as { businessEventId?: string; riskFindingId?: string; contractId?: string } | null) ?? null;
-  const navEventId = navState?.businessEventId ?? null;
-  const navRiskFindingId = navState?.riskFindingId ?? null;
-  const navContractId = navState?.contractId ?? null;
+  const navState = normalizeDrilldownState(location.state);
+  const navEventId = navState.businessEventId ?? null;
+  const navRiskFindingId = navState.riskFindingId ?? null;
+  const navContractId = navState.contractId ?? null;
   const { t } = useI18n();
   const [findings, setFindings] = useState<RiskFinding[]>([]);
   const [closureRecords, setClosureRecords] = useState<RiskClosureRecord[]>([]);
@@ -180,6 +179,20 @@ export function RiskPage() {
         : scopedByContract;
     return filterRiskFindingsByScope(scopedBase, eventMap, scopeFilter);
   }, [eventMap, events, findings, navContractId, navEventId, navRiskFindingId, scopeFilter]);
+  const selectedFinding = useMemo(
+    () => findings.find((item) => item.id === selectedFindingId) ?? null,
+    [findings, selectedFindingId]
+  );
+  const selectedFindingEvent = useMemo(
+    () => selectedFinding?.businessEventId ? eventMap.get(selectedFinding.businessEventId) ?? null : null,
+    [eventMap, selectedFinding]
+  );
+  const closureTargets = useMemo(
+    () => selectedFinding
+      ? buildRiskClosureTargetChain({ findingId: selectedFinding.id, event: selectedFindingEvent })
+      : [],
+    [selectedFinding, selectedFindingEvent]
+  );
 
   return (
     <section style={{ display: "grid", gap: "20px" }}>
@@ -383,6 +396,19 @@ export function RiskPage() {
       <article style={panelStyle()}>
         <h3 style={{ marginTop: 0 }}>异常关闭与复盘记录</h3>
         <p>当前查看：{selectedFindingId || "未选择风险发现"}</p>
+        {closureTargets.length ? (
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
+            {closureTargets.map((target) => (
+              <button
+                key={`closure-${target.path}-${target.label}`}
+                style={{ fontSize: "12px", padding: "4px 10px" }}
+                onClick={() => navigate(target.path, { state: target.state })}
+              >
+                {target.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>

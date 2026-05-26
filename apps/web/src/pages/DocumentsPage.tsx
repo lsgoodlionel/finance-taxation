@@ -20,6 +20,7 @@ import {
   buildPrintableDocumentHtml,
   getExpenseDocumentTemplateKind
 } from "./document-relations";
+import { normalizeDrilldownState } from "./drilldown";
 import { ExpenseClaimTemplate } from "./document-templates/ExpenseClaimTemplate";
 import { InvoiceBundleTemplate } from "./document-templates/InvoiceBundleTemplate";
 
@@ -100,9 +101,9 @@ export function DocumentsPage() {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
-  const navState = (location.state as { businessEventId?: string; documentId?: string } | null) ?? null;
-  const navEventId = navState?.businessEventId ?? null;
-  const navDocumentId = navState?.documentId ?? null;
+  const navState = normalizeDrilldownState(location.state);
+  const navEventId = navState.businessEventId ?? null;
+  const navDocumentId = navState.documentId ?? null;
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [relatedTasks, setRelatedTasks] = useState<(Task & { isOverdue?: boolean })[]>([]);
