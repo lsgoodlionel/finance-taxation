@@ -1,9 +1,10 @@
 import type { ServerResponse } from "node:http";
 import type { ExportArchiveEntry, ExportArtifactKind, ExportJob, ExportJobStatus } from "@finance-taxation/domain-model";
 import { query, withTransaction } from "../../db/client.js";
+import { writeAudit } from "../../services/audit.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
-import { buildExportArchiveEntry, buildExportJob } from "./history.js";
+import { buildExportArchiveEntry, buildExportJob, markExportJobStatus } from "./history.js";
 
 interface ExportJobRow {
   id: string;
@@ -215,8 +216,61 @@ export async function createExportJob(req: ApiRequest, res: ServerResponse) {
     );
   });
 
+  writeAudit({
+    companyId: req.auth.companyId,
+    userId: req.auth.userId,
+    userName: req.auth.username,
+    action: "create",
+    resourceType: "export_job",
+    resourceId: job.id,
+    resourceLabel: job.label,
+    changes: { data: { kind: job.kind, status: job.status, fileName: job.fileName } }
+  });
+
   return json(res, 201, {
     job,
     archiveEntry
   });
+}
+
+export async function updateExportJobStatus(req: ApiRequest, res: ServerResponse, jobId: string) {
+  if (!req.auth) {
+    return json(res, 401, { error: "Unauthorized" });
+  }
+
+  const body = (req.body || {}) as { status?: ExportJobStatus };
+  if (!body.status || !["opened", "completed", "failed"].includes(body.status)) {
+    return json(res, 400, { error: "status 必须为 opened/completed/failed" });
+  }
+
+  const rows = await query<ExportJobRow>(
+    `select id, company_id, kind, label, file_name, resource_type, resource_id,
+            period_label, status, created_by_user_id, created_by_name, created_at
+     from export_jobs
+     where id = $1 and company_id = $2`,
+    [jobId, req.auth.companyId]
+  );
+  const current = rows[0];
+  if (!current) {
+    return json(res, 404, { error: "导出任务不存在" });
+  }
+
+  const updated = markExportJobStatus(mapJobRow(current), body.status);
+  await query(
+    `update export_jobs set status = $3 where id = $1 and company_id = $2`,
+    [jobId, req.auth.companyId, updated.status]
+  );
+
+  writeAudit({
+    companyId: req.auth.companyId,
+    userId: req.auth.userId,
+    userName: req.auth.username,
+    action: "update_status",
+    resourceType: "export_job",
+    resourceId: updated.id,
+    resourceLabel: updated.label,
+    changes: { status: { from: current.status, to: updated.status } }
+  });
+
+  return json(res, 200, { job: updated });
 }

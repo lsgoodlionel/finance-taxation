@@ -13,6 +13,12 @@ function normalizeArchiveSegment(value: string | null | undefined) {
     .replace(/^-|-$/g, "");
 }
 
+export function buildExportArchiveBatchNo(kind: ExportArtifactKind, periodLabel?: string | null) {
+  const prefix = normalizeArchiveSegment(kind).toUpperCase() || "EXPORT";
+  const period = normalizeArchiveSegment(periodLabel).toUpperCase() || "GENERAL";
+  return `${prefix}-${period}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+}
+
 export function buildExportJob(input: {
   companyId: string;
   userId: string | null;
@@ -58,7 +64,9 @@ export function buildExportArchiveEntry(input: {
   resourceId?: string | null;
   periodLabel?: string | null;
 }): ExportArchiveEntry {
+  const batchNo = buildExportArchiveBatchNo(input.kind, input.periodLabel);
   const archiveKey = [
+    batchNo,
     normalizeArchiveSegment(input.kind),
     normalizeArchiveSegment(input.periodLabel),
     normalizeArchiveSegment(input.resourceType),
@@ -80,6 +88,17 @@ export function buildExportArchiveEntry(input: {
     periodLabel: input.periodLabel ?? null,
     createdAt: nowIso()
   };
+}
+
+export function groupArchiveEntries(entries: ExportArchiveEntry[]) {
+  const groups = new Map<string, { batchNo: string; items: ExportArchiveEntry[] }>();
+  for (const entry of entries) {
+    const batchNo = entry.archiveKey.split(":")[0] ?? entry.archiveKey;
+    const group = groups.get(batchNo) ?? { batchNo, items: [] };
+    group.items.push(entry);
+    groups.set(batchNo, group);
+  }
+  return Array.from(groups.values());
 }
 
 export function filterArchiveEntries(

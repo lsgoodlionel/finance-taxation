@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { buildExportArchiveEntry, buildExportJob, filterArchiveEntries, markExportJobStatus } from "./history.js";
+import {
+  buildExportArchiveBatchNo,
+  buildExportArchiveEntry,
+  buildExportJob,
+  filterArchiveEntries,
+  groupArchiveEntries,
+  markExportJobStatus
+} from "./history.js";
 
 const job = buildExportJob({
   companyId: "company-1",
@@ -35,9 +42,10 @@ assert.equal(archiveEntry.jobId, job.id);
 assert.equal(archiveEntry.objectType, "report_snapshot");
 assert.equal(archiveEntry.objectId, "snapshot-1");
 assert.equal(archiveEntry.periodLabel, "2026-05");
-assert.match(archiveEntry.archiveKey, /^report:/);
+assert.match(archiveEntry.archiveKey, /^REPORT-2026-05-\d{8}:report:/);
 
 assert.equal(markExportJobStatus(job, "completed").status, "completed");
+assert.match(buildExportArchiveBatchNo("report", "2026-05"), /^REPORT-2026-05-/);
 
 const filtered = filterArchiveEntries(
   [
@@ -58,5 +66,18 @@ const filtered = filterArchiveEntries(
 
 assert.equal(filtered.length, 1);
 assert.equal(filtered[0]?.id, archiveEntry.id);
+
+const grouped = groupArchiveEntries([
+  archiveEntry,
+  {
+    ...archiveEntry,
+    id: "archive-2",
+    archiveKey: `${archiveEntry.archiveKey}:retry`,
+    title: "利润表 2026-05 第二次导出"
+  }
+]);
+
+assert.equal(grouped.length, 1);
+assert.equal(grouped[0]?.items.length, 2);
 
 console.log("export-history-ok");

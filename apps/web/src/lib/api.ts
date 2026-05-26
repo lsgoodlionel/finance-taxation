@@ -814,6 +814,13 @@ export async function createExportJob(input: {
   });
 }
 
+export async function updateExportJobStatus(jobId: string, status: ExportJob["status"]) {
+  return request<{ job: ExportJob }>(`/api/exports/jobs/${encodeURIComponent(jobId)}/status`, {
+    method: "POST",
+    body: JSON.stringify({ status })
+  });
+}
+
 export interface DashboardCard {
   key: string;
   label: string;

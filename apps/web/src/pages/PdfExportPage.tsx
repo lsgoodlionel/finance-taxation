@@ -19,6 +19,7 @@ import {
   listTaxItems,
   listVouchers
 } from "../lib/api";
+import { updateExportJobStatus } from "../lib/api";
 import type {
   ExportArchiveEntry,
   ExportArtifactKind,
@@ -172,7 +173,7 @@ export function PdfExportPage() {
     resourceId?: string | null;
     periodLabel?: string | null;
   }) {
-    void createExportJob({ ...input, status: "completed" })
+    void createExportJob({ ...input, status: "opened" })
       .then(({ job, archiveEntry }) => {
         setExportHistory((current) => [job, ...current].slice(0, 20));
         setArchiveEntries((current) => [archiveEntry, ...current].slice(0, 20));
@@ -180,6 +181,16 @@ export function PdfExportPage() {
       .catch(() => {
         setMessage("导出已打开，但后端导出历史记录失败。");
       });
+  }
+
+  async function handleUpdateExportStatus(jobId: string, status: ExportJob["status"]) {
+    try {
+      const { job } = await updateExportJobStatus(jobId, status);
+      setExportHistory((current) => current.map((item) => item.id === job.id ? job : item));
+      setMessage(`已将导出任务更新为 ${status}。`);
+    } catch {
+      setMessage("导出任务状态更新失败。");
+    }
   }
 
   useEffect(() => {
@@ -282,7 +293,7 @@ export function PdfExportPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
               <tr style={{ color: "#6c7a89" }}>
-                {["时间", "类型", "名称", "建议文件名"].map((h) => (
+                {["时间", "类型", "名称", "建议文件名", "操作"].map((h) => (
                   <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
                 ))}
               </tr>
@@ -296,6 +307,13 @@ export function PdfExportPage() {
                   <td style={cellStyle()}>
                     <div>{item.fileName}</div>
                     <div style={{ fontSize: "11px", color: "#6c7a89", marginTop: "2px" }}>状态：{item.status}</div>
+                  </td>
+                  <td style={cellStyle()}>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      {item.status !== "completed" ? btnExport(() => void handleUpdateExportStatus(item.id, "completed"), "标记完成") : null}
+                      {item.status !== "failed" ? btnExport(() => void handleUpdateExportStatus(item.id, "failed"), "标记失败") : null}
+                      {item.status === "failed" ? btnExport(() => void handleUpdateExportStatus(item.id, "opened"), "重试") : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -333,7 +351,7 @@ export function PdfExportPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
               <tr style={{ color: "#6c7a89" }}>
-                {["归档键", "分类", "标题", "对象", "建议文件名", "时间"].map((h) => (
+                {["批次号", "归档键", "分类", "标题", "对象", "建议文件名", "时间"].map((h) => (
                   <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
                 ))}
               </tr>
@@ -341,6 +359,7 @@ export function PdfExportPage() {
             <tbody>
               {archiveEntries.map((item) => (
                 <tr key={item.id}>
+                  <td style={cellStyle()}>{item.archiveKey.split(":")[0]}</td>
                   <td style={cellStyle()}>{item.archiveKey}</td>
                   <td style={cellStyle()}>{item.kind}</td>
                   <td style={cellStyle()}>{item.title}</td>

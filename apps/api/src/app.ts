@@ -120,7 +120,8 @@ import {
 import {
   createExportJob,
   listExportArchiveEntries,
-  listExportJobs
+  listExportJobs,
+  updateExportJobStatus
 } from "./modules/exports/routes.js";
 import { listAuditLogs } from "./modules/audit/routes.js";
 import { bossChat } from "./modules/boss-qa/routes.js";
@@ -903,6 +904,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "GET") return listExportJobs(req, res);
     if (req.method === "POST") return createExportJob(req, res);
+  }
+
+  const exportStatusMatch = url.pathname.match(/^\/api\/exports\/jobs\/([^/]+)\/status$/);
+  if (exportStatusMatch) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") return updateExportJobStatus(req, res, decodeURIComponent(exportStatusMatch[1]!));
   }
 
   if (url.pathname === "/api/exports/archive-index") {
