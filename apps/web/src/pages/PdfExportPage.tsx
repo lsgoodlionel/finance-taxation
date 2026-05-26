@@ -36,6 +36,7 @@ import type {
 } from "@finance-taxation/domain-model";
 import { buildPrintableDocumentHtml } from "./document-relations";
 import { buildExportFileName } from "./pdf-export-utils";
+import { buildResultPageSubtitle } from "../lib/entry-guidance";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 
@@ -256,6 +257,9 @@ export function PdfExportPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <h2 style={{ margin: "0 0 4px", fontSize: "22px" }}>PDF 导出中心</h2>
+          <div style={{ color: "#6c7a89", fontSize: "13px", marginBottom: "4px" }}>
+            {buildResultPageSubtitle("PDF 导出")}
+          </div>
           <div style={{ color: "#6c7a89", fontSize: "13px" }}>{message}</div>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>

@@ -14,6 +14,13 @@ export const EVENTS_ENTRY_SUBTITLE =
 export const CHAIRMAN_DASHBOARD_SUBTITLE =
   "用于经营与财税总览，不替代 AI 财税助手和经营事项总线这两个主入口。";
 
+export const RESULT_PAGE_GUIDANCE =
+  "结果页：承接主入口已生成的事项、任务、单据、凭证或税务结果，适合查看、复核与导出，不建议作为业务起点。";
+
+export function buildResultPageSubtitle(pageName: string) {
+  return `${pageName} · ${RESULT_PAGE_GUIDANCE}`;
+}
+
 export const LEGACY_ENTRY_ALIASES = {
   "boss-qa": "/assistant"
 } as const;
