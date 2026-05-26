@@ -58,7 +58,7 @@ const planWithBaseOnly = buildContractAutoDerivationPlan({
 
 expectEqual(planWithBaseOnly.baseEventId, "evt-1", "base event should be detected");
 expectEqual(planWithBaseOnly.missingActions.join(","), "invoice,collection,revenue", "sales contract should derive full remaining chain");
-expectEqual(planWithBaseOnly.autoCreateActions.join(","), "invoice,collection,revenue", "base event should unlock auto creation for missing actions");
+expectEqual(planWithBaseOnly.autoCreateActions.join(","), "invoice", "auto creation should only unlock the next missing action in sequence");
 expectTrue(planWithBaseOnly.summary.includes("自动补齐"), "summary should describe auto derivation");
 
 const planWithPartialFlow = buildContractAutoDerivationPlan({
@@ -86,7 +86,7 @@ const planWithPartialFlow = buildContractAutoDerivationPlan({
 });
 
 expectEqual(planWithPartialFlow.missingActions.join(","), "revenue", "existing blocked or in-progress steps should not be re-created");
-expectEqual(planWithPartialFlow.autoCreateActions.join(","), "revenue", "only missing steps should be auto-created");
+expectEqual(planWithPartialFlow.autoCreateActions.join(","), "", "blocked upstream steps should prevent downstream auto creation");
 
 const inactivePlan = buildContractAutoDerivationPlan({
   contract: { ...contract, status: "fulfilled" },

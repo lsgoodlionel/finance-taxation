@@ -56,6 +56,12 @@ expectEqual(timeline[0]?.title, "合同签订", "timeline should start with cont
 expectEqual(timeline[1]?.title, "合同生效", "timeline should include contract start");
 expectTrue(timeline.some((item) => item.title === "开票申请事项"), "timeline should include invoice event");
 expectTrue(timeline.some((item) => item.title === "收入确认事项"), "timeline should include revenue event");
+expectTrue(timeline.some((item) => item.title === "回款跟踪事项"), "timeline should include pending collection milestone even before event exists");
+expectEqual(
+  timeline.find((item) => item.title === "回款跟踪事项")?.status,
+  "pending",
+  "missing collection milestone should show pending status"
+);
 
 const fulfilledTimeline = buildContractTimeline({
   contract: {

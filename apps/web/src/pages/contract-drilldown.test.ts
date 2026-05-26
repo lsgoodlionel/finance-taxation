@@ -1,5 +1,6 @@
 import type { BusinessEvent, RiskFinding } from "@finance-taxation/domain-model";
 import {
+  buildContractNavigationState,
   filterContractRiskFindings,
   resolveContractAuditContext
 } from "./contract-drilldown";
@@ -79,5 +80,9 @@ expectEqual(contractARisks[0]?.id, "risk-1", "contract-scoped risk should keep m
 const auditContext = resolveContractAuditContext("contract-a");
 expectEqual(auditContext.resourceType, "contract", "contract audit context should target contract resource type");
 expectEqual(auditContext.resourceId, "contract-a", "contract audit context should target exact contract id");
+
+const navState = buildContractNavigationState("contract-a", { businessEventId: "evt-1" });
+expectEqual(navState.contractId, "contract-a", "contract nav state should preserve contract id");
+expectEqual(navState.businessEventId, "evt-1", "contract nav state should keep extra context");
 
 console.log("contract-drilldown-ok");
