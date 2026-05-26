@@ -11,6 +11,10 @@ import { ASSISTANT_ENTRY_SUBTITLE } from "../lib/entry-guidance";
 import { PageHeader } from "../components/ui/PageHeader";
 import { ResultBanner } from "../components/ui/ResultBanner";
 import { useDrawer } from "../hooks/useDrawer";
+import { AssistantShell } from "./assistant/AssistantShell";
+import { AssistantHistoryPanel } from "./assistant/AssistantHistoryPanel";
+import { AssistantStatusPanel } from "./assistant/AssistantStatusPanel";
+import { AssistantComposer } from "./assistant/AssistantComposer";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
@@ -665,10 +669,8 @@ export function AssistantPage() {
   const currentFlowNode = flowContext?.nodes.find((node) => node.id === flowContext.currentNodeId);
   const nextFlowNode = flowContext?.nodes.find((node) => node.status === "pending");
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px", height: "calc(100vh - 180px)", maxHeight: "800px", position: "relative" }}>
-
-      {/* Header */}
+  const header = (
+    <>
       <PageHeader
         title="AI 财税助手"
         subtitle={ASSISTANT_ENTRY_SUBTITLE}
@@ -751,78 +753,30 @@ export function AssistantPage() {
           </div>
         )}
       </div>
+    </>
+  );
 
-      {/* History panel */}
-      {showHistory && (
-        <div style={{
-          ...panelBg,
-          padding: "16px",
-          maxHeight: "240px",
-          overflowY: "auto",
-          background: "rgba(248,249,250,0.95)"
-        }}>
-          {sessionGroups.length === 0 ? (
-            <div style={{ color: "#aab5c0", fontSize: "13px", textAlign: "center", padding: "16px 0" }}>暂无历史记录</div>
-          ) : (
-            sessionGroups.map((group) => (
-              <div key={group.label} style={{ marginBottom: "12px" }}>
-                <div style={{ fontSize: "11px", color: "#aab5c0", fontWeight: 600, letterSpacing: "0.5px", marginBottom: "6px" }}>
-                  {group.label}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                  {group.items.map((s) => (
-                    <div
-                      key={s.id}
-                      onMouseEnter={() => setHoveredSession(s.id)}
-                      onMouseLeave={() => setHoveredSession(null)}
-                      style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "8px 10px", borderRadius: "8px", cursor: "pointer",
-                        background: activeId === s.id
-                          ? "rgba(30,42,55,0.08)"
-                          : hoveredSession === s.id ? "rgba(30,42,55,0.04)" : "transparent",
-                        transition: "background 0.15s"
-                      }}
-                    >
-                      <div onClick={() => handleLoadSession(s.id)} style={{ flex: 1, overflow: "hidden" }}>
-                        <div style={{
-                          fontSize: "13px", color: "#1e2a37", fontWeight: activeId === s.id ? 600 : 400,
-                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
-                        }}>
-                          {activeId === s.id && "● "}{s.title}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#aab5c0", marginTop: "2px" }}>
-                          {new Date(s.updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                          {" · "}{s.messages.length / 2 | 0} 轮对话
-                        </div>
-                      </div>
-                      {hoveredSession === s.id && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.id); }}
-                          style={{
-                            background: "none", border: "none", cursor: "pointer",
-                            color: "#c0392b", fontSize: "12px", padding: "2px 6px",
-                            borderRadius: "4px", flexShrink: 0
-                          }}
-                        >
-                          删除
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* Decision mode hint */}
+  const statusPanels = (
+    <AssistantStatusPanel>
       {!isOpMode && <ResultBanner tone="warning" message="决策视角：基于实时财务快照（资金/收支/税负/风险）回答，每次提问自动刷新。" />}
-
-      {/* Operation mode hint for boss */}
       {isOpMode && isBoss && <ResultBanner tone="info" message="操作视角：可处理报销、入账等实际财务操作，AI 将给出账务处理建议并自动生成凭证草稿。" />}
+      {isOpMode && suggestedEvents.length > 0 && (
+        <ResultBanner
+          tone="success"
+          message={`下一步：确认创建 ${suggestedEvents.length} 条事项，然后进入任务、单据、凭证与税务页面继续处理。`}
+        />
+      )}
+      {isOpMode && !suggestedEvents.length && flowContext?.businessEventId && (
+        <ResultBanner
+          tone="info"
+          message={`当前事项已进入流程跟踪。建议下一步前往 ${nextFlowNode?.routes[0] ?? "对应业务页"} 继续处理。`}
+        />
+      )}
+    </AssistantStatusPanel>
+  );
 
+  const flowSection = (
+    <>
       <ProcessFlowCard
         mode="inline"
         title={flowTitle}
@@ -868,69 +822,69 @@ export function AssistantPage() {
           </div>
         </div>
       )}
+    </>
+  );
 
-      {/* Quick prompts */}
-      {messages.length === 0 && !showHistory && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          {quickPrompts.map((p) => (
-            <button
-              key={p}
-              onClick={() => sendMessage(p)}
-              style={{
-                padding: "8px 14px", borderRadius: "20px", fontSize: "13px",
-                background: "rgba(255,255,255,0.82)", border: "1px solid rgba(20,40,60,0.1)",
-                cursor: "pointer", color: "#1e2a37", textAlign: "left"
-              }}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
+  const historySection = (
+    <AssistantHistoryPanel visible={showHistory}>
+      {sessionGroups.length === 0 ? (
+        <div style={{ color: "#aab5c0", fontSize: "13px", textAlign: "center", padding: "16px 0" }}>暂无历史记录</div>
+      ) : (
+        sessionGroups.map((group) => (
+          <div key={group.label} style={{ marginBottom: "12px" }}>
+            <div style={{ fontSize: "11px", color: "#aab5c0", fontWeight: 600, letterSpacing: "0.5px", marginBottom: "6px" }}>
+              {group.label}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+              {group.items.map((s) => (
+                <div
+                  key={s.id}
+                  onMouseEnter={() => setHoveredSession(s.id)}
+                  onMouseLeave={() => setHoveredSession(null)}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "8px 10px", borderRadius: "8px", cursor: "pointer",
+                    background: activeId === s.id
+                      ? "rgba(30,42,55,0.08)"
+                      : hoveredSession === s.id ? "rgba(30,42,55,0.04)" : "transparent",
+                    transition: "background 0.15s"
+                  }}
+                >
+                  <div onClick={() => handleLoadSession(s.id)} style={{ flex: 1, overflow: "hidden" }}>
+                    <div style={{
+                      fontSize: "13px", color: "#1e2a37", fontWeight: activeId === s.id ? 600 : 400,
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
+                    }}>
+                      {activeId === s.id && "● "}{s.title}
+                    </div>
+                    <div style={{ fontSize: "11px", color: "#aab5c0", marginTop: "2px" }}>
+                      {new Date(s.updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                      {" · "}{s.messages.length / 2 | 0} 轮对话
+                    </div>
+                  </div>
+                  {hoveredSession === s.id && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.id); }}
+                      style={{
+                        background: "none", border: "none", cursor: "pointer",
+                        color: "#c0392b", fontSize: "12px", padding: "2px 6px",
+                        borderRadius: "4px", flexShrink: 0
+                      }}
+                    >
+                      删除
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
       )}
+    </AssistantHistoryPanel>
+  );
 
-      {/* Chat area */}
-      <div style={{ ...panelBg, flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-        {messages.length === 0 && (
-          <div style={{ textAlign: "center", color: "#aab5c0", fontSize: "14px", marginTop: "60px" }}>
-            <div style={{ fontSize: "40px", marginBottom: "12px" }}>💬</div>
-            <div>{isOpMode ? "描述您的经营事项或财税问题" : "直接提问财务经营问题"}</div>
-            <div style={{ fontSize: "12px", marginTop: "6px" }}>
-              {isOpMode
-                ? "可文字描述，也可点击 📎 上传发票/回单/收据（支持 PDF 直接识别，无需转图）"
-                : "我会基于实时财务数据给出简洁结论和行动建议"}
-            </div>
-          </div>
-        )}
-
-        {messages.map((msg, i) => (
-          <div key={i} style={{ display: "flex", flexDirection: msg.role === "user" ? "row-reverse" : "row", gap: "10px", alignItems: "flex-start" }}>
-            <div style={{
-              width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
-              background: msg.role === "user" ? "#1e2a37" : "#e8f4ef",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "14px", color: msg.role === "user" ? "#fff" : "#1a7f5a"
-            }}>
-              {msg.role === "user" ? "我" : "AI"}
-            </div>
-            <div style={{
-              maxWidth: "72%",
-              background: msg.role === "user" ? "#1e2a37" : "rgba(255,255,255,0.9)",
-              color: msg.role === "user" ? "#fff" : "#1e2a37",
-              borderRadius: msg.role === "user" ? "18px 4px 18px 18px" : "4px 18px 18px 18px",
-              padding: "12px 16px", fontSize: "14px", lineHeight: "1.6",
-              border: msg.role === "assistant" ? "1px solid rgba(20,40,60,0.08)" : "none"
-            }}>
-              {msg.content === "" ? (
-                <span style={{ color: "#aab5c0", fontStyle: "italic" }}>正在思考...</span>
-              ) : (
-                <span dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
-              )}
-            </div>
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-
+  const composer = (
+    <AssistantComposer>
       {/* OCR preview card */}
       {ocrPreview && (
         <div style={{
@@ -977,7 +931,6 @@ export function AssistantPage() {
         </div>
       )}
 
-      {/* Suggested event card — operation mode only */}
       {suggestedEvents.length > 0 && isOpMode && (
         <div style={{
           ...panelBg, padding: "16px",
@@ -1038,9 +991,7 @@ export function AssistantPage() {
         </div>
       )}
 
-      {/* Input area */}
       <div style={{ ...panelBg, padding: "12px 16px", display: "flex", gap: "10px", alignItems: "flex-end" }}>
-        {/* Image upload button — operation mode only */}
         {isOpMode && (
           <label
             title="上传发票/回单/收据（PDF 直接识别，支持图片格式）"
@@ -1096,6 +1047,81 @@ export function AssistantPage() {
           {sending ? "发送中" : "发送"}
         </button>
       </div>
-    </div>
+    </AssistantComposer>
+  );
+
+  const chat = (
+    <>
+      {messages.length === 0 && !showHistory && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+          {quickPrompts.map((p) => (
+            <button
+              key={p}
+              onClick={() => sendMessage(p)}
+              style={{
+                padding: "8px 14px", borderRadius: "20px", fontSize: "13px",
+                background: "rgba(255,255,255,0.82)", border: "1px solid rgba(20,40,60,0.1)",
+                cursor: "pointer", color: "#1e2a37", textAlign: "left"
+              }}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ ...panelBg, flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+        {messages.length === 0 && (
+          <div style={{ textAlign: "center", color: "#aab5c0", fontSize: "14px", marginTop: "60px" }}>
+            <div style={{ fontSize: "40px", marginBottom: "12px" }}>💬</div>
+            <div>{isOpMode ? "描述您的经营事项或财税问题" : "直接提问财务经营问题"}</div>
+            <div style={{ fontSize: "12px", marginTop: "6px" }}>
+              {isOpMode
+                ? "可文字描述，也可点击 📎 上传发票/回单/收据（支持 PDF 直接识别，无需转图）"
+                : "我会基于实时财务数据给出简洁结论和行动建议"}
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg, i) => (
+          <div key={i} style={{ display: "flex", flexDirection: msg.role === "user" ? "row-reverse" : "row", gap: "10px", alignItems: "flex-start" }}>
+            <div style={{
+              width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
+              background: msg.role === "user" ? "#1e2a37" : "#e8f4ef",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "14px", color: msg.role === "user" ? "#fff" : "#1a7f5a"
+            }}>
+              {msg.role === "user" ? "我" : "AI"}
+            </div>
+            <div style={{
+              maxWidth: "72%",
+              background: msg.role === "user" ? "#1e2a37" : "rgba(255,255,255,0.9)",
+              color: msg.role === "user" ? "#fff" : "#1e2a37",
+              borderRadius: msg.role === "user" ? "18px 4px 18px 18px" : "4px 18px 18px 18px",
+              padding: "12px 16px", fontSize: "14px", lineHeight: "1.6",
+              border: msg.role === "assistant" ? "1px solid rgba(20,40,60,0.08)" : "none"
+            }}>
+              {msg.content === "" ? (
+                <span style={{ color: "#aab5c0", fontStyle: "italic" }}>正在思考...</span>
+              ) : (
+                <span dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
+              )}
+            </div>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+    </>
+  );
+
+  return (
+    <AssistantShell
+      header={header}
+      history={historySection}
+      status={statusPanels}
+      flow={flowSection}
+      chat={chat}
+      composer={composer}
+    />
   );
 }

@@ -27,10 +27,13 @@ import { EVENTS_ENTRY_SUBTITLE } from "../lib/entry-guidance";
 import { ProcessFlowCard } from "../features/process-flow/ProcessFlowCard";
 import { buildProcessFlowPageContext } from "../features/process-flow/page-context";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
-import { EntityDrawer } from "../components/ui/EntityDrawer";
 import { PageHeader } from "../components/ui/PageHeader";
 import { ResultBanner } from "../components/ui/ResultBanner";
 import { useQueryState } from "../hooks/useQueryState";
+import { EventsShell } from "./events/EventsShell";
+import { EventListPanel } from "./events/EventListPanel";
+import { EventCreatePanel } from "./events/EventCreatePanel";
+import { EventDetailPanel } from "./events/EventDetailPanel";
 
 const EVENT_TYPE_KEYS = [
   "sales", "procurement", "expense", "payroll",
@@ -272,14 +275,12 @@ export function EventsPage() {
 
   const isBusy = loading !== "done" && loading !== "idle";
 
-  return (
-    <div style={{ display: "grid", gap: 20 }}>
-      {showHelp ? <EventsHelpModal onClose={() => setShowHelp(false)} /> : null}
-      <PageHeader
-        title="经营事项总线"
-        subtitle={EVENTS_ENTRY_SUBTITLE}
-        actions={(
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+  const header = (
+    <PageHeader
+      title="经营事项总线"
+      subtitle={EVENTS_ENTRY_SUBTITLE}
+      actions={(
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
             type="button"
             onClick={() => setShowHelp(true)}
@@ -299,176 +300,177 @@ export function EventsPage() {
             ?
           </button>
         </div>
-        )}
-      />
+      )}
+    />
+  );
 
-      {message ? <ResultBanner tone="info" message={message} /> : null}
-
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20 }}>
-        {/* 新建表单 */}
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">新建经营事项</span>
-          </div>
-          <div className="card-body">
-            <div className="grid-2" style={{ gap: 12 }}>
-              <div className="form-group">
-                <label className="form-label">类型</label>
-                <select
-                  className="form-select"
-                  value={form.type}
-                  onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-                >
-                  {EVENT_TYPE_KEYS.map((k) => <option key={k} value={k}>{t(EVENT_TYPE_LABELS, k)}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">部门</label>
-                <input
-                  className="form-input"
-                  value={form.department}
-                  onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
-                />
-              </div>
-              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="form-label">标题</label>
-                <input
-                  className="form-input"
-                  value={form.title}
-                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                  placeholder="请输入事项标题"
-                />
-              </div>
-              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
-                <label className="form-label">描述</label>
-                <textarea
-                  className="form-textarea"
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  rows={3}
-                  placeholder="请输入事项描述"
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">发生日期</label>
-                <input
-                  className="form-input"
-                  type="date"
-                  value={form.occurredOn}
-                  onChange={(e) => setForm((f) => ({ ...f, occurredOn: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">金额</label>
-                <input
-                  className="form-input"
-                  value={form.amount}
-                  onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                  placeholder="选填"
-                />
-              </div>
-            </div>
-            <div className="mt-16">
-              <button
-                className="btn btn-primary"
-                onClick={() => void handleCreate()}
-                disabled={isBusy || !form.title.trim()}
-              >
-                {loading === "saving" ? "创建中…" : "创建事项"}
-              </button>
-            </div>
-          </div>
+  const createPanel = (
+    <EventCreatePanel>
+      <div className="grid-2" style={{ gap: 12 }}>
+        <div className="form-group">
+          <label className="form-label">类型</label>
+          <select
+            className="form-select"
+            value={form.type}
+            onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+          >
+            {EVENT_TYPE_KEYS.map((k) => <option key={k} value={k}>{t(EVENT_TYPE_LABELS, k)}</option>)}
+          </select>
         </div>
-
-        {/* 事项列表 */}
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">经营事项列表</span>
-            <span className="badge badge-gray">{events.length}</span>
-          </div>
-          <div className="card-body" style={{ padding: "8px 12px", maxHeight: 480, overflowY: "auto" }}>
-            {events.length === 0 ? (
-              <div className="state-empty">暂无事项</div>
-            ) : (
-              <div style={{ display: "grid", gap: 6 }}>
-                {events.map((evt) => (
-                  <button
-                    key={evt.id}
-                    onClick={() => {
-                      setSelectedEventIdState(evt.id);
-                      setStatusDraft(evt.status);
-                      void refreshDetail(evt.id);
-                    }}
-                    style={{
-                      textAlign: "left",
-                      padding: "12px 14px",
-                      borderRadius: "var(--r-lg)",
-                      border: evt.id === selectedEventId
-                        ? "1px solid var(--c-primary)"
-                        : "1px solid var(--c-border)",
-                      background: evt.id === selectedEventId
-                        ? "var(--c-primary-light)"
-                        : "var(--c-surface)",
-                      cursor: "pointer",
-                      width: "100%"
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{evt.title}</div>
-                    <div className="flex-row mt-4">
-                      <span className={statusBadge(evt.status)}>{t(EVENT_STATUS_LABELS, evt.status)}</span>
-                      <span className="text-muted text-sm">{t(EVENT_TYPE_LABELS, evt.type)} · {evt.department}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        <div className="form-group">
+          <label className="form-label">部门</label>
+          <input
+            className="form-input"
+            value={form.department}
+            onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
+          />
+        </div>
+        <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+          <label className="form-label">标题</label>
+          <input
+            className="form-input"
+            value={form.title}
+            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            placeholder="请输入事项标题"
+          />
+        </div>
+        <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+          <label className="form-label">描述</label>
+          <textarea
+            className="form-textarea"
+            value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            rows={3}
+            placeholder="请输入事项描述"
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">发生日期</label>
+          <input
+            className="form-input"
+            type="date"
+            value={form.occurredOn}
+            onChange={(e) => setForm((f) => ({ ...f, occurredOn: e.target.value }))}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">金额</label>
+          <input
+            className="form-input"
+            value={form.amount}
+            onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+            placeholder="选填"
+          />
         </div>
       </div>
+      <div className="mt-16">
+        <button
+          className="btn btn-primary"
+          onClick={() => void handleCreate()}
+          disabled={isBusy || !form.title.trim()}
+        >
+          {loading === "saving" ? "创建中…" : "创建事项"}
+        </button>
+      </div>
+    </EventCreatePanel>
+  );
 
-      {/* 事项详情 */}
-      <EntityDrawer
-        title={detail ? detail.title : "经营事项详情"}
-        subtitle={selectedSummary ?? undefined}
-        actions={selectedEventId ? (
-          <div className="flex-row">
-              <select
-                className="form-select"
-                style={{ width: "auto" }}
-                value={statusDraft}
-                onChange={(e) => setStatusDraft(e.target.value as BusinessEventStatus)}
-              >
-                {STATUS_OPTION_KEYS.map((s) => <option key={s} value={s}>{t(EVENT_STATUS_LABELS, s)}</option>)}
-              </select>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => void handleAnalyze(selectedEventId)}
-                disabled={isBusy}
-              >
-                AI 拆解
-              </button>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => void handleRiskCheck(selectedEventId)}
-                disabled={isBusy}
-              >
-                风险检查
-              </button>
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={() => void handleStatusUpdate(selectedEventId)}
-                disabled={isBusy}
-              >
-                更新状态
-              </button>
-            </div>
-        ) : undefined}
+  const listPanel = (
+    <EventListPanel count={events.length}>
+      {events.length === 0 ? (
+        <div className="state-empty">暂无事项</div>
+      ) : (
+        <div style={{ display: "grid", gap: 6 }}>
+          {events.map((evt) => (
+            <button
+              key={evt.id}
+              onClick={() => {
+                setSelectedEventIdState(evt.id);
+                setStatusDraft(evt.status);
+                void refreshDetail(evt.id);
+              }}
+              style={{
+                textAlign: "left",
+                padding: "12px 14px",
+                borderRadius: "var(--r-lg)",
+                border: evt.id === selectedEventId
+                  ? "1px solid var(--c-primary)"
+                  : "1px solid var(--c-border)",
+                background: evt.id === selectedEventId
+                  ? "var(--c-primary-light)"
+                  : "var(--c-surface)",
+                cursor: "pointer",
+                width: "100%"
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{evt.title}</div>
+              <div className="flex-row mt-4">
+                <span className={statusBadge(evt.status)}>{t(EVENT_STATUS_LABELS, evt.status)}</span>
+                <span className="text-muted text-sm">{t(EVENT_TYPE_LABELS, evt.type)} · {evt.department}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </EventListPanel>
+  );
+
+  const detailActions = selectedEventId ? (
+    <div className="flex-row">
+      <select
+        className="form-select"
+        style={{ width: "auto" }}
+        value={statusDraft}
+        onChange={(e) => setStatusDraft(e.target.value as BusinessEventStatus)}
       >
+        {STATUS_OPTION_KEYS.map((s) => <option key={s} value={s}>{t(EVENT_STATUS_LABELS, s)}</option>)}
+      </select>
+      <button
+        className="btn btn-outline btn-sm"
+        onClick={() => void handleAnalyze(selectedEventId)}
+        disabled={isBusy}
+      >
+        AI 拆解
+      </button>
+      <button
+        className="btn btn-outline btn-sm"
+        onClick={() => void handleRiskCheck(selectedEventId)}
+        disabled={isBusy}
+      >
+        风险检查
+      </button>
+      <button
+        className="btn btn-primary btn-sm"
+        onClick={() => void handleStatusUpdate(selectedEventId)}
+        disabled={isBusy}
+      >
+        更新状态
+      </button>
+    </div>
+  ) : undefined;
 
+  return (
+    <>
+      {showHelp ? <EventsHelpModal onClose={() => setShowHelp(false)} /> : null}
+      <EventsShell
+        header={header}
+        banner={message ? <ResultBanner tone="info" message={message} /> : null}
+        createPanel={createPanel}
+        listPanel={listPanel}
+        detailPanel={(
+          <EventDetailPanel
+            title={detail ? detail.title : "经营事项详情"}
+            subtitle={selectedSummary ?? undefined}
+            actions={detailActions}
+          >
         {detail ? (
           <div>
+            <ResultBanner
+              tone="info"
+              message={`下游对象：任务 ${detail.tasks.length} 项、单据 ${detail.generatedDocuments.length} 份、凭证 ${detail.vouchers.length} 张、税务事项 ${detail.taxItems.length} 条。建议先完成当前步骤，再进入对应结果页。`}
+            />
             {processFlowContext && (
-              <div style={{ marginBottom: 24 }}>
+              <div style={{ marginTop: 16, marginBottom: 24 }}>
                 <ProcessFlowCard
                   mode="inline"
                   title="当前事项流程位置"
@@ -662,7 +664,9 @@ export function EventsPage() {
         ) : (
           <div className="state-empty">请从左侧列表选择一条经营事项</div>
         )}
-      </EntityDrawer>
-    </div>
+          </EventDetailPanel>
+        )}
+      />
+    </>
   );
 }
