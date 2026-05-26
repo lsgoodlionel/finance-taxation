@@ -53,7 +53,7 @@
 - [x] Extract contracts table body
 - [x] Keep existing actions and drilldown behavior intact
 - [x] Verify typecheck and focused tests
-- [ ] Commit
+- [x] Commit
 
 ## Progress Update
 
