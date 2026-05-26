@@ -1,111 +1,93 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
+import {
+  Table, Tag, Button, Space, Alert, Drawer, Typography, Badge, Segmented,
+  Tooltip, Empty, Skeleton, Flex, Card,
+} from "antd";
+import type { ColumnsType } from "antd/es/table";
+import {
+  ClockCircleOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
+  StopOutlined, MinusCircleOutlined, BellOutlined,
+  QuestionCircleOutlined, AppstoreOutlined, UnorderedListOutlined,
+} from "@ant-design/icons";
+import { toast } from "sonner";
 import type { Task, TaskStatus, TaskTreeNode } from "@finance-taxation/domain-model";
 import { listTasks, remindTask, updateTaskStatus } from "../lib/api";
-import { useI18n, TASK_STATUS_LABELS, TASK_PRIORITY_SHORT } from "../lib/i18n";
+import { useI18n, TASK_STATUS_LABELS } from "../lib/i18n";
 import { buildResultPageSubtitle } from "../lib/entry-guidance";
 import { normalizeDrilldownState } from "./drilldown";
 
-function TasksHelpModal({ onClose }: { onClose: () => void }) {
+const { Text, Title } = Typography;
+type TaskWithOverdue = Task & { isOverdue?: boolean };
+type ViewMode = "list" | "kanban";
+
+const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
+  not_started: { color: "default",    icon: <MinusCircleOutlined />,       label: "待开始" },
+  pending:     { color: "default",    icon: <MinusCircleOutlined />,       label: "待处理" },
+  in_progress: { color: "processing", icon: <ClockCircleOutlined />,       label: "进行中" },
+  in_review:   { color: "warning",    icon: <ExclamationCircleOutlined />, label: "复核中" },
+  done:        { color: "success",    icon: <CheckCircleOutlined />,       label: "已完成" },
+  completed:   { color: "success",    icon: <CheckCircleOutlined />,       label: "已完成" },
+  blocked:     { color: "error",      icon: <StopOutlined />,              label: "已阻塞" },
+  cancelled:   { color: "default",    icon: <StopOutlined />,              label: "已取消" },
+};
+
+const PRIORITY_CONFIG: Record<string, { color: string; label: string }> = {
+  high:   { color: "red",     label: "高" },
+  medium: { color: "orange",  label: "中" },
+  low:    { color: "default", label: "低" },
+};
+
+const NEXT_STATUS: Partial<Record<TaskStatus, { status: TaskStatus; label: string }>> = {
+  not_started: { status: "in_progress", label: "开始执行" },
+  pending:     { status: "in_progress", label: "开始执行" },
+  in_progress: { status: "done",        label: "标记完成" },
+  in_review:   { status: "done",        label: "复核完成" },
+  blocked:     { status: "in_progress", label: "解除阻塞" },
+};
+
+function KanbanCard({ task, onClick }: { task: TaskWithOverdue; onClick: () => void }) {
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ background: "#fff", borderRadius: "16px", padding: "28px 32px", maxWidth: "560px", width: "92%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)", maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>任务中心 · 业务关系与操作说明</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "#9aa5b4" }}>✕</button>
-        </div>
-        <div style={{ display: "grid", gap: "14px", fontSize: "13.5px", lineHeight: 1.75 }}>
-          <div style={{ background: "rgba(79,142,247,0.06)", borderRadius: "10px", padding: "14px 16px", border: "1px solid rgba(79,142,247,0.18)" }}>
-            <strong>三个中心的关系</strong><br />
-            <strong>任务中心</strong>是执行入口，负责把经营事项拆成可落地动作；<strong>单据中心</strong>负责补齐发票、回单、审批和附件；<strong>凭证中心</strong>负责最终入账。任务中心在三者中最靠前，决定后面该补哪些资料、由谁做、先做什么。
-          </div>
-          <div><strong>标准业务流程</strong>
-            <ol style={{ margin: "6px 0 0 18px", padding: 0 }}>
-              <li>AI 财税秘书或事项页分析业务后自动生成任务</li>
-              <li>任务中心分配责任部门和执行顺序</li>
-              <li>执行人根据任务要求前往单据中心补资料</li>
-              <li>资料齐全后前往凭证中心完成审核和过账</li>
-              <li>如有税务或归档要求，再进入税务、报表和归档流程</li>
-            </ol>
-          </div>
-          <div><strong>本页负责什么</strong>
-            <div>这里不直接做会计入账，而是负责推进执行。任务做得好，后面的单据和凭证才能顺畅；任务卡住，通常意味着资料、审批或责任分工有问题。</div>
-          </div>
-          <div><strong>任务状态说明</strong>
-            <div style={{ display: "grid", gap: "4px", marginTop: "6px" }}>
-              {[["待开始/待处理", "尚未开始执行的新任务"], ["进行中", "已开始、尚未完成"], ["已完成", "任务已执行完毕"], ["已阻塞", "因缺少信息或条件而暂停"], ["已取消", "已确认不需执行"]].map(([s, d]) => (
-                <div key={s} style={{ display: "flex", gap: "8px" }}>
-                  <span style={{ fontWeight: 600, minWidth: "80px" }}>{s}</span>
-                  <span style={{ color: "#4d5d6c" }}>{d}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div><strong>优先级说明</strong>
-            <div style={{ display: "grid", gap: "4px", marginTop: "6px" }}>
-              {[["高", "#dc2626", "必须本期完成，影响申报或合规"], ["中", "#d97706", "本月内完成"], ["低", "#6c7a89", "可延后处理"]].map(([p, c, d]) => (
-                <div key={p} style={{ display: "flex", gap: "8px" }}>
-                  <span style={{ color: c, fontWeight: 700, minWidth: "24px" }}>{p}</span>
-                  <span style={{ color: "#4d5d6c" }}>{d}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ background: "rgba(255,165,0,0.08)", borderRadius: "8px", padding: "10px 14px", fontSize: "12.5px", color: "#b45309" }}>
-            ⚠️ 逾期任务（截止日已过但未完成）会以红色高亮显示。若任务长期阻塞，应先定位是“资料没补齐”还是“凭证无法推进”，再回到对应页面处理。
-          </div>
-        </div>
-      </div>
+    <div
+      onClick={onClick}
+      style={{
+        background: "#fff", borderRadius: 8, padding: "10px 12px",
+        border: task.isOverdue ? "1px solid #fca5a5" : "1px solid #e2e8f0",
+        cursor: "pointer", transition: "box-shadow 0.15s",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.10)"; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; }}
+    >
+      {task.isOverdue && <Tag color="error" style={{ marginBottom: 6, fontSize: 11 }}>逾期</Tag>}
+      <div style={{ fontSize: 13, fontWeight: 500, color: "#0f172a", lineHeight: 1.4, marginBottom: 6 }}>{task.title}</div>
+      <Flex gap={6} wrap="wrap">
+        <Tag color={PRIORITY_CONFIG[task.priority]?.color ?? "default"} style={{ fontSize: 11, lineHeight: "18px", padding: "0 6px" }}>
+          {PRIORITY_CONFIG[task.priority]?.label ?? task.priority}
+        </Tag>
+        {task.dueAt && (
+          <Text type={task.isOverdue ? "danger" : "secondary"} style={{ fontSize: 11 }}>
+            <ClockCircleOutlined style={{ marginRight: 3 }} />{task.dueAt.slice(0, 10)}
+          </Text>
+        )}
+      </Flex>
     </div>
   );
 }
 
-type TaskWithOverdue = Task & { isOverdue?: boolean };
-
-const STATUS_BADGE: Record<string, string> = {
-  not_started: "badge badge-gray",
-  in_progress: "badge badge-blue",
-  in_review: "badge badge-yellow",
-  done: "badge badge-green",
-  blocked: "badge badge-red",
-  cancelled: "badge badge-gray",
-  pending: "badge badge-gray",
-  completed: "badge badge-green"
-};
-
-const PRIORITY_BADGE: Record<string, string> = {
-  high: "badge badge-red",
-  medium: "badge badge-yellow",
-  low: "badge badge-gray"
-};
-
-// Next status transition for action buttons
-const NEXT_STATUS: Partial<Record<TaskStatus, { status: TaskStatus; label: string; className: string }>> = {
-  not_started: { status: "in_progress", label: "开始执行", className: "btn btn-primary btn-xs" },
-  in_progress: { status: "done", label: "标记完成", className: "btn btn-success btn-xs" },
-  in_review: { status: "done", label: "复核完成", className: "btn btn-success btn-xs" },
-  blocked: { status: "in_progress", label: "解除阻塞", className: "btn btn-outline btn-xs" }
-};
-
-function RenderTree({ nodes }: { nodes: TaskTreeNode[] }) {
-  const { t } = useI18n();
+function KanbanColumn({ title, tasks, color, onSelect }: { title: string; tasks: TaskWithOverdue[]; color: string; onSelect: (t: TaskWithOverdue) => void }) {
   return (
-    <ul style={{ paddingLeft: 20, lineHeight: 1.9, fontSize: 13.5 }}>
-      {nodes.map((node) => {
-        const overdue = (node as TaskWithOverdue).isOverdue;
-        return (
-          <li key={node.id} style={{ color: overdue ? "var(--c-danger)" : "inherit" }}>
-            {overdue && <span className="badge badge-red" style={{ marginRight: 6 }}>逾期</span>}
-            {node.title}
-            <span className="text-muted">
-              {" · "}{t(TASK_STATUS_LABELS, node.status)}
-              {" · "}{t(TASK_PRIORITY_SHORT, node.priority)}
-            </span>
-            {node.children.length ? <RenderTree nodes={node.children} /> : null}
-          </li>
-        );
-      })}
-    </ul>
+    <div style={{ flex: 1, minWidth: 210, background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0" }}>
+      <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
+        <Text strong style={{ fontSize: 13 }}>{title}</Text>
+        <Badge count={tasks.length} style={{ background: "#e2e8f0", color: "#475569", boxShadow: "none" }} />
+      </div>
+      <div style={{ padding: "10px", display: "flex", flexDirection: "column", gap: 8, maxHeight: 500, overflowY: "auto" }}>
+        {tasks.length === 0
+          ? <Text type="secondary" style={{ fontSize: 12, textAlign: "center", padding: "16px 0", display: "block" }}>暂无任务</Text>
+          : tasks.map(t => <KanbanCard key={t.id} task={t} onClick={() => onSelect(t)} />)}
+      </div>
+    </div>
   );
 }
 
@@ -114,12 +96,17 @@ export function TasksPage() {
   const navEventId = normalizeDrilldownState(location.state).businessEventId ?? null;
   const [tasks, setTasks] = useState<TaskWithOverdue[]>([]);
   const [taskTree, setTaskTree] = useState<TaskTreeNode[]>([]);
-  const [message, setMessage] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [remindingId, setRemindingId] = useState<string | null>(null);
-  const [showHelp, setShowHelp] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [detailTask, setDetailTask] = useState<TaskWithOverdue | null>(null);
+  const { t } = useI18n();
+
+  // suppress unused warning - tree kept for future use
+  void taskTree;
 
   async function loadTasks(onlyOverdue: boolean) {
     setLoading(true);
@@ -127,12 +114,8 @@ export function TasksPage() {
       const payload = await listTasks(navEventId || undefined, onlyOverdue);
       setTasks(payload.items);
       setTaskTree(payload.tree);
-      const overdueCount = payload.items.filter((t) => t.isOverdue).length;
-      setMessage(
-        `${navEventId ? `当前事项 ${navEventId}：` : ""}共 ${payload.total} 个任务${overdueCount > 0 ? `，${overdueCount} 个逾期` : ""}`
-      );
     } catch (err) {
-      setMessage((err as Error).message);
+      toast.error((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -144,9 +127,9 @@ export function TasksPage() {
     setRemindingId(taskId);
     try {
       await remindTask(taskId);
-      setMessage("催办通知已发送");
+      toast.success("催办通知已发送");
     } catch (err) {
-      setMessage((err as Error).message);
+      toast.error((err as Error).message);
     } finally {
       setRemindingId(null);
     }
@@ -156,183 +139,247 @@ export function TasksPage() {
     setUpdatingId(taskId);
     try {
       await updateTaskStatus(taskId, newStatus);
-      setTasks((prev) =>
-        prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t)
-      );
+      setTasks(prev => prev.map(task => task.id === taskId ? { ...task, status: newStatus } : task));
       const label = TASK_STATUS_LABELS[newStatus] ?? newStatus;
-      setMessage(`任务已更新为「${label}」`);
+      toast.success(`任务已更新为「${label}」`);
+      if (detailTask?.id === taskId) {
+        setDetailTask(prev => prev ? { ...prev, status: newStatus } : null);
+      }
     } catch (err) {
-      setMessage((err as Error).message);
+      toast.error((err as Error).message);
     } finally {
       setUpdatingId(null);
     }
   }
 
-  async function handleFilterToggle() {
-    const next = !overdueOnly;
-    setOverdueOnly(next);
-    await loadTasks(next);
-  }
+  const overdueCount = useMemo(() => tasks.filter(task => task.isOverdue).length, [tasks]);
+  const notStartedCount = useMemo(() => tasks.filter(task => task.status === "not_started" || task.status === "pending").length, [tasks]);
 
-  const { t } = useI18n();
-  const overdueCount = tasks.filter((t) => t.isOverdue).length;
-  const notStartedCount = tasks.filter((t) => t.status === "not_started").length;
+  const kanbanGroups = useMemo(() => ({
+    not_started: tasks.filter(task => task.status === "not_started" || task.status === "pending"),
+    in_progress: tasks.filter(task => task.status === "in_progress" || task.status === "in_review"),
+    done:        tasks.filter(task => task.status === "done" || task.status === "completed"),
+    blocked:     tasks.filter(task => task.status === "blocked"),
+  }), [tasks]);
+
+  const columns: ColumnsType<TaskWithOverdue> = [
+    {
+      title: "任务标题",
+      dataIndex: "title",
+      key: "title",
+      render: (title: string, record) => (
+        <div>
+          {record.isOverdue && <Tag color="error" style={{ marginRight: 6, fontSize: 11 }}>逾期</Tag>}
+          <Text strong style={{ fontSize: 13 }}>{title}</Text>
+          {record.description && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{record.description}</div>}
+        </div>
+      ),
+    },
+    {
+      title: "状态", dataIndex: "status", key: "status", width: 100,
+      render: (status: string) => {
+        const cfg = STATUS_CONFIG[status];
+        return cfg ? <Tag color={cfg.color} icon={cfg.icon} style={{ fontSize: 12 }}>{cfg.label}</Tag> : <Tag>{status}</Tag>;
+      },
+    },
+    {
+      title: "优先级", dataIndex: "priority", key: "priority", width: 80,
+      render: (priority: string) => {
+        const cfg = PRIORITY_CONFIG[priority];
+        return cfg ? <Tag color={cfg.color}>{cfg.label}</Tag> : <Tag>{priority}</Tag>;
+      },
+    },
+    {
+      title: "部门", dataIndex: "assigneeDepartment", key: "dept", width: 110,
+      render: (v: string) => v || <Text type="secondary">—</Text>,
+    },
+    {
+      title: "截止日", dataIndex: "dueAt", key: "dueAt", width: 110,
+      render: (v: string, record) => v
+        ? <Text type={record.isOverdue ? "danger" : undefined} style={{ fontSize: 13 }}>{v.slice(0, 10)}</Text>
+        : <Text type="secondary">—</Text>,
+    },
+    {
+      title: "操作", key: "actions", width: 200,
+      render: (_, record) => {
+        const next = NEXT_STATUS[record.status as TaskStatus];
+        const isUpdating = updatingId === record.id;
+        return (
+          <Space size={4} wrap>
+            {next && record.status !== "done" && record.status !== "completed" && record.status !== "cancelled" && (
+              <Button type="primary" size="small" loading={isUpdating} onClick={() => void handleStatusChange(record.id, next.status)}>
+                {next.label}
+              </Button>
+            )}
+            {record.status === "in_progress" && (
+              <Button size="small" danger ghost loading={isUpdating} onClick={() => void handleStatusChange(record.id, "blocked")}>
+                标记阻塞
+              </Button>
+            )}
+            {record.isOverdue && (
+              <Button size="small" icon={<BellOutlined />} loading={remindingId === record.id} onClick={() => void handleRemind(record.id)}>
+                催办
+              </Button>
+            )}
+            <Button size="small" type="text" onClick={() => setDetailTask(record)}>详情</Button>
+          </Space>
+        );
+      },
+    },
+  ];
+
+  const activeNext = detailTask ? NEXT_STATUS[detailTask.status as TaskStatus] : undefined;
 
   return (
-    <div style={{ display: "grid", gap: 20 }}>
-      {showHelp && <TasksHelpModal onClose={() => setShowHelp(false)} />}
-      <div className="page-header">
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
-          <div className="page-title">任务中心</div>
-          <div className="page-subtitle">{buildResultPageSubtitle("任务中心")}</div>
+          <Title level={4} style={{ margin: 0, color: "#0f172a" }}>任务中心</Title>
+          <Text type="secondary" style={{ fontSize: 13 }}>{buildResultPageSubtitle("任务中心")}</Text>
         </div>
-        <div className="flex-row">
-          {notStartedCount > 0 && (
-            <span className="badge badge-yellow">📋 {notStartedCount} 待开始</span>
-          )}
-          {overdueCount > 0 && (
-            <span className="badge badge-red">⚠ {overdueCount} 逾期</span>
-          )}
-          <button
-            className={overdueOnly ? "btn btn-danger btn-sm" : "btn btn-outline btn-sm"}
-            onClick={() => void handleFilterToggle()}
+        <Space wrap>
+          {notStartedCount > 0 && <Tag icon={<ClockCircleOutlined />} color="blue">{notStartedCount} 待开始</Tag>}
+          {overdueCount > 0 && <Tag icon={<ExclamationCircleOutlined />} color="error">{overdueCount} 逾期</Tag>}
+          <Button
+            type={overdueOnly ? "primary" : "default"}
+            danger={overdueOnly}
+            size="small"
+            onClick={() => { const next = !overdueOnly; setOverdueOnly(next); void loadTasks(next); }}
           >
             {overdueOnly ? "显示全部" : "仅逾期"}
-          </button>
-          <button onClick={() => setShowHelp(true)} title="操作说明" style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid rgba(79,142,247,0.6)", background: "rgba(79,142,247,0.08)", color: "#4f8ef7", fontWeight: 700, fontSize: "13px", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>?</button>
-        </div>
+          </Button>
+          <Segmented
+            size="small"
+            value={viewMode}
+            onChange={v => setViewMode(v as ViewMode)}
+            options={[
+              { value: "list",   icon: <UnorderedListOutlined /> },
+              { value: "kanban", icon: <AppstoreOutlined /> },
+            ]}
+          />
+          <Tooltip title="操作说明">
+            <Button shape="circle" size="small" icon={<QuestionCircleOutlined />} onClick={() => setHelpOpen(true)} />
+          </Tooltip>
+        </Space>
       </div>
 
-      {message && (
-        <div className="alert alert-info">{message}</div>
-      )}
-
       {notStartedCount > 0 && !overdueOnly && (
-        <div style={{
-          background: "rgba(79,142,247,0.08)",
-          border: "1px solid rgba(79,142,247,0.3)",
-          borderRadius: 8,
-          padding: "12px 16px",
-          fontSize: 13.5,
-          color: "#2563eb"
-        }}>
-          <strong>💡 操作提示：</strong>AI 已自动为您生成 <strong>{notStartedCount}</strong> 个待处理任务。
-          点击「开始执行」按钮可将任务推进为进行中，处理完成后点击「标记完成」结束任务。
-        </div>
+        <Alert type="info" showIcon style={{ borderRadius: 8 }}
+          message={<>AI 已为您生成 <Text strong>{notStartedCount}</Text> 个待处理任务。点击「开始执行」推进任务，完成后点击「标记完成」。</>}
+        />
       )}
 
       {navEventId && (
-        <div style={{
-          background: "rgba(37,99,235,0.08)",
-          border: "1px solid rgba(37,99,235,0.2)",
-          borderRadius: 8,
-          padding: "10px 14px",
-          fontSize: 13,
-          color: "#2563eb"
-        }}>
-          当前仅显示事项 <strong>{navEventId}</strong> 的关联任务。
-        </div>
+        <Alert type="info" showIcon style={{ borderRadius: 8 }}
+          message={<>当前仅显示事项 <Text code>{navEventId}</Text> 的关联任务。</>}
+        />
       )}
 
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">任务列表</span>
-          <span className="badge badge-gray">{tasks.length}</span>
-        </div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {loading ? (
-            <div className="state-loading">加载中…</div>
-          ) : tasks.length === 0 ? (
-            <div className="state-empty">暂无任务数据</div>
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>标题</th>
-                  <th>状态</th>
-                  <th>优先级</th>
-                  <th>部门</th>
-                  <th>截止时间</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.map((task) => {
-                  const next = NEXT_STATUS[task.status];
-                  return (
-                    <tr key={task.id} style={{ background: task.isOverdue ? "rgba(220,38,38,0.04)" : undefined }}>
-                      <td>
-                        {task.isOverdue && (
-                          <span className="badge badge-red" style={{ marginRight: 6 }}>逾期</span>
-                        )}
-                        {task.title}
-                        {task.description && (
-                          <div style={{ fontSize: 12, color: "#9aa5b4", marginTop: 2 }}>{task.description}</div>
-                        )}
-                      </td>
-                      <td>
-                        <span className={STATUS_BADGE[task.status] ?? "badge badge-gray"}>
-                          {t(TASK_STATUS_LABELS, task.status)}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={PRIORITY_BADGE[task.priority] ?? "badge badge-gray"}>
-                          {t(TASK_PRIORITY_SHORT, task.priority)}
-                        </span>
-                      </td>
-                      <td>{task.assigneeDepartment || "—"}</td>
-                      <td style={{ color: task.isOverdue ? "var(--c-danger)" : undefined }}>
-                        {task.dueAt ? task.dueAt.slice(0, 10) : "—"}
-                      </td>
-                      <td>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {next && task.status !== "done" && task.status !== "cancelled" && (
-                            <button
-                              className={next.className}
-                              onClick={() => void handleStatusChange(task.id, next.status)}
-                              disabled={updatingId === task.id}
-                            >
-                              {updatingId === task.id ? "更新中…" : next.label}
-                            </button>
-                          )}
-                          {task.isOverdue && (
-                            <button
-                              className="btn btn-danger btn-xs"
-                              onClick={() => void handleRemind(task.id)}
-                              disabled={remindingId === task.id}
-                            >
-                              {remindingId === task.id ? "发送中…" : "催办"}
-                            </button>
-                          )}
-                          {task.status === "in_progress" && (
-                            <button
-                              className="btn btn-outline btn-xs"
-                              onClick={() => void handleStatusChange(task.id, "blocked")}
-                              disabled={updatingId === task.id}
-                            >
-                              标记阻塞
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+      {/* Main card */}
+      <Card
+        title={<Space><Text strong>任务列表</Text><Tag>{tasks.length}</Tag></Space>}
+        styles={{ body: { padding: 0 } }}
+        style={{ borderRadius: 12 }}
+      >
+        {loading ? (
+          <div style={{ padding: 24 }}><Skeleton active paragraph={{ rows: 6 }} /></div>
+        ) : viewMode === "list" ? (
+          <Table
+            dataSource={tasks}
+            columns={columns}
+            rowKey="id"
+            size="middle"
+            pagination={{ pageSize: 20, showTotal: total => `共 ${total} 条`, size: "small", hideOnSinglePage: true }}
+            locale={{ emptyText: <Empty description="暂无任务数据" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+            onRow={record => ({ style: record.isOverdue ? { background: "rgba(220,38,38,0.03)" } : undefined })}
+          />
+        ) : (
+          <div style={{ padding: 16, display: "flex", gap: 12, overflowX: "auto" }}>
+            <KanbanColumn title="待开始" tasks={kanbanGroups.not_started} color="#94a3b8" onSelect={setDetailTask} />
+            <KanbanColumn title="进行中" tasks={kanbanGroups.in_progress} color="#3b82f6" onSelect={setDetailTask} />
+            <KanbanColumn title="已完成" tasks={kanbanGroups.done}        color="#16a34a" onSelect={setDetailTask} />
+            <KanbanColumn title="已阻塞" tasks={kanbanGroups.blocked}     color="#dc2626" onSelect={setDetailTask} />
+          </div>
+        )}
+      </Card>
 
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">任务树视图</span>
-          <span style={{ fontSize: 12, color: "#9aa5b4" }}>按经营事项分组展示层级关系</span>
-        </div>
-        <div className="card-body">
-          {taskTree.length ? <RenderTree nodes={taskTree} /> : <p className="text-muted">暂无任务树数据</p>}
-        </div>
-      </div>
+      {/* Task detail drawer */}
+      <Drawer
+        title={detailTask?.title ?? "任务详情"}
+        open={!!detailTask}
+        onClose={() => setDetailTask(null)}
+        width={440}
+        footer={
+          detailTask && (
+            <Space>
+              {activeNext && detailTask.status !== "done" && detailTask.status !== "completed" && detailTask.status !== "cancelled" && (
+                <Button type="primary" loading={updatingId === detailTask.id} onClick={() => void handleStatusChange(detailTask.id, activeNext.status)}>
+                  {activeNext.label}
+                </Button>
+              )}
+              {detailTask.status === "in_progress" && (
+                <Button danger loading={updatingId === detailTask.id} onClick={() => void handleStatusChange(detailTask.id, "blocked")}>
+                  标记阻塞
+                </Button>
+              )}
+              {detailTask.isOverdue && (
+                <Button icon={<BellOutlined />} loading={remindingId === detailTask.id} onClick={() => void handleRemind(detailTask.id)}>
+                  催办
+                </Button>
+              )}
+            </Space>
+          )
+        }
+      >
+        {detailTask && (
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            {detailTask.isOverdue && <Alert type="error" showIcon message="该任务已逾期，请尽快处理" />}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px" }}>
+              {[
+                { label: "状态", content: (() => { const cfg = STATUS_CONFIG[detailTask.status]; return cfg ? <Tag color={cfg.color} icon={cfg.icon}>{cfg.label}</Tag> : <Tag>{detailTask.status}</Tag>; })() },
+                { label: "优先级", content: (() => { const cfg = PRIORITY_CONFIG[detailTask.priority]; return cfg ? <Tag color={cfg.color}>{cfg.label}</Tag> : <Tag>{detailTask.priority}</Tag>; })() },
+                { label: "责任部门", content: <Text>{detailTask.assigneeDepartment || "—"}</Text> },
+                { label: "截止日期", content: <Text type={detailTask.isOverdue ? "danger" : undefined}>{detailTask.dueAt ? detailTask.dueAt.slice(0, 10) : "—"}</Text> },
+              ].map(({ label, content }) => (
+                <div key={label}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{label}</Text>
+                  <div style={{ marginTop: 4 }}>{content}</div>
+                </div>
+              ))}
+            </div>
+            {detailTask.description && (
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>任务描述</Text>
+                <div style={{ marginTop: 6, padding: "10px 12px", background: "#f8fafc", borderRadius: 8, fontSize: 13, lineHeight: 1.7 }}>
+                  {detailTask.description}
+                </div>
+              </div>
+            )}
+          </Space>
+        )}
+      </Drawer>
+
+      {/* Help drawer */}
+      <Drawer title="任务中心 · 说明" open={helpOpen} onClose={() => setHelpOpen(false)} width={480}>
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <Alert type="info" showIcon message="三个中心的关系"
+            description="任务中心是执行入口；单据中心负责补齐发票、回单；凭证中心负责最终入账。任务中心在三者中最靠前。"
+          />
+          <div>
+            <Text strong>状态说明</Text>
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+              {[["待开始/待处理","尚未开始执行的新任务"],["进行中","已开始、尚未完成"],["已完成","任务已执行完毕"],["已阻塞","因缺少信息或条件暂停"],["已取消","已确认不需执行"]].map(([s, d]) => (
+                <div key={s} style={{ display: "flex", gap: 8, fontSize: 13 }}>
+                  <Text strong style={{ minWidth: 90 }}>{s}</Text>
+                  <Text type="secondary">{d}</Text>
+                </div>
+              ))}
+            </div>
+          </div>
+          <Alert type="warning" showIcon message="逾期任务以红色高亮显示。若任务长期阻塞，应先定位是资料没补齐还是凭证无法推进，再回到对应页面处理。" />
+        </Space>
+      </Drawer>
     </div>
   );
 }
