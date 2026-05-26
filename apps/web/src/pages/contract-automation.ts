@@ -56,11 +56,10 @@ export function buildContractAutoDerivationPlan({
   const baseTitle = eventTitleFor(contract, "base");
   const baseEvent = relatedEvents.find((event) => event.title === baseTitle) ?? null;
   const requiredActions = getContractFollowupActions(contract);
-
-  const missingActions = requiredActions.filter((action) => {
-    const existing = relatedEvents.find((event) => event.title === eventTitleFor(contract, action));
-    return !existing;
-  });
+  const existingByAction = new Map(
+    requiredActions.map((action) => [action, relatedEvents.find((event) => event.title === eventTitleFor(contract, action)) ?? null])
+  );
+  const missingActions = requiredActions.filter((action) => !existingByAction.get(action));
 
   if (contract.status !== "active") {
     return {
@@ -89,10 +88,32 @@ export function buildContractAutoDerivationPlan({
     };
   }
 
+  const blockingAction = requiredActions.find((action) => {
+    const existing = existingByAction.get(action);
+    if (!existing) {
+      return false;
+    }
+    const state = resolveContractProgressState(existing.status);
+    return state === "blocked" || state === "in_progress";
+  });
+
+  if (blockingAction) {
+    return {
+      baseEventId: baseEvent.id,
+      missingActions,
+      autoCreateActions: [] as ContractFollowupAction[],
+      summary: `上游履约步骤仍在处理中或阻塞中，当前不自动继续补齐后续事项。`
+    };
+  }
+
+  const nextMissingAction = requiredActions.find((action) => !existingByAction.get(action)) ?? null;
+
   return {
     baseEventId: baseEvent.id,
     missingActions,
-    autoCreateActions: missingActions,
-    summary: `已识别 ${missingActions.length} 个可自动补齐的履约步骤，系统可按规则继续生成后续事项。`
+    autoCreateActions: nextMissingAction ? [nextMissingAction] : [],
+    summary: nextMissingAction
+      ? `已识别 ${missingActions.length} 个待补步骤，系统将按顺序自动补齐 ${eventTitleFor(contract, nextMissingAction).replace(`${contract.title} `, "")}。`
+      : "履约链已完整，无需再自动补齐。"
   };
 }

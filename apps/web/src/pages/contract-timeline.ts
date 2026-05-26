@@ -1,5 +1,6 @@
 import type { Contract } from "@finance-taxation/domain-model";
 import { resolveContractProgressState, type ContractProgressState } from "./contract-automation";
+import { buildContractWorkflow } from "./contract-workflow";
 
 interface RelatedContractEvent {
   id: string;
@@ -31,6 +32,8 @@ export function buildContractTimeline({
   relatedEvents: RelatedContractEvent[];
 }): ContractTimelineItem[] {
   const items: ContractTimelineItem[] = [];
+  const workflow = buildContractWorkflow({ contract, relatedEvents });
+  const eventMap = new Map(relatedEvents.map((event) => [event.id, event]));
 
   if (contract.signedDate) {
     items.push({
@@ -52,14 +55,15 @@ export function buildContractTimeline({
     });
   }
 
-  for (const event of relatedEvents) {
+  for (const step of workflow.steps) {
+    const event = step.relatedEventId ? eventMap.get(step.relatedEventId) ?? null : null;
     items.push({
-      id: event.id,
-      date: event.createdAt.slice(0, 10),
-      title: normalizeEventTitle(event.title),
+      id: event?.id ?? `${contract.id}-${step.action}`,
+      date: (event?.createdAt ?? contract.startDate ?? contract.signedDate ?? contract.endDate ?? contract.updatedAt).slice(0, 10),
+      title: normalizeEventTitle(event?.title ?? `${contract.title} ${step.title}`),
       kind: "event",
-      status: resolveContractProgressState(event.status),
-      relatedEventId: event.id
+      status: event ? resolveContractProgressState(event.status) : step.state,
+      relatedEventId: event?.id
     });
   }
 
@@ -98,7 +102,12 @@ export function buildContractTimeline({
   }
 
   return items.sort((a, b) => {
-    if (a.date === b.date) return a.id.localeCompare(b.id);
+    if (a.date === b.date) {
+      if (a.kind !== b.kind) {
+        return a.kind === "contract" ? -1 : 1;
+      }
+      return a.id.localeCompare(b.id);
+    }
     return a.date.localeCompare(b.date);
   });
 }
