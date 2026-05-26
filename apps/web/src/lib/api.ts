@@ -809,9 +809,16 @@ export async function createExportJob(input: {
   periodLabel?: string | null;
   status?: ExportJob["status"];
 }) {
-  return request<{ job: ExportJob; archiveEntry: ExportArchiveEntry }>("/api/exports/jobs", {
+  return request<{ job: ExportJob; archiveEntry: ExportArchiveEntry; reused: boolean }>("/api/exports/jobs", {
     method: "POST",
     body: JSON.stringify(input)
+  });
+}
+
+export async function updateExportJobStatus(jobId: string, status: ExportJob["status"]) {
+  return request<{ job: ExportJob }>(`/api/exports/jobs/${encodeURIComponent(jobId)}/status`, {
+    method: "POST",
+    body: JSON.stringify({ status })
   });
 }
 
