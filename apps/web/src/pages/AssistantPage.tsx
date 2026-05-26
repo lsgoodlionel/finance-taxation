@@ -15,6 +15,9 @@ import { AssistantShell } from "./assistant/AssistantShell";
 import { AssistantHistoryPanel } from "./assistant/AssistantHistoryPanel";
 import { AssistantStatusPanel } from "./assistant/AssistantStatusPanel";
 import { AssistantComposer } from "./assistant/AssistantComposer";
+import { AssistantSessionList } from "./assistant/AssistantSessionList";
+import { AssistantSuggestedEventsCard } from "./assistant/AssistantSuggestedEventsCard";
+import { AssistantInputBar } from "./assistant/AssistantInputBar";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
@@ -827,59 +830,14 @@ export function AssistantPage() {
 
   const historySection = (
     <AssistantHistoryPanel visible={showHistory}>
-      {sessionGroups.length === 0 ? (
-        <div style={{ color: "#aab5c0", fontSize: "13px", textAlign: "center", padding: "16px 0" }}>暂无历史记录</div>
-      ) : (
-        sessionGroups.map((group) => (
-          <div key={group.label} style={{ marginBottom: "12px" }}>
-            <div style={{ fontSize: "11px", color: "#aab5c0", fontWeight: 600, letterSpacing: "0.5px", marginBottom: "6px" }}>
-              {group.label}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              {group.items.map((s) => (
-                <div
-                  key={s.id}
-                  onMouseEnter={() => setHoveredSession(s.id)}
-                  onMouseLeave={() => setHoveredSession(null)}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "8px 10px", borderRadius: "8px", cursor: "pointer",
-                    background: activeId === s.id
-                      ? "rgba(30,42,55,0.08)"
-                      : hoveredSession === s.id ? "rgba(30,42,55,0.04)" : "transparent",
-                    transition: "background 0.15s"
-                  }}
-                >
-                  <div onClick={() => handleLoadSession(s.id)} style={{ flex: 1, overflow: "hidden" }}>
-                    <div style={{
-                      fontSize: "13px", color: "#1e2a37", fontWeight: activeId === s.id ? 600 : 400,
-                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
-                    }}>
-                      {activeId === s.id && "● "}{s.title}
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#aab5c0", marginTop: "2px" }}>
-                      {new Date(s.updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                      {" · "}{s.messages.length / 2 | 0} 轮对话
-                    </div>
-                  </div>
-                  {hoveredSession === s.id && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.id); }}
-                      style={{
-                        background: "none", border: "none", cursor: "pointer",
-                        color: "#c0392b", fontSize: "12px", padding: "2px 6px",
-                        borderRadius: "4px", flexShrink: 0
-                      }}
-                    >
-                      删除
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))
-      )}
+      <AssistantSessionList
+        activeId={activeId}
+        hoveredSession={hoveredSession}
+        groups={sessionGroups}
+        onHover={setHoveredSession}
+        onLoad={handleLoadSession}
+        onDelete={handleDeleteSession}
+      />
     </AssistantHistoryPanel>
   );
 
@@ -931,122 +889,30 @@ export function AssistantPage() {
         </div>
       )}
 
-      {suggestedEvents.length > 0 && isOpMode && (
-        <div style={{
-          ...panelBg, padding: "16px",
-          background: "rgba(232,244,239,0.95)",
-          border: "1px solid rgba(26,127,90,0.2)",
-          display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px"
-        }}>
-          <div style={{ fontSize: "13px", flex: 1 }}>
-            <span style={{ fontWeight: 600, color: "#1a7f5a" }}>
-              📋 建议创建经营事项{suggestedEvents.length > 1 ? `（共 ${suggestedEvents.length} 条，按月分拆）` : ""}：
-            </span>
-            {suggestedEvents.length === 1 ? (
-              <span style={{ marginLeft: "8px" }}>
-                [{EVENT_TYPE_LABELS[suggestedEvents[0]!.type] ?? suggestedEvents[0]!.type}] {suggestedEvents[0]!.title}
-                {suggestedEvents[0]!.amount !== null && ` · ¥${suggestedEvents[0]!.amount.toLocaleString()}`}
-                {suggestedEvents[0]!.occurredOn && ` · ${suggestedEvents[0]!.occurredOn}`}
-              </span>
-            ) : (
-              <ul style={{ margin: "6px 0 0 0", paddingLeft: "20px", lineHeight: 1.8 }}>
-                {suggestedEvents.map((ev, i) => (
-                  <li key={i} style={{ fontSize: "12.5px" }}>
-                    [{EVENT_TYPE_LABELS[ev.type] ?? ev.type}] {ev.title}
-                    {ev.amount !== null && ` · ¥${ev.amount.toLocaleString()}`}
-                    {ev.occurredOn && ` · ${ev.occurredOn}`}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div style={{ fontSize: "12px", color: "#6c7a89", marginTop: "6px" }}>
-              确认后将分别自动生成执行任务和凭证草稿，由 <strong>{approverRoleLabel}</strong> 审核过账
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "8px", flexShrink: 0, paddingTop: "2px" }}>
-            <button
-              onClick={() => void handleCreateEvent()}
-              disabled={creating}
-              style={{
-                background: "#1a7f5a", color: "#fff", border: "none",
-                borderRadius: "8px", padding: "6px 16px", cursor: "pointer",
-                fontSize: "13px", opacity: creating ? 0.6 : 1
-              }}
-            >
-              {creating ? "处理中..." : suggestedEvents.length > 1 ? `批量创建 ${suggestedEvents.length} 条` : "一键处理"}
-            </button>
-            <button
-              onClick={() => {
-                setSuggestedEvents([]);
-                setFlowContext(null);
-              }}
-              style={{
-                background: "none", color: "#6c7a89", border: "1px solid rgba(20,40,60,0.15)",
-                borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontSize: "13px"
-              }}
-            >
-              忽略
-            </button>
-          </div>
-        </div>
-      )}
+      <AssistantSuggestedEventsCard
+        approverRoleLabel={approverRoleLabel}
+        creating={creating}
+        eventTypeLabels={EVENT_TYPE_LABELS}
+        events={suggestedEvents}
+        onConfirm={() => void handleCreateEvent()}
+        onDismiss={() => {
+          setSuggestedEvents([]);
+          setFlowContext(null);
+        }}
+      />
 
-      <div style={{ ...panelBg, padding: "12px 16px", display: "flex", gap: "10px", alignItems: "flex-end" }}>
-        {isOpMode && (
-          <label
-            title="上传发票/回单/收据（PDF 直接识别，支持图片格式）"
-            style={{
-              flexShrink: 0, width: "38px", height: "38px", display: "flex",
-              alignItems: "center", justifyContent: "center",
-              borderRadius: "10px", cursor: ocrLoading ? "default" : "pointer",
-              background: ocrLoading ? "#eef0f3" : "rgba(255,255,255,0.9)",
-              border: "1px solid rgba(20,40,60,0.12)",
-              fontSize: "18px", opacity: ocrLoading ? 0.5 : 1
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,application/pdf"
-              style={{ display: "none" }}
-              disabled={ocrLoading || sending}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleImageFile(file);
-              }}
-            />
-            {ocrLoading ? "⏳" : "📎"}
-          </label>
-        )}
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          rows={2}
-          placeholder={isOpMode
-            ? "描述经营事项、报销内容等，或点击 📎 上传凭证图片/PDF 直接识别（Enter 发送）"
-            : "直接提问财务经营问题（Enter 发送，Shift+Enter 换行）"}
-          disabled={isLoading}
-          style={{
-            flex: 1, border: "1px solid rgba(20,40,60,0.12)", borderRadius: "12px",
-            padding: "10px 14px", fontSize: "14px", resize: "none", outline: "none",
-            fontFamily: "inherit", lineHeight: "1.5",
-            background: isLoading ? "#f8f9fa" : "#fff"
-          }}
-        />
-        <button
-          onClick={() => sendMessage(input)}
-          disabled={isLoading || !input.trim()}
-          style={{
-            background: "#1e2a37", color: "#fff", border: "none",
-            borderRadius: "12px", padding: "10px 20px", cursor: "pointer",
-            fontSize: "14px", flexShrink: 0,
-            opacity: isLoading || !input.trim() ? 0.5 : 1
-          }}
-        >
-          {sending ? "发送中" : "发送"}
-        </button>
-      </div>
+      <AssistantInputBar
+        disabled={isLoading}
+        input={input}
+        isOperationMode={isOpMode}
+        ocrLoading={ocrLoading}
+        sending={sending}
+        fileInputRef={fileInputRef}
+        onChange={setInput}
+        onKeyDown={handleKeyDown}
+        onSend={() => void sendMessage(input)}
+        onPickFile={(file) => { void handleImageFile(file); }}
+      />
     </AssistantComposer>
   );
 

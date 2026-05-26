@@ -274,6 +274,21 @@ export function EventsPage() {
   );
 
   const isBusy = loading !== "done" && loading !== "idle";
+  const eventTypeOptions = useMemo(
+    () => EVENT_TYPE_KEYS.map((key) => ({ value: key, label: t(EVENT_TYPE_LABELS, key) })),
+    [t]
+  );
+  const eventListItems = useMemo(
+    () => events.map((event) => ({
+      id: event.id,
+      title: event.title,
+      typeLabel: t(EVENT_TYPE_LABELS, event.type),
+      department: event.department,
+      status: event.status,
+      statusLabel: t(EVENT_STATUS_LABELS, event.status)
+    })),
+    [events, t]
+  );
 
   const header = (
     <PageHeader
@@ -305,114 +320,27 @@ export function EventsPage() {
   );
 
   const createPanel = (
-    <EventCreatePanel>
-      <div className="grid-2" style={{ gap: 12 }}>
-        <div className="form-group">
-          <label className="form-label">类型</label>
-          <select
-            className="form-select"
-            value={form.type}
-            onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-          >
-            {EVENT_TYPE_KEYS.map((k) => <option key={k} value={k}>{t(EVENT_TYPE_LABELS, k)}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">部门</label>
-          <input
-            className="form-input"
-            value={form.department}
-            onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
-          />
-        </div>
-        <div className="form-group" style={{ gridColumn: "1 / -1" }}>
-          <label className="form-label">标题</label>
-          <input
-            className="form-input"
-            value={form.title}
-            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-            placeholder="请输入事项标题"
-          />
-        </div>
-        <div className="form-group" style={{ gridColumn: "1 / -1" }}>
-          <label className="form-label">描述</label>
-          <textarea
-            className="form-textarea"
-            value={form.description}
-            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            rows={3}
-            placeholder="请输入事项描述"
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">发生日期</label>
-          <input
-            className="form-input"
-            type="date"
-            value={form.occurredOn}
-            onChange={(e) => setForm((f) => ({ ...f, occurredOn: e.target.value }))}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">金额</label>
-          <input
-            className="form-input"
-            value={form.amount}
-            onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-            placeholder="选填"
-          />
-        </div>
-      </div>
-      <div className="mt-16">
-        <button
-          className="btn btn-primary"
-          onClick={() => void handleCreate()}
-          disabled={isBusy || !form.title.trim()}
-        >
-          {loading === "saving" ? "创建中…" : "创建事项"}
-        </button>
-      </div>
-    </EventCreatePanel>
+    <EventCreatePanel
+      form={form}
+      isBusy={isBusy}
+      isSaving={loading === "saving"}
+      options={eventTypeOptions}
+      onChange={(next) => setForm((prev) => ({ ...prev, ...next }))}
+      onSubmit={() => void handleCreate()}
+    />
   );
 
   const listPanel = (
-    <EventListPanel count={events.length}>
-      {events.length === 0 ? (
-        <div className="state-empty">暂无事项</div>
-      ) : (
-        <div style={{ display: "grid", gap: 6 }}>
-          {events.map((evt) => (
-            <button
-              key={evt.id}
-              onClick={() => {
-                setSelectedEventIdState(evt.id);
-                setStatusDraft(evt.status);
-                void refreshDetail(evt.id);
-              }}
-              style={{
-                textAlign: "left",
-                padding: "12px 14px",
-                borderRadius: "var(--r-lg)",
-                border: evt.id === selectedEventId
-                  ? "1px solid var(--c-primary)"
-                  : "1px solid var(--c-border)",
-                background: evt.id === selectedEventId
-                  ? "var(--c-primary-light)"
-                  : "var(--c-surface)",
-                cursor: "pointer",
-                width: "100%"
-              }}
-            >
-              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{evt.title}</div>
-              <div className="flex-row mt-4">
-                <span className={statusBadge(evt.status)}>{t(EVENT_STATUS_LABELS, evt.status)}</span>
-                <span className="text-muted text-sm">{t(EVENT_TYPE_LABELS, evt.type)} · {evt.department}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-    </EventListPanel>
+    <EventListPanel
+      count={events.length}
+      events={eventListItems}
+      selectedEventId={selectedEventId}
+      onSelect={(eventId, status) => {
+        setSelectedEventIdState(eventId);
+        setStatusDraft(status as BusinessEventStatus);
+        void refreshDetail(eventId);
+      }}
+    />
   );
 
   const detailActions = selectedEventId ? (
