@@ -20,3 +20,13 @@ export function resolveContractAuditContext(contractId: string) {
     resourceId: contractId
   } as const;
 }
+
+export function buildContractNavigationState(
+  contractId: string,
+  extra?: Record<string, unknown>
+): Record<string, unknown> & { contractId: string } {
+  return {
+    contractId,
+    ...extra
+  };
+}

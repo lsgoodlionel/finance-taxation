@@ -19,7 +19,7 @@ import {
   getContractFollowupActions
 } from "./contract-event";
 import { buildContractAutoDerivationPlan } from "./contract-automation";
-import { resolveContractAuditContext } from "./contract-drilldown";
+import { buildContractNavigationState, resolveContractAuditContext } from "./contract-drilldown";
 import { buildContractTimeline } from "./contract-timeline";
 import { buildContractWorkflow } from "./contract-workflow";
 
@@ -310,7 +310,12 @@ export function ContractsPage() {
   }
 
   function navigateWithEvent(path: string, eventId: string) {
-    navigate(path, { state: { businessEventId: eventId } });
+    const contractId = detail?.contract.id;
+    navigate(path, {
+      state: contractId
+        ? buildContractNavigationState(contractId, { businessEventId: eventId })
+        : { businessEventId: eventId }
+    });
   }
 
   return (
@@ -573,12 +578,25 @@ export function ContractsPage() {
                     </span>
                     <span style={{ fontSize: "13px", color: "#1e2a37" }}>{step.title}</span>
                     {step.relatedEventId ? (
-                      <button
-                        onClick={() => navigateWithEvent("/events", step.relatedEventId!)}
-                        style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}
-                      >
-                        查看事项
-                      </button>
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            color: style.color,
+                            background: style.tagBg,
+                            padding: "4px 10px",
+                            borderRadius: "999px"
+                          }}
+                        >
+                          {WORKFLOW_STATE_LABELS[step.state]}
+                        </span>
+                        <button
+                          onClick={() => navigateWithEvent("/events", step.relatedEventId!)}
+                          style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}
+                        >
+                          查看事项
+                        </button>
+                      </div>
                     ) : null}
                   </div>
                     );
@@ -632,12 +650,25 @@ export function ContractsPage() {
                     <div style={{ fontSize: "12px", color: "#6c7a89" }}>{item.date}</div>
                     <div style={{ fontSize: "13px", color: "#1e2a37" }}>{item.title}</div>
                     {item.relatedEventId ? (
-                      <button
-                        onClick={() => navigateWithEvent("/events", item.relatedEventId!)}
-                        style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}
-                      >
-                        查看事项
-                      </button>
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            color: WORKFLOW_STATE_STYLES[item.status].color,
+                            background: WORKFLOW_STATE_STYLES[item.status].tagBg,
+                            padding: "4px 10px",
+                            borderRadius: "999px"
+                          }}
+                        >
+                          {WORKFLOW_STATE_LABELS[item.status]}
+                        </span>
+                        <button
+                          onClick={() => navigateWithEvent("/events", item.relatedEventId!)}
+                          style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}
+                        >
+                          查看事项
+                        </button>
+                      </div>
                     ) : (
                       <span
                         style={{
@@ -712,17 +743,17 @@ export function ContractsPage() {
                 查看凭证
               </button>
             ) : null}
-            <button
-              onClick={() => navigate("/risk", { state: { contractId: detail.contract.id } })}
-              style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #c0392b", color: "#c0392b", background: "none", cursor: "pointer" }}
-            >
-              查看合同风险
-            </button>
-            <button
-              onClick={() => navigate("/audit", { state: { ...resolveContractAuditContext(detail.contract.id), contractId: detail.contract.id } })}
-              style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #4a5568", color: "#4a5568", background: "none", cursor: "pointer" }}
-            >
-              查看合同审计
+              <button
+                onClick={() => navigate("/risk", { state: buildContractNavigationState(detail.contract.id) })}
+                style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #c0392b", color: "#c0392b", background: "none", cursor: "pointer" }}
+              >
+                查看合同风险
+              </button>
+              <button
+                onClick={() => navigate("/audit", { state: { ...resolveContractAuditContext(detail.contract.id), ...buildContractNavigationState(detail.contract.id) } })}
+                style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px", border: "1px solid #4a5568", color: "#4a5568", background: "none", cursor: "pointer" }}
+              >
+                查看合同审计
             </button>
           </div>
           {detail.relatedEvents.length > 0 && (
