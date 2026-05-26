@@ -86,14 +86,19 @@ const employeeTarget = resolveAuditLogTarget(employeeLog);
 assert(employeeTarget?.path === "/payroll", "expected employee log to resolve to payroll page");
 assert(employeeTarget?.state?.employeeId === "emp-1", "expected employee drilldown to preserve employee id");
 assert(employeeTarget?.state?.tab === "employees", "expected employee drilldown to open employee tab");
+assert(employeeTarget?.state?.resourceType === "employee", "expected employee drilldown to preserve resource type");
 
 const normalized = normalizeDrilldownState({
   voucherId: "voucher-2",
   payrollPeriod: "2026-05",
-  tab: "payroll"
+  tab: "payroll",
+  focus: "payroll-risk",
+  riskScope: "payroll"
 });
 assert(normalized.voucherId === "voucher-2", "expected voucher id to be normalized");
 assert(normalized.payrollPeriod === "2026-05", "expected payroll period to be normalized");
+assert(normalized.focus === "payroll-risk", "expected focus to be normalized");
+assert(normalized.riskScope === "payroll", "expected risk scope to be normalized");
 
 const taxAuditContext = resolveAuditContextFromState({ taxItemId: "tax-1" });
 assert(taxAuditContext?.resourceType === "tax_item", "expected tax item context to derive resource type");
@@ -108,5 +113,7 @@ const closureTargets = buildRiskClosureTargetChain({
 });
 assert(closureTargets[0]?.path === "/contracts", "expected closure chain to include contract first");
 assert(closureTargets.some((item) => item.path === "/audit"), "expected closure chain to keep audit target");
+const auditTarget = closureTargets.find((item) => item.path === "/audit" && item.state?.resourceType === "risk_finding");
+assert(auditTarget?.state?.contractId === "contract-1", "expected closure audit target to preserve contract context");
 
 console.log("drilldown-ok");
