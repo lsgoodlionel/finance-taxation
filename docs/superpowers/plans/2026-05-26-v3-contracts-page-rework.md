@@ -45,7 +45,7 @@
 - [x] Extract contract timeline panel
 - [x] Keep existing drilldown and contract behavior intact
 - [x] Verify typecheck and focused tests
-- [ ] Commit
+- [x] Commit
 
 ## Progress Update
 
