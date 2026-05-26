@@ -1,0 +1,124 @@
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: var(--v3-color-bg);
+  color: var(--v3-color-text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.v3-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--v3-space-md);
+}
+
+.v3-page-header h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.v3-page-header p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--v3-color-text-muted);
+}
+
+.v3-banner {
+  border: 1px solid var(--v3-color-border);
+  border-radius: var(--v3-radius-lg);
+  padding: 12px 14px;
+  background: var(--v3-color-surface);
+  font-size: 13px;
+}
+
+.v3-banner[data-tone="info"] {
+  border-color: rgba(79, 142, 247, 0.25);
+  background: rgba(79, 142, 247, 0.08);
+}
+
+.v3-banner[data-tone="success"] {
+  border-color: rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.v3-banner[data-tone="warning"] {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.v3-banner[data-tone="error"] {
+  border-color: rgba(220, 38, 38, 0.25);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.v3-entity-drawer {
+  border: 1px solid rgba(20, 40, 60, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--v3-shadow-sm);
+}
+
+.v3-entity-drawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 0;
+}
+
+.v3-entity-drawer__body {
+  padding: 20px;
+}
+
+.v3-entity-drawer__footer {
+  padding: 0 20px 20px;
+}
+
+.v3-empty-state {
+  border: 1px dashed rgba(20, 40, 60, 0.16);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  color: var(--v3-color-text-muted);
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.v3-step-wizard {
+  display: grid;
+  gap: 14px;
+}
+
+.v3-step-wizard__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.v3-step-wizard__step {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(20, 40, 60, 0.12);
+  font-size: 12px;
+  color: var(--v3-color-text-muted);
+}
+
+.v3-step-wizard__step[data-active="true"] {
+  background: var(--v3-color-primary-soft);
+  border-color: rgba(79, 142, 247, 0.35);
+  color: var(--v3-color-primary);
+  font-weight: 600;
+}
+
+.v3-table-shell {
+  display: grid;
+  gap: 12px;
+}

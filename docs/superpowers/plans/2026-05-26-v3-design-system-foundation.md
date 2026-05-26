@@ -41,11 +41,11 @@
 - Create: `apps/web/src/styles/global.css`
 - Modify: `apps/web/src/main.tsx`
 
-- [ ] **Step 1: Write the failing smoke expectation by importing styles in main**
+- [x] **Step 1: Write the failing smoke expectation by importing styles in main**
 
 Expected initial failure mode: imports missing.
 
-- [ ] **Step 2: Create `apps/web/src/styles/tokens.css`**
+- [x] **Step 2: Create `apps/web/src/styles/tokens.css`**
 
 ```css
 :root {
@@ -71,7 +71,7 @@ Expected initial failure mode: imports missing.
 }
 ```
 
-- [ ] **Step 3: Create `apps/web/src/styles/global.css`**
+- [x] **Step 3: Create `apps/web/src/styles/global.css`**
 
 ```css
 html,
@@ -92,19 +92,19 @@ body {
 }
 ```
 
-- [ ] **Step 4: Import styles in `apps/web/src/main.tsx`**
+- [x] **Step 4: Import styles in `apps/web/src/main.tsx`**
 
 ```tsx
 import "./styles/tokens.css";
 import "./styles/global.css";
 ```
 
-- [ ] **Step 5: Verify app typecheck still passes**
+- [x] **Step 5: Verify app typecheck still passes**
 
 Run: `npm run typecheck:v2`  
 Expected: pass
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/styles/tokens.css apps/web/src/styles/global.css apps/web/src/main.tsx
@@ -120,7 +120,7 @@ git commit -m "Add V3 style tokens and global styles"
 - Test: `apps/web/src/hooks/useDrawer.test.ts`
 - Test: `apps/web/src/hooks/useQueryState.test.ts`
 
-- [ ] **Step 1: Write `useDrawer` test**
+- [x] **Step 1: Write `useDrawer` test**
 
 ```ts
 import { strict as assert } from "node:assert";
@@ -135,7 +135,7 @@ assert.equal(state.isOpen, false);
 assert.equal(state.value, null);
 ```
 
-- [ ] **Step 2: Implement `apps/web/src/hooks/useDrawer.ts`**
+- [x] **Step 2: Implement `apps/web/src/hooks/useDrawer.ts`**
 
 ```ts
 import { useState } from "react";
@@ -170,7 +170,7 @@ export function useDrawer<T>() {
 }
 ```
 
-- [ ] **Step 3: Implement `apps/web/src/hooks/useQueryState.ts`**
+- [x] **Step 3: Implement `apps/web/src/hooks/useQueryState.ts`**
 
 ```ts
 import { useMemo } from "react";
@@ -194,7 +194,7 @@ export function useQueryState(key: string, fallback = "") {
 }
 ```
 
-- [ ] **Step 4: Implement `apps/web/src/hooks/useAsyncAction.ts`**
+- [x] **Step 4: Implement `apps/web/src/hooks/useAsyncAction.ts`**
 
 ```ts
 import { useState } from "react";
@@ -221,7 +221,7 @@ export function useAsyncAction() {
 }
 ```
 
-- [ ] **Step 5: Run targeted tests**
+- [x] **Step 5: Run targeted tests**
 
 Run:
 - `node --import tsx apps/web/src/hooks/useDrawer.test.ts`
@@ -229,7 +229,7 @@ Run:
 
 Expected: pass
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/hooks/useDrawer.ts apps/web/src/hooks/useQueryState.ts apps/web/src/hooks/useAsyncAction.ts apps/web/src/hooks/useDrawer.test.ts apps/web/src/hooks/useQueryState.test.ts
@@ -249,7 +249,7 @@ git commit -m "Add shared V3 page state hooks"
 - Test: `apps/web/src/components/ui/EntityDrawer.test.tsx`
 - Test: `apps/web/src/components/ui/ResultBanner.test.tsx`
 
-- [ ] **Step 1: Add minimal test for `PageHeader` title rendering**
+- [x] **Step 1: Add minimal test for `PageHeader` title rendering**
 
 ```tsx
 import { strict as assert } from "node:assert";
@@ -260,7 +260,7 @@ const html = renderToStaticMarkup(<PageHeader title="经营事项总线" />);
 assert.ok(html.includes("经营事项总线"));
 ```
 
-- [ ] **Step 2: Implement `PageHeader`**
+- [x] **Step 2: Implement `PageHeader`**
 
 ```tsx
 import type { ReactNode } from "react";
@@ -284,7 +284,7 @@ export function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
 }
 ```
 
-- [ ] **Step 3: Implement remaining UI primitives with simple, typed wrappers**
+- [x] **Step 3: Implement remaining UI primitives with simple, typed wrappers**
 
 Implementation requirements:
 - `EntityDrawer`: uniform shell with title/body/footer slots
@@ -293,7 +293,7 @@ Implementation requirements:
 - `ResultBanner`: tone (`info|success|warning|error`) + message
 - `DataTableShell`: section shell around existing tables
 
-- [ ] **Step 4: Run component tests**
+- [x] **Step 4: Run component tests**
 
 Run:
 - `node --import tsx apps/web/src/components/ui/PageHeader.test.tsx`
@@ -302,7 +302,7 @@ Run:
 
 Expected: pass
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/components/ui
@@ -316,28 +316,28 @@ git commit -m "Add V3 shared UI primitives"
 - Modify: `apps/web/src/pages/EventsPage.tsx`
 - Modify: `apps/web/src/pages/PdfExportPage.tsx`
 
-- [ ] **Step 1: Replace repeated page header blocks with `PageHeader`**
+- [x] **Step 1: Replace repeated page header blocks with `PageHeader`**
 
 Targets:
 - `AssistantPage`
 - `EventsPage`
 - `PdfExportPage`
 
-- [ ] **Step 2: Replace local banners/messages with `ResultBanner` where possible**
+- [x] **Step 2: Replace local banners/messages with `ResultBanner` where possible**
 
 Targets:
 - assistant context notices
 - events status guidance
 - export result guidance
 
-- [ ] **Step 3: Introduce `useDrawer` / `useQueryState` in one concrete place per page**
+- [x] **Step 3: Introduce `useDrawer` / `useQueryState` in one concrete place per page**
 
 Targets:
 - `EventsPage`: selected event id
 - `PdfExportPage`: active scene or tab
 - `AssistantPage`: active session or right-panel selection
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 Run:
 - `npm run typecheck:v2`
@@ -345,7 +345,7 @@ Run:
 
 Expected: pass
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/pages/AssistantPage.tsx apps/web/src/pages/EventsPage.tsx apps/web/src/pages/PdfExportPage.tsx
@@ -359,6 +359,19 @@ git commit -m "Apply V3 foundation primitives to core entry pages"
 - Type consistency: all planned hooks and components are named consistently across tasks.
 
 ## Execution Handoff
+
+Plan executed for Phase 0 foundation. Verification used direct `node`, `tsx`, and `tsc` binaries because the current shell environment does not expose `npm`.
+
+Executed verification:
+- `/Applications/Codex.app/Contents/Resources/node --import tsx apps/web/src/hooks/useDrawer.test.ts`
+- `/Applications/Codex.app/Contents/Resources/node --import tsx apps/web/src/hooks/useQueryState.test.ts`
+- `/Applications/Codex.app/Contents/Resources/node --import tsx apps/web/src/components/ui/PageHeader.test.tsx`
+- `/Applications/Codex.app/Contents/Resources/node --import tsx apps/web/src/components/ui/EntityDrawer.test.tsx`
+- `/Applications/Codex.app/Contents/Resources/node --import tsx apps/web/src/components/ui/ResultBanner.test.tsx`
+- `./node_modules/.bin/tsc --noEmit -p apps/web/tsconfig.json`
+- `/Applications/Codex.app/Contents/Resources/node --check src/scripts/app.js`
+- `/Applications/Codex.app/Contents/Resources/node tools/check-json.mjs backend/data`
+- `/Applications/Codex.app/Contents/Resources/node tools/check-progress-board.mjs docs/v2-progress-board.md`
 
 Plan complete and saved to `docs/superpowers/plans/2026-05-26-v3-design-system-foundation.md`.
 

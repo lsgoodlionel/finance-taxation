@@ -122,7 +122,7 @@ function buildPayrollNavigationState(
 export function PayrollPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const navState = (location.state as { payrollPeriod?: string; employeeId?: string; tab?: Tab; businessEventId?: string } | null) ?? {};
+  const navState = normalizePayrollNavState(location.state);
   const navPayrollPeriod = navState.payrollPeriod ?? null;
   const navEmployeeId = navState.employeeId ?? null;
   const navTab = navState.tab ?? null;

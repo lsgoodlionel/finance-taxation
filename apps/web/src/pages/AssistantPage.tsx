@@ -8,6 +8,9 @@ import { buildProcessFlowPageContext } from "../features/process-flow/page-conte
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 import type { ProcessFlowContext } from "../features/process-flow/types";
 import { ASSISTANT_ENTRY_SUBTITLE } from "../lib/entry-guidance";
+import { PageHeader } from "../components/ui/PageHeader";
+import { ResultBanner } from "../components/ui/ResultBanner";
+import { useDrawer } from "../hooks/useDrawer";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
@@ -189,7 +192,7 @@ export function AssistantPage() {
   );
   const [suggestedEvents, setSuggestedEvents] = useState<SuggestedEvent[]>([]);
   const [creating, setCreating] = useState(false);
-  const [ocrPreview, setOcrPreview] = useState<OcrPreview | null>(null);
+  const ocrPreviewDrawer = useDrawer<OcrPreview>();
   const [showHistory, setShowHistory] = useState(false);
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
   const [uploadPhase, setUploadPhase] = useState<{ phase: "reading" | "uploading" | "ai"; pct: number } | null>(null);
@@ -199,6 +202,14 @@ export function AssistantPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const ocrPreview = ocrPreviewDrawer.value;
+  const setOcrPreview = (next: OcrPreview | null) => {
+    if (next) {
+      ocrPreviewDrawer.open(next);
+      return;
+    }
+    ocrPreviewDrawer.close();
+  };
 
   useEffect(() => {
     getCurrentUser()
@@ -658,10 +669,36 @@ export function AssistantPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", height: "calc(100vh - 180px)", maxHeight: "800px", position: "relative" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <h2 style={{ margin: "0 0 4px", fontSize: "22px" }}>AI 财税助手</h2>
+      <PageHeader
+        title="AI 财税助手"
+        subtitle={ASSISTANT_ENTRY_SUBTITLE}
+        actions={(
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              onClick={() => sessions.length > 0 && setShowHistory((v) => !v)}
+              style={{
+                background: showHistory ? "#1e2a37" : "#eef0f3",
+                color: showHistory ? "#fff" : sessions.length > 0 ? "#1e2a37" : "#bcc5ce",
+                border: "none", borderRadius: "8px", padding: "6px 14px",
+                cursor: sessions.length > 0 ? "pointer" : "default", fontSize: "13px"
+              }}
+            >
+              历史记录{sessions.length > 0 ? ` (${sessions.length})` : ""}
+            </button>
+            <button
+              onClick={handleNewSession}
+              style={{
+                background: "#eef0f3", color: "#1e2a37", border: "none",
+                borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontSize: "13px"
+              }}
+            >
+              + 新对话
+            </button>
+          </div>
+        )}
+      />
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             {/* View mode toggle — visible only to boss users */}
             {isBoss && (
               <button
@@ -689,10 +726,9 @@ export function AssistantPage() {
               </span>
             )}
           </div>
-          <div style={{ color: "#6c7a89", fontSize: "13px", fontWeight: 500 }}>{ASSISTANT_ENTRY_SUBTITLE}</div>
-          <div style={{ color: "#6c7a89", fontSize: "13px", marginTop: "2px" }}>{status}</div>
-          {uploadPhase && (
-            <div style={{ marginTop: "6px", width: "260px" }}>
+        <div style={{ color: "#6c7a89", fontSize: "13px", marginTop: "6px" }}>{status}</div>
+        {uploadPhase && (
+          <div style={{ marginTop: "6px", width: "260px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#4f8ef7", marginBottom: "3px" }}>
                 <span>
                   {uploadPhase.phase === "reading" && "读取文件"}
@@ -712,31 +748,8 @@ export function AssistantPage() {
                   transition: "width 0.3s ease"
                 }} />
               </div>
-            </div>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button
-            onClick={() => sessions.length > 0 && setShowHistory((v) => !v)}
-            style={{
-              background: showHistory ? "#1e2a37" : "#eef0f3",
-              color: showHistory ? "#fff" : sessions.length > 0 ? "#1e2a37" : "#bcc5ce",
-              border: "none", borderRadius: "8px", padding: "6px 14px",
-              cursor: sessions.length > 0 ? "pointer" : "default", fontSize: "13px"
-            }}
-          >
-            历史记录{sessions.length > 0 ? ` (${sessions.length})` : ""}
-          </button>
-          <button
-            onClick={handleNewSession}
-            style={{
-              background: "#eef0f3", color: "#1e2a37", border: "none",
-              borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontSize: "13px"
-            }}
-          >
-            + 新对话
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* History panel */}
@@ -805,28 +818,10 @@ export function AssistantPage() {
       )}
 
       {/* Decision mode hint */}
-      {!isOpMode && (
-        <div style={{
-          ...panelBg, padding: "10px 16px",
-          background: "rgba(255,249,235,0.8)",
-          border: "1px solid rgba(217,119,6,0.15)",
-          fontSize: "13px", color: "#92400e"
-        }}>
-          📊 决策视角：基于实时财务快照（资金/收支/税负/风险）回答，每次提问自动刷新。
-        </div>
-      )}
+      {!isOpMode && <ResultBanner tone="warning" message="决策视角：基于实时财务快照（资金/收支/税负/风险）回答，每次提问自动刷新。" />}
 
       {/* Operation mode hint for boss */}
-      {isOpMode && isBoss && (
-        <div style={{
-          ...panelBg, padding: "10px 16px",
-          background: "rgba(240,247,255,0.8)",
-          border: "1px solid rgba(79,142,247,0.2)",
-          fontSize: "13px", color: "#1e4a8c"
-        }}>
-          ⚙ 操作视角：可处理报销、入账等实际财务操作，AI 将给出账务处理建议并自动生成凭证草稿。
-        </div>
-      )}
+      {isOpMode && isBoss && <ResultBanner tone="info" message="操作视角：可处理报销、入账等实际财务操作，AI 将给出账务处理建议并自动生成凭证草稿。" />}
 
       <ProcessFlowCard
         mode="inline"

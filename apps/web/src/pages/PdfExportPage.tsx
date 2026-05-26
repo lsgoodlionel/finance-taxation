@@ -40,6 +40,9 @@ import type {
 import { buildPrintableDocumentHtml } from "./document-relations";
 import { buildExportFileName } from "./pdf-export-utils";
 import { buildResultPageSubtitle } from "../lib/entry-guidance";
+import { PageHeader } from "../components/ui/PageHeader";
+import { ResultBanner } from "../components/ui/ResultBanner";
+import { useQueryState } from "../hooks/useQueryState";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 
@@ -119,7 +122,7 @@ export function PdfExportPage() {
   const [closingPeriod, setClosingPeriod] = useState("2026-05");
   const [inspectionPeriod, setInspectionPeriod] = useState("2026-Q2");
   const [message, setMessage] = useState("正在加载导出列表...");
-  const [activeTab, setActiveTab] = useState<"payroll" | "reports" | "tax" | "packages" | "documents" | "risk" | "rnd" | "vouchers">("reports");
+  const [activeTabState, setActiveTabState] = useQueryState("tab", "reports");
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
@@ -128,6 +131,9 @@ export function PdfExportPage() {
   const [exportAuditLogs, setExportAuditLogs] = useState<AuditLog[]>([]);
   const [archiveKindFilter, setArchiveKindFilter] = useState<ExportArtifactKind | "">("");
   const [archiveKeyword, setArchiveKeyword] = useState("");
+  const activeTab = (["payroll", "reports", "tax", "packages", "documents", "risk", "rnd", "vouchers"].includes(activeTabState)
+    ? activeTabState
+    : "reports") as "payroll" | "reports" | "tax" | "packages" | "documents" | "risk" | "rnd" | "vouchers";
 
   useEffect(() => {
     async function bootstrap() {
@@ -277,29 +283,26 @@ export function PdfExportPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h2 style={{ margin: "0 0 4px", fontSize: "22px" }}>PDF 导出中心</h2>
-          <div style={{ color: "#6c7a89", fontSize: "13px", marginBottom: "4px" }}>
-            {buildResultPageSubtitle("PDF 导出")}
+      <PageHeader
+        title="PDF 导出中心"
+        subtitle={buildResultPageSubtitle("PDF 导出")}
+        actions={(
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button style={tabStyle("reports")} onClick={() => setActiveTabState("reports")}>报表导出</button>
+            <button style={tabStyle("tax")} onClick={() => setActiveTabState("tax")}>税务底稿</button>
+            <button style={tabStyle("packages")} onClick={() => setActiveTabState("packages")}>资料包</button>
+            <button style={tabStyle("documents")} onClick={() => setActiveTabState("documents")}>单据导出</button>
+            <button style={tabStyle("risk")} onClick={() => setActiveTabState("risk")}>风险复盘</button>
+            <button style={tabStyle("rnd")} onClick={() => setActiveTabState("rnd")}>研发资料</button>
+            <button style={tabStyle("payroll")} onClick={() => setActiveTabState("payroll")}>工资导出</button>
+            <button style={tabStyle("vouchers")} onClick={() => setActiveTabState("vouchers")}>凭证导出</button>
           </div>
-          <div style={{ color: "#6c7a89", fontSize: "13px" }}>{message}</div>
-        </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button style={tabStyle("reports")} onClick={() => setActiveTab("reports")}>报表导出</button>
-          <button style={tabStyle("tax")} onClick={() => setActiveTab("tax")}>税务底稿</button>
-          <button style={tabStyle("packages")} onClick={() => setActiveTab("packages")}>资料包</button>
-          <button style={tabStyle("documents")} onClick={() => setActiveTab("documents")}>单据导出</button>
-          <button style={tabStyle("risk")} onClick={() => setActiveTab("risk")}>风险复盘</button>
-          <button style={tabStyle("rnd")} onClick={() => setActiveTab("rnd")}>研发资料</button>
-          <button style={tabStyle("payroll")} onClick={() => setActiveTab("payroll")}>工资导出</button>
-          <button style={tabStyle("vouchers")} onClick={() => setActiveTab("vouchers")}>凭证导出</button>
-        </div>
-      </div>
+        )}
+      />
 
-      <div style={{ ...panelStyle(), background: "rgba(232,244,239,0.6)", border: "1px solid rgba(26,127,90,0.15)", fontSize: "13px", color: "#1a7f5a" }}>
-        💡 打开导出链接后，在浏览器中按 <strong>Ctrl+P</strong>（Mac: <strong>⌘+P</strong>），选择「另存为 PDF」即可保存 PDF 文件。
-      </div>
+      {message ? <ResultBanner tone="info" message={message} /> : null}
+
+      <ResultBanner tone="success" message="打开导出链接后，在浏览器中按 Ctrl+P（Mac: ⌘+P），选择「另存为 PDF」即可保存 PDF 文件。" />
 
       <div style={panelStyle()}>
         <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>最近导出记录</h3>

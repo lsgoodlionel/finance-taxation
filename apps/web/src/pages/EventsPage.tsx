@@ -27,6 +27,10 @@ import { EVENTS_ENTRY_SUBTITLE } from "../lib/entry-guidance";
 import { ProcessFlowCard } from "../features/process-flow/ProcessFlowCard";
 import { buildProcessFlowPageContext } from "../features/process-flow/page-context";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
+import { EntityDrawer } from "../components/ui/EntityDrawer";
+import { PageHeader } from "../components/ui/PageHeader";
+import { ResultBanner } from "../components/ui/ResultBanner";
+import { useQueryState } from "../hooks/useQueryState";
 
 const EVENT_TYPE_KEYS = [
   "sales", "procurement", "expense", "payroll",
@@ -103,7 +107,7 @@ function EventsHelpModal({ onClose }: { onClose: () => void }) {
 export function EventsPage() {
   const navigate = useNavigate();
   const [events, setEvents] = useState<BusinessEvent[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEventIdState, setSelectedEventIdState] = useQueryState("event", "");
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState("idle");
   const [message, setMessage] = useState("");
@@ -120,17 +124,17 @@ export function EventsPage() {
   });
   const [statusDraft, setStatusDraft] = useState<BusinessEventStatus>("draft");
   const { t } = useI18n();
+  const selectedEventId = selectedEventIdState || null;
 
   async function loadEvents() {
     setLoading("loading");
     try {
       const payload = await listEvents();
       setEvents(payload.items);
-      const savedId = sessionStorage.getItem("events_selectedEventId");
-      const targetId = (savedId && payload.items.some((e) => e.id === savedId))
-        ? savedId
+      const targetId = (selectedEventId && payload.items.some((e) => e.id === selectedEventId))
+        ? selectedEventId
         : payload.items[0]?.id ?? null;
-      setSelectedEventId(targetId);
+      setSelectedEventIdState(targetId ?? "");
       setMessage(`已加载 ${payload.total} 条经营事项`);
       if (targetId) {
         const d = await getEventDetail(targetId);
@@ -166,7 +170,7 @@ export function EventsPage() {
       const created = await createEvent({ ...form, amount: form.amount || null });
       const payload = await listEvents();
       setEvents(payload.items);
-      setSelectedEventId(created.id);
+      setSelectedEventIdState(created.id);
       await refreshDetail(created.id);
       setMessage(`已创建：${created.title}`);
       setForm((f) => ({ ...f, title: "", description: "", amount: "" }));
@@ -271,13 +275,11 @@ export function EventsPage() {
   return (
     <div style={{ display: "grid", gap: 20 }}>
       {showHelp ? <EventsHelpModal onClose={() => setShowHelp(false)} /> : null}
-      <div className="page-header">
-        <div>
-          <div className="page-title">经营事项总线</div>
-          <div className="page-subtitle">{EVENTS_ENTRY_SUBTITLE}</div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {message ? <span className="badge badge-blue">{message}</span> : null}
+      <PageHeader
+        title="经营事项总线"
+        subtitle={EVENTS_ENTRY_SUBTITLE}
+        actions={(
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
             type="button"
             onClick={() => setShowHelp(true)}
@@ -297,7 +299,10 @@ export function EventsPage() {
             ?
           </button>
         </div>
-      </div>
+        )}
+      />
+
+      {message ? <ResultBanner tone="info" message={message} /> : null}
 
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20 }}>
         {/* 新建表单 */}
@@ -390,8 +395,7 @@ export function EventsPage() {
                   <button
                     key={evt.id}
                     onClick={() => {
-                      sessionStorage.setItem("events_selectedEventId", evt.id);
-                      setSelectedEventId(evt.id);
+                      setSelectedEventIdState(evt.id);
                       setStatusDraft(evt.status);
                       void refreshDetail(evt.id);
                     }}
@@ -423,18 +427,11 @@ export function EventsPage() {
       </div>
 
       {/* 事项详情 */}
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <span className="card-title">
-              {detail ? detail.title : "经营事项详情"}
-            </span>
-            {selectedSummary && (
-              <div className="text-muted text-sm mt-4">{selectedSummary}</div>
-            )}
-          </div>
-          {selectedEventId && (
-            <div className="flex-row">
+      <EntityDrawer
+        title={detail ? detail.title : "经营事项详情"}
+        subtitle={selectedSummary ?? undefined}
+        actions={selectedEventId ? (
+          <div className="flex-row">
               <select
                 className="form-select"
                 style={{ width: "auto" }}
@@ -465,11 +462,11 @@ export function EventsPage() {
                 更新状态
               </button>
             </div>
-          )}
-        </div>
+        ) : undefined}
+      >
 
         {detail ? (
-          <div className="card-body">
+          <div>
             {processFlowContext && (
               <div style={{ marginBottom: 24 }}>
                 <ProcessFlowCard
@@ -665,7 +662,7 @@ export function EventsPage() {
         ) : (
           <div className="state-empty">请从左侧列表选择一条经营事项</div>
         )}
-      </div>
+      </EntityDrawer>
     </div>
   );
 }
