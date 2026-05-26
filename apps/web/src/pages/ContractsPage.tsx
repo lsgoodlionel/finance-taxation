@@ -31,6 +31,8 @@ import { ContractsWorkbench } from "./contracts/ContractsWorkbench";
 import { ContractFollowupActions, ContractWorkflowSummary } from "./contracts/ContractWorkflowSummary";
 import { ContractObjectOverview, ContractWorkbenchActions } from "./contracts/ContractObjectOverview";
 import { ContractRelatedEventsTable } from "./contracts/ContractRelatedEventsTable";
+import { ContractMetadataGrid } from "./contracts/ContractMetadataGrid";
+import { ContractTimelinePanel } from "./contracts/ContractTimelinePanel";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   sales: "销售合同",
@@ -511,24 +513,19 @@ export function ContractsPage() {
           recommendedActionsLabel={workflow?.recommendedActions.length ? workflow.recommendedActions.map((action) => FOLLOWUP_ACTION_LABELS[action]).join(" / ") : undefined}
           autoCreateCount={autoDerivationPlan?.autoCreateActions.length ?? 0}
         />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px 24px", fontSize: "13px", marginBottom: "20px" }}>
-          {[
-            ["合同编号", detail.contract.contractNo],
-            ["类型", CONTRACT_TYPE_LABELS[detail.contract.contractType]],
-            ["状态", STATUS_LABELS[detail.contract.status]],
-            ["交易方", detail.contract.counterpartyName],
-            ["金额", `${detail.contract.amount.toLocaleString()} ${detail.contract.currency}`],
-            ["签订日期", detail.contract.signedDate ?? "—"],
-            ["起始日期", detail.contract.startDate ?? "—"],
-            ["到期日期", detail.contract.endDate ?? "—"],
-            ["备注", detail.contract.notes || "—"]
-          ].map(([k, v]) => (
-            <div key={k}>
-              <div style={{ color: "#6c7a89", marginBottom: "2px" }}>{k}</div>
-              <div>{v}</div>
-            </div>
-          ))}
-        </div>
+        <ContractMetadataGrid
+          fields={[
+            { label: "合同编号", value: detail.contract.contractNo ?? "—" },
+            { label: "类型", value: CONTRACT_TYPE_LABELS[detail.contract.contractType] ?? detail.contract.contractType },
+            { label: "状态", value: STATUS_LABELS[detail.contract.status] ?? detail.contract.status },
+            { label: "交易方", value: detail.contract.counterpartyName },
+            { label: "金额", value: `${detail.contract.amount.toLocaleString()} ${detail.contract.currency}` },
+            { label: "签订日期", value: detail.contract.signedDate ?? "—" },
+            { label: "起始日期", value: detail.contract.startDate ?? "—" },
+            { label: "到期日期", value: detail.contract.endDate ?? "—" },
+            { label: "备注", value: detail.contract.notes || "—" }
+          ]}
+        />
         <ContractFollowupActions
           creating={creatingEventContractId === detail.contract.id}
           workflow={workflow}
@@ -541,64 +538,12 @@ export function ContractsPage() {
           onAutoCreate={() => void handleAutoDeriveFollowups(detail.contract)}
           onOpenEvent={(eventId) => navigateWithEvent("/events", eventId)}
         />
-          {timeline.length > 0 && (
-            <div style={{ marginBottom: "16px" }}>
-              <div style={{ color: "#6c7a89", fontSize: "12px", marginBottom: "8px" }}>合同履约时间轴</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {timeline.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "96px 1fr auto",
-                      gap: "12px",
-                      alignItems: "center",
-                      padding: "8px 12px",
-                      borderRadius: "10px",
-                      background: item.kind === "contract" ? "rgba(37,99,235,0.06)" : "rgba(20,40,60,0.04)",
-                      border: "1px solid rgba(20,40,60,0.08)"
-                    }}
-                  >
-                    <div style={{ fontSize: "12px", color: "#6c7a89" }}>{item.date}</div>
-                    <div style={{ fontSize: "13px", color: "#1e2a37" }}>{item.title}</div>
-                    {item.relatedEventId ? (
-                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            color: WORKFLOW_STATE_STYLES[item.status].color,
-                            background: WORKFLOW_STATE_STYLES[item.status].tagBg,
-                            padding: "4px 10px",
-                            borderRadius: "999px"
-                          }}
-                        >
-                          {WORKFLOW_STATE_LABELS[item.status]}
-                        </span>
-                        <button
-                          onClick={() => navigateWithEvent("/events", item.relatedEventId!)}
-                          style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}
-                        >
-                          查看事项
-                        </button>
-                      </div>
-                    ) : (
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          color: WORKFLOW_STATE_STYLES[item.status].color,
-                          background: WORKFLOW_STATE_STYLES[item.status].tagBg,
-                          padding: "4px 10px",
-                          borderRadius: "999px"
-                        }}
-                      >
-                        {WORKFLOW_STATE_LABELS[item.status]}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        <ContractTimelinePanel
+          items={timeline}
+          stateLabels={WORKFLOW_STATE_LABELS}
+          stateStyles={WORKFLOW_STATE_STYLES}
+          onOpenEvent={(eventId) => navigateWithEvent("/events", eventId)}
+        />
         <ContractObjectOverview
           relatedTasksCount={detail.relatedTasks.length}
           relatedDocumentsCount={detail.relatedDocuments.length}

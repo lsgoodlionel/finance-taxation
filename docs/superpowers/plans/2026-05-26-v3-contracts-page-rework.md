@@ -39,8 +39,17 @@
 - [x] Verify typecheck and focused tests
 - [x] Commit
 
+### Task 4: Continue sinking remaining detail rendering blocks
+
+- [x] Extract contract metadata grid
+- [x] Extract contract timeline panel
+- [x] Keep existing drilldown and contract behavior intact
+- [x] Verify typecheck and focused tests
+- [ ] Commit
+
 ## Progress Update
 
 - `Task 1` 已完成并提交。
 - `Task 2` 已完成列表面板、详情工作台壳拆分，以及对象概览、履约动作、关联事项表的受控子组件下沉，现有 drilldown 和合同业务逻辑保持不变。
 - `Task 3` 已完成第一轮合同页 V3 摘要优先展示，并已通过 focused test 与前端 typecheck。
+- `Task 4` 已完成合同元信息区和履约时间轴区的受控子组件下沉，`ContractsPage` 继续变薄，现有导航和履约逻辑保持不变。
