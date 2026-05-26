@@ -20,7 +20,11 @@ export function buildPayrollTaxReviewLedgers({
   const iitTaxItems = taxItems.filter((item) => item.taxType === "个人所得税");
   const socialTaxItems = taxItems.filter((item) => item.taxType === "社保公积金");
   const now = new Date().toISOString();
-  const readyStatus = businessEventId ? "ready" : "pending";
+  const readyStatus = businessEventId
+    ? taxItems.length > 0 && taxItems.every((item) => item.status === "ready")
+      ? "reviewed"
+      : "ready"
+    : "pending";
 
   return [
     {

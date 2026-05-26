@@ -91,14 +91,43 @@ const EMPTY_EMP_FORM = {
   name: "", idCard: "", position: "", hireDate: "", baseSalary: "", notes: ""
 };
 
+function normalizePayrollNavState(state: unknown) {
+  if (!state || typeof state !== "object") {
+    return {};
+  }
+  const source = state as Record<string, unknown>;
+  const pick = (key: string) => typeof source[key] === "string" ? source[key] : undefined;
+  return {
+    businessEventId: pick("businessEventId"),
+    employeeId: pick("employeeId"),
+    payrollPeriod: pick("payrollPeriod"),
+    tab: pick("tab"),
+    resourceType: pick("resourceType"),
+    resourceId: pick("resourceId")
+  };
+}
+
+function buildPayrollNavigationState(
+  period: string,
+  businessEventId: string,
+  extra?: Record<string, string>
+) {
+  return {
+    payrollPeriod: period,
+    businessEventId,
+    ...extra
+  };
+}
+
 export function PayrollPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const navState = (location.state as { payrollPeriod?: string; employeeId?: string; tab?: Tab } | null) ?? {};
+  const navState = (location.state as { payrollPeriod?: string; employeeId?: string; tab?: Tab; businessEventId?: string } | null) ?? {};
   const navPayrollPeriod = navState.payrollPeriod ?? null;
   const navEmployeeId = navState.employeeId ?? null;
   const navTab = navState.tab ?? null;
-  const [tab, setTab] = useState<Tab>("employees");
+  const navBusinessEventId = navState.businessEventId ?? null;
+  const [tab, setTab] = useState<Tab>(navPayrollPeriod || navBusinessEventId ? "payroll" : "employees");
   const [message, setMessage] = useState("正在加载数据...");
 
   // employees tab
@@ -160,14 +189,17 @@ export function PayrollPage() {
       if (navEmployeeId) {
         setMessage(`已按员工 ${navEmployeeId} 恢复工资管理上下文。`);
       }
+      return;
     }
-  }, [navEmployeeId, navTab]);
+    if (navPayrollPeriod || navBusinessEventId) {
+      setTab("payroll");
+    }
+  }, [navBusinessEventId, navEmployeeId, navPayrollPeriod, navTab]);
 
   useEffect(() => {
     if (!navPayrollPeriod) {
       return;
     }
-    setTab("payroll");
     setCustomPeriod(navPayrollPeriod);
     void handleLoadPeriod(navPayrollPeriod).catch(() => {
       setSelectedPeriod(navPayrollPeriod);
@@ -288,6 +320,13 @@ export function PayrollPage() {
     setMessage(`已加载 ${period} 工资数据，共 ${res.total} 条。`);
   }
 
+  useEffect(() => {
+    if (!navState.payrollPeriod) {
+      return;
+    }
+    void handleLoadPeriod(navState.payrollPeriod).catch((error) => setMessage((error as Error).message));
+  }, [navState.payrollPeriod]);
+
   async function handleConfirm(recordId: string) {
     await confirmPayroll(recordId);
     if (selectedPeriod) {
@@ -340,7 +379,7 @@ export function PayrollPage() {
       setMessage("请先生成工资事项，再进入任务、税务或凭证中心。");
       return;
     }
-    navigate(path, { state: { businessEventId: eventId, payrollPeriod: selectedPeriod, ...extraState } });
+    navigate(path, { state: buildPayrollNavigationState(selectedPeriod, eventId, extraState) });
   }
 
   const linkedEventId = selectedPeriod ? linkedEventIds[selectedPeriod] ?? null : null;
@@ -434,6 +473,21 @@ export function PayrollPage() {
     };
   }, [linkedEventId, selectedPeriod]);
 
+  useEffect(() => {
+    if (!linkedEventId || navState.businessEventId !== linkedEventId) {
+      return;
+    }
+    if (navState.payrollPeriod && navState.payrollPeriod !== selectedPeriod) {
+      return;
+    }
+    if (navState.tab === "employees" && navState.employeeId) {
+      return;
+    }
+    if (navState.resourceType || navState.resourceId) {
+      setMessage(`已恢复工资上下文：事项 ${linkedEventId}，可继续查看税务、凭证或风险结果。`);
+    }
+  }, [linkedEventId, navState.businessEventId, navState.employeeId, navState.payrollPeriod, navState.resourceId, navState.resourceType, navState.tab, selectedPeriod]);
+
   async function handlePayrollRiskCheck() {
     const eventId = linkedEventIds[selectedPeriod];
     if (!eventId) {
@@ -443,7 +497,12 @@ export function PayrollPage() {
     try {
       const result = await runEventRiskCheck(eventId);
       setMessage(`工资事项风险检查完成，生成 ${result.total} 条发现。`);
-      navigate("/risk", { state: { businessEventId: eventId } });
+      navigate("/risk", {
+        state: buildPayrollNavigationState(selectedPeriod, eventId, {
+          focus: "payroll-risk",
+          riskScope: "payroll"
+        })
+      });
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -793,6 +852,11 @@ export function PayrollPage() {
                         <span style={{ fontSize: "12px", color: "#6c7a89" }}>
                           当前已落地 {reviewLedgers.length} 本：个税 / 社保 / 公积金
                         </span>
+                        <span style={{ fontSize: "12px", color: reviewLedgers.every((item) => item.status === "reviewed") && reviewLedgers.length > 0 ? "#1a7f5a" : "#b0890a" }}>
+                          {reviewLedgers.length > 0 && reviewLedgers.every((item) => item.status === "reviewed")
+                            ? "税务复核状态已回写完成"
+                            : "税务复核状态待进一步确认"}
+                        </span>
                         {linkedEventId ? (
                           <button style={btnSecondary()} onClick={() => navigateWithEvent("/tax", { focus: "payroll-ledgers" })}>
                             查看工资税务事项
@@ -864,6 +928,9 @@ export function PayrollPage() {
                         </div>
                       ))}
                     </div>
+                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#6c7a89" }}>
+                      已关联工资凭证 {linkedVoucherCount} 张。若摘要、科目或金额口径仍需调整，应先在凭证中心修正后再进入过账。
+                    </div>
                     <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
                       <button style={btnSecondary()} onClick={() => navigateWithEvent("/vouchers", { focus: "payroll-voucher" })}>
                         查看工资凭证中心
@@ -892,8 +959,23 @@ export function PayrollPage() {
                         刷新工资风险
                       </button>
                       {linkedEventId ? (
-                        <button style={btnSecondary()} onClick={() => navigate("/risk", { state: { businessEventId: linkedEventId, payrollPeriod: selectedPeriod, focus: "payroll-risk" } })}>
+                        <button style={btnSecondary()} onClick={() => navigate("/risk", { state: buildPayrollNavigationState(selectedPeriod, linkedEventId, { focus: "payroll-risk", riskScope: "payroll" }) })}>
                           查看工资风险详情
+                        </button>
+                      ) : null}
+                      {linkedEventId && payrollRiskBuckets.iit.length > 0 ? (
+                        <button style={btnSecondary()} onClick={() => navigate("/risk", { state: buildPayrollNavigationState(selectedPeriod, linkedEventId, { focus: "payroll-risk-iit", riskScope: "payroll-iit" }) })}>
+                          仅看个税风险
+                        </button>
+                      ) : null}
+                      {linkedEventId && payrollRiskBuckets.socialSecurity.length > 0 ? (
+                        <button style={btnSecondary()} onClick={() => navigate("/risk", { state: buildPayrollNavigationState(selectedPeriod, linkedEventId, { focus: "payroll-risk-social", riskScope: "payroll-social" }) })}>
+                          仅看社保风险
+                        </button>
+                      ) : null}
+                      {linkedEventId && payrollRiskBuckets.housingFund.length > 0 ? (
+                        <button style={btnSecondary()} onClick={() => navigate("/risk", { state: buildPayrollNavigationState(selectedPeriod, linkedEventId, { focus: "payroll-risk-housing", riskScope: "payroll-housing" }) })}>
+                          仅看公积金风险
                         </button>
                       ) : null}
                     </div>
