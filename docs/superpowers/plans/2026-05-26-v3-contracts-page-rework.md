@@ -18,23 +18,29 @@
 
 ### Task 1: Extract contracts page shell
 
-- [ ] Create shell render test
-- [ ] Add shell/header/filter bar components
-- [ ] Move top-level layout out of `ContractsPage.tsx`
-- [ ] Keep behavior intact and pass typecheck
-- [ ] Commit
+- [x] Create shell render test
+- [x] Add shell/header/filter bar components
+- [x] Move top-level layout out of `ContractsPage.tsx`
+- [x] Keep behavior intact and pass typecheck
+- [x] Commit
 
 ### Task 2: Split contract list and detail workbench
 
-- [ ] Extract list panel
-- [ ] Extract detail workbench container
+- [x] Extract list panel
+- [x] Extract detail workbench container
 - [ ] Keep existing actions and drilldown behavior intact
 - [ ] Verify typecheck and focused tests
 - [ ] Commit
 
 ### Task 3: Normalize V3 entry/result guidance for contracts
 
-- [ ] Add V3 header/subtitle and next-step cues
-- [ ] Make detail view show workflow summary first
+- [x] Add V3 header/subtitle and next-step cues
+- [x] Make detail view show workflow summary first
 - [ ] Verify typecheck and focused tests
 - [ ] Commit
+
+## Progress Update
+
+- `Task 1` 已完成并提交。
+- `Task 2` 已完成列表面板和详情工作台壳拆分，下一步继续下沉内部块和动作区。
+- `Task 3` 已完成第一轮合同页 V3 摘要优先展示。

@@ -493,33 +493,56 @@ export function ContractsPage() {
   const detailView = detail ? (
     <ContractsWorkbench>
       <div style={panelStyle()}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <h3 style={{ margin: "0 0 16px", fontSize: "16px" }}>{detail.contract.title}</h3>
-            <button
-              onClick={() => setDetail(null)}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "#6c7a89", fontSize: "18px" }}
-            >
-              ×
-            </button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <h3 style={{ margin: "0 0 16px", fontSize: "16px" }}>{detail.contract.title}</h3>
+          <button
+            onClick={() => setDetail(null)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#6c7a89", fontSize: "18px" }}
+          >
+            ×
+          </button>
+        </div>
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "16px 18px",
+            borderRadius: "16px",
+            border: "1px solid rgba(37,99,235,0.12)",
+            background: "rgba(37,99,235,0.06)",
+            display: "grid",
+            gap: "8px"
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#2563eb", fontWeight: 700, letterSpacing: "0.04em" }}>
+            履约流程摘要
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px 24px", fontSize: "13px", marginBottom: "20px" }}>
-            {[
-              ["合同编号", detail.contract.contractNo],
-              ["类型", CONTRACT_TYPE_LABELS[detail.contract.contractType]],
-              ["状态", STATUS_LABELS[detail.contract.status]],
-              ["交易方", detail.contract.counterpartyName],
-              ["金额", `${detail.contract.amount.toLocaleString()} ${detail.contract.currency}`],
-              ["签订日期", detail.contract.signedDate ?? "—"],
-              ["起始日期", detail.contract.startDate ?? "—"],
-              ["到期日期", detail.contract.endDate ?? "—"],
-              ["备注", detail.contract.notes || "—"]
-            ].map(([k, v]) => (
-              <div key={k}>
-                <div style={{ color: "#6c7a89", marginBottom: "2px" }}>{k}</div>
-                <div>{v}</div>
-              </div>
-            ))}
+          <div style={{ fontSize: "14px", color: "#1e2a37", fontWeight: 600 }}>
+            {workflow?.summary ?? "当前合同已进入履约工作台，可继续推进事项、税务和凭证处理。"}
           </div>
+          <div style={{ fontSize: "12px", color: "#5b6b7b", lineHeight: 1.7 }}>
+            当前状态：{STATUS_LABELS[detail.contract.status] ?? detail.contract.status}
+            {workflow?.recommendedActions.length ? ` · 建议优先补 ${workflow.recommendedActions.map((action) => FOLLOWUP_ACTION_LABELS[action]).join(" / ")}` : ""}
+            {(autoDerivationPlan?.autoCreateActions.length ?? 0) > 0 ? ` · 可自动补齐 ${autoDerivationPlan?.autoCreateActions.length} 项履约动作` : ""}
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px 24px", fontSize: "13px", marginBottom: "20px" }}>
+          {[
+            ["合同编号", detail.contract.contractNo],
+            ["类型", CONTRACT_TYPE_LABELS[detail.contract.contractType]],
+            ["状态", STATUS_LABELS[detail.contract.status]],
+            ["交易方", detail.contract.counterpartyName],
+            ["金额", `${detail.contract.amount.toLocaleString()} ${detail.contract.currency}`],
+            ["签订日期", detail.contract.signedDate ?? "—"],
+            ["起始日期", detail.contract.startDate ?? "—"],
+            ["到期日期", detail.contract.endDate ?? "—"],
+            ["备注", detail.contract.notes || "—"]
+          ].map(([k, v]) => (
+            <div key={k}>
+              <div style={{ color: "#6c7a89", marginBottom: "2px" }}>{k}</div>
+              <div>{v}</div>
+            </div>
+          ))}
+        </div>
           <div style={{ marginBottom: "16px" }}>
             <div style={{ color: "#6c7a89", fontSize: "12px", marginBottom: "8px" }}>合同履约链动作</div>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
