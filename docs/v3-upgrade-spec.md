@@ -2,7 +2,7 @@
 
 > 版本：v3.0-spec-1.0  
 > 日期：2026-05-26  
-> 状态：已确认，待实施  
+> 状态：已确认，实施中（需按当前代码基线校准）  
 > 目标：将现有 18 个前端页面从"信息堆砌型"重构为"业务流程引导型"，
 > 让操作逻辑更直观、步骤更清晰、信息更有层次。
 
@@ -10,6 +10,7 @@
 
 ## 目录
 
+0. [当前基线校准](#零当前基线校准)
 1. [现状诊断](#一现状诊断)
 2. [V3.0 技术选型](#二v30-技术选型)
 3. [设计原则与规范](#三设计原则与规范)
@@ -21,6 +22,39 @@
 
 ---
 
+## 零、当前基线校准
+
+本计划书最初提交于 `56f8cdc`。自该提交之后，`main` 已继续合入多条
+V2/V2.1 收口分支，因此本文档既是 V3 路线图，也需要明确当前真实基线，
+避免重复实现或误判优先级。
+
+### 0.1 当前主线已合入成果
+
+| 已合入分支 | 当前结果 | 对 V3 的影响 |
+|---|---|---|
+| `codex/p0-contract-fulfillment-closure` | 合同已接入事项主线，具备履约动作、时间轴、对象聚合、部分终态同步 | `ContractsPage` 不再从零重做，应直接进入结构重构和强关系深化 |
+| `codex/p0-payroll-tax-closure` | 工资已接入 `payroll` 事项、税务复核台账、凭证/风险联动 | `PayrollPage` 重点从“补闭环”转为“拆结构 + 强化状态回写” |
+| `codex/p1-risk-audit-drilldown` | 已有 drilldown 状态恢复、范围过滤、审计上下文展开基础设施 | `RiskPage`/`AuditPage` V3 应复用现有上下文模型，不要另起一套 |
+| `codex/p1-navigation-and-entry-reorder` | AI 助手、事项总线前移，入口说明第一轮统一，`BossQAPage` 清理 | 导航不再是纯待开始项，V3 以体验收敛为主 |
+| `codex/p2-export-batch-and-naming` | 已有导出任务状态、批量命名、归档索引、导出历史第一轮对象层 | `PdfExportPage` 应重构交互，而不是重做数据能力 |
+
+### 0.2 当前仍未完成的高价值问题
+
+1. 页面结构仍然过大，核心页仍普遍存在“列表 + 详情 + 操作 + 引导”混写。
+2. 视觉层和交互层仍缺统一设计系统，大量页面依然以内联布局为主。
+3. 合同、工资、风险、导出虽然已进入主链，但页面形态仍偏工程态，不是稳定产品态。
+4. URL 状态持久化、空态、骨架屏、响应式和无障碍支持仍未形成统一规范。
+5. 报表、导出、助手、事项四条高频路径在 V3 里还没有统一的“入口 -> 过程 -> 结果”表达。
+
+### 0.3 对 V3 实施方式的约束
+
+- 先重构基础组件与页面骨架，再继续深化底层业务模型。
+- 已在 V2 分支中完成的数据能力，V3 一律复用，不重复发明接口和对象。
+- V3 第一阶段只聚焦高频页：`Assistant / Events / Contracts / Payroll / PdfExport`。
+- `Tax / Ledger / Reports / Rnd / Risk / Audit / Knowledge / Settings` 在第一阶段只做结构承接，不做大范围重写。
+
+---
+
 ## 一、现状诊断
 
 ### 1.1 页面复杂度全景
@@ -29,7 +63,7 @@
 |---|---|---|---|---|
 | PayrollPage | 1147 | 25 | 3 | 三个独立业务域强行合并，计算流程不可见 |
 | AssistantPage | 1106 | 16 | — | OCR/对话/事项创建/流程卡四功能混合 |
-| PdfExportPage | 928 | 21 | 8 | 8 种导出类型全部铺开，无场景引导 |
+| PdfExportPage | 928 | 21 | 8 | 已有导出对象层，但页面仍以功能平铺为主，无统一场景入口 |
 | ContractsPage | 825 | 9 | — | 列表/详情/时间轴/工作流/风险合一文件 |
 | TaxPage | 706 | 21 | — | 申报/计算/税种/工资税未分域 |
 | EventsPage | 671 | 9 | — | 事项操作与列表混合，无流程指引 |
@@ -52,10 +86,10 @@
 |---|---|---|
 | **无设计系统** | 全部为 `style={{...}}` 内联，无 CSS token，无共享组件 | 样式不一致，改动成本高 |
 | **单一 message 状态** | 错误/成功/状态用同一字符串，用户无法判断严重程度 | 用户体验差 |
-| **无步骤引导** | 复杂操作（工资计算/税务申报）没有流程指引 | 操作失误率高 |
+| **步骤引导不统一** | 部分流程已有步骤或流程卡，但没有统一 Stepper 体系 | 操作体验不稳定 |
 | **无骨架屏/空状态** | loading 只显示文字，列表空时只有简单文本 | 视觉体验差 |
 | **表单内嵌列表** | 新建/编辑表单直接渲染在列表页内 | 页面拥挤，操作混乱 |
-| **无 URL 状态持久化** | 筛选/分页/Tab 刷新即失 | 无法分享链接，后退键失效 |
+| **URL 状态持久化不完整** | drilldown 已有基础，但筛选/分页/Tab 仍未统一落地 | 无法完整分享链接，后退键失效 |
 | **无响应式设计** | 宽度全部硬编码 | 移动端和小屏完全不可用 |
 | **无无障碍支持** | 无 `aria-*`，无键盘导航 | 不合规 |
 | **单文件巨组件** | 最大文件 1147 行，最多 25 个 useState | 维护困难，测试覆盖低 |
@@ -296,6 +330,10 @@ reference/dubbl/app/
 
 ### Phase 0：基础设施（所有模块依赖此 Phase）
 
+当前说明：
+- 本阶段在当前代码库里大部分仍未正式开始。
+- 但 `entry-guidance`、`drilldown`、局部流程图、局部对象页抽象已存在，可作为 Phase 0 输入，而不是被替换。
+
 #### 0-A：设计 Token 系统
 **文件：** `src/styles/tokens.css`
 
@@ -388,6 +426,10 @@ import { antdTheme } from "./lib/antd-theme";
 ---
 
 ### Phase 1：核心业务路径（高优先级）
+
+当前说明：
+- `Events / Tasks / Documents / Vouchers` 在功能链路上已经闭环。
+- V3 对这四页的目标不是“补业务”，而是“重构为统一流程壳 + Drawer + Stepper + URL 状态”。
 
 #### 1-A：EventsPage（经营事项）— 业务起点，最重要
 
@@ -587,6 +629,10 @@ reference/Tunisian-ERP/  # 同技术栈，有会计模块
 
 ### Phase 2：复杂流程 Stepper 化
 
+当前说明：
+- `Payroll / Tax / Contracts / Ledger` 在业务能力上已有不同程度前置成果。
+- 本阶段应优先做页面拆分、流程可见和对象关系展示，不优先继续补后端闭环。
+
 #### 2-A：PayrollPage（工资管理）— 最高复杂度，最大拆分
 
 **当前核心问题：**
@@ -717,7 +763,7 @@ reference/dubbl/app/  # 财务报表和税务视图
 #### 2-C：ContractsPage（合同管理）— 看板化
 
 **当前核心问题：**
-825 行，合同列表/详情/时间轴/工作流/风险一文件，生命周期不可视
+825 行，合同列表/详情/时间轴/工作流/风险一文件，虽然已有履约动作和时间轴，但页面组织仍然过于集中，生命周期不可视
 
 **V3.0 升级方案：合同看板 + 详情 Drawer**
 
@@ -814,6 +860,10 @@ reference/Cent/src/pages/ledger/  # 中文账本
 ---
 
 ### Phase 3：辅助功能模块
+
+当前说明：
+- `Assistant / PdfExport / Risk / Reports / Rnd / Dashboard` 已有实质功能，V3 重点是交互重构和视觉层级升级。
+- `Audit / Knowledge / Settings` 保持“低风险结构优化”策略，不做激进重写。
 
 #### 3-A：AssistantPage（AI 财税秘书）— 三区布局重构
 
@@ -1065,32 +1115,27 @@ AI配置: 增加"连接测试"按钮（带 toast 反馈）
 
 ## 六、实施路线图
 
-### 里程碑
+### 里程碑（校准版）
 
 | 阶段 | 时间 | 内容 | 产出物 |
 |---|---|---|---|
-| **Phase 0** | 第1-3天 | 基础设施：antd配置/Token/通用组件/Hook | 8个通用组件，5个通用Hook |
-| **Phase 1** | 第4-14天 | Events/Tasks/Documents/Vouchers | 4个模块完成重构 |
-| **Phase 2A** | 第15-21天 | PayrollPage 拆分 + 6步向导 | 工资模块完成 |
-| **Phase 2B** | 第22-26天 | TaxPage 左导航 + 申报向导 | 税务模块完成 |
-| **Phase 2C** | 第27-31天 | ContractsPage 看板化 | 合同模块完成 |
-| **Phase 2D** | 第32-34天 | LedgerPage Tab 深化 | 总账模块完成 |
-| **Phase 3A** | 第35-39天 | AssistantPage 三区布局 | AI助手完成 |
-| **Phase 3B** | 第40-43天 | PdfExportPage 场景化 | 导出中心完成 |
-| **Phase 3C-I** | 第44-52天 | Risk/Reports/Rnd/Dashboard/其余模块 | 全部模块完成 |
-| **测试验收** | 第53-56天 | E2E测试 + Bug Fix + 性能优化 | 可发布版本 |
+| **Phase 0** | 第1周 | 设计系统、通用 UI、通用 Hook、URL 状态规范 | 基础设施骨架 |
+| **Phase 1** | 第2-3周 | Assistant / Events / Tasks / Documents / Vouchers | 高频主路径完成重构 |
+| **Phase 2** | 第4-5周 | Payroll / Contracts / PdfExport | 三个复杂业务页完成重构 |
+| **Phase 3** | 第6周 | Tax / Ledger / Reports / Risk / Audit | 结果页与稽核页结构升级 |
+| **Phase 4** | 第7周 | Rnd / Dashboard / Knowledge / Settings | 剩余页体验收口 |
+| **测试验收** | 第8周 | E2E 测试 + Bug Fix + 性能优化 | 可发布版本 |
 
-**总计：约 8 周（56天）**
+**总计：约 8 周**
 
-### 开发顺序依据
+### 开发顺序依据（校准版）
 
 ```
-Phase 0 → 所有模块依赖（先建基础设施）
-Phase 1 → 业务核心路径（Events→Tasks→Documents→Vouchers），
-           用户最高频操作，最先上线获取反馈
-Phase 2A/B → 工资和税务是核心盈利功能，优先
-Phase 2C → 合同管理支撑工资和税务
-Phase 3 → 辅助功能，在核心路径稳定后迭代
+Phase 0 → 所有页面依赖的 UI / Hook / URL 状态骨架
+Phase 1 → 主入口与主链（Assistant→Events→Tasks→Documents→Vouchers）
+Phase 2 → 复杂业务页（Payroll / Contracts / PdfExport）
+Phase 3 → 结果页与稽核页（Tax / Ledger / Reports / Risk / Audit）
+Phase 4 → 其余辅助页收口
 ```
 
 ### 每个 Sprint 完成标准
@@ -1102,6 +1147,18 @@ Phase 3 → 辅助功能，在核心路径稳定后迭代
 - [ ] URL 状态持久化（筛选/Tab/选中ID）
 - [ ] Toast 替换所有 `message` 状态
 - [ ] TypeScript 无 `any`，无 eslint 错误
+
+### V3 第一阶段建议分支
+
+建议不要沿用当前 `p0/p1/p2` 分支继续堆交互重构，而应从 `main` 另开 V3 分支：
+
+1. `codex/v3-design-system-foundation`
+2. `codex/v3-assistant-events-flow`
+3. `codex/v3-contracts-page-rework`
+4. `codex/v3-payroll-page-rework`
+5. `codex/v3-export-center-rework`
+
+每个分支只做页面结构与交互层升级，尽量复用现有业务对象层和接口，不重新发明底层能力。
 
 ---
 
@@ -1242,7 +1299,8 @@ apps/web/src/
 
 ---
 
-> 本文档作为 V3.0 开发的权威参考。每个 Phase 开始前以此为基准进行实施规划，
-> 完成后更新对应章节的实施状态。
+> 本文档作为 V3.0 开发的权威参考，但实施时必须以“零、当前基线校准”为入口，
+> 不得忽略 `main` 已合入成果。
 >
-> 下一步：确认 Phase 0 开始执行，或调整某个具体模块的优先级。
+> 下一步：先开 `codex/v3-design-system-foundation`，完成 Phase 0 基础设施，再进入
+> `Assistant / Events / Contracts / Payroll / PdfExport` 五条 V3 第一阶段分支。
