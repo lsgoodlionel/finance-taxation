@@ -90,3 +90,15 @@ test("buildPayrollTaxReviewLedgers marks ledgers pending without linked event", 
 
   assert.ok(ledgers.every((item) => item.status === "pending"));
 });
+
+test("buildPayrollTaxReviewLedgers marks ledgers reviewed when linked tax items are ready", () => {
+  const ledgers = buildPayrollTaxReviewLedgers({
+    companyId: "cmp-1",
+    period: "2026-05",
+    businessEventId: "evt-payroll",
+    records,
+    taxItems: taxItems.map((item) => ({ ...item, status: "ready" }))
+  });
+
+  assert.ok(ledgers.every((item) => item.status === "reviewed"));
+});

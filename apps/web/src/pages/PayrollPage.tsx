@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { Employee, PayrollPolicy, PayrollRecord, PayrollPeriodSummary, PayrollTaxReviewLedger, RiskFinding, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import {
   analyzeEvent,
@@ -91,9 +91,28 @@ const EMPTY_EMP_FORM = {
   name: "", idCard: "", position: "", hireDate: "", baseSalary: "", notes: ""
 };
 
+function normalizePayrollNavState(state: unknown) {
+  if (!state || typeof state !== "object") {
+    return {};
+  }
+  const source = state as Record<string, unknown>;
+  const pick = (key: string) => typeof source[key] === "string" ? source[key] : undefined;
+  return {
+    businessEventId: pick("businessEventId"),
+    employeeId: pick("employeeId"),
+    payrollPeriod: pick("payrollPeriod"),
+    tab: pick("tab"),
+    resourceType: pick("resourceType"),
+    resourceId: pick("resourceId")
+  };
+}
+
 export function PayrollPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>("employees");
+  const location = useLocation();
+  const navState = normalizePayrollNavState(location.state);
+  const initialTab = navState.tab === "employees" || navState.payrollPeriod || navState.businessEventId ? "payroll" : "employees";
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [message, setMessage] = useState("正在加载数据...");
 
   // employees tab
@@ -148,6 +167,19 @@ export function PayrollPage() {
       // ignore broken session payloads
     }
   }, []);
+
+  useEffect(() => {
+    if (navState.tab === "employees") {
+      setTab("employees");
+      if (navState.employeeId) {
+        setMessage(`已按员工上下文恢复到工资页：${navState.employeeId}`);
+      }
+      return;
+    }
+    if (navState.payrollPeriod || navState.businessEventId) {
+      setTab("payroll");
+    }
+  }, [navState.businessEventId, navState.employeeId, navState.payrollPeriod, navState.tab]);
 
   async function loadAll() {
     const [empRes, perRes, polRes] = await Promise.all([
@@ -260,6 +292,13 @@ export function PayrollPage() {
     }
     setMessage(`已加载 ${period} 工资数据，共 ${res.total} 条。`);
   }
+
+  useEffect(() => {
+    if (!navState.payrollPeriod) {
+      return;
+    }
+    void handleLoadPeriod(navState.payrollPeriod).catch((error) => setMessage((error as Error).message));
+  }, [navState.payrollPeriod]);
 
   async function handleConfirm(recordId: string) {
     await confirmPayroll(recordId);
@@ -406,6 +445,21 @@ export function PayrollPage() {
       active = false;
     };
   }, [linkedEventId, selectedPeriod]);
+
+  useEffect(() => {
+    if (!linkedEventId || navState.businessEventId !== linkedEventId) {
+      return;
+    }
+    if (navState.payrollPeriod && navState.payrollPeriod !== selectedPeriod) {
+      return;
+    }
+    if (navState.tab === "employees" && navState.employeeId) {
+      return;
+    }
+    if (navState.resourceType || navState.resourceId) {
+      setMessage(`已恢复工资上下文：事项 ${linkedEventId}，可继续查看税务、凭证或风险结果。`);
+    }
+  }, [linkedEventId, navState.businessEventId, navState.employeeId, navState.payrollPeriod, navState.resourceId, navState.resourceType, navState.tab, selectedPeriod]);
 
   async function handlePayrollRiskCheck() {
     const eventId = linkedEventIds[selectedPeriod];
