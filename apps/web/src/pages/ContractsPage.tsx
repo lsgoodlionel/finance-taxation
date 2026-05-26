@@ -17,6 +17,7 @@ import {
   buildContractFollowupEventInput,
   getContractFollowupActions
 } from "./contract-event";
+import { normalizeDrilldownState } from "./drilldown";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   sales: "销售合同",
@@ -79,7 +80,7 @@ interface ContractDetailView {
 export function ContractsPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const navContractId = (location.state as { contractId?: string } | null)?.contractId ?? null;
+  const navContractId = normalizeDrilldownState(location.state).contractId ?? null;
   const { t } = useI18n();
   const [contracts, setContracts] = useState<ContractWithEventCount[]>([]);
   const [detail, setDetail] = useState<ContractDetailView | null>(null);

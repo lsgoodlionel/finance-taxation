@@ -60,7 +60,10 @@ export function buildRiskClosureTargetChain({
   findingId: string;
   event: BusinessEvent | null;
 }): DrilldownTarget[] {
-  const targets = buildRiskDrilldownTargets(event);
+  const baseTargets = buildRiskDrilldownTargets(event);
+  const contractTarget = baseTargets.find((target) => target.path === "/contracts");
+  const otherTargets = baseTargets.filter((target) => target.path !== "/contracts");
+  const targets = contractTarget ? [contractTarget, ...otherTargets] : baseTargets;
   return [
     ...targets,
     {

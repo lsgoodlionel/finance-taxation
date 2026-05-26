@@ -2,6 +2,18 @@ import type { BusinessEvent, RiskFinding } from "@finance-taxation/domain-model"
 
 export type RiskScopeFilter = "all" | "contract" | "payroll";
 
+export function filterContractRiskFindings(
+  findings: RiskFinding[],
+  events: BusinessEvent[],
+  contractId: string
+) {
+  const eventMap = new Map(events.map((event) => [event.id, event]));
+  return findings.filter((finding) => {
+    const event = finding.businessEventId ? eventMap.get(finding.businessEventId) ?? null : null;
+    return event?.contractId === contractId;
+  });
+}
+
 export function filterRiskFindingsByScope(
   findings: RiskFinding[],
   eventMap: Map<string, BusinessEvent>,

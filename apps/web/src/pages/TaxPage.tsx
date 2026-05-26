@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { useI18n, TAX_STATUS_LABELS, TAX_BATCH_STATUS_LABELS, REVIEW_RESULT_LABELS } from "../lib/i18n";
+import { normalizeDrilldownState } from "./drilldown";
 
 function TaxHelpModal({ onClose }: { onClose: () => void }) {
   return (
@@ -93,9 +94,9 @@ function cellStyle() {
 
 export function TaxPage() {
   const location = useLocation();
-  const navState = (location.state as { businessEventId?: string; taxItemId?: string } | null) ?? null;
-  const navEventId = navState?.businessEventId ?? null;
-  const navTaxItemId = navState?.taxItemId ?? null;
+  const navState = normalizeDrilldownState(location.state);
+  const navEventId = navState.businessEventId ?? null;
+  const navTaxItemId = navState.taxItemId ?? null;
   const { t } = useI18n();
   const [items, setItems] = useState<TaxItem[]>([]);
   const [batches, setBatches] = useState<TaxFilingBatch[]>([]);
