@@ -31,14 +31,14 @@
 - [x] Extract policy section container
 - [x] Keep existing actions and drilldown behavior intact
 - [x] Verify typecheck and focused tests
-- [ ] Commit
+- [x] Commit
 
 ### Task 3: Prioritize workflow summary and next-step cues
 
 - [x] Make payroll section show workflow summary before tables
 - [x] Normalize payroll entry/result guidance
 - [x] Verify typecheck and focused tests
-- [ ] Commit
+- [x] Commit
 
 ## Progress Update
 
