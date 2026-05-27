@@ -26,17 +26,17 @@
 ### Task 2. 结果面板拆分
 - [x] 导出历史面板
 - [x] 归档索引面板
-- [ ] 导出审计轨迹面板
+- [x] 导出审计轨迹面板
 
 ### Task 3. 场景区拆分
-- [ ] Reports
-- [ ] Tax
-- [ ] Packages
-- [ ] Documents
-- [ ] Risk
-- [ ] Rnd
-- [ ] Payroll
-- [ ] Vouchers
+- [x] Reports
+- [x] Tax
+- [x] Packages
+- [x] Documents
+- [x] Risk
+- [x] Rnd
+- [x] Payroll
+- [x] Vouchers
 
 ### Task 4. Summary-first 收口
 - [ ] 场景摘要优先
