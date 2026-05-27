@@ -28,8 +28,9 @@ import { buildPayrollRiskBuckets, buildPayrollVoucherSuggestions } from "./payro
 import { buildPayrollLinkageSummary } from "./payroll-linkage";
 import { buildPayrollTaxReviewSummary } from "./payroll-tax-review";
 import { buildPayrollWorkflow } from "./payroll-workflow";
-
-type Tab = "employees" | "payroll" | "policy";
+import { PayrollHeader } from "./payroll/PayrollHeader";
+import { PayrollShell } from "./payroll/PayrollShell";
+import { PayrollTabBar, type PayrollTab } from "./payroll/PayrollTabBar";
 
 const EMPLOYEE_STATUS_LABELS: Record<string, string> = {
   active: "在职",
@@ -127,7 +128,7 @@ export function PayrollPage() {
   const navEmployeeId = navState.employeeId ?? null;
   const navTab = navState.tab ?? null;
   const navBusinessEventId = navState.businessEventId ?? null;
-  const [tab, setTab] = useState<Tab>(navPayrollPeriod || navBusinessEventId ? "payroll" : "employees");
+  const [tab, setTab] = useState<PayrollTab>(navPayrollPeriod || navBusinessEventId ? "payroll" : "employees");
   const [message, setMessage] = useState("正在加载数据...");
 
   // employees tab
@@ -538,30 +539,15 @@ export function PayrollPage() {
     setMessage("参数设置已保存。");
   }
 
-  const tabStyle = (t: Tab) => ({
-    padding: "8px 20px",
-    borderRadius: "8px",
-    border: "none",
-    cursor: "pointer",
-    fontSize: "14px",
-    background: tab === t ? "#1e2a37" : "rgba(255,255,255,0.72)",
-    color: tab === t ? "#fff" : "#1e2a37"
-  } as const);
+  const header = (
+    <PayrollHeader
+      message={message}
+      actions={<PayrollTabBar activeTab={tab} onChange={setTab} />}
+    />
+  );
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h2 style={{ margin: "0 0 4px", fontSize: "22px" }}>工资管理</h2>
-          <div style={{ color: "#6c7a89", fontSize: "13px" }}>{message}</div>
-        </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button style={tabStyle("employees")} onClick={() => setTab("employees")}>员工管理</button>
-          <button style={tabStyle("payroll")} onClick={() => setTab("payroll")}>工资计算</button>
-          <button style={tabStyle("policy")} onClick={() => setTab("policy")}>参数设置</button>
-        </div>
-      </div>
+  const content = (
+    <>
 
       {/* ── Tab: 员工管理 ── */}
       {tab === "employees" && (
@@ -1142,6 +1128,13 @@ export function PayrollPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
+  );
+
+  return (
+    <PayrollShell
+      header={header}
+      content={content}
+    />
   );
 }

@@ -15,7 +15,7 @@
 | V3-WS0 | 设计系统底座 | `codex/v3-design-system-foundation` | ✅ done | 2026-05-26 | token、global.css、shared hooks、shared UI primitives 已落地 | 作为后续所有 V3 分支的公共基线 |
 | V3-WS1 | Assistant / Events 主入口重构 | `codex/v3-assistant-events-flow` | ✅ first batch done | 2026-05-26 | 壳组件、状态面板、创建面板、详情面板、状态下沉第一批完成 | 如需继续，仅收敛 URL 状态与更细子组件 |
 | V3-WS2 | Contracts 工作台重构 | `codex/v3-contracts-page-rework` | ✅ structure split mostly done | 2026-05-27 | 壳、列表、详情工作台、摘要优先、元信息、时间轴、对象概览、关联事项、表单、表格均已组件化 | 只做视觉一致性和细节收口，不扩业务逻辑 |
-| V3-WS3 | Payroll 工作台重构 | `codex/v3-payroll-page-rework` | ⏳ pending | — | — | 新建计划并开始第一批壳组件重构 |
+| V3-WS3 | Payroll 工作台重构 | `codex/v3-payroll-page-rework` | ⚠️ first batch in progress | 2026-05-27 | 已建立计划、PayrollShell、PayrollHeader、PayrollTabBar，并完成 `PayrollPage` 顶层布局迁移 | 提交第一批后继续拆 employees / payroll / policy 三段 |
 | V3-WS4 | Export Center 重构 | `codex/v3-export-center-rework` | ⏳ pending | — | — | 在 Payroll 之后重构导出交互层 |
 
 ## 3. 已完成分支与提交
