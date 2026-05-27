@@ -1,61 +1,19 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
-import { useI18n, TAX_STATUS_LABELS, TAX_BATCH_STATUS_LABELS, REVIEW_RESULT_LABELS } from "../lib/i18n";
-import { normalizeDrilldownState } from "./drilldown";
-
-function TaxHelpModal({ onClose }: { onClose: () => void }) {
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ background: "#fff", borderRadius: "16px", padding: "28px 32px", maxWidth: "560px", width: "92%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)", maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>税务中心 · 业务关系与操作说明</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "#9aa5b4" }}>✕</button>
-        </div>
-        <div style={{ display: "grid", gap: "14px", fontSize: "13.5px", lineHeight: 1.75 }}>
-          <div style={{ background: "rgba(37,99,235,0.06)", borderRadius: "10px", padding: "14px 16px", border: "1px solid rgba(37,99,235,0.18)" }}>
-            <strong>相关页面的关系</strong><br />
-            <strong>经营事项页</strong>识别业务并形成税务关注点，<strong>单据中心</strong>和<strong>凭证中心</strong>提供申报依据，<strong>税务中心</strong>负责把这些结果归集为税务事项和申报批次，完成复核、申报和留档。
-          </div>
-          <div><strong>标准业务流程</strong>
-            <ol style={{ margin: "6px 0 0 18px", padding: 0 }}>
-              <li>经营事项分析后生成税务事项</li>
-              <li>单据、凭证、报表为税务处理提供依据</li>
-              <li>在本页按税种和期间组建申报批次</li>
-              <li>完成校验、复核、申报、留档</li>
-              <li>申报结果回流到归档和风险管理</li>
-            </ol>
-          </div>
-          <div><strong>本页负责什么</strong>
-            <div>这里负责纳税人口径、税率规则、税务事项、申报批次和税务底稿。也就是把前面业务和账务结果，组织成真正可申报、可复核、可留档的税务资料。</div>
-          </div>
-          <div><strong>税务事项状态</strong>
-            {[["待处理", "事项已生成，尚未处理"], ["需关注", "存在潜在风险，需人工复核"], ["已申报", "已完成本期申报"], ["已逾期", "申报期已过但未完成申报"], ["免申报", "本期免于申报（如小规模纳税人等）"]].map(([s, d]) => (
-              <div key={s} style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-                <span style={{ fontWeight: 600, minWidth: "50px" }}>{s}</span><span style={{ color: "#4d5d6c" }}>{d}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ background: "rgba(255,165,0,0.08)", borderRadius: "8px", padding: "10px 14px", fontSize: "12.5px", color: "#b45309" }}>
-            ⚠️ 如果前面的单据、凭证、事项口径不完整，本页不应直接提交申报，应先回到上游页面补齐依据。
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 import type {
   CorporateIncomeTaxPreparation,
   IndividualIncomeTaxMaterial,
   StampAndSurtaxSummary,
+  TaxRuleProfile,
   TaxFilingBatch,
-  TaxFilingBatchArchiveRecord,
-  TaxFilingBatchReviewRecord,
   TaxItem,
   TaxpayerProfile,
-  TaxRuleProfile,
   VatWorkingPaper
 } from "@finance-taxation/domain-model";
+import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
+import { ResultBanner } from "../components/ui/ResultBanner";
+import { useQueryState } from "../hooks/useQueryState";
+import { normalizeDrilldownState } from "./drilldown";
 import {
   archiveTaxFilingBatch,
   createTaxpayerProfile,
@@ -73,23 +31,35 @@ import {
   submitTaxFilingBatch,
   validateTaxFilingBatch
 } from "../lib/api";
+import { TaxBatchesPanel } from "./tax/TaxBatchesPanel";
+import { TaxHeader } from "./tax/TaxHeader";
+import { TaxHelpModal } from "./tax/TaxHelpModal";
+import { TaxItemsPanel } from "./tax/TaxItemsPanel";
+import { TaxMaterialsPanel, type TaxMaterialKey } from "./tax/TaxMaterialsPanel";
+import { TaxProfilePanel } from "./tax/TaxProfilePanel";
+import { TaxShell } from "./tax/TaxShell";
+import type { TaxBatchDetail, TaxNotice } from "./tax/taxTypes";
+import { TaxWorkspaceSummary } from "./tax/TaxWorkspaceSummary";
 
-function panelStyle() {
-  return {
-    background: "rgba(255,255,255,0.82)",
-    borderRadius: "24px",
-    border: "1px solid rgba(20,40,60,0.08)",
-    padding: "24px"
-  } as const;
+const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
+  vat: "增值税底稿",
+  iit: "个税申报资料",
+  stamp: "印花税与附加税",
+  cit: "企业所得税准备"
+};
+
+function isMaterialKey(value: string): value is TaxMaterialKey {
+  return value === "vat" || value === "iit" || value === "stamp" || value === "cit";
 }
 
-function cellStyle() {
-  return {
-    borderBottom: "1px solid rgba(20,40,60,0.08)",
-    padding: "10px 8px",
-    textAlign: "left" as const,
-    verticalAlign: "top" as const
-  };
+function openPrintableHtml(html: string) {
+  const printableWindow = window.open("", "_blank", "noopener,noreferrer");
+  if (!printableWindow) {
+    throw new Error("无法打开打印窗口");
+  }
+  printableWindow.document.open();
+  printableWindow.document.write(html);
+  printableWindow.document.close();
 }
 
 export function TaxPage() {
@@ -97,24 +67,20 @@ export function TaxPage() {
   const navState = normalizeDrilldownState(location.state);
   const navEventId = navState.businessEventId ?? null;
   const navTaxItemId = navState.taxItemId ?? null;
-  const { t } = useI18n();
+  const [selectedBatchState, setSelectedBatchState] = useQueryState("batch", "");
+  const [activeMaterialState, setActiveMaterialState] = useQueryState("material", "vat");
+  const activeMaterial = isMaterialKey(activeMaterialState) ? activeMaterialState : "vat";
+
   const [items, setItems] = useState<TaxItem[]>([]);
   const [batches, setBatches] = useState<TaxFilingBatch[]>([]);
-  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
-  const [selectedBatchDetail, setSelectedBatchDetail] = useState<(
-    TaxFilingBatch & {
-      items: TaxItem[];
-      reviews: TaxFilingBatchReviewRecord[];
-      archives: TaxFilingBatchArchiveRecord[];
-    }
-  ) | null>(null);
-  const [validation, setValidation] = useState<{ valid: boolean; issues: string[]; itemCount: number } | null>(null);
   const [profiles, setProfiles] = useState<TaxpayerProfile[]>([]);
+  const [selectedBatchDetail, setSelectedBatchDetail] = useState<TaxBatchDetail | null>(null);
+  const [validation, setValidation] = useState<{ valid: boolean; issues: string[]; itemCount: number } | null>(null);
+  const [ruleProfile, setRuleProfile] = useState<(TaxRuleProfile & { filingPeriod: string }) | null>(null);
   const [vatPaper, setVatPaper] = useState<VatWorkingPaper | null>(null);
   const [incomeTaxPreparation, setIncomeTaxPreparation] = useState<CorporateIncomeTaxPreparation | null>(null);
   const [iitMaterials, setIitMaterials] = useState<IndividualIncomeTaxMaterial | null>(null);
   const [stampAndSurtax, setStampAndSurtax] = useState<StampAndSurtaxSummary | null>(null);
-  const [ruleProfile, setRuleProfile] = useState<(TaxRuleProfile & { filingPeriod: string }) | null>(null);
   const [vatFilingPeriod, setVatFilingPeriod] = useState("2026-05");
   const [iitFilingPeriod, setIitFilingPeriod] = useState("2026-05");
   const [stampFilingPeriod, setStampFilingPeriod] = useState("2026-Q2");
@@ -132,7 +98,10 @@ export function TaxPage() {
     effectiveFrom: "2026-05-01",
     notes: ""
   });
-  const [message, setMessage] = useState("正在准备税务数据。");
+  const [notice, setNotice] = useState<TaxNotice>({
+    tone: "info",
+    message: "正在准备税务数据。"
+  });
   const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
@@ -146,561 +115,272 @@ export function TaxPage() {
         setItems(itemsPayload.items);
         setBatches(batchesPayload.items);
         setProfiles(profilesPayload.items);
-        const first = batchesPayload.items[0]?.id || null;
-        setSelectedBatchId(first);
-        if (first) {
-          setSelectedBatchDetail(await getTaxFilingBatchDetail(first));
+
+        const nextBatchId = selectedBatchState || batchesPayload.items[0]?.id || "";
+        if (nextBatchId) {
+          if (selectedBatchState !== nextBatchId) {
+            setSelectedBatchState(nextBatchId);
+          }
+          setSelectedBatchDetail(await getTaxFilingBatchDetail(nextBatchId));
+        } else {
+          setSelectedBatchDetail(null);
         }
-        setMessage(
-          `${navEventId ? `当前事项 ${navEventId}：` : navTaxItemId ? `当前税务事项 ${navTaxItemId}：` : ""}已加载 ${itemsPayload.total} 条税务事项，${batchesPayload.total} 个申报批次。`
-        );
+
+        setNotice({
+          tone: "info",
+          message: `${navEventId ? `当前事项 ${navEventId}：` : navTaxItemId ? `当前税务事项 ${navTaxItemId}：` : ""}已加载 ${itemsPayload.total} 条税务事项，${batchesPayload.total} 个申报批次。`
+        });
       } catch (error) {
-        setMessage((error as Error).message);
+        setNotice({
+          tone: "error",
+          message: (error as Error).message
+        });
       }
     }
+
     void bootstrap();
-  }, [navEventId]);
+  }, [navEventId, navTaxItemId, selectedBatchState]);
 
   async function refreshBatches(batchId?: string) {
     const batchesPayload = await listTaxFilingBatches();
     setBatches(batchesPayload.items);
-    const targetId = batchId || selectedBatchId || batchesPayload.items[0]?.id || null;
-    setSelectedBatchId(targetId);
-    if (targetId) {
-      setSelectedBatchDetail(await getTaxFilingBatchDetail(targetId));
+    const targetId = batchId || selectedBatchState || batchesPayload.items[0]?.id || "";
+    if (!targetId) {
+      setSelectedBatchDetail(null);
+      return;
+    }
+    if (selectedBatchState !== targetId) {
+      setSelectedBatchState(targetId);
+    }
+    setSelectedBatchDetail(await getTaxFilingBatchDetail(targetId));
+  }
+
+  async function handleSelectBatch(batchId: string) {
+    setValidation(null);
+    setSelectedBatchState(batchId);
+    setSelectedBatchDetail(await getTaxFilingBatchDetail(batchId));
+  }
+
+  async function handleCreateProfile() {
+    try {
+      await createTaxpayerProfile(profileForm);
+      const profilesPayload = await listTaxpayerProfiles();
+      setProfiles(profilesPayload.items);
+      const rulePayload = await getTaxRuleProfile("增值税", profileForm.effectiveFrom);
+      setRuleProfile(rulePayload);
+      setVatFilingPeriod(rulePayload.filingPeriod);
+      setNotice({ tone: "success", message: "已保存纳税人口径并刷新税率规则。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
     }
   }
 
+  async function handleResolveRuleProfile() {
+    try {
+      const payload = await getTaxRuleProfile("增值税", profileForm.effectiveFrom);
+      setRuleProfile(payload);
+      setVatFilingPeriod(payload.filingPeriod);
+      setNotice({ tone: "success", message: "已解析增值税规则。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleValidateBatch() {
+    if (!selectedBatchDetail) {
+      return;
+    }
+    const result = await validateTaxFilingBatch(selectedBatchDetail.id);
+    setValidation(result);
+    setNotice({
+      tone: result.valid ? "success" : "warning",
+      message: result.valid
+        ? `批次 ${selectedBatchDetail.id} 校验通过。`
+        : `批次 ${selectedBatchDetail.id} 校验未通过。`
+    });
+  }
+
+  async function handleSubmitBatch() {
+    if (!selectedBatchDetail) {
+      return;
+    }
+    try {
+      await submitTaxFilingBatch(selectedBatchDetail.id);
+      await refreshBatches(selectedBatchDetail.id);
+      setNotice({ tone: "success", message: `批次 ${selectedBatchDetail.id} 已提交。` });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleReviewBatch() {
+    if (!selectedBatchDetail) {
+      return;
+    }
+    try {
+      const detail = await reviewTaxFilingBatch(selectedBatchDetail.id, reviewForm);
+      setSelectedBatchDetail(detail);
+      setReviewForm((current) => ({ ...current, reviewNotes: "" }));
+      setNotice({ tone: "success", message: `批次 ${selectedBatchDetail.id} 已完成复核。` });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleArchiveBatch() {
+    if (!selectedBatchDetail) {
+      return;
+    }
+    try {
+      const detail = await archiveTaxFilingBatch(selectedBatchDetail.id, archiveForm);
+      setSelectedBatchDetail(detail);
+      await refreshBatches(selectedBatchDetail.id);
+      setArchiveForm((current) => ({ ...current, archiveNotes: "" }));
+      setNotice({ tone: "success", message: `批次 ${selectedBatchDetail.id} 已留档。` });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleGenerateVat() {
+    try {
+      const payload = await getVatWorkingPaper(vatFilingPeriod);
+      setVatPaper(payload);
+      setNotice({ tone: "success", message: "已生成增值税底稿。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handlePrintVat() {
+    try {
+      const html = await getTaxPrintableHtml("vat", vatFilingPeriod);
+      openPrintableHtml(html);
+      setNotice({ tone: "success", message: "已打开增值税底稿打印版。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleGenerateIit() {
+    try {
+      const payload = await getIndividualIncomeTaxMaterials(iitFilingPeriod);
+      setIitMaterials(payload);
+      setNotice({ tone: "success", message: "已生成个税申报资料。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleGenerateStamp() {
+    try {
+      const payload = await getStampAndSurtaxSummary(stampFilingPeriod);
+      setStampAndSurtax(payload);
+      setNotice({ tone: "success", message: "已汇总印花税与附加税事项。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleGenerateCit() {
+    try {
+      const payload = await getCorporateIncomeTaxPreparation(incomeTaxPeriod);
+      setIncomeTaxPreparation(payload);
+      setNotice({ tone: "success", message: "已生成企业所得税预缴与汇算准备。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handlePrintCit() {
+    try {
+      const html = await getTaxPrintableHtml("corporate_income_tax", incomeTaxPeriod);
+      openPrintableHtml(html);
+      setNotice({ tone: "success", message: "已打开企业所得税打印版。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  const selectedBatchLabel = selectedBatchDetail
+    ? `${selectedBatchDetail.taxType} · ${selectedBatchDetail.filingPeriod}`
+    : batches.find((item) => item.id === selectedBatchState)?.id || "";
+
   return (
     <section style={{ display: "grid", gap: "20px" }}>
-      {showHelp && <TaxHelpModal onClose={() => setShowHelp(false)} />}
-      <article style={panelStyle()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-          <h2 style={{ margin: 0 }}>税务中心</h2>
-          <button onClick={() => setShowHelp(true)} title="业务说明" style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid rgba(79,142,247,0.6)", background: "rgba(79,142,247,0.08)", color: "#4f8ef7", fontWeight: 700, fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>?</button>
-        </div>
-        <p style={{ margin: "0 0 12px", lineHeight: 1.8 }}>{message}</p>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "10px" }}>
-          <select
-            value={profileForm.taxpayerType}
-            onChange={(event) =>
-              setProfileForm((current) => ({
-                ...current,
-                taxpayerType: event.target.value as typeof current.taxpayerType
-              }))
-            }
-          >
-            <option value="general_vat">一般纳税人</option>
-            <option value="small_scale">小规模纳税人</option>
-            <option value="general_simplified">一般纳税人简易计税</option>
-          </select>
-          <input
-            value={profileForm.effectiveFrom}
-            onChange={(event) => setProfileForm((current) => ({ ...current, effectiveFrom: event.target.value }))}
-          />
-          <input
-            value={profileForm.notes}
-            onChange={(event) => setProfileForm((current) => ({ ...current, notes: event.target.value }))}
-            placeholder="说明"
-          />
-          <button
-            onClick={() =>
-              void createTaxpayerProfile(profileForm)
-                .then(() => listTaxpayerProfiles())
-                .then((payload) => {
-                  setProfiles(payload.items);
-                  return getTaxRuleProfile("增值税", profileForm.effectiveFrom);
-                })
-                .then((payload) => {
-                  setRuleProfile(payload);
-                  setMessage("已保存纳税人口径。");
-                })
-                .catch((error) => setMessage((error as Error).message))
-            }
-          >
-            保存纳税人口径
-          </button>
-        </div>
-      </article>
-      <ProcessFlowStageSection
-        title="税务阶段流程回看"
-        subtitle="当前页定位到税务复核与申报留档节点；如果当前批次已完成留档，则定位到归档查询节点。两类业务分支都可从这里回看并跳转到上下游页面。"
-        currentNodeId={selectedBatchDetail?.archives.length ? "archive_trace_query" : "tax_filing_archive"}
-        branch={null}
-      />
-      <article style={panelStyle()}>
-        <h3 style={{ marginTop: 0 }}>纳税人口径档案</h3>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={cellStyle()}>类型</th>
-              <th style={cellStyle()}>生效日期</th>
-              <th style={cellStyle()}>状态</th>
-              <th style={cellStyle()}>说明</th>
-            </tr>
-          </thead>
-          <tbody>
-            {profiles.map((profile) => (
-              <tr key={profile.id}>
-                <td style={cellStyle()}>{profile.taxpayerType}</td>
-                <td style={cellStyle()}>{profile.effectiveFrom}</td>
-                <td style={cellStyle()}>{profile.status}</td>
-                <td style={cellStyle()}>{profile.notes || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </article>
-      <article style={panelStyle()}>
-        <h3 style={{ marginTop: 0 }}>税率规则与期间规则</h3>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "12px" }}>
-          <button
-            onClick={() =>
-              void getTaxRuleProfile("增值税", profileForm.effectiveFrom)
-                .then((payload) => {
-                  setRuleProfile(payload);
-                  setVatFilingPeriod(payload.filingPeriod);
-                  setMessage("已解析增值税规则。");
-                })
-                .catch((error) => setMessage((error as Error).message))
-            }
-          >
-            解析增值税规则
-          </button>
-        </div>
-        {ruleProfile ? (
-          <div style={{ lineHeight: 1.8 }}>
-            <div>税种：{ruleProfile.taxType}</div>
-            <div>纳税人口径：{ruleProfile.taxpayerType}</div>
-            <div>申报频率：{ruleProfile.filingFrequency}</div>
-            <div>默认税率：{ruleProfile.defaultRate}%</div>
-            <div>推导申报期：{ruleProfile.filingPeriod}</div>
-          </div>
-        ) : (
-          <p>尚未解析税率和期间规则。</p>
-        )}
-      </article>
-      <article style={panelStyle()}>
-        <h3 style={{ marginTop: 0 }}>税务事项</h3>
-        {(navEventId || navTaxItemId) && (
-          <div style={{ marginBottom: "12px", padding: "10px 14px", borderRadius: "8px", background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.2)", color: "#2563eb", fontSize: "13px" }}>
-            {navEventId
-              ? <>当前仅显示事项 <strong>{navEventId}</strong> 的关联税务事项。</>
-              : <>当前高亮税务事项 <strong>{navTaxItemId}</strong>。</>}
-          </div>
-        )}
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={cellStyle()}>编号</th>
-              <th style={cellStyle()}>税种</th>
-              <th style={cellStyle()}>申报期</th>
-              <th style={cellStyle()}>状态</th>
-              <th style={cellStyle()}>事项</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr
-                key={item.id}
-                style={{
-                  background: navTaxItemId === item.id ? "rgba(37,99,235,0.08)" : "transparent"
-                }}
-              >
-                <td style={cellStyle()}>{item.id}</td>
-                <td style={cellStyle()}>{item.taxType}</td>
-                <td style={cellStyle()}>{item.filingPeriod}</td>
-                <td style={cellStyle()}>{t(TAX_STATUS_LABELS, item.status)}</td>
-                <td style={cellStyle()}>{item.treatment}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </article>
-      <section style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: "20px" }}>
-        <article style={panelStyle()}>
-          <h3 style={{ marginTop: 0 }}>申报批次</h3>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={cellStyle()}>批次编号</th>
-                <th style={cellStyle()}>税种</th>
-                <th style={cellStyle()}>状态</th>
-                <th style={cellStyle()}>事项数</th>
-              </tr>
-            </thead>
-            <tbody>
-              {batches.map((item) => (
-                <tr
-                  key={item.id}
-                  onClick={() => {
-                    setSelectedBatchId(item.id);
-                    setValidation(null);
-                    void getTaxFilingBatchDetail(item.id).then(setSelectedBatchDetail);
-                  }}
-                  style={{
-                    cursor: "pointer",
-                    background: item.id === selectedBatchId ? "rgba(30,42,55,0.06)" : "transparent"
-                  }}
-                >
-                  <td style={cellStyle()}>{item.id}</td>
-                  <td style={cellStyle()}>{item.taxType}</td>
-                  <td style={cellStyle()}>{t(TAX_BATCH_STATUS_LABELS, item.status)}</td>
-                  <td style={cellStyle()}>{item.itemIds.length}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </article>
-        <article style={panelStyle()}>
-          <h3 style={{ marginTop: 0 }}>批次详情</h3>
-          {selectedBatchDetail ? (
-            <>
-              <p>税种：{selectedBatchDetail.taxType}</p>
-              <p>申报期：{selectedBatchDetail.filingPeriod}</p>
-              <p>状态：{t(TAX_BATCH_STATUS_LABELS, selectedBatchDetail.status)}</p>
-              <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
-                <button
-                  onClick={() =>
-                    void validateTaxFilingBatch(selectedBatchDetail.id).then((result) => {
-                      setValidation(result);
-                      setMessage(
-                        result.valid
-                          ? `批次 ${selectedBatchDetail.id} 校验通过。`
-                          : `批次 ${selectedBatchDetail.id} 校验未通过。`
-                      );
-                    })
-                  }
-                >
-                  校验批次
-                </button>
-                <button
-                  onClick={() =>
-                    void submitTaxFilingBatch(selectedBatchDetail.id)
-                      .then(async () => {
-                        await refreshBatches(selectedBatchDetail.id);
-                        setMessage(`批次 ${selectedBatchDetail.id} 已提交。`);
-                      })
-                      .catch((error) => setMessage((error as Error).message))
-                  }
-                >
-                  提交批次
-                </button>
-                <button
-                  onClick={() =>
-                    void reviewTaxFilingBatch(selectedBatchDetail.id, reviewForm)
-                      .then((detail) => {
-                        setSelectedBatchDetail(detail);
-                        setMessage(`批次 ${selectedBatchDetail.id} 已完成复核。`);
-                        setReviewForm((current) => ({ ...current, reviewNotes: "" }));
-                      })
-                      .catch((error) => setMessage((error as Error).message))
-                  }
-                >
-                  保存复核
-                </button>
-                <button
-                  onClick={() =>
-                    void archiveTaxFilingBatch(selectedBatchDetail.id, archiveForm)
-                      .then((detail) => {
-                        setSelectedBatchDetail(detail);
-                        void refreshBatches(selectedBatchDetail.id);
-                        setMessage(`批次 ${selectedBatchDetail.id} 已留档。`);
-                        setArchiveForm((current) => ({ ...current, archiveNotes: "" }));
-                      })
-                      .catch((error) => setMessage((error as Error).message))
-                  }
-                >
-                  留档批次
-                </button>
-              </div>
-              <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <select
-                    value={reviewForm.reviewResult}
-                    onChange={(event) =>
-                      setReviewForm((current) => ({
-                        ...current,
-                        reviewResult: event.target.value as "approved" | "rejected"
-                      }))
-                    }
-                  >
-                    <option value="approved">审核通过</option>
-                    <option value="rejected">审核驳回</option>
-                  </select>
-                  <input
-                    value={reviewForm.reviewNotes}
-                    onChange={(event) => setReviewForm((current) => ({ ...current, reviewNotes: event.target.value }))}
-                    placeholder="复核说明"
-                  />
-                </div>
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <input
-                    value={archiveForm.archiveLabel}
-                    onChange={(event) => setArchiveForm((current) => ({ ...current, archiveLabel: event.target.value }))}
-                    placeholder="留档标签，如 2026Q2-VAT"
-                  />
-                  <input
-                    value={archiveForm.archiveNotes}
-                    onChange={(event) => setArchiveForm((current) => ({ ...current, archiveNotes: event.target.value }))}
-                    placeholder="留档说明"
-                  />
-                </div>
-              </section>
-              {validation ? (
-                <div style={{ marginBottom: "12px" }}>
-                  <div>校验结果：{validation.valid ? "通过" : "未通过"}</div>
-                  {validation.issues.length ? (
-                    <ul style={{ paddingLeft: "22px", lineHeight: 1.8 }}>
-                      {validation.issues.map((issue) => (
-                        <li key={issue}>{issue}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              ) : null}
-              <h4>批次事项</h4>
-              <ul style={{ paddingLeft: "22px", lineHeight: 1.8 }}>
-                {selectedBatchDetail.items.map((item) => (
-                  <li key={item.id}>
-                    {item.taxType} | {item.filingPeriod} | {t(TAX_STATUS_LABELS, item.status)} | {item.treatment}
-                  </li>
-                ))}
-              </ul>
-              <h4>复核记录</h4>
-              {selectedBatchDetail.reviews.length ? (
-                <ul style={{ paddingLeft: "22px", lineHeight: 1.8 }}>
-                  {selectedBatchDetail.reviews.map((item) => (
-                    <li key={item.id}>
-                      {item.reviewedAt.slice(0, 10)} | {item.reviewedByName} | {t(REVIEW_RESULT_LABELS, item.reviewResult)} | {item.reviewNotes}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>暂无复核记录。</p>
-              )}
-              <h4>留档记录</h4>
-              {selectedBatchDetail.archives.length ? (
-                <ul style={{ paddingLeft: "22px", lineHeight: 1.8 }}>
-                  {selectedBatchDetail.archives.map((item) => (
-                    <li key={item.id}>
-                      {item.archivedAt.slice(0, 10)} | {item.archiveLabel} | {item.archivedByName} | {item.archiveNotes || "—"}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>暂无留档记录。</p>
-              )}
-            </>
-          ) : (
-            <p>请选择一个申报批次。</p>
-          )}
-        </article>
-      </section>
-      <article style={panelStyle()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ marginTop: 0 }}>增值税底稿</h3>
-          <div style={{ display: "flex", gap: "10px" }}>
-            <input value={vatFilingPeriod} onChange={(event) => setVatFilingPeriod(event.target.value)} placeholder="申报期" />
-            <button
-              onClick={() =>
-                void getVatWorkingPaper(vatFilingPeriod)
-                  .then((payload) => {
-                    setVatPaper(payload);
-                    setMessage("已生成增值税底稿。");
-                  })
-                  .catch((error) => setMessage((error as Error).message))
-              }
-            >
-              生成底稿
-            </button>
-            <button
-              onClick={() =>
-                void getTaxPrintableHtml("vat", vatFilingPeriod)
-                  .then((html) => {
-                    const printableWindow = window.open("", "_blank", "noopener,noreferrer");
-                    if (!printableWindow) throw new Error("无法打开打印窗口");
-                    printableWindow.document.open();
-                    printableWindow.document.write(html);
-                    printableWindow.document.close();
-                    setMessage("已打开增值税底稿打印版。");
-                  })
-                  .catch((error) => setMessage((error as Error).message))
-              }
-            >
-              打印底稿
-            </button>
-          </div>
-        </div>
-        {vatPaper ? (
+      {showHelp ? <TaxHelpModal onClose={() => setShowHelp(false)} /> : null}
+      <TaxShell
+        header={<TaxHeader activeMaterialLabel={MATERIAL_LABELS[activeMaterial]} onOpenHelp={() => setShowHelp(true)} />}
+        guidance={<ResultBanner tone={notice.tone} message={notice.message} />}
+        summary={(
           <>
-            <p>纳税人口径：{vatPaper.taxpayerType}</p>
-            <p>申报期：{vatPaper.filingPeriod}</p>
-            <p>销项税额：{vatPaper.outputTaxAmount}</p>
-            <p>进项税额：{vatPaper.inputTaxAmount}</p>
-            <p>简易计税额：{vatPaper.simplifiedTaxAmount}</p>
-            <p>应纳增值税：{vatPaper.payableVatAmount}</p>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={cellStyle()}>类型</th>
-                  <th style={cellStyle()}>说明</th>
-                  <th style={cellStyle()}>税率</th>
-                  <th style={cellStyle()}>计税基础</th>
-                  <th style={cellStyle()}>税额</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vatPaper.lines.map((line) => (
-                  <tr key={line.id}>
-                    <td style={cellStyle()}>{line.sourceType}</td>
-                    <td style={cellStyle()}>{line.description}</td>
-                    <td style={cellStyle()}>{line.taxRate}%</td>
-                    <td style={cellStyle()}>{line.taxableAmount}</td>
-                    <td style={cellStyle()}>{line.taxAmount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <TaxWorkspaceSummary
+              itemCount={items.length}
+              batchCount={batches.length}
+              profileCount={profiles.length}
+              selectedBatchLabel={selectedBatchLabel}
+              navEventId={navEventId}
+              navTaxItemId={navTaxItemId}
+            />
+            <ProcessFlowStageSection
+              title="税务阶段流程回看"
+              subtitle="当前页定位到税务复核与申报留档节点；如果当前批次已完成留档，则定位到归档查询节点。"
+              currentNodeId={selectedBatchDetail?.archives.length ? "archive_trace_query" : "tax_filing_archive"}
+              branch={null}
+            />
+            <TaxProfilePanel
+              profiles={profiles}
+              profileForm={profileForm}
+              ruleProfile={ruleProfile}
+              onProfileFormChange={setProfileForm}
+              onCreateProfile={() => void handleCreateProfile()}
+              onResolveRuleProfile={() => void handleResolveRuleProfile()}
+            />
           </>
-        ) : (
-          <p>尚未生成增值税底稿。</p>
         )}
-      </article>
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-        <article style={panelStyle()}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 style={{ marginTop: 0 }}>个税申报资料</h3>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <input value={iitFilingPeriod} onChange={(event) => setIitFilingPeriod(event.target.value)} placeholder="申报期" />
-              <button
-                onClick={() =>
-                  void getIndividualIncomeTaxMaterials(iitFilingPeriod)
-                    .then((payload) => {
-                      setIitMaterials(payload);
-                      setMessage("已生成个税申报资料。");
-                    })
-                    .catch((error) => setMessage((error as Error).message))
-                }
-              >
-                生成个税资料
-              </button>
-            </div>
-          </div>
-          {iitMaterials ? (
-            <div style={{ lineHeight: 1.8 }}>
-              <div>申报期：{iitMaterials.filingPeriod}</div>
-              <div>工资事项数：{iitMaterials.payrollEventCount}</div>
-              <div>代扣事项数：{iitMaterials.withholdingItemCount}</div>
-              <div>工资总额：{iitMaterials.totalPayrollAmount}</div>
-              <ul style={{ paddingLeft: "20px" }}>
-                {iitMaterials.checklist.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p>尚未生成个税申报资料。</p>
-          )}
-        </article>
-        <article style={panelStyle()}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 style={{ marginTop: 0 }}>印花税与附加税事项</h3>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <input
-                value={stampFilingPeriod}
-                onChange={(event) => setStampFilingPeriod(event.target.value)}
-                placeholder="申报期"
-              />
-              <button
-                onClick={() =>
-                  void getStampAndSurtaxSummary(stampFilingPeriod)
-                    .then((payload) => {
-                      setStampAndSurtax(payload);
-                      setMessage("已汇总印花税与附加税事项。");
-                    })
-                    .catch((error) => setMessage((error as Error).message))
-                }
-              >
-                汇总税务事项
-              </button>
-            </div>
-          </div>
-          {stampAndSurtax ? (
-            <div style={{ lineHeight: 1.8 }}>
-              <div>申报期：{stampAndSurtax.filingPeriod}</div>
-              <div>印花税事项数：{stampAndSurtax.stampDutyItems.length}</div>
-              <div>附加税事项数：{stampAndSurtax.surtaxItems.length}</div>
-              <ul style={{ paddingLeft: "20px" }}>
-                {stampAndSurtax.notes.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p>尚未汇总印花税与附加税事项。</p>
-          )}
-        </article>
-      </section>
-      <article style={panelStyle()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ marginTop: 0 }}>企业所得税预缴与汇算准备</h3>
-          <div style={{ display: "flex", gap: "10px" }}>
-            <input value={incomeTaxPeriod} onChange={(event) => setIncomeTaxPeriod(event.target.value)} placeholder="申报期" />
-            <button
-              onClick={() =>
-                void getCorporateIncomeTaxPreparation(incomeTaxPeriod)
-                  .then((payload) => {
-                    setIncomeTaxPreparation(payload);
-                    setMessage("已生成企业所得税预缴与汇算准备。");
-                  })
-                  .catch((error) => setMessage((error as Error).message))
-              }
-            >
-              生成准备稿
-            </button>
-            <button
-              onClick={() =>
-                void getTaxPrintableHtml("corporate_income_tax", incomeTaxPeriod)
-                  .then((html) => {
-                    const printableWindow = window.open("", "_blank", "noopener,noreferrer");
-                    if (!printableWindow) throw new Error("无法打开打印窗口");
-                    printableWindow.document.open();
-                    printableWindow.document.write(html);
-                    printableWindow.document.close();
-                    setMessage("已打开企业所得税打印版。");
-                  })
-                  .catch((error) => setMessage((error as Error).message))
-              }
-            >
-              打印准备稿
-            </button>
-          </div>
-        </div>
-        {incomeTaxPreparation ? (
-          <div style={{ lineHeight: 1.8 }}>
-            <div>申报期：{incomeTaxPreparation.filingPeriod}</div>
-            <div>会计利润：{incomeTaxPreparation.accountingProfit}</div>
-            <div>应纳税所得额估算：{incomeTaxPreparation.taxableIncomeEstimate}</div>
-            <div>税率：{incomeTaxPreparation.incomeTaxRate}%</div>
-            <div>预缴税额估算：{incomeTaxPreparation.prepaymentTaxEstimate}</div>
-            <h4>调整提示</h4>
-            <ul style={{ paddingLeft: "20px" }}>
-              {incomeTaxPreparation.adjustmentHints.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <h4>准备清单</h4>
-            <ul style={{ paddingLeft: "20px" }}>
-              {incomeTaxPreparation.checklist.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <p>尚未生成企业所得税预缴与汇算准备。</p>
+        taxItems={<TaxItemsPanel items={items} navEventId={navEventId} navTaxItemId={navTaxItemId} />}
+        batches={(
+          <TaxBatchesPanel
+            batches={batches}
+            selectedBatchId={selectedBatchState || null}
+            selectedBatchDetail={selectedBatchDetail}
+            validation={validation}
+            reviewForm={reviewForm}
+            archiveForm={archiveForm}
+            onSelectBatch={(batchId) => void handleSelectBatch(batchId)}
+            onReviewFormChange={setReviewForm}
+            onArchiveFormChange={setArchiveForm}
+            onValidateBatch={() => void handleValidateBatch()}
+            onSubmitBatch={() => void handleSubmitBatch()}
+            onReviewBatch={() => void handleReviewBatch()}
+            onArchiveBatch={() => void handleArchiveBatch()}
+          />
         )}
-      </article>
+        materials={(
+          <TaxMaterialsPanel
+            activeMaterial={activeMaterial}
+            vatPaper={vatPaper}
+            incomeTaxPreparation={incomeTaxPreparation}
+            iitMaterials={iitMaterials}
+            stampAndSurtax={stampAndSurtax}
+            vatFilingPeriod={vatFilingPeriod}
+            iitFilingPeriod={iitFilingPeriod}
+            stampFilingPeriod={stampFilingPeriod}
+            incomeTaxPeriod={incomeTaxPeriod}
+            onSelectMaterial={setActiveMaterialState}
+            onVatPeriodChange={setVatFilingPeriod}
+            onIitPeriodChange={setIitFilingPeriod}
+            onStampPeriodChange={setStampFilingPeriod}
+            onIncomeTaxPeriodChange={setIncomeTaxPeriod}
+            onGenerateVat={() => void handleGenerateVat()}
+            onPrintVat={() => void handlePrintVat()}
+            onGenerateIit={() => void handleGenerateIit()}
+            onGenerateStamp={() => void handleGenerateStamp()}
+            onGenerateCit={() => void handleGenerateCit()}
+            onPrintCit={() => void handlePrintCit()}
+          />
+        )}
+      />
     </section>
   );
 }
