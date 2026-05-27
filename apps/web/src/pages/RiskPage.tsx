@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type { BusinessEvent, RiskClosureRecord, RiskFinding } from "@finance-taxation/domain-model";
 import {
   closeRiskFinding,
@@ -8,10 +8,22 @@ import {
   listRiskFindings,
   runEventRiskCheck
 } from "../lib/api";
-import { useI18n, RISK_SEVERITY_LABELS, RISK_PRIORITY_LABELS, RISK_STATUS_LABELS } from "../lib/i18n";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
-import { buildRiskClosureTargetChain, buildRiskDrilldownTargets, normalizeDrilldownState } from "./drilldown";
-import { filterContractRiskFindings, filterRiskFindingsByScope, type RiskScopeFilter } from "./risk-scope";
+import { useI18n, RISK_PRIORITY_LABELS, RISK_SEVERITY_LABELS, RISK_STATUS_LABELS } from "../lib/i18n";
+import { buildRiskClosureTargetChain, normalizeDrilldownState } from "./drilldown";
+import {
+  filterContractRiskFindings,
+  filterRiskFindingsByScope,
+  filterRiskFindingsByView,
+  type RiskScopeFilter
+} from "./risk-scope";
+import { RiskClosureTimeline } from "./risk/RiskClosureTimeline";
+import { RiskFindingsListPanel } from "./risk/RiskFindingsListPanel";
+import { RiskPageShell } from "./risk/RiskPageShell";
+import { RiskResolutionWorkbench } from "./risk/RiskResolutionWorkbench";
+import { RiskWorkbenchHeader } from "./risk/RiskWorkbenchHeader";
+import { readRiskUrlState, writeRiskUrlState, type RiskViewFilter } from "./risk/risk-url-state";
+import { writeAuditUrlState } from "./audit/audit-url-state";
 
 function RiskHelpModal({ onClose }: { onClose: () => void }) {
   return (
@@ -56,27 +68,11 @@ function RiskHelpModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function panelStyle() {
-  return {
-    background: "rgba(255,255,255,0.82)",
-    borderRadius: "24px",
-    border: "1px solid rgba(20,40,60,0.08)",
-    padding: "24px"
-  } as const;
-}
-
-function cellStyle() {
-  return {
-    borderBottom: "1px solid rgba(20,40,60,0.08)",
-    padding: "10px 8px",
-    textAlign: "left" as const,
-    verticalAlign: "top" as const
-  };
-}
-
 export function RiskPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlState = useMemo(() => readRiskUrlState(searchParams), [searchParams]);
   const navState = normalizeDrilldownState(location.state);
   const navEventId = navState.businessEventId ?? null;
   const navRiskFindingId = navState.riskFindingId ?? null;
@@ -84,44 +80,47 @@ export function RiskPage() {
   const { t } = useI18n();
   const [findings, setFindings] = useState<RiskFinding[]>([]);
   const [closureRecords, setClosureRecords] = useState<RiskClosureRecord[]>([]);
-  const [selectedFindingId, setSelectedFindingId] = useState("");
-  const [eventId, setEventId] = useState("");
+  const [selectedFindingId, setSelectedFindingId] = useState(urlState.findingId);
+  const [eventId, setEventId] = useState(urlState.eventId);
   const [events, setEvents] = useState<BusinessEvent[]>([]);
   const [eventSearch, setEventSearch] = useState("");
   const [showEventDropdown, setShowEventDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [resolution, setResolution] = useState("已复核并完成整改。");
-  const [scopeFilter, setScopeFilter] = useState<RiskScopeFilter>("all");
+  const [scopeFilter, setScopeFilter] = useState<RiskScopeFilter>(urlState.scope);
+  const [viewFilter, setViewFilter] = useState<RiskViewFilter>(urlState.view);
   const [message, setMessage] = useState("正在准备风险勾稽。");
   const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     async function bootstrap() {
       try {
-        const [eventsPayload, findingsPayload] = await Promise.all([
-          listEvents(),
-          listRiskFindings()
-        ]);
+        const [eventsPayload, findingsPayload] = await Promise.all([listEvents(), listRiskFindings()]);
         setEvents(eventsPayload.items);
         const scopedEvents = navContractId
           ? eventsPayload.items.filter((item) => item.contractId === navContractId)
           : eventsPayload.items;
-        const preferredEvent = navEventId
-          ? eventsPayload.items.find((item) => item.id === navEventId) ?? null
-          : null;
-        const firstId = preferredEvent?.id || scopedEvents[0]?.id || eventsPayload.items[0]?.id || "";
-        setEventId(firstId);
-        setEventSearch(preferredEvent?.title || scopedEvents[0]?.title || eventsPayload.items[0]?.title || firstId);
+        const preferredEvent = urlState.eventId
+          ? eventsPayload.items.find((item) => item.id === urlState.eventId) ?? null
+          : navEventId
+            ? eventsPayload.items.find((item) => item.id === navEventId) ?? null
+            : null;
+        const firstEvent = preferredEvent ?? scopedEvents[0] ?? eventsPayload.items[0] ?? null;
+        setEventId(firstEvent?.id ?? "");
+        setEventSearch(firstEvent?.title ?? firstEvent?.id ?? "");
         setFindings(findingsPayload.items);
+
         const scopedFindings = navContractId
           ? filterContractRiskFindings(findingsPayload.items, eventsPayload.items, navContractId)
           : findingsPayload.items;
-        const preferredFinding = navEventId
-          ? findingsPayload.items.find((item) => item.businessEventId === navEventId) ?? null
+        const preferredFinding = urlState.findingId
+          ? findingsPayload.items.find((item) => item.id === urlState.findingId) ?? null
           : navRiskFindingId
             ? findingsPayload.items.find((item) => item.id === navRiskFindingId) ?? null
-            : scopedFindings[0] ?? null;
-        setSelectedFindingId(preferredFinding?.id || findingsPayload.items[0]?.id || "");
+            : navEventId
+              ? findingsPayload.items.find((item) => item.businessEventId === navEventId) ?? null
+              : scopedFindings[0] ?? null;
+        setSelectedFindingId(preferredFinding?.id ?? findingsPayload.items[0]?.id ?? "");
         if (preferredFinding?.id) {
           void loadClosureRecords(preferredFinding.id);
         }
@@ -133,9 +132,8 @@ export function RiskPage() {
       }
     }
     void bootstrap();
-  }, [navContractId, navEventId, navRiskFindingId]);
+  }, [navContractId, navEventId, navRiskFindingId, urlState.eventId, urlState.findingId]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -145,6 +143,18 @@ export function RiskPage() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  useEffect(() => {
+    const next = writeRiskUrlState({
+      scope: scopeFilter,
+      eventId,
+      findingId: selectedFindingId,
+      view: viewFilter
+    });
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [eventId, scopeFilter, searchParams, selectedFindingId, setSearchParams, viewFilter]);
 
   async function refreshFindings() {
     const payload = await listRiskFindings();
@@ -163,277 +173,148 @@ export function RiskPage() {
     [events, navContractId]
   );
 
+  const eventMap = useMemo(() => new Map(events.map((event) => [event.id, event])), [events]);
 
-  const eventMap = useMemo(
-    () => new Map(events.map((event) => [event.id, event])),
-    [events]
-  );
   const visibleFindings = useMemo(() => {
-    const scopedByContract = navContractId
-      ? filterContractRiskFindings(findings, events, navContractId)
-      : findings;
-    const scopedBase = navEventId
+    const scopedByContract = navContractId ? filterContractRiskFindings(findings, events, navContractId) : findings;
+    const scopedByContext = navEventId
       ? scopedByContract.filter((finding) => finding.businessEventId === navEventId)
       : navRiskFindingId
         ? scopedByContract.filter((finding) => finding.id === navRiskFindingId)
         : scopedByContract;
-    return filterRiskFindingsByScope(scopedBase, eventMap, scopeFilter);
-  }, [eventMap, events, findings, navContractId, navEventId, navRiskFindingId, scopeFilter]);
+    const scopedByObject = filterRiskFindingsByScope(scopedByContext, eventMap, scopeFilter);
+    return filterRiskFindingsByView(scopedByObject, viewFilter);
+  }, [eventMap, events, findings, navContractId, navEventId, navRiskFindingId, scopeFilter, viewFilter]);
+
   const selectedFinding = useMemo(
-    () => findings.find((item) => item.id === selectedFindingId) ?? null,
-    [findings, selectedFindingId]
+    () => findings.find((item) => item.id === selectedFindingId) ?? visibleFindings[0] ?? null,
+    [findings, selectedFindingId, visibleFindings]
   );
   const selectedFindingEvent = useMemo(
     () => selectedFinding?.businessEventId ? eventMap.get(selectedFinding.businessEventId) ?? null : null,
     [eventMap, selectedFinding]
   );
   const closureTargets = useMemo(
-    () => selectedFinding
-      ? buildRiskClosureTargetChain({ findingId: selectedFinding.id, event: selectedFindingEvent })
-      : [],
+    () => selectedFinding ? buildRiskClosureTargetChain({ findingId: selectedFinding.id, event: selectedFindingEvent }) : [],
     [selectedFinding, selectedFindingEvent]
   );
 
+  function navigateWithState(path: string, state?: Record<string, string>) {
+    navigate(path, { state });
+  }
+
+  function openAuditForSelectedFinding() {
+    if (!selectedFinding) {
+      return;
+    }
+    const auditSearch = writeAuditUrlState({
+      resourceType: "risk_finding",
+      resourceId: selectedFinding.id,
+      from: "",
+      to: "",
+      offset: 0,
+      logId: "",
+      expandedId: ""
+    });
+    navigate(
+      { pathname: "/audit", search: `?${auditSearch.toString()}` },
+      {
+        state: {
+          resourceType: "risk_finding",
+          resourceId: selectedFinding.id,
+          riskFindingId: selectedFinding.id,
+          ...(selectedFinding.businessEventId ? { businessEventId: selectedFinding.businessEventId } : {})
+        }
+      }
+    );
+  }
+
+  async function closeSelectedFinding() {
+    if (!selectedFinding) {
+      return;
+    }
+    await closeRiskFinding(selectedFinding.id, resolution);
+    await Promise.all([refreshFindings(), loadClosureRecords(selectedFinding.id)]);
+  }
+
   return (
     <section style={{ display: "grid", gap: "20px" }}>
-      {showHelp && <RiskHelpModal onClose={() => setShowHelp(false)} />}
-      <article style={panelStyle()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-          <h2 style={{ margin: 0 }}>风险勾稽中心</h2>
-          <button onClick={() => setShowHelp(true)} title="操作说明" style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid rgba(79,142,247,0.6)", background: "rgba(79,142,247,0.08)", color: "#4f8ef7", fontWeight: 700, fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>?</button>
-        </div>
-        <p style={{ margin: "0 0 12px" }}>{message}</p>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end" }}>
-          {/* 事项选择器 */}
-          <div ref={dropdownRef} style={{ position: "relative", flex: 2, minWidth: "200px" }}>
-            <label style={{ fontSize: "12px", color: "#6c7a89", display: "block", marginBottom: "4px" }}>选择经营事项</label>
-            <input
-              value={eventSearch}
-              onChange={(e) => { setEventSearch(e.target.value); setShowEventDropdown(true); }}
-              onFocus={() => setShowEventDropdown(true)}
-              placeholder="点击选择或搜索事项…"
-              style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.2)", boxSizing: "border-box", fontSize: "13px" }}
-            />
-            {showEventDropdown && (
-              <div style={{
-                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
-                background: "#fff", border: "1px solid rgba(20,40,60,0.15)", borderRadius: "8px",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.12)", maxHeight: "220px", overflowY: "auto",
-                marginTop: "4px"
-              }}>
-                {visibleEvents
-                  .filter((ev) => {
-                    const q = eventSearch.toLowerCase();
-                    return !q || ev.title.toLowerCase().includes(q) || ev.id.toLowerCase().includes(q);
-                  })
-                  .map((ev) => (
-                    <div
-                      key={ev.id}
-                      onClick={() => {
-                        setEventId(ev.id);
-                        setEventSearch(ev.title);
-                        setShowEventDropdown(false);
-                      }}
-                      style={{
-                        padding: "9px 14px", cursor: "pointer", fontSize: "13px",
-                        borderBottom: "1px solid rgba(20,40,60,0.05)",
-                        background: ev.id === eventId ? "rgba(79,142,247,0.07)" : "transparent",
-                        color: ev.id === eventId ? "#2563eb" : "#1e2a37"
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "rgba(20,40,60,0.04)"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = ev.id === eventId ? "rgba(79,142,247,0.07)" : "transparent"; }}
-                    >
-                      <div style={{ fontWeight: 500 }}>{ev.title}</div>
-                      <div style={{ fontSize: "11px", color: "#9aa5b4", marginTop: "2px" }}>{ev.id}</div>
-                    </div>
-                  ))
-                }
-                {visibleEvents.filter((ev) => {
-                  const q = eventSearch.toLowerCase();
-                  return !q || ev.title.toLowerCase().includes(q) || ev.id.toLowerCase().includes(q);
-                }).length === 0 && (
-                  <div style={{ padding: "12px 14px", fontSize: "13px", color: "#9aa5b4" }}>无匹配事项</div>
-                )}
-              </div>
-            )}
-            {eventId && (
-              <div style={{ fontSize: "11px", color: "#6c7a89", marginTop: "4px" }}>
-                已选：<code style={{ background: "#f0f4ff", padding: "1px 5px", borderRadius: "4px" }}>{eventId}</code>
-              </div>
-            )}
-          </div>
-
-          <div style={{ flex: 2, minWidth: "160px" }}>
-            <label style={{ fontSize: "12px", color: "#6c7a89", display: "block", marginBottom: "4px" }}>关闭说明</label>
-            <input value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="关闭说明" style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.2)", boxSizing: "border-box", fontSize: "13px" }} />
-          </div>
-
-          <div style={{ minWidth: "140px" }}>
-            <label style={{ fontSize: "12px", color: "#6c7a89", display: "block", marginBottom: "4px" }}>风险对象</label>
-            <select
-              value={scopeFilter}
-              onChange={(event) => setScopeFilter(event.target.value as RiskScopeFilter)}
-              style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.2)", boxSizing: "border-box", fontSize: "13px" }}
-            >
-              <option value="all">全部</option>
-              <option value="contract">合同链</option>
-              <option value="payroll">工资链</option>
-            </select>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-            <div style={{ fontSize: "12px", color: "transparent", marginBottom: "4px" }}>操作</div>
-            <button
-              onClick={() =>
+      {showHelp ? <RiskHelpModal onClose={() => setShowHelp(false)} /> : null}
+      <RiskPageShell
+        header={
+          <Fragment>
+            <RiskWorkbenchHeader
+              message={message}
+              navState={navState}
+              scopeFilter={scopeFilter}
+              viewFilter={viewFilter}
+              eventId={eventId}
+              eventSearch={eventSearch}
+              visibleEvents={visibleEvents}
+              selectedFinding={selectedFinding}
+              resolution={resolution}
+              showEventDropdown={showEventDropdown}
+              dropdownRef={dropdownRef}
+              onShowHelp={() => setShowHelp(true)}
+              onEventSearchChange={(value) => {
+                setEventSearch(value);
+                setShowEventDropdown(true);
+              }}
+              onFocusEventSearch={() => setShowEventDropdown(true)}
+              onSelectEvent={(nextEventId, title) => {
+                setEventId(nextEventId);
+                setEventSearch(title);
+                setShowEventDropdown(false);
+              }}
+              onResolutionChange={setResolution}
+              onScopeChange={setScopeFilter}
+              onViewChange={setViewFilter}
+              onRunRiskCheck={() =>
                 void runEventRiskCheck(eventId)
                   .then(() => refreshFindings())
                   .catch((error) => setMessage((error as Error).message))
               }
-              disabled={!eventId}
-              style={{ padding: "8px 18px", borderRadius: "8px", cursor: eventId ? "pointer" : "default", fontSize: "13px", opacity: eventId ? 1 : 0.5 }}
-            >
-              执行风险检查
-            </button>
-          </div>
-        </div>
-      </article>
-      <ProcessFlowStageSection
-        title="风险检查流程回看"
-        subtitle="风险检查主要来源于 AI 初判与资料校验阶段，并会联动事项、凭证和税务处理结果。当前页可从两类业务主线回看风险来源并跳转到相关业务页面。"
-        currentNodeId="ai_precheck"
-        branch={null}
-        businessEventId={eventId || undefined}
+            />
+            <ProcessFlowStageSection
+              title="风险检查流程回看"
+              subtitle="风险检查主要来源于 AI 初判与资料校验阶段，并会联动事项、凭证和税务处理结果。当前页可从两类业务主线回看风险来源并跳转到相关业务页面。"
+              currentNodeId="ai_precheck"
+              branch={null}
+              businessEventId={eventId || undefined}
+            />
+          </Fragment>
+        }
+        list={
+          <RiskFindingsListPanel
+            findings={visibleFindings}
+            eventMap={eventMap}
+            navEventId={navEventId}
+            selectedFindingId={selectedFinding?.id ?? ""}
+            severityLabel={(severity) => t(RISK_SEVERITY_LABELS, severity)}
+            priorityLabel={(priority) => t(RISK_PRIORITY_LABELS, priority)}
+            statusLabel={(status) => t(RISK_STATUS_LABELS, status)}
+            onSelectFinding={(findingId) =>
+              void loadClosureRecords(findingId).catch((error) => setMessage((error as Error).message))
+            }
+            onNavigate={navigateWithState}
+          />
+        }
+        detail={
+          <RiskResolutionWorkbench
+            finding={selectedFinding}
+            event={selectedFindingEvent}
+            closureTargets={closureTargets}
+            resolution={resolution}
+            onResolutionChange={setResolution}
+            onNavigate={navigateWithState}
+            onOpenAudit={openAuditForSelectedFinding}
+            onCloseFinding={() =>
+              void closeSelectedFinding().catch((error) => setMessage((error as Error).message))
+            }
+          />
+        }
+        timeline={<RiskClosureTimeline selectedFindingId={selectedFinding?.id ?? ""} records={closureRecords} />}
       />
-      <article style={panelStyle()}>
-        <h3 style={{ marginTop: 0 }}>
-          风险发现{navEventId ? `（当前事项 ${navEventId}）` : ""}
-        </h3>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={cellStyle()}>规则</th>
-              <th style={cellStyle()}>严重级别</th>
-              <th style={cellStyle()}>评分</th>
-              <th style={cellStyle()}>优先级</th>
-              <th style={cellStyle()}>事项</th>
-              <th style={cellStyle()}>标题</th>
-              <th style={cellStyle()}>说明</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleFindings.map((finding) => {
-              const linkedEvent = finding.businessEventId ? eventMap.get(finding.businessEventId) ?? null : null;
-              const targets = buildRiskDrilldownTargets(linkedEvent);
-              return (
-              <tr key={finding.id}>
-                <td style={cellStyle()}>{finding.ruleCode}</td>
-                <td style={cellStyle()}>{t(RISK_SEVERITY_LABELS, finding.severity)}</td>
-                <td style={cellStyle()}>{finding.score ?? "—"}</td>
-                <td style={cellStyle()}>{finding.priority ? t(RISK_PRIORITY_LABELS, finding.priority) : "—"}</td>
-                <td style={cellStyle()}>{finding.businessEventId || "—"}</td>
-                <td style={cellStyle()}>{finding.title}</td>
-                <td style={cellStyle()}>
-                  <div>{finding.detail}</div>
-                  {targets.length ? (
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
-                      {targets.map((target) => (
-                        <button
-                          key={`${finding.id}-${target.path}-${target.label}`}
-                          style={{ fontSize: "11px", padding: "3px 10px" }}
-                          onClick={() => navigate(target.path, { state: target.state })}
-                        >
-                          {target.label}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                  <button
-                    style={{ marginTop: "8px", marginRight: "8px" }}
-                    onClick={() =>
-                      void loadClosureRecords(finding.id).catch((error) => setMessage((error as Error).message))
-                    }
-                  >
-                    查看复盘
-                  </button>
-                  <button
-                    style={{ marginTop: "8px", marginRight: "8px" }}
-                    onClick={() =>
-                      navigate("/audit", {
-                        state: {
-                          resourceType: "risk_finding",
-                          resourceId: finding.id
-                        }
-                      })
-                    }
-                  >
-                    查看审计
-                  </button>
-                  {finding.status !== "resolved" ? (
-                    <button
-                      style={{ marginTop: "8px" }}
-                      onClick={() =>
-                        void closeRiskFinding(finding.id, resolution)
-                          .then(() => Promise.all([refreshFindings(), loadClosureRecords(finding.id)]))
-                          .catch((error) => setMessage((error as Error).message))
-                      }
-                    >
-                      标记已关闭
-                    </button>
-                  ) : null}
-                </td>
-              </tr>
-            );})}
-            {visibleFindings.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ ...cellStyle(), textAlign: "center", color: "#9aa5b4", padding: "24px" }}>
-                  当前筛选范围内暂无风险发现
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </article>
-      <article style={panelStyle()}>
-        <h3 style={{ marginTop: 0 }}>异常关闭与复盘记录</h3>
-        <p>当前查看：{selectedFindingId || "未选择风险发现"}</p>
-        {closureTargets.length ? (
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
-            {closureTargets.map((target) => (
-              <button
-                key={`closure-${target.path}-${target.label}`}
-                style={{ fontSize: "12px", padding: "4px 10px" }}
-                onClick={() => navigate(target.path, { state: target.state })}
-              >
-                {target.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={cellStyle()}>复盘编号</th>
-              <th style={cellStyle()}>关闭人</th>
-              <th style={cellStyle()}>关闭说明</th>
-              <th style={cellStyle()}>复核时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            {closureRecords.length ? closureRecords.map((record) => (
-              <tr key={record.id}>
-                <td style={cellStyle()}>{record.id}</td>
-                <td style={cellStyle()}>{record.closedByName}</td>
-                <td style={cellStyle()}>{record.resolution}</td>
-                <td style={cellStyle()}>{record.reviewedAt}</td>
-              </tr>
-            )) : (
-              <tr>
-                <td style={cellStyle()} colSpan={4}>暂无关闭记录。</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </article>
     </section>
   );
 }
