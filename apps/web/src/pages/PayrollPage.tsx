@@ -30,7 +30,11 @@ import { buildPayrollTaxReviewSummary } from "./payroll-tax-review";
 import { buildPayrollWorkflow } from "./payroll-workflow";
 import { PayrollEmployeesSection } from "./payroll/PayrollEmployeesSection";
 import { PayrollHeader } from "./payroll/PayrollHeader";
+import { PayrollEmployeeForm } from "./payroll/PayrollEmployeeForm";
+import { PayrollEmployeesTable } from "./payroll/PayrollEmployeesTable";
+import { PayrollPolicyForm } from "./payroll/PayrollPolicyForm";
 import { PayrollPolicySection } from "./payroll/PayrollPolicySection";
+import { PayrollRecordsTable } from "./payroll/PayrollRecordsTable";
 import { PayrollRunSection } from "./payroll/PayrollRunSection";
 import { PayrollShell } from "./payroll/PayrollShell";
 import { PayrollTabBar, type PayrollTab } from "./payroll/PayrollTabBar";
@@ -564,103 +568,24 @@ export function PayrollPage() {
             </div>
           )}
           form={(showEmpForm || editingEmp) ? (
-            <div style={panelStyle()}>
-              <h3 style={{ margin: "0 0 16px", fontSize: "16px" }}>
-                {editingEmp ? `编辑员工：${editingEmp.name}` : "添加员工"}
-              </h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                {[
-                  { label: "姓名*", key: "name", type: "text" },
-                  { label: "身份证号", key: "idCard", type: "text" },
-                  { label: "职位", key: "position", type: "text" },
-                  { label: "入职日期", key: "hireDate", type: "date" },
-                  { label: "基本工资（元）*", key: "baseSalary", type: "number" }
-                ].map(({ label, key, type }) => (
-                  <label key={key} style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-                    <span style={{ color: "#6c7a89" }}>{label}</span>
-                    <input
-                      type={type}
-                      value={empForm[key as keyof typeof empForm]}
-                      onChange={(e) => setEmpForm({ ...empForm, [key]: e.target.value })}
-                      style={{ padding: "8px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px" }}
-                    />
-                  </label>
-                ))}
-                <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px", gridColumn: "1 / -1" }}>
-                  <span style={{ color: "#6c7a89" }}>备注</span>
-                  <input
-                    type="text"
-                    value={empForm.notes}
-                    onChange={(e) => setEmpForm({ ...empForm, notes: e.target.value })}
-                    style={{ padding: "8px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px" }}
-                  />
-                </label>
-              </div>
-              <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
-                <button style={btnPrimary()} onClick={editingEmp ? handleUpdateEmployee : handleCreateEmployee}>
-                  {editingEmp ? "保存修改" : "确认添加"}
-                </button>
-                <button style={btnSecondary()} onClick={() => { setShowEmpForm(false); setEditingEmp(null); }}>
-                  取消
-                </button>
-              </div>
-            </div>
+            <PayrollEmployeeForm
+              editingName={editingEmp?.name}
+              form={empForm}
+              onChange={setEmpForm}
+              onSubmit={editingEmp ? handleUpdateEmployee : handleCreateEmployee}
+              onCancel={() => { setShowEmpForm(false); setEditingEmp(null); }}
+              primaryLabel={editingEmp ? "保存修改" : "确认添加"}
+            />
           ) : undefined}
           list={(
-            <div style={panelStyle()}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                <thead>
-                  <tr style={{ color: "#6c7a89" }}>
-                    {["姓名", "职位", "入职日期", "基本工资", "状态", "操作"].map((h) => (
-                      <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {employees.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} style={{ ...cellStyle(), color: "#aab5c0", textAlign: "center", padding: "32px" }}>
-                        暂无员工数据，点击"添加员工"开始录入
-                      </td>
-                    </tr>
-                  ) : (
-                    employees.map((emp) => (
-                      <tr key={emp.id}>
-                        <td
-                          style={{
-                            ...cellStyle(),
-                            background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined
-                          }}
-                        >
-                          <div>{emp.name}</div>
-                          <div style={{ color: "#8a9bb0", fontSize: "11px" }}>{emp.idCard}</div>
-                        </td>
-                        <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>{emp.position || "—"}</td>
-                        <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>{emp.hireDate ?? "—"}</td>
-                        <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>¥ {fmt(emp.baseSalary)}</td>
-                        <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>
-                          <span style={{
-                            background: emp.status === "active" ? "#1a7f5a22" : "#8a9bb022",
-                            color: emp.status === "active" ? "#1a7f5a" : "#8a9bb0",
-                            borderRadius: "999px", padding: "2px 10px", fontSize: "12px"
-                          }}>
-                            {EMPLOYEE_STATUS_LABELS[emp.status] ?? emp.status}
-                          </span>
-                        </td>
-                        <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>
-                          <button
-                            onClick={() => startEditEmployee(emp)}
-                            style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #1e2a37", color: "#1e2a37", background: "none", cursor: "pointer" }}
-                          >
-                            编辑
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <PayrollEmployeesTable
+              employees={employees}
+              navEmployeeId={navEmployeeId}
+              employeeStatusLabels={EMPLOYEE_STATUS_LABELS}
+              formatAmount={fmt}
+              onEdit={startEditEmployee}
+              cellStyle={cellStyle}
+            />
           )}
         />
       )}
@@ -1016,77 +941,14 @@ export function PayrollPage() {
                   </div>
                 </div>
               )}
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "900px" }}>
-                  <thead>
-                    <tr style={{ color: "#6c7a89" }}>
-                      {["姓名", "应发工资", "个人社保", "单位社保", "个人公积金", "单位公积金", "个税", "实发工资", "状态", "操作"].map((h) => (
-                        <th key={h} style={{ ...cellStyle(), fontWeight: 500, whiteSpace: "nowrap" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payrollRecords.map((r) => (
-                      <tr key={r.id}>
-                        <td style={cellStyle()}>{r.employeeName}</td>
-                        <td style={cellStyle()}>¥{fmt(r.grossSalary)}</td>
-                        <td style={cellStyle()}>¥{fmt(r.socialSecurityEmployee)}</td>
-                        <td style={cellStyle()}>¥{fmt(r.socialSecurityEmployer)}</td>
-                        <td style={cellStyle()}>¥{fmt(r.housingFundEmployee)}</td>
-                        <td style={cellStyle()}>¥{fmt(r.housingFundEmployer)}</td>
-                        <td style={cellStyle()}>¥{fmt(r.iitWithheld)}</td>
-                        <td style={{ ...cellStyle(), fontWeight: 600 }}>¥{fmt(r.netPay)}</td>
-                        <td style={cellStyle()}>
-                          <span style={{
-                            background: `${PAYROLL_STATUS_COLOR[r.status]}22`,
-                            color: PAYROLL_STATUS_COLOR[r.status],
-                            borderRadius: "999px", padding: "2px 8px", fontSize: "11px"
-                          }}>
-                            {PAYROLL_STATUS_LABELS[r.status] ?? r.status}
-                          </span>
-                        </td>
-                        <td style={cellStyle()}>
-                          {r.status === "draft" && (
-                            <button
-                              onClick={() => handleConfirm(r.id)}
-                              style={{ fontSize: "11px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #1a7f5a", color: "#1a7f5a", background: "none", cursor: "pointer" }}
-                            >
-                              确认
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: "rgba(30,42,55,0.04)", fontWeight: 600, fontSize: "13px" }}>
-                      <td style={{ ...cellStyle(), borderTop: "2px solid rgba(20,40,60,0.12)" }}>合计</td>
-                      <td style={{ ...cellStyle(), borderTop: "2px solid rgba(20,40,60,0.12)" }}>
-                        ¥{fmt(payrollRecords.reduce((s, r) => s + r.grossSalary, 0))}
-                      </td>
-                      <td style={{ ...cellStyle(), borderTop: "2px solid rgba(20,40,60,0.12)" }}>
-                        ¥{fmt(payrollRecords.reduce((s, r) => s + r.socialSecurityEmployee, 0))}
-                      </td>
-                      <td style={{ ...cellStyle(), borderTop: "2px solid rgba(20,40,60,0.12)" }}>
-                        ¥{fmt(payrollRecords.reduce((s, r) => s + r.socialSecurityEmployer, 0))}
-                      </td>
-                      <td style={{ ...cellStyle(), borderTop: "2px solid rgba(20,40,60,0.12)" }}>
-                        ¥{fmt(payrollRecords.reduce((s, r) => s + r.housingFundEmployee, 0))}
-                      </td>
-                      <td style={{ ...cellStyle(), borderTop: "2px solid rgba(20,40,60,0.12)" }}>
-                        ¥{fmt(payrollRecords.reduce((s, r) => s + r.housingFundEmployer, 0))}
-                      </td>
-                      <td style={{ ...cellStyle(), borderTop: "2px solid rgba(20,40,60,0.12)" }}>
-                        ¥{fmt(payrollRecords.reduce((s, r) => s + r.iitWithheld, 0))}
-                      </td>
-                      <td style={{ ...cellStyle(), borderTop: "2px solid rgba(20,40,60,0.12)" }}>
-                        ¥{fmt(payrollRecords.reduce((s, r) => s + r.netPay, 0))}
-                      </td>
-                      <td colSpan={2} style={{ ...cellStyle(), borderTop: "2px solid rgba(20,40,60,0.12)" }} />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              <PayrollRecordsTable
+                records={payrollRecords}
+                formatAmount={fmt}
+                getStatusLabel={(status) => PAYROLL_STATUS_LABELS[status] ?? status}
+                getStatusColor={(status) => PAYROLL_STATUS_COLOR[status] ?? "#8a9bb0"}
+                onConfirm={handleConfirm}
+                cellStyle={cellStyle}
+              />
             </div>
           ) : undefined}
           empty={selectedPeriod && payrollRecords.length === 0 ? (
@@ -1099,59 +961,20 @@ export function PayrollPage() {
 
       {/* ── Tab: 参数设置 ── */}
       {tab === "policy" && policy && (
-        <PayrollPolicySection content={<div style={panelStyle()}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-            <h3 style={{ margin: 0, fontSize: "16px" }}>社保/公积金/个税参数</h3>
-            {!editingPolicy ? (
-              <button style={btnPrimary()} onClick={() => setEditingPolicy(true)}>编辑参数</button>
-            ) : (
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button style={btnPrimary()} onClick={handleSavePolicy}>保存</button>
-                <button style={btnSecondary()} onClick={() => { setEditingPolicy(false); setPolicyForm(policyToForm(policy)); }}>取消</button>
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 40px" }}>
-            {[
-              { label: "社保基数下限（元）", key: "socialSecurityBaseMin" },
-              { label: "社保基数上限（元）", key: "socialSecurityBaseMax" },
-              { label: "养老保险 个人费率", key: "pensionEmployeeRate" },
-              { label: "养老保险 单位费率", key: "pensionEmployerRate" },
-              { label: "医疗保险 个人费率", key: "medicalEmployeeRate" },
-              { label: "医疗保险 单位费率", key: "medicalEmployerRate" },
-              { label: "失业保险 个人费率", key: "unemploymentEmployeeRate" },
-              { label: "失业保险 单位费率", key: "unemploymentEmployerRate" },
-              { label: "住房公积金 个人费率", key: "housingFundEmployeeRate" },
-              { label: "住房公积金 单位费率", key: "housingFundEmployerRate" },
-              { label: "个税起征点（元）", key: "iitThreshold" }
-            ].map(({ label, key }) => {
-              const isRate = key.endsWith("Rate");
-              const raw = Number(policyForm[key] ?? 0);
-              const display = editingPolicy ? policyForm[key] : (isRate ? pct(raw) : fmt(raw));
-              return (
-                <div key={key} style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-                  <span style={{ color: "#6c7a89" }}>{label}</span>
-                  {editingPolicy ? (
-                    <input
-                      type="number"
-                      value={policyForm[key]}
-                      step={isRate ? "0.001" : "100"}
-                      onChange={(e) => setPolicyForm({ ...policyForm, [key]: e.target.value })}
-                      style={{ padding: "7px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px", width: "120px" }}
-                    />
-                  ) : (
-                    <span style={{ fontWeight: 500 }}>{display}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <div style={{ marginTop: "20px", padding: "12px 16px", background: "rgba(30,42,55,0.04)", borderRadius: "12px", fontSize: "12px", color: "#6c7a89" }}>
-            <strong>个税计算说明：</strong>应纳税所得额 = 应发工资 − 个人社保 − 个人公积金 − 起征点，适用七级超额累进税率（3%～45%）。
-          </div>
-        </div>} />
+        <PayrollPolicySection
+          content={(
+            <PayrollPolicyForm
+              editing={editingPolicy}
+              form={policyForm}
+              onChange={setPolicyForm}
+              onStartEdit={() => setEditingPolicy(true)}
+              onSave={handleSavePolicy}
+              onCancel={() => { setEditingPolicy(false); setPolicyForm(policyToForm(policy)); }}
+              formatAmount={fmt}
+              formatPercent={pct}
+            />
+          )}
+        />
       )}
     </>
   );

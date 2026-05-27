@@ -40,8 +40,18 @@
 - [x] Verify typecheck and focused tests
 - [x] Commit
 
+### Task 4: Extract employees form, payroll records table, and policy form
+
+- [x] Extract employee create/edit form
+- [x] Extract payroll detail table
+- [x] Extract payroll policy form
+- [x] Keep existing payroll compute/tax review/risk linkage intact
+- [x] Verify typecheck and focused tests
+- [x] Commit
+
 ## Progress Update
 
 - `Task 1` 已完成实现与验证，等待本分支提交。
 - `Task 2` 已完成 employees / payroll / policy 三段容器拆分，现有工资计算、税务复核、风险联动和 drilldown 行为保持不变。
 - `Task 3` 已完成第一轮工资工作流摘要前置展示，并已通过 focused test 与前端 typecheck。
+- `Task 4` 已完成员工表单、工资明细表和参数表单下沉，`PayrollPage` 继续变薄，现有工资计算、税务复核、凭证建议和风险联动逻辑保持不变。
