@@ -84,6 +84,7 @@
 - `Task 2` 已完成实现与验证，`EventsPage` 顶层布局已改为壳组件组合。
 - `Task 3` 已完成第一轮主入口提示统一，等待本分支统一提交。
 - 第二批已完成：`AssistantPage` 的会话列表、建议事项卡、输入区状态已下沉到子组件；`EventsPage` 的创建表单和事项列表已改成受控子组件。
+- 第三批已完成：`AssistantPage` 的 `session / mode / history` 已同步到 URL 查询参数，`EventsPage` 继续保持 `event` 查询参数选中态；两页入口提示与结果承接语义已统一，未改后端接口和既有业务链。
 
 ## Execution Handoff
 

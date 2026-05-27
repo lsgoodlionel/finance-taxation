@@ -11,6 +11,7 @@ import { ASSISTANT_ENTRY_SUBTITLE } from "../lib/entry-guidance";
 import { PageHeader } from "../components/ui/PageHeader";
 import { ResultBanner } from "../components/ui/ResultBanner";
 import { useDrawer } from "../hooks/useDrawer";
+import { useQueryState } from "../hooks/useQueryState";
 import { AssistantShell } from "./assistant/AssistantShell";
 import { AssistantHistoryPanel } from "./assistant/AssistantHistoryPanel";
 import { AssistantStatusPanel } from "./assistant/AssistantStatusPanel";
@@ -183,6 +184,9 @@ function writeStoredFlowContexts(contexts: Record<string, AssistantFlowContext>)
 export function AssistantPage() {
   const { messages, setMessages, persistMessages, sessions, activeId, newSession, loadSession, deleteSession } =
     useChatSessions(STORAGE_KEY);
+  const [sessionIdState, setSessionIdState] = useQueryState("session", "");
+  const [modeState, setModeState] = useQueryState("mode", "");
+  const [historyState, setHistoryState] = useQueryState("history", "");
 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -225,7 +229,10 @@ export function AssistantPage() {
         setIsBoss(boss);
         setCompanyId(user.companyId);
         const savedMode = localStorage.getItem(`ft-view-mode-${user.companyId}`) as "boss" | "staff" | null;
-        setViewMode(boss ? (savedMode ?? "boss") : "staff");
+        const nextMode = boss
+          ? (modeState === "boss" || modeState === "staff" ? modeState : (savedMode ?? "boss"))
+          : "staff";
+        setViewMode(nextMode);
       })
       .catch(() => {});
 
@@ -243,6 +250,10 @@ export function AssistantPage() {
   }, [messages]);
 
   useEffect(() => {
+    setShowHistory(historyState === "open");
+  }, [historyState]);
+
+  useEffect(() => {
     if (!activeId) {
       return;
     }
@@ -250,6 +261,20 @@ export function AssistantPage() {
     const contexts = readStoredFlowContexts();
     setFlowContext(contexts[activeId] ?? null);
   }, [activeId]);
+
+  useEffect(() => {
+    if ((activeId ?? "") !== sessionIdState) {
+      setSessionIdState(activeId ?? "");
+    }
+  }, [activeId, sessionIdState, setSessionIdState]);
+
+  useEffect(() => {
+    if (!sessionIdState || !sessions.some((session) => session.id === sessionIdState) || activeId === sessionIdState) {
+      return;
+    }
+
+    loadSession(sessionIdState);
+  }, [activeId, loadSession, sessionIdState, sessions]);
 
   useEffect(() => {
     if (!activeId) {
@@ -273,6 +298,7 @@ export function AssistantPage() {
     const next = viewMode === "boss" ? "staff" : "boss";
     setViewMode(next);
     if (companyId) localStorage.setItem(`ft-view-mode-${companyId}`, next);
+    setModeState(next);
     setSuggestedEvents([]);
     setFlowContext(null);
     setStatus(next === "boss" ? "已切换为决策视角" : "已切换为操作视角");
@@ -285,7 +311,7 @@ export function AssistantPage() {
     setSending(true);
     setSuggestedEvents([]);
     setFlowContext(null);
-    setShowHistory(false);
+    setHistoryState("");
     setOcrPreview(null);
 
     const userMsg: SessionMessage = { role: "user", content: userText };
@@ -629,18 +655,20 @@ export function AssistantPage() {
     setOcrPreview(null);
     setFlowContext(null);
     newSession();
+    setSessionIdState("");
     setStatus("新对话已开始，请输入您的问题。");
-    setShowHistory(false);
+    setHistoryState("");
   }
 
   function handleLoadSession(id: string) {
     abortRef.current?.abort();
     setSuggestedEvents([]);
     loadSession(id);
+    setSessionIdState(id);
     const contexts = readStoredFlowContexts();
     setFlowContext(contexts[id] ?? null);
     setStatus(contexts[id] ? "已恢复历史对话和流程位置，可继续提问。" : "已恢复历史对话，可继续提问。");
-    setShowHistory(false);
+    setHistoryState("");
   }
 
   function handleDeleteSession(id: string) {
@@ -680,7 +708,7 @@ export function AssistantPage() {
         actions={(
           <div style={{ display: "flex", gap: "8px" }}>
             <button
-              onClick={() => sessions.length > 0 && setShowHistory((v) => !v)}
+              onClick={() => sessions.length > 0 && setHistoryState(showHistory ? "" : "open")}
               style={{
                 background: showHistory ? "#1e2a37" : "#eef0f3",
                 color: showHistory ? "#fff" : sessions.length > 0 ? "#1e2a37" : "#bcc5ce",
