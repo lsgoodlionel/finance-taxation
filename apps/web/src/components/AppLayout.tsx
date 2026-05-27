@@ -1,7 +1,19 @@
-import { type FormEvent, useState, useEffect } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import {
+  Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin,
+} from "antd";
+import {
+  RobotOutlined, UnorderedListOutlined, CheckSquareOutlined, DashboardOutlined,
+  FileTextOutlined, TeamOutlined, FolderOpenOutlined, AuditOutlined, BarChartOutlined,
+  LineChartOutlined, CalculatorOutlined, ExperimentOutlined, AlertOutlined, FileSearchOutlined,
+  BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined,
+} from "@ant-design/icons";
 import { getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
 import { LOGIN_GATE_SUBTITLE, SIDEBAR_BRAND_SUBTITLE } from "../lib/entry-guidance";
+
+const { Sider, Content } = Layout;
+const { Text } = Typography;
 
 interface User {
   id: string;
@@ -10,73 +22,85 @@ interface User {
   roleIds: string[];
 }
 
-const navGroups = [
+const navItems = [
   {
+    key: "g-entry",
     label: "业务入口",
-    items: [
-      { to: "/assistant", label: "AI 财税助手", icon: "✦" },
-      { to: "/events", label: "经营事项总线", icon: "⋯" },
-      { to: "/tasks", label: "任务中心", icon: "◎" },
-      { to: "/dashboard/chairman", label: "董事长驾驶舱", icon: "◈" }
-    ]
+    type: "group" as const,
+    children: [
+      { key: "/assistant", icon: <RobotOutlined />, label: "AI 财税助手" },
+      { key: "/events", icon: <UnorderedListOutlined />, label: "经营事项总线" },
+      { key: "/tasks", icon: <CheckSquareOutlined />, label: "任务中心" },
+      { key: "/dashboard/chairman", icon: <DashboardOutlined />, label: "董事长驾驶舱" },
+    ],
   },
   {
+    key: "g-mgmt",
     label: "经营管理",
-    items: [
-      { to: "/contracts", label: "合同管理", icon: "◻" },
-      { to: "/payroll", label: "工资管理", icon: "◑" }
-    ]
+    type: "group" as const,
+    children: [
+      { key: "/contracts", icon: <FileTextOutlined />, label: "合同管理" },
+      { key: "/payroll", icon: <TeamOutlined />, label: "工资管理" },
+    ],
   },
   {
+    key: "g-finance",
     label: "财务运营",
-    items: [
-      { to: "/documents", label: "单据中心", icon: "◷" },
-      { to: "/vouchers", label: "凭证中心", icon: "◈" },
-      { to: "/ledger", label: "总账中心", icon: "≡" },
-      { to: "/reports", label: "财务报表", icon: "∥" }
-    ]
+    type: "group" as const,
+    children: [
+      { key: "/documents", icon: <FolderOpenOutlined />, label: "单据中心" },
+      { key: "/vouchers", icon: <AuditOutlined />, label: "凭证中心" },
+      { key: "/ledger", icon: <BarChartOutlined />, label: "总账中心" },
+      { key: "/reports", icon: <LineChartOutlined />, label: "财务报表" },
+    ],
   },
   {
+    key: "g-tax",
     label: "税务人力",
-    items: [
-      { to: "/tax", label: "税务中心", icon: "◉" }
-    ]
+    type: "group" as const,
+    children: [
+      { key: "/tax", icon: <CalculatorOutlined />, label: "税务中心" },
+    ],
   },
   {
+    key: "g-risk",
     label: "研发风控",
-    items: [
-      { to: "/rnd", label: "研发辅助账", icon: "◊" },
-      { to: "/risk", label: "风险勾稽", icon: "⚑" },
-      { to: "/audit", label: "审计日志", icon: "◌" }
-    ]
+    type: "group" as const,
+    children: [
+      { key: "/rnd", icon: <ExperimentOutlined />, label: "研发辅助账" },
+      { key: "/risk", icon: <AlertOutlined />, label: "风险勾稽" },
+      { key: "/audit", icon: <FileSearchOutlined />, label: "审计日志" },
+    ],
   },
   {
+    key: "g-tools",
     label: "AI 与工具",
-    items: [
-      { to: "/knowledge", label: "制度库", icon: "⊞" },
-      { to: "/pdf-export", label: "PDF 导出", icon: "↓" }
-    ]
+    type: "group" as const,
+    children: [
+      { key: "/knowledge", icon: <BookOutlined />, label: "制度库" },
+      { key: "/pdf-export", icon: <ExportOutlined />, label: "PDF 导出" },
+    ],
   },
   {
+    key: "g-sys",
     label: "系统",
-    items: [
-      { to: "/settings", label: "系统设置", icon: "⚙" }
-    ]
-  }
+    type: "group" as const,
+    children: [
+      { key: "/settings", icon: <SettingOutlined />, label: "系统设置" },
+    ],
+  },
 ];
 
 function LoginGate({ onLogin }: { onLogin: (user: User) => void }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [form] = Form.useForm();
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(values: { username: string; password: string }) {
     setError("");
     setLoading(true);
     try {
-      const result = await login(username, password);
+      const result = await login(values.username, values.password);
       onLogin(result.user as User);
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败");
@@ -86,59 +110,56 @@ function LoginGate({ onLogin }: { onLogin: (user: User) => void }) {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--c-bg)"
-      }}
-    >
-      <div
-        className="card"
-        style={{ width: 360, padding: "36px 32px" }}
+    <div style={{
+      minHeight: "100vh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
+    }}>
+      <Card
+        style={{ width: 400, borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+        styles={{ body: { padding: "40px 36px" } }}
       >
-        <div style={{ marginBottom: 24 }}>
-          <div className="sidebar-brand-name" style={{ color: "var(--c-text)", fontSize: 20 }}>
-            Finance Taxation V2
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 14,
+            background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 16,
+          }}>
+            <SafetyOutlined style={{ fontSize: 26, color: "#fff" }} />
           </div>
-          <div className="sidebar-brand-sub" style={{ color: "var(--c-text-muted)", marginTop: 4 }}>
-            {LOGIN_GATE_SUBTITLE}
-          </div>
+          <Typography.Title level={4} style={{ margin: 0, color: "#0f172a" }}>
+            Finance Taxation
+          </Typography.Title>
+          <Text type="secondary" style={{ fontSize: 13 }}>{LOGIN_GATE_SUBTITLE}</Text>
         </div>
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div className="form-group">
-            <label className="form-label">用户名</label>
-            <input
-              className="form-input"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              placeholder="请输入用户名"
-              autoFocus
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">密码</label>
-            <input
-              className="form-input"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="请输入密码"
-              required
-            />
-          </div>
-          {error && <div className="alert alert-error">{error}</div>}
-          <button className="btn btn-primary" type="submit" disabled={loading} style={{ marginTop: 4 }}>
-            {loading ? "登录中…" : "登录"}
-          </button>
-        </form>
-        <div style={{ marginTop: 16, fontSize: 12, color: "var(--c-text-light)", textAlign: "center" }}>
-          默认账户：chairman / 123456 &nbsp;|&nbsp; finance / 123456
-        </div>
-      </div>
+
+        <Form form={form} layout="vertical" onFinish={handleSubmit} size="large">
+          <Form.Item name="username" label="用户名" rules={[{ required: true, message: "请输入用户名" }]}>
+            <Input placeholder="请输入用户名" autoFocus />
+          </Form.Item>
+          <Form.Item name="password" label="密码" rules={[{ required: true, message: "请输入密码" }]}>
+            <Input.Password placeholder="请输入密码" />
+          </Form.Item>
+          {error && (
+            <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12, padding: "8px 12px", background: "#fee2e2", borderRadius: 6 }}>
+              {error}
+            </div>
+          )}
+          <Button type="primary" htmlType="submit" block loading={loading} style={{ height: 44, fontSize: 15 }}>
+            {loading ? "登录中…" : "登 录"}
+          </Button>
+        </Form>
+
+        <Divider style={{ margin: "20px 0 12px" }} />
+        <Text type="secondary" style={{ fontSize: 12, display: "block", textAlign: "center" }}>
+          默认账户：<Text code style={{ fontSize: 12 }}>chairman / 123456</Text>
+          &nbsp;|&nbsp;
+          <Text code style={{ fontSize: 12 }}>finance / 123456</Text>
+        </Text>
+      </Card>
     </div>
   );
 }
@@ -146,14 +167,13 @@ function LoginGate({ onLogin }: { onLogin: (user: User) => void }) {
 export function AppLayout() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const token = getStoredToken();
-    if (!token) {
-      setChecking(false);
-      return;
-    }
+    if (!token) { setChecking(false); return; }
     getCurrentUser()
       .then(u => setUser(u as User))
       .catch(() => {})
@@ -161,9 +181,7 @@ export function AppLayout() {
   }, []);
 
   async function handleLogout() {
-    try {
-      await logoutSession();
-    } catch {
+    try { await logoutSession(); } catch {
       localStorage.removeItem("finance-taxation-v2-token");
       localStorage.removeItem("finance-taxation-v2-refresh-token");
     }
@@ -173,70 +191,116 @@ export function AppLayout() {
 
   if (checking) {
     return (
-      <div className="state-loading" style={{ marginTop: 80 }}>
-        正在加载…
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f5f9" }}>
+        <Spin size="large" tip="加载中…" />
       </div>
     );
   }
 
-  if (!user) {
-    return <LoginGate onLogin={setUser} />;
-  }
+  if (!user) return <LoginGate onLogin={setUser} />;
 
   const initials = (user.displayName || user.username || "U").slice(0, 2).toUpperCase();
-  const roleLabel = user.roleIds.includes("chairman") ? "董事长" :
-    user.roleIds.includes("cfo") ? "财务总监" :
-    user.roleIds.includes("accountant") ? "会计" : "成员";
+  const roleLabel =
+    user.roleIds.includes("role-chairman") || user.roleIds.includes("chairman") ? "董事长" :
+    user.roleIds.includes("role-finance-director") || user.roleIds.includes("cfo") ? "财务总监" :
+    user.roleIds.includes("role-accountant") || user.roleIds.includes("accountant") ? "会计" : "成员";
 
   return (
-    <div className="app-shell">
-      <aside className="app-sidebar">
-        <div className="sidebar-brand">
-          <div className="sidebar-brand-name">Finance Taxation V2</div>
-          <div className="sidebar-brand-sub">{SIDEBAR_BRAND_SUBTITLE}</div>
-        </div>
-
-        <nav className="sidebar-nav">
-          {navGroups.map(group => (
-            <div key={group.label} className="sidebar-group">
-              <div className="sidebar-group-label">{group.label}</div>
-              {group.items.map(item => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    "sidebar-link" + (isActive ? " active" : "")
-                  }
-                >
-                  <span style={{ fontSize: 14, lineHeight: 1 }}>{item.icon}</span>
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        <div className="sidebar-user">
-          <div className="sidebar-user-avatar">{initials}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="sidebar-user-name">{user.displayName || user.username}</div>
-            <div className="sidebar-user-role">{roleLabel}</div>
+    <Layout style={{ minHeight: "100vh" }}>
+      <Sider
+        collapsible
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        width={224}
+        collapsedWidth={64}
+        style={{
+          background: "#0f172a",
+          boxShadow: "2px 0 8px rgba(0,0,0,0.15)",
+          overflow: "auto",
+          height: "100vh",
+          position: "fixed",
+          left: 0, top: 0, bottom: 0,
+        }}
+      >
+        {/* Brand */}
+        <div style={{
+          padding: collapsed ? "18px 0 14px" : "18px 16px 14px",
+          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          textAlign: collapsed ? "center" : "left",
+          transition: "padding 0.2s",
+        }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 34, height: 34, borderRadius: 9,
+            background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+            marginBottom: collapsed ? 0 : 8,
+          }}>
+            <SafetyOutlined style={{ color: "#fff", fontSize: 17 }} />
           </div>
-          <button
-            className="sidebar-logout"
-            onClick={handleLogout}
-            title="退出登录"
-          >
-            ⏻
-          </button>
+          {!collapsed && (
+            <>
+              <div style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>
+                Finance Taxation
+              </div>
+              <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>
+                {SIDEBAR_BRAND_SUBTITLE}
+              </div>
+            </>
+          )}
         </div>
-      </aside>
 
-      <div className="app-main">
-        <div className="app-content">
-          <Outlet />
+        {/* Navigation */}
+        <div style={{ padding: "6px 0", overflowY: "auto", height: "calc(100vh - 130px)" }}>
+          <Menu
+            mode="inline"
+            theme="dark"
+            selectedKeys={[location.pathname]}
+            style={{ background: "transparent", border: "none", fontSize: 13 }}
+            items={navItems}
+            onClick={({ key }) => navigate(key)}
+          />
         </div>
-      </div>
-    </div>
+
+        {/* User footer */}
+        <div style={{
+          position: "absolute", bottom: 40, left: 0, right: 0,
+          padding: collapsed ? "10px 0" : "10px 14px",
+          borderTop: "1px solid rgba(255,255,255,0.07)",
+          display: "flex", alignItems: "center", gap: 8,
+          justifyContent: collapsed ? "center" : "flex-start",
+        }}>
+          <Avatar
+            size={30}
+            style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)", flexShrink: 0, fontSize: 12, cursor: "default" }}
+          >
+            {initials}
+          </Avatar>
+          {!collapsed && (
+            <>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: "#e2e8f0", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {user.displayName || user.username}
+                </div>
+                <div style={{ color: "#475569", fontSize: 11 }}>{roleLabel}</div>
+              </div>
+              <Button
+                type="text"
+                icon={<PoweroffOutlined style={{ fontSize: 13 }} />}
+                size="small"
+                onClick={handleLogout}
+                title="退出登录"
+                style={{ color: "#475569", padding: "0 4px" }}
+              />
+            </>
+          )}
+        </div>
+      </Sider>
+
+      <Layout style={{ marginLeft: collapsed ? 64 : 224, transition: "margin-left 0.2s", background: "#f1f5f9", minHeight: "100vh" }}>
+        <Content style={{ padding: "24px 28px" }}>
+          <Outlet />
+        </Content>
+      </Layout>
+    </Layout>
   );
 }

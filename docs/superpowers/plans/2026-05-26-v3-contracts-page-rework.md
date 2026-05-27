@@ -1,0 +1,74 @@
+# V3 Contracts Page Rework Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** 将 `ContractsPage` 从“单文件堆叠的列表 + 详情 + 履约链”重构为更清晰的 V3 合同履约工作台。
+
+**Architecture:** 不改后端接口和合同履约业务逻辑，先重构前端页面结构。优先抽出壳组件、筛选条、列表面板和详情工作台，再逐步把表单和履约动作下沉到子组件。
+
+**Tech Stack:** React, TypeScript, existing Vite app, current contracts APIs and contract workflow helpers
+
+## File Map
+
+- Create: `apps/web/src/pages/contracts/ContractsShell.tsx`
+- Create: `apps/web/src/pages/contracts/ContractsHeader.tsx`
+- Create: `apps/web/src/pages/contracts/ContractsFiltersBar.tsx`
+- Create: `apps/web/src/pages/contracts/contracts-shell.test.tsx`
+- Modify: `apps/web/src/pages/ContractsPage.tsx`
+
+### Task 1: Extract contracts page shell
+
+- [x] Create shell render test
+- [x] Add shell/header/filter bar components
+- [x] Move top-level layout out of `ContractsPage.tsx`
+- [x] Keep behavior intact and pass typecheck
+- [x] Commit
+
+### Task 2: Split contract list and detail workbench
+
+- [x] Extract list panel
+- [x] Extract detail workbench container
+- [x] Keep existing actions and drilldown behavior intact
+- [x] Verify typecheck and focused tests
+- [x] Commit
+
+### Task 3: Normalize V3 entry/result guidance for contracts
+
+- [x] Add V3 header/subtitle and next-step cues
+- [x] Make detail view show workflow summary first
+- [x] Verify typecheck and focused tests
+- [x] Commit
+
+### Task 4: Continue sinking remaining detail rendering blocks
+
+- [x] Extract contract metadata grid
+- [x] Extract contract timeline panel
+- [x] Keep existing drilldown and contract behavior intact
+- [x] Verify typecheck and focused tests
+- [x] Commit
+
+### Task 5: Extract create form and contracts table body
+
+- [x] Extract contract create form
+- [x] Extract contracts table body
+- [x] Keep existing actions and drilldown behavior intact
+- [x] Verify typecheck and focused tests
+- [x] Commit
+
+### Task 6: Polish contracts presentation without changing workflow logic
+
+- [x] Improve list/workbench layout hierarchy
+- [x] Add explicit empty states and guidance copy
+- [x] Normalize filter, header, and action presentation
+- [x] Keep existing actions and drilldown behavior intact
+- [x] Verify typecheck and focused tests
+- [x] Commit
+
+## Progress Update
+
+- `Task 1` 已完成并提交。
+- `Task 2` 已完成列表面板、详情工作台壳拆分，以及对象概览、履约动作、关联事项表的受控子组件下沉，现有 drilldown 和合同业务逻辑保持不变。
+- `Task 3` 已完成第一轮合同页 V3 摘要优先展示，并已通过 focused test 与前端 typecheck。
+- `Task 4` 已完成合同元信息区和履约时间轴区的受控子组件下沉，`ContractsPage` 继续变薄，现有导航和履约逻辑保持不变。
+- `Task 5` 已完成新建合同表单和合同列表表格本体的受控子组件下沉，创建、关闭、生成事项和 drilldown 行为保持不变。
+- `Task 6` 已完成合同页展示层收口：列表/工作台层级、空态、筛选区和标题提示已统一，现有履约和 drilldown 逻辑保持不变。
