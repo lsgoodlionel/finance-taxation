@@ -5,5 +5,5 @@ type AssistantComposerProps = {
 };
 
 export function AssistantComposer({ children }: AssistantComposerProps) {
-  return <>{children}</>;
+  return <div style={{ display: "grid", gap: "14px" }}>{children}</div>;
 }

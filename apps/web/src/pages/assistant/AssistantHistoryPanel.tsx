@@ -12,14 +12,9 @@ export function AssistantHistoryPanel({ visible, children }: AssistantHistoryPan
 
   return (
     <div
-      style={{
-        background: "rgba(248,249,250,0.95)",
-        borderRadius: "24px",
-        border: "1px solid rgba(20,40,60,0.08)",
-        padding: "16px",
-        maxHeight: "240px",
-        overflowY: "auto"
-      }}
+      className="v3-section-shell"
+      data-tone="muted"
+      style={{ maxHeight: "240px", overflowY: "auto" }}
     >
       {children}
     </div>

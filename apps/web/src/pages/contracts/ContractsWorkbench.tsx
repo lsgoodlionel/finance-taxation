@@ -6,10 +6,11 @@ type ContractsWorkbenchProps = {
 
 export function ContractsWorkbench({ children }: ContractsWorkbenchProps) {
   return (
-    <section style={{ display: "grid", gap: "12px", minWidth: 0 }}>
-      <div style={{ display: "grid", gap: "4px" }}>
-        <span style={{ fontSize: "12px", color: "#6c7a89" }}>合同工作台</span>
-        <strong style={{ fontSize: "16px", color: "#1e2a37" }}>优先看流程摘要，再推进履约动作、事项联动和下游对象。</strong>
+    <section className="v3-section-shell" data-tone="accent" style={{ minWidth: 0 }}>
+      <div className="v3-section-heading">
+        <span className="v3-section-kicker">合同工作台</span>
+        <h2 className="v3-section-title">工作台先给出流程摘要，再处理动作、事项和下游对象。</h2>
+        <p className="v3-section-description">这里是合同闭环主视图。优先看当前阶段、下一步动作和对象联动，再决定是否补开票、回款、收入确认或归档。</p>
       </div>
       {children}
     </section>
