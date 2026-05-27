@@ -12,20 +12,11 @@ export function PayrollWorkflowSummary({
   pendingActions
 }: PayrollWorkflowSummaryProps) {
   return (
-    <div
-      style={{
-        border: "1px solid rgba(37,99,235,0.12)",
-        borderRadius: "16px",
-        background: "rgba(37,99,235,0.06)",
-        padding: "16px 18px",
-        display: "grid",
-        gap: "10px"
-      }}
-    >
-      <div style={{ fontSize: "12px", color: "#2563eb", fontWeight: 700, letterSpacing: "0.04em" }}>
-        工资工作流摘要
+    <div className="v3-hero-shell" style={{ padding: "18px 20px", gap: "12px" }}>
+      <div className="v3-section-heading">
+        <span className="v3-section-kicker" style={{ color: "#2563eb" }}>工资工作流摘要</span>
+        <h2 className="v3-section-title" style={{ fontSize: "17px" }}>{summary}</h2>
       </div>
-      <div style={{ fontSize: "14px", color: "#1e2a37", fontWeight: 600 }}>{summary}</div>
       {highlights.length ? (
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           {highlights.map((item) => (

@@ -15,19 +15,12 @@ const TABS: { key: PayrollTab; label: string }[] = [
 
 export function PayrollTabBar({ activeTab, onChange }: PayrollTabBarProps) {
   return (
-    <div style={{ display: "flex", gap: "8px" }}>
+    <div className="v3-tab-bar">
       {TABS.map((tab) => (
         <button
           key={tab.key}
-          style={{
-            padding: "8px 20px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "14px",
-            background: activeTab === tab.key ? "#1e2a37" : "rgba(255,255,255,0.72)",
-            color: activeTab === tab.key ? "#fff" : "#1e2a37"
-          }}
+          className="v3-tab-bar__button"
+          data-active={activeTab === tab.key}
           onClick={() => onChange(tab.key)}
         >
           {tab.label}

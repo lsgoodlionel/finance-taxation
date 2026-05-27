@@ -12,12 +12,12 @@ type ExportShellProps = {
 export function ExportShell({ header, guidance, sceneSelector, content, history, archive }: ExportShellProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      {header}
-      {guidance}
-      {sceneSelector}
-      {content}
-      {history}
-      {archive}
+      <section className="v3-hero-shell">{header}</section>
+      {guidance ? <section className="v3-section-shell" data-tone="muted">{guidance}</section> : null}
+      <section className="v3-section-shell" data-tone="accent">{sceneSelector}</section>
+      <section className="v3-section-shell">{content}</section>
+      <section className="v3-section-shell" data-tone="muted">{history}</section>
+      <section className="v3-section-shell" data-tone="muted">{archive}</section>
     </div>
   );
 }

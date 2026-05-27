@@ -8,7 +8,7 @@ type PayrollShellProps = {
 export function PayrollShell({ header, content }: PayrollShellProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      {header}
+      <section className="v3-hero-shell">{header}</section>
       {content}
     </div>
   );
