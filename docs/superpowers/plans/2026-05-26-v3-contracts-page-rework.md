@@ -55,6 +55,15 @@
 - [x] Verify typecheck and focused tests
 - [x] Commit
 
+### Task 6: Polish contracts presentation without changing workflow logic
+
+- [x] Improve list/workbench layout hierarchy
+- [x] Add explicit empty states and guidance copy
+- [x] Normalize filter, header, and action presentation
+- [x] Keep existing actions and drilldown behavior intact
+- [x] Verify typecheck and focused tests
+- [x] Commit
+
 ## Progress Update
 
 - `Task 1` 已完成并提交。
@@ -62,3 +71,4 @@
 - `Task 3` 已完成第一轮合同页 V3 摘要优先展示，并已通过 focused test 与前端 typecheck。
 - `Task 4` 已完成合同元信息区和履约时间轴区的受控子组件下沉，`ContractsPage` 继续变薄，现有导航和履约逻辑保持不变。
 - `Task 5` 已完成新建合同表单和合同列表表格本体的受控子组件下沉，创建、关闭、生成事项和 drilldown 行为保持不变。
+- `Task 6` 已完成合同页展示层收口：列表/工作台层级、空态、筛选区和标题提示已统一，现有履约和 drilldown 逻辑保持不变。

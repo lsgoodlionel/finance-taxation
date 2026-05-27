@@ -24,7 +24,9 @@ export function ContractsHeader({ message, onToggleCreate }: ContractsHeaderProp
           </button>
         )}
       />
-      <div style={{ color: "#6c7a89", fontSize: "13px" }}>{message}</div>
+      <div style={{ padding: "10px 14px", borderRadius: "12px", background: "rgba(20,40,60,0.04)", color: "#4d5d6c", fontSize: "13px" }}>
+        {message}
+      </div>
     </div>
   );
 }

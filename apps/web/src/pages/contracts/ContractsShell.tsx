@@ -10,12 +10,14 @@ type ContractsShellProps = {
 
 export function ContractsShell({ header, createForm, filters, list, detail }: ContractsShellProps) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div style={{ display: "grid", gap: "24px" }}>
       {header}
       {createForm}
       {filters}
-      {list}
-      {detail}
+      <div style={{ display: "grid", gridTemplateColumns: detail ? "minmax(0, 1.05fr) minmax(340px, 0.95fr)" : "1fr", gap: "24px", alignItems: "start" }}>
+        {list}
+        {detail}
+      </div>
     </div>
   );
 }

@@ -35,6 +35,7 @@ import { ContractMetadataGrid } from "./contracts/ContractMetadataGrid";
 import { ContractTimelinePanel } from "./contracts/ContractTimelinePanel";
 import { ContractCreateForm } from "./contracts/ContractCreateForm";
 import { ContractsTable } from "./contracts/ContractsTable";
+import { EmptyState } from "../components/ui/EmptyState";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   sales: "销售合同",
@@ -361,16 +362,31 @@ export function ContractsPage() {
   const list = (
     <ContractsListPanel>
       <div style={panelStyle()}>
-        <ContractsTable
-          contracts={contracts}
-          creatingEventContractId={creatingEventContractId}
-          contractTypeLabels={CONTRACT_TYPE_LABELS}
-          statusLabels={STATUS_LABELS}
-          statusColor={STATUS_COLOR}
-          onOpenDetail={(contractId) => void handleDetail(contractId)}
-          onCreateEvent={(contract) => void handleCreateEvent(contract)}
-          onClose={(contract, status) => void handleClose(contract, status)}
-        />
+        {contracts.length === 0 ? (
+          <EmptyState
+            title="当前没有匹配的合同"
+            description="你可以先新建合同，或调整筛选条件后重新查看。"
+            action={(
+              <button
+                onClick={() => setShowForm(true)}
+                style={{ background: "#1e2a37", color: "#fff", border: "none", borderRadius: "8px", padding: "10px 20px", cursor: "pointer", fontSize: "14px" }}
+              >
+                + 新建合同
+              </button>
+            )}
+          />
+        ) : (
+          <ContractsTable
+            contracts={contracts}
+            creatingEventContractId={creatingEventContractId}
+            contractTypeLabels={CONTRACT_TYPE_LABELS}
+            statusLabels={STATUS_LABELS}
+            statusColor={STATUS_COLOR}
+            onOpenDetail={(contractId) => void handleDetail(contractId)}
+            onCreateEvent={(contract) => void handleCreateEvent(contract)}
+            onClose={(contract, status) => void handleClose(contract, status)}
+          />
+        )}
       </div>
     </ContractsListPanel>
   );
@@ -456,7 +472,16 @@ export function ContractsPage() {
         />
       </div>
     </ContractsWorkbench>
-  ) : null;
+  ) : (
+    <ContractsWorkbench>
+      <div style={panelStyle()}>
+        <EmptyState
+          title="选择一份合同查看工作台"
+          description="右侧会优先显示履约流程摘要、下一步动作、关联事项以及税务/凭证联动结果。"
+        />
+      </div>
+    </ContractsWorkbench>
+  );
 
   return (
     <ContractsShell
