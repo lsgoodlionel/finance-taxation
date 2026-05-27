@@ -22,7 +22,7 @@
 - [x] Add shell/header/tab bar components
 - [x] Move top-level layout out of `PayrollPage.tsx`
 - [x] Keep behavior intact and pass typecheck
-- [ ] Commit
+- [x] Commit
 
 ### Task 2: Split employees / payroll / policy sections
 
