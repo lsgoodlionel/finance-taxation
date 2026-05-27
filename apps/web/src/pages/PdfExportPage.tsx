@@ -39,10 +39,13 @@ import type {
 } from "@finance-taxation/domain-model";
 import { buildPrintableDocumentHtml } from "./document-relations";
 import { buildExportFileName } from "./pdf-export-utils";
-import { buildResultPageSubtitle } from "../lib/entry-guidance";
-import { PageHeader } from "../components/ui/PageHeader";
 import { ResultBanner } from "../components/ui/ResultBanner";
 import { useQueryState } from "../hooks/useQueryState";
+import { ExportArchivePanel } from "./export/ExportArchivePanel";
+import { ExportHeader } from "./export/ExportHeader";
+import { ExportHistoryPanel } from "./export/ExportHistoryPanel";
+import { ExportSceneSelector, type ExportSceneKey, type ExportSceneOption } from "./export/ExportSceneSelector";
+import { ExportShell } from "./export/ExportShell";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 
@@ -102,6 +105,17 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
   cash_flow: "现金流量表"
 };
 
+const EXPORT_SCENES: ExportSceneOption[] = [
+  { key: "reports", title: "财务报表", description: "报表快照、期间对比和结果页导出。", emoji: "📊" },
+  { key: "payroll", title: "工资材料", description: "工资汇总表、工资条和工资期间材料。", emoji: "💰" },
+  { key: "tax", title: "税务材料", description: "增值税底稿、企业所得税准备和申报资料。", emoji: "🧾" },
+  { key: "packages", title: "批量归档", description: "月结、审计、稽核资料包统一导出。", emoji: "📦" },
+  { key: "documents", title: "单据模板", description: "报销单、票据包和其他正式模板导出。", emoji: "📁" },
+  { key: "risk", title: "风险复盘", description: "风险发现、关闭记录和复盘输出。", emoji: "🔍" },
+  { key: "rnd", title: "研发辅助", description: "研发资料包和加计扣除检查清单。", emoji: "🔬" },
+  { key: "vouchers", title: "凭证导出", description: "凭证打印、批量打开和凭证归档。", emoji: "🧷" }
+];
+
 function escHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -134,6 +148,7 @@ export function PdfExportPage() {
   const activeTab = (["payroll", "reports", "tax", "packages", "documents", "risk", "rnd", "vouchers"].includes(activeTabState)
     ? activeTabState
     : "reports") as "payroll" | "reports" | "tax" | "packages" | "documents" | "risk" | "rnd" | "vouchers";
+  const activeScene = EXPORT_SCENES.find((item) => item.key === activeTab) ?? EXPORT_SCENES[0]!;
 
   useEffect(() => {
     async function bootstrap() {
@@ -165,13 +180,6 @@ export function PdfExportPage() {
     }
     bootstrap();
   }, []);
-
-  const tabStyle = (t: typeof activeTab) => ({
-    padding: "8px 20px", borderRadius: "8px", border: "none",
-    cursor: "pointer", fontSize: "14px",
-    background: activeTab === t ? "#1e2a37" : "rgba(255,255,255,0.72)",
-    color: activeTab === t ? "#fff" : "#1e2a37"
-  } as const);
 
   function toggleSelection(id: string, setter: (updater: (current: string[]) => string[]) => void) {
     setter((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
@@ -282,65 +290,41 @@ export function PdfExportPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <PageHeader
-        title="PDF 导出中心"
-        subtitle={buildResultPageSubtitle("PDF 导出")}
-        actions={(
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <button style={tabStyle("reports")} onClick={() => setActiveTabState("reports")}>报表导出</button>
-            <button style={tabStyle("tax")} onClick={() => setActiveTabState("tax")}>税务底稿</button>
-            <button style={tabStyle("packages")} onClick={() => setActiveTabState("packages")}>资料包</button>
-            <button style={tabStyle("documents")} onClick={() => setActiveTabState("documents")}>单据导出</button>
-            <button style={tabStyle("risk")} onClick={() => setActiveTabState("risk")}>风险复盘</button>
-            <button style={tabStyle("rnd")} onClick={() => setActiveTabState("rnd")}>研发资料</button>
-            <button style={tabStyle("payroll")} onClick={() => setActiveTabState("payroll")}>工资导出</button>
-            <button style={tabStyle("vouchers")} onClick={() => setActiveTabState("vouchers")}>凭证导出</button>
-          </div>
-        )}
-      />
-
-      {message ? <ResultBanner tone="info" message={message} /> : null}
-
-      <ResultBanner tone="success" message="打开导出链接后，在浏览器中按 Ctrl+P（Mac: ⌘+P），选择「另存为 PDF」即可保存 PDF 文件。" />
-
-      <div style={panelStyle()}>
-        <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>最近导出记录</h3>
-        {exportHistory.length === 0 ? (
-          <div style={{ color: "#aab5c0", textAlign: "center", padding: "24px" }}>暂无导出记录</div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-            <thead>
-              <tr style={{ color: "#6c7a89" }}>
-                {["时间", "类型", "名称", "建议文件名", "操作"].map((h) => (
-                  <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {exportHistory.map((item) => (
-                <tr key={item.id}>
-                  <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
-                  <td style={cellStyle()}>{item.kind}</td>
-                  <td style={cellStyle()}>{item.label}</td>
-                  <td style={cellStyle()}>
-                    <div>{item.fileName}</div>
-                    <div style={{ fontSize: "11px", color: "#6c7a89", marginTop: "2px" }}>状态：{item.status}</div>
-                  </td>
-                  <td style={cellStyle()}>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      {(item.status === "created" || item.status === "opened") ? btnExport(() => void handleUpdateExportStatus(item.id, "completed"), "标记完成") : null}
-                      {(item.status === "created" || item.status === "opened") ? btnExport(() => void handleUpdateExportStatus(item.id, "failed"), "标记失败") : null}
-                      {(item.status === "failed" || item.status === "completed") ? btnExport(() => void handleUpdateExportStatus(item.id, "opened"), "重试") : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
+    <ExportShell
+      header={<ExportHeader activeSceneLabel={activeScene.title} />}
+      guidance={(
+        <>
+          {message ? <ResultBanner tone="info" message={message} /> : null}
+          <ResultBanner tone="success" message="打开导出链接后，在浏览器中按 Ctrl+P（Mac: ⌘+P），选择「另存为 PDF」即可保存 PDF 文件。" />
+        </>
+      )}
+      sceneSelector={(
+        <ExportSceneSelector
+          activeScene={activeTab as ExportSceneKey}
+          options={EXPORT_SCENES}
+          onChange={(key) => setActiveTabState(key)}
+        />
+      )}
+      history={(
+        <ExportHistoryPanel
+          jobs={exportHistory}
+          onUpdateStatus={(jobId, status) => void handleUpdateExportStatus(jobId, status)}
+          renderActionButton={btnExport}
+          cellStyle={cellStyle}
+        />
+      )}
+      archive={(
+        <ExportArchivePanel
+          archiveEntries={archiveEntries}
+          archiveKindFilter={archiveKindFilter}
+          archiveKeyword={archiveKeyword}
+          onKindFilterChange={setArchiveKindFilter}
+          onKeywordChange={setArchiveKeyword}
+          cellStyle={cellStyle}
+        />
+      )}
+      content={(
+        <>
       <div style={panelStyle()}>
         <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>导出审计轨迹</h3>
         {exportAuditLogs.length === 0 ? (
@@ -365,75 +349,6 @@ export function PdfExportPage() {
               ))}
             </tbody>
           </table>
-        )}
-      </div>
-
-      <div style={panelStyle()}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-end", marginBottom: "16px", flexWrap: "wrap" }}>
-          <h3 style={{ margin: 0, fontSize: "15px" }}>导出归档索引</h3>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <select value={archiveKindFilter} onChange={(event) => setArchiveKindFilter(event.target.value as ExportArtifactKind | "")} style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", fontSize: "12px" }}>
-              <option value="">全部分类</option>
-              <option value="report">报表</option>
-              <option value="tax">税务</option>
-              <option value="package">资料包</option>
-              <option value="document">单据</option>
-              <option value="risk">风险</option>
-              <option value="rnd">研发</option>
-              <option value="payroll">工资</option>
-              <option value="voucher">凭证</option>
-            </select>
-            <input
-              value={archiveKeyword}
-              onChange={(event) => setArchiveKeyword(event.target.value)}
-              placeholder="搜索标题/文件名/归档键"
-              style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", fontSize: "12px", minWidth: "220px" }}
-            />
-          </div>
-        </div>
-        {archiveEntries.length === 0 ? (
-          <div style={{ color: "#aab5c0", textAlign: "center", padding: "24px" }}>暂无归档索引</div>
-        ) : (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {Object.values(
-              archiveEntries.reduce<Record<string, ExportArchiveEntry[]>>((groups, entry) => {
-                const batchNo = entry.archiveKey.split(":")[0] ?? entry.archiveKey;
-                groups[batchNo] = groups[batchNo] ?? [];
-                groups[batchNo].push(entry);
-                return groups;
-              }, {})
-            ).map((items) => {
-              const batchNo = items[0]!.archiveKey.split(":")[0];
-              return (
-                <div key={batchNo} style={{ border: "1px solid rgba(20,40,60,0.08)", borderRadius: "14px", overflow: "hidden" }}>
-                  <div style={{ padding: "10px 14px", background: "rgba(20,40,60,0.04)", fontSize: "12px", fontWeight: 700, color: "#4d5d6c" }}>
-                    批次号：{batchNo} · 共 {items.length} 项
-                  </div>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                    <thead>
-                      <tr style={{ color: "#6c7a89" }}>
-                        {["归档键", "分类", "标题", "对象", "建议文件名", "时间"].map((h) => (
-                          <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((item) => (
-                        <tr key={item.id}>
-                          <td style={cellStyle()}>{item.archiveKey}</td>
-                          <td style={cellStyle()}>{item.kind}</td>
-                          <td style={cellStyle()}>{item.title}</td>
-                          <td style={cellStyle()}>{item.objectId || item.objectType}</td>
-                          <td style={cellStyle()}>{item.fileName}</td>
-                          <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
-          </div>
         )}
       </div>
 
@@ -926,6 +841,8 @@ export function PdfExportPage() {
           )}
         </div>
       )}
-    </div>
+        </>
+      )}
+    />
   );
 }
