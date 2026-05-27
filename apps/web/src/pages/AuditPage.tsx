@@ -1,59 +1,23 @@
-import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type { AuditLog } from "@finance-taxation/domain-model";
 import { listAuditLogs } from "../lib/api";
-import { normalizeDrilldownState, resolveAuditContextFromState, resolveAuditLogTarget } from "./drilldown";
+import { normalizeDrilldownState, resolveAuditContextFromState } from "./drilldown";
 import { resolveInitialAuditExpansion } from "./risk-scope";
+import { AuditDetailPanel } from "./audit/AuditDetailPanel";
+import { AuditFiltersBar } from "./audit/AuditFiltersBar";
+import { AuditLogTablePanel } from "./audit/AuditLogTablePanel";
+import { AuditPageShell } from "./audit/AuditPageShell";
+import { AuditWorkbenchHeader } from "./audit/AuditWorkbenchHeader";
+import { readAuditUrlState, writeAuditUrlState } from "./audit/audit-url-state";
 
-const RESOURCE_TYPE_LABELS: Record<string, string> = {
-  business_event: "经营事项",
-  voucher: "凭证",
-  document: "单据",
-  contract: "合同",
-  employee: "员工",
-  payroll: "工资",
-  tax_item: "税务事项",
-  risk_finding: "风险发现"
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  create: "创建",
-  update: "更新",
-  update_status: "状态变更",
-  delete: "删除",
-  approve: "审核",
-  post: "过账",
-  archive: "归档",
-  close: "关闭",
-  compute: "计算工资",
-  confirm: "确认工资",
-  analyze: "AI 分析"
-};
-
-function panelStyle() {
-  return {
-    background: "rgba(255,255,255,0.82)",
-    borderRadius: "24px",
-    border: "1px solid rgba(20,40,60,0.08)",
-    padding: "24px"
-  } as const;
-}
-
-const cell: React.CSSProperties = {
-  borderBottom: "1px solid rgba(20,40,60,0.08)",
-  padding: "10px 8px",
-  textAlign: "left",
-  verticalAlign: "top",
-  fontSize: "13px"
-};
-
-const RESOURCE_TYPES = [
-  "", "business_event", "voucher", "document", "contract", "employee", "payroll", "tax_item", "risk_finding"
-];
+const RESOURCE_TYPES = ["", "business_event", "voucher", "document", "contract", "employee", "payroll", "tax_item", "risk_finding"];
 
 export function AuditPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlState = useMemo(() => readAuditUrlState(searchParams), [searchParams]);
   const navState = normalizeDrilldownState(location.state);
   const navAuditContext = resolveAuditContextFromState(navState);
   const navResourceType = navAuditContext?.resourceType ?? "";
@@ -62,23 +26,44 @@ export function AuditPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("正在加载审计日志...");
-  const [resourceType, setResourceType] = useState("");
-  const [resourceId, setResourceId] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [resourceType, setResourceType] = useState(urlState.resourceType || navResourceType);
+  const [resourceId, setResourceId] = useState(urlState.resourceId || navResourceId);
+  const [fromDate, setFromDate] = useState(urlState.from);
+  const [toDate, setToDate] = useState(urlState.to);
+  const [offset, setOffset] = useState(urlState.offset);
+  const [expandedId, setExpandedId] = useState<string | null>(urlState.expandedId || null);
+  const [selectedLogId, setSelectedLogId] = useState(urlState.logId);
   const LIMIT = 50;
 
   useEffect(() => {
-    if (navResourceType) {
-      setResourceType(navResourceType);
-    }
-    setResourceId(navResourceId);
-    void load(0, navResourceType, navResourceId, fromDate, toDate);
+    void load(urlState.offset, resourceType, resourceId, fromDate, toDate, urlState.logId, urlState.expandedId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function load(off: number, rt: string, rid: string, fd: string, td: string) {
+  useEffect(() => {
+    const next = writeAuditUrlState({
+      resourceType,
+      resourceId,
+      from: fromDate,
+      to: toDate,
+      offset,
+      logId: selectedLogId,
+      expandedId: expandedId ?? ""
+    });
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [expandedId, fromDate, offset, resourceId, resourceType, searchParams, selectedLogId, setSearchParams, toDate]);
+
+  async function load(
+    off: number,
+    rt: string,
+    rid: string,
+    fd: string,
+    td: string,
+    logId?: string,
+    explicitExpandedId?: string
+  ) {
     setLoading(true);
     try {
       const res = await listAuditLogs({
@@ -90,10 +75,14 @@ export function AuditPage() {
         offset: off
       });
       setLogs(res.items);
-      setExpandedId(resolveInitialAuditExpansion(
-        res.items.map((item) => ({ id: item.id, resourceId: item.resourceId })),
-        resourceId ?? navResourceId ?? null
-      ));
+      const nextExpandedId = explicitExpandedId
+        || logId
+        || resolveInitialAuditExpansion(
+          res.items.map((item) => ({ id: item.id, resourceId: item.resourceId })),
+          rid || navResourceId || null
+        );
+      setExpandedId(nextExpandedId);
+      setSelectedLogId(logId || nextExpandedId || "");
       setTotal(res.total);
       setOffset(off);
       setMessage(`${rid ? `当前对象 ${rid}：` : ""}共 ${res.total} 条审计记录`);
@@ -105,40 +94,7 @@ export function AuditPage() {
   }
 
   function handleSearch() {
-    load(0, resourceType, resourceId, fromDate, toDate);
-  }
-
-  function fmtDate(iso: string) {
-    return iso ? new Date(iso).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }) : "-";
-  }
-
-  function actionTag(action: string) {
-    const colorMap: Record<string, string> = {
-      create: "#1a7f5a",
-      approve: "#1a7f5a",
-      confirm: "#1a7f5a",
-      post: "#2563eb",
-      compute: "#2563eb",
-      analyze: "#7c3aed",
-      update: "#d97706",
-      update_status: "#d97706",
-      close: "#dc2626",
-      archive: "#6c7a89",
-      delete: "#dc2626"
-    };
-    return (
-      <span style={{
-        fontSize: "11px",
-        padding: "2px 8px",
-        borderRadius: "4px",
-        background: `${colorMap[action] ?? "#6c7a89"}18`,
-        color: colorMap[action] ?? "#6c7a89",
-        fontWeight: 500,
-        whiteSpace: "nowrap" as const
-      }}>
-        {ACTION_LABELS[action] ?? action}
-      </span>
-    );
+    void load(0, resourceType, resourceId, fromDate, toDate, selectedLogId, expandedId ?? "");
   }
 
   function renderChanges(changes: Record<string, unknown> | null) {
@@ -165,7 +121,6 @@ export function AuditPage() {
       return valueLabel[s] ?? s;
     }
 
-    // Format: { before: {...}, after: {...} }
     if ("before" in changes || "after" in changes) {
       const before = (changes.before ?? {}) as Record<string, unknown>;
       const after = (changes.after ?? {}) as Record<string, unknown>;
@@ -184,7 +139,6 @@ export function AuditPage() {
       );
     }
 
-    // Format: { data: {...} }
     if ("data" in changes) {
       const data = changes.data as Record<string, unknown>;
       return (
@@ -199,7 +153,6 @@ export function AuditPage() {
       );
     }
 
-    // Format: { fieldName: { from: "...", to: "..." } }  e.g. task status change
     const keys = Object.keys(changes);
     const isFromToFormat = keys.length > 0 && keys.every((k) => {
       const v = changes[k];
@@ -223,7 +176,6 @@ export function AuditPage() {
       );
     }
 
-    // Generic flat key-value fallback
     return (
       <div style={{ fontSize: "11.5px", lineHeight: 1.7 }}>
         {keys.map((k) => (
@@ -237,173 +189,50 @@ export function AuditPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h2 style={{ margin: "0 0 4px", fontSize: "22px" }}>审计日志</h2>
-          <div style={{ color: "#6c7a89", fontSize: "13px" }}>{message}</div>
-        </div>
-      </div>
-
-      {/* 过滤栏 */}
-      <div style={{ ...panelStyle(), display: "flex", gap: "12px", alignItems: "flex-end", flexWrap: "wrap" }}>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-          操作对象
-          <select
-            value={resourceType}
-            onChange={(e) => setResourceType(e.target.value)}
-            style={{ fontSize: "13px", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)" }}
-          >
-            {RESOURCE_TYPES.map((rt) => (
-              <option key={rt} value={rt}>{rt ? (RESOURCE_TYPE_LABELS[rt] ?? rt) : "全部类型"}</option>
-            ))}
-          </select>
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-          资源编号
-          <input
-            value={resourceId}
-            onChange={(e) => setResourceId(e.target.value)}
-            placeholder="例如 contract-xxx / voucher-xxx"
-            style={{ fontSize: "13px", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", minWidth: "240px" }}
-          />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-          开始日期
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            style={{ fontSize: "13px", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)" }}
-          />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-          结束日期
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            style={{ fontSize: "13px", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)" }}
-          />
-        </label>
-        <button
-          onClick={handleSearch}
-          style={{
-            padding: "8px 20px", borderRadius: "8px", border: "none",
-            background: "#1e2a37", color: "#fff", fontSize: "13px", cursor: "pointer"
+    <AuditPageShell
+      header={<AuditWorkbenchHeader total={total} message={message} navState={navState} />}
+      filters={
+        <AuditFiltersBar
+          resourceTypes={RESOURCE_TYPES}
+          resourceType={resourceType}
+          resourceId={resourceId}
+          fromDate={fromDate}
+          toDate={toDate}
+          onResourceTypeChange={setResourceType}
+          onResourceIdChange={setResourceId}
+          onFromDateChange={setFromDate}
+          onToDateChange={setToDate}
+          onSearch={handleSearch}
+          onReset={() => {
+            setResourceType("");
+            setResourceId("");
+            setFromDate("");
+            setToDate("");
+            setSelectedLogId("");
+            setExpandedId(null);
+            void load(0, "", "", "", "", "", "");
           }}
-        >
-          查询
-        </button>
-        {(resourceType || resourceId || fromDate || toDate) && (
-          <button
-            onClick={() => { setResourceType(""); setResourceId(""); setFromDate(""); setToDate(""); load(0, "", "", "", ""); }}
-            style={{
-              padding: "8px 16px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)",
-              background: "none", color: "#6c7a89", fontSize: "13px", cursor: "pointer"
-            }}
-          >
-            清除过滤
-          </button>
-        )}
-      </div>
-
-      {navResourceId && (
-        <div style={{ ...panelStyle(), padding: "12px 16px", fontSize: "13px", color: "#2563eb", background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.16)" }}>
-          当前按对象 <strong>{navResourceId}</strong> 恢复审计上下文。
-        </div>
-      )}
-
-      {/* 日志表格 */}
-      <div style={panelStyle()}>
-        {loading ? (
-          <div style={{ textAlign: "center", color: "#aab5c0", padding: "40px" }}>加载中...</div>
-        ) : logs.length === 0 ? (
-          <div style={{ textAlign: "center", color: "#aab5c0", padding: "40px" }}>暂无审计记录</div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ color: "#6c7a89", fontSize: "12px", letterSpacing: "0.04em" }}>
-                {["时间", "操作人", "操作类型", "对象类型", "对象标签", "变更详情", "跳转"].map((h) => (
-                  <th key={h} style={{ ...cell, fontWeight: 500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((log) => {
-                const isExpanded = expandedId === log.id;
-                const hasChanges = !!log.changes;
-                const target = resolveAuditLogTarget(log);
-                return (
-                  <tr key={log.id}>
-                    <td style={{ ...cell, whiteSpace: "nowrap" as const, color: "#6c7a89" }}>
-                      {fmtDate(log.createdAt)}
-                    </td>
-                    <td style={cell}>{log.userName ?? log.userId ?? "-"}</td>
-                    <td style={cell}>{actionTag(log.action)}</td>
-                    <td style={cell}>{RESOURCE_TYPE_LABELS[log.resourceType] ?? log.resourceType}</td>
-                    <td style={{ ...cell, background: navResourceId === log.resourceId ? "rgba(37,99,235,0.06)" : "transparent" }}>
-                      <div style={{ maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                        {log.resourceLabel ?? log.resourceId ?? "-"}
-                      </div>
-                    </td>
-                    <td style={cell}>
-                      {hasChanges ? (
-                        <button
-                          onClick={() => setExpandedId(isExpanded ? null : log.id)}
-                          style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: "pointer" }}
-                        >
-                          {isExpanded ? "收起" : "查看变更"}
-                        </button>
-                      ) : (
-                        <span style={{ color: "#aab5c0" }}>-</span>
-                      )}
-                      {isExpanded && (
-                        <div style={{ marginTop: "6px", padding: "8px", background: "rgba(20,40,60,0.04)", borderRadius: "6px", maxWidth: "300px" }}>
-                          {renderChanges(log.changes)}
-                        </div>
-                      )}
-                    </td>
-                    <td style={cell}>
-                      {target ? (
-                        <button
-                          onClick={() => navigate(target.path, { state: target.state })}
-                          style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "4px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: "pointer" }}
-                        >
-                          {target.label}
-                        </button>
-                      ) : (
-                        <span style={{ color: "#aab5c0" }}>-</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-
-        {/* 分页 */}
-        {total > LIMIT && (
-          <div style={{ display: "flex", gap: "8px", marginTop: "16px", justifyContent: "center", alignItems: "center", fontSize: "13px" }}>
-            <button
-              disabled={offset === 0}
-              onClick={() => load(Math.max(0, offset - LIMIT), resourceType, resourceId, fromDate, toDate)}
-              style={{ padding: "6px 16px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: offset === 0 ? "default" : "pointer", color: offset === 0 ? "#aab5c0" : "#1e2a37" }}
-            >
-              上一页
-            </button>
-            <span style={{ color: "#6c7a89" }}>{offset + 1} – {Math.min(offset + LIMIT, total)} / {total}</span>
-            <button
-              disabled={offset + LIMIT >= total}
-              onClick={() => load(offset + LIMIT, resourceType, resourceId, fromDate, toDate)}
-              style={{ padding: "6px 16px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: offset + LIMIT >= total ? "default" : "pointer", color: offset + LIMIT >= total ? "#aab5c0" : "#1e2a37" }}
-            >
-              下一页
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+        />
+      }
+      list={
+        <AuditLogTablePanel
+          logs={logs}
+          loading={loading}
+          navResourceId={navResourceId}
+          expandedId={expandedId}
+          selectedLogId={selectedLogId}
+          total={total}
+          limit={LIMIT}
+          offset={offset}
+          renderChanges={renderChanges}
+          onToggleExpanded={(logId) => setExpandedId((current) => current === logId ? null : logId)}
+          onSelectLog={(logId) => setSelectedLogId(logId)}
+          onNavigate={(path, state) => navigate(path, { state })}
+          onPrevPage={() => void load(Math.max(0, offset - LIMIT), resourceType, resourceId, fromDate, toDate, selectedLogId, expandedId ?? "")}
+          onNextPage={() => void load(offset + LIMIT, resourceType, resourceId, fromDate, toDate, selectedLogId, expandedId ?? "")}
+        />
+      }
+      detail={<AuditDetailPanel log={logs.find((item) => item.id === selectedLogId || item.id === expandedId) ?? null} renderChanges={renderChanges} />}
+    />
   );
 }
