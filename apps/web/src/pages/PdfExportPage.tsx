@@ -52,6 +52,7 @@ import { ExportReportsPanel } from "./export/ExportReportsPanel";
 import { ExportRiskPanel } from "./export/ExportRiskPanel";
 import { ExportRndPanel } from "./export/ExportRndPanel";
 import { ExportSceneSelector, type ExportSceneKey, type ExportSceneOption } from "./export/ExportSceneSelector";
+import { ExportSceneSummary } from "./export/ExportSceneSummary";
 import { ExportShell } from "./export/ExportShell";
 import { ExportTaxPanel } from "./export/ExportTaxPanel";
 import { ExportVouchersPanel } from "./export/ExportVouchersPanel";
@@ -125,6 +126,80 @@ const EXPORT_SCENES: ExportSceneOption[] = [
   { key: "vouchers", title: "凭证导出", description: "凭证打印、批量打开和凭证归档。", emoji: "🧷" }
 ];
 
+function buildSceneSummary(
+  scene: ExportSceneKey,
+  context: {
+    periods: PayrollPeriodSummary[];
+    snapshots: ReportSnapshot[];
+    documents: GeneratedDocument[];
+    findings: RiskFinding[];
+    rndProjects: Array<RndProject & { summary: RndProjectSummary }>;
+    vouchers: Voucher[];
+    selectedReportIds: string[];
+    selectedDocumentIds: string[];
+    selectedVoucherIds: string[];
+  }
+) {
+  switch (scene) {
+    case "reports":
+      return {
+        title: "财务报表导出",
+        description: "面向资产负债表、利润表、现金流量表快照。先确认期间和快照，再执行单项或批量打开。",
+        highlights: [`${context.snapshots.length} 条快照`, `已选 ${context.selectedReportIds.length} 项`, "支持批量打开"],
+        pendingCount: context.selectedReportIds.length
+      };
+    case "payroll":
+      return {
+        title: "工资材料导出",
+        description: "用于工资汇总表、工资条和工资期留档。优先按工资期间选择，再导出汇总或全员工资条。",
+        highlights: [`${context.periods.length} 个工资期间`, "工资汇总表", "全员工资条"],
+        pendingCount: context.periods.length
+      };
+    case "tax":
+      return {
+        title: "税务材料导出",
+        description: "面向增值税底稿与企业所得税准备稿。确认申报期间后再打开打印版。",
+        highlights: ["增值税底稿", "企业所得税准备稿", "按期间生成"],
+        pendingCount: 2
+      };
+    case "packages":
+      return {
+        title: "资料包导出",
+        description: "统一处理月结、审计和稽核资料包。先选期间，再分别打开对应资料包。",
+        highlights: ["月结资料包", "审计资料包", "稽核资料包"],
+        pendingCount: 3
+      };
+    case "documents":
+      return {
+        title: "单据模板导出",
+        description: "用于正式单据模板和票据包打印。先确认关联事项，再执行单项或批量打开。",
+        highlights: [`${context.documents.length} 份单据`, `已选 ${context.selectedDocumentIds.length} 项`, "正式模板打印"],
+        pendingCount: context.selectedDocumentIds.length
+      };
+    case "risk":
+      return {
+        title: "风险复盘导出",
+        description: "面向风险发现、关闭记录和复盘输出。先确认规则和事项，再打开复盘记录。",
+        highlights: [`${context.findings.length} 条风险`, "关闭记录", "复盘留档"],
+        pendingCount: context.findings.length
+      };
+    case "rnd":
+      return {
+        title: "研发资料导出",
+        description: "用于研发项目资料包和加计扣除检查清单。优先确认项目编码和费用口径。",
+        highlights: [`${context.rndProjects.length} 个项目`, "加计扣除清单", "研发资料包"],
+        pendingCount: context.rndProjects.length
+      };
+    case "vouchers":
+      return {
+        title: "凭证导出",
+        description: "用于凭证打印和批量打开。先筛选凭证，再按摘要或编号导出。",
+        highlights: [`${context.vouchers.length} 条凭证`, `已选 ${context.selectedVoucherIds.length} 项`, "批量打开"],
+        pendingCount: context.selectedVoucherIds.length
+      };
+  }
+}
+
 function escHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -158,6 +233,17 @@ export function PdfExportPage() {
     ? activeTabState
     : "reports") as "payroll" | "reports" | "tax" | "packages" | "documents" | "risk" | "rnd" | "vouchers";
   const activeScene = EXPORT_SCENES.find((item) => item.key === activeTab) ?? EXPORT_SCENES[0]!;
+  const sceneSummary = buildSceneSummary(activeTab, {
+    periods,
+    snapshots,
+    documents,
+    findings,
+    rndProjects,
+    vouchers,
+    selectedReportIds,
+    selectedDocumentIds,
+    selectedVoucherIds
+  });
 
   useEffect(() => {
     async function bootstrap() {
@@ -314,6 +400,238 @@ export function PdfExportPage() {
           onChange={(key) => setActiveTabState(key)}
         />
       )}
+      content={(
+        <>
+          <ExportSceneSummary
+            scene={activeTab}
+            title={sceneSummary.title}
+            description={sceneSummary.description}
+            highlights={sceneSummary.highlights}
+            pendingCount={sceneSummary.pendingCount}
+          />
+          <ExportAuditPanel logs={exportAuditLogs} cellStyle={cellStyle} />
+          {activeTab === "payroll" && (
+            <ExportPayrollPanel
+              periods={periods}
+              onOpenPayrollSummary={(period) => {
+                rememberExport({
+                  kind: "payroll",
+                  label: `${period.period} 工资汇总表`,
+                  fileName: buildExportFileName([period.period, "工资汇总表"]),
+                  resourceType: "payroll_period",
+                  resourceId: period.period,
+                  periodLabel: period.period
+                });
+                openPdf(`/api/pdf/payroll?period=${period.period}`);
+              }}
+              onOpenPayrollSlips={(period) => {
+                rememberExport({
+                  kind: "payroll",
+                  label: `${period.period} 全员工资条`,
+                  fileName: buildExportFileName([period.period, "全员工资条"]),
+                  resourceType: "payroll_period",
+                  resourceId: `${period.period}:slips`,
+                  periodLabel: period.period
+                });
+                openPdf(`/api/pdf/payroll-slip?period=${period.period}`);
+              }}
+              renderActionButton={btnExport}
+              cellStyle={cellStyle}
+            />
+          )}
+
+          {activeTab === "reports" && (
+            <ExportReportsPanel
+              snapshots={snapshots}
+              selectedIds={selectedReportIds}
+              onToggleSelection={(id) => toggleSelection(id, setSelectedReportIds)}
+              onBatchOpen={() => selectedReportIds.forEach((id) => openReportSnapshot(id))}
+              onOpenSnapshot={openReportSnapshot}
+              buildFileName={(snapshot) => buildExportFileName([REPORT_TYPE_LABELS[snapshot.reportType] ?? snapshot.reportType, snapshot.periodLabel, "快照"])}
+              cellStyle={cellStyle}
+              batchButtonStyle={batchButtonStyle}
+            />
+          )}
+
+          {activeTab === "tax" && (
+            <ExportTaxPanel
+              vatFilingPeriod={vatFilingPeriod}
+              citFilingPeriod={citFilingPeriod}
+              onVatPeriodChange={setVatFilingPeriod}
+              onCitPeriodChange={setCitFilingPeriod}
+              onOpenVat={() => void getTaxPrintableHtml("vat", vatFilingPeriod).then((html) => {
+                rememberExport({
+                  kind: "tax",
+                  label: `增值税底稿 ${vatFilingPeriod}`,
+                  fileName: buildExportFileName(["增值税底稿", vatFilingPeriod]),
+                  resourceType: "tax_working_paper",
+                  resourceId: `vat:${vatFilingPeriod}`,
+                  periodLabel: vatFilingPeriod
+                });
+                openHtmlPreview(`增值税底稿 ${vatFilingPeriod}`, html);
+              })}
+              onOpenCit={() => void getTaxPrintableHtml("corporate_income_tax", citFilingPeriod).then((html) => {
+                rememberExport({
+                  kind: "tax",
+                  label: `企业所得税准备 ${citFilingPeriod}`,
+                  fileName: buildExportFileName(["企业所得税准备", citFilingPeriod]),
+                  resourceType: "corporate_income_tax_preparation",
+                  resourceId: `cit:${citFilingPeriod}`,
+                  periodLabel: citFilingPeriod
+                });
+                openHtmlPreview(`企业所得税准备 ${citFilingPeriod}`, html);
+              })}
+              renderActionButton={btnExport}
+            />
+          )}
+
+          {activeTab === "packages" && (
+            <ExportPackagesPanel
+              closingPeriod={closingPeriod}
+              inspectionPeriod={inspectionPeriod}
+              onClosingPeriodChange={setClosingPeriod}
+              onInspectionPeriodChange={setInspectionPeriod}
+              onOpenMonthEnd={() => void getClosingBundleHtml("month_end", closingPeriod).then((html) => {
+                rememberExport({
+                  kind: "package",
+                  label: `月结资料包 ${closingPeriod}`,
+                  fileName: buildExportFileName(["月结资料包", closingPeriod]),
+                  resourceType: "closing_bundle",
+                  resourceId: `month_end:${closingPeriod}`,
+                  periodLabel: closingPeriod
+                });
+                openHtmlPreview(`月结资料包 ${closingPeriod}`, html);
+              })}
+              onOpenAudit={() => void getClosingBundleHtml("audit", inspectionPeriod).then((html) => {
+                rememberExport({
+                  kind: "package",
+                  label: `审计资料包 ${inspectionPeriod}`,
+                  fileName: buildExportFileName(["审计资料包", inspectionPeriod]),
+                  resourceType: "closing_bundle",
+                  resourceId: `audit:${inspectionPeriod}`,
+                  periodLabel: inspectionPeriod
+                });
+                openHtmlPreview(`审计资料包 ${inspectionPeriod}`, html);
+              })}
+              onOpenInspection={() => void getClosingBundleHtml("inspection", inspectionPeriod).then((html) => {
+                rememberExport({
+                  kind: "package",
+                  label: `稽核资料包 ${inspectionPeriod}`,
+                  fileName: buildExportFileName(["稽核资料包", inspectionPeriod]),
+                  resourceType: "closing_bundle",
+                  resourceId: `inspection:${inspectionPeriod}`,
+                  periodLabel: inspectionPeriod
+                });
+                openHtmlPreview(`稽核资料包 ${inspectionPeriod}`, html);
+              })}
+              renderActionButton={btnExport}
+            />
+          )}
+
+          {activeTab === "documents" && (
+            <ExportDocumentsPanel
+              documents={documents}
+              selectedIds={selectedDocumentIds}
+              onToggleSelection={(id) => toggleSelection(id, setSelectedDocumentIds)}
+              onBatchOpen={() => {
+                selectedDocumentIds.forEach((id) => {
+                  const document = documents.find((item) => item.id === id);
+                  if (document) {
+                    void openDocumentTemplate(document);
+                  }
+                });
+              }}
+              onOpenDocument={(document) => void openDocumentTemplate(document)}
+              buildFileName={(document) => buildExportFileName([document.title, document.documentType, document.businessEventId])}
+              cellStyle={cellStyle}
+              batchButtonStyle={batchButtonStyle}
+            />
+          )}
+
+          {activeTab === "risk" && (
+            <ExportRiskPanel
+              findings={findings}
+              onOpenFinding={(finding) => void listRiskClosureRecords(finding.id).then((payload) => {
+                const closures = payload.items as RiskClosureRecord[];
+                rememberExport({
+                  kind: "risk",
+                  label: `风险复盘 ${finding.ruleCode}`,
+                  fileName: buildExportFileName(["风险复盘", finding.ruleCode, finding.id]),
+                  resourceType: "risk_finding",
+                  resourceId: finding.id,
+                  periodLabel: null
+                });
+                const html = `
+                  <html><head><meta charset="utf-8"><title>${escHtml(finding.title)}</title></head>
+                  <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;color:#1f2937;">
+                    <h1 style="margin:0 0 8px;">风险复盘记录</h1>
+                    <div style="margin-bottom:16px;color:#6b7280;">规则：${escHtml(finding.ruleCode)} ｜ 标题：${escHtml(finding.title)}</div>
+                    <div style="margin-bottom:16px;"><strong>说明：</strong>${escHtml(finding.detail)}</div>
+                    <h2 style="margin:24px 0 8px;font-size:16px;">关闭记录</h2>
+                    ${
+                      closures.length
+                        ? `<ul>${closures.map((record) => `<li><strong>${escHtml(record.closedByName)}</strong> ｜ ${escHtml(record.reviewedAt)} ｜ ${escHtml(record.resolution)}</li>`).join("")}</ul>`
+                        : "<div>暂无关闭记录</div>"
+                    }
+                  </body></html>
+                `;
+                openHtmlPreview(`风险复盘 ${finding.ruleCode}`, html);
+              })}
+              renderActionButton={btnExport}
+              cellStyle={cellStyle}
+            />
+          )}
+
+          {activeTab === "rnd" && (
+            <ExportRndPanel
+              projects={rndProjects}
+              onOpenProject={(project) => void Promise.all([
+                getRndProjectDetail(project.id),
+                getRndSuperDeductionPackage(project.id)
+              ]).then(([detail, pkg]) => {
+                rememberExport({
+                  kind: "rnd",
+                  label: `研发资料包 ${project.code}`,
+                  fileName: buildExportFileName(["研发资料包", project.code, project.name]),
+                  resourceType: "rnd_project",
+                  resourceId: project.id,
+                  periodLabel: null
+                });
+                const html = `
+                  <html><head><meta charset="utf-8"><title>${escHtml(detail.name)}</title></head>
+                  <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;color:#1f2937;">
+                    <h1 style="margin:0 0 8px;">研发资料包</h1>
+                    <div style="margin-bottom:16px;color:#6b7280;">项目：${escHtml(detail.name)} ｜ 编号：${escHtml(detail.code)}</div>
+                    <div><strong>费用化：</strong>${escHtml(detail.summary.expenseAmount)}</div>
+                    <div><strong>资本化：</strong>${escHtml(detail.summary.capitalizedAmount)}</div>
+                    <div><strong>总工时：</strong>${escHtml(detail.summary.totalHours)}</div>
+                    <div><strong>加计扣除基数：</strong>${escHtml(pkg.eligibleBase)}</div>
+                    <div><strong>建议加计扣除：</strong>${escHtml(pkg.suggestedDeductionAmount)}</div>
+                    <h2 style="margin:24px 0 8px;font-size:16px;">检查清单</h2>
+                    <ul>${pkg.checklist.map((item) => `<li>${escHtml(item)}</li>`).join("")}</ul>
+                  </body></html>
+                `;
+                openHtmlPreview(`研发资料包 ${detail.code}`, html);
+              })}
+              renderActionButton={btnExport}
+              cellStyle={cellStyle}
+            />
+          )}
+
+          {activeTab === "vouchers" && (
+            <ExportVouchersPanel
+              vouchers={vouchers}
+              selectedIds={selectedVoucherIds}
+              onToggleSelection={(id) => toggleSelection(id, setSelectedVoucherIds)}
+              onBatchOpen={() => selectedVoucherIds.forEach((id) => openVoucherPdf(id))}
+              onOpenVoucher={openVoucherPdf}
+              buildFileName={(voucher) => buildExportFileName(["凭证", voucher.id.slice(-8).toUpperCase(), voucher.voucherType])}
+              cellStyle={cellStyle}
+              batchButtonStyle={batchButtonStyle}
+            />
+          )}
+        </>
+      )}
       history={(
         <ExportHistoryPanel
           jobs={exportHistory}
@@ -331,232 +649,6 @@ export function PdfExportPage() {
           onKeywordChange={setArchiveKeyword}
           cellStyle={cellStyle}
         />
-      )}
-      content={(
-        <>
-      <ExportAuditPanel logs={exportAuditLogs} cellStyle={cellStyle} />
-
-      {activeTab === "payroll" && (
-        <ExportPayrollPanel
-          periods={periods}
-          onOpenPayrollSummary={(period) => {
-            rememberExport({
-              kind: "payroll",
-              label: `${period.period} 工资汇总表`,
-              fileName: buildExportFileName([period.period, "工资汇总表"]),
-              resourceType: "payroll_period",
-              resourceId: period.period,
-              periodLabel: period.period
-            });
-            openPdf(`/api/pdf/payroll?period=${period.period}`);
-          }}
-          onOpenPayrollSlips={(period) => {
-            rememberExport({
-              kind: "payroll",
-              label: `${period.period} 全员工资条`,
-              fileName: buildExportFileName([period.period, "全员工资条"]),
-              resourceType: "payroll_period",
-              resourceId: `${period.period}:slips`,
-              periodLabel: period.period
-            });
-            openPdf(`/api/pdf/payroll-slip?period=${period.period}`);
-          }}
-          renderActionButton={btnExport}
-          cellStyle={cellStyle}
-        />
-      )}
-
-      {activeTab === "reports" && (
-        <ExportReportsPanel
-          snapshots={snapshots}
-          selectedIds={selectedReportIds}
-          onToggleSelection={(id) => toggleSelection(id, setSelectedReportIds)}
-          onBatchOpen={() => selectedReportIds.forEach((id) => openReportSnapshot(id))}
-          onOpenSnapshot={openReportSnapshot}
-          buildFileName={(snapshot) => buildExportFileName([REPORT_TYPE_LABELS[snapshot.reportType] ?? snapshot.reportType, snapshot.periodLabel, "快照"])}
-          cellStyle={cellStyle}
-          batchButtonStyle={batchButtonStyle}
-        />
-      )}
-
-      {activeTab === "tax" && (
-        <ExportTaxPanel
-          vatFilingPeriod={vatFilingPeriod}
-          citFilingPeriod={citFilingPeriod}
-          onVatPeriodChange={setVatFilingPeriod}
-          onCitPeriodChange={setCitFilingPeriod}
-          onOpenVat={() => void getTaxPrintableHtml("vat", vatFilingPeriod).then((html) => {
-            rememberExport({
-              kind: "tax",
-              label: `增值税底稿 ${vatFilingPeriod}`,
-              fileName: buildExportFileName(["增值税底稿", vatFilingPeriod]),
-              resourceType: "tax_working_paper",
-              resourceId: `vat:${vatFilingPeriod}`,
-              periodLabel: vatFilingPeriod
-            });
-            openHtmlPreview(`增值税底稿 ${vatFilingPeriod}`, html);
-          })}
-          onOpenCit={() => void getTaxPrintableHtml("corporate_income_tax", citFilingPeriod).then((html) => {
-            rememberExport({
-              kind: "tax",
-              label: `企业所得税准备 ${citFilingPeriod}`,
-              fileName: buildExportFileName(["企业所得税准备", citFilingPeriod]),
-              resourceType: "corporate_income_tax_preparation",
-              resourceId: `cit:${citFilingPeriod}`,
-              periodLabel: citFilingPeriod
-            });
-            openHtmlPreview(`企业所得税准备 ${citFilingPeriod}`, html);
-          })}
-          renderActionButton={btnExport}
-        />
-      )}
-
-      {activeTab === "packages" && (
-        <ExportPackagesPanel
-          closingPeriod={closingPeriod}
-          inspectionPeriod={inspectionPeriod}
-          onClosingPeriodChange={setClosingPeriod}
-          onInspectionPeriodChange={setInspectionPeriod}
-          onOpenMonthEnd={() => void getClosingBundleHtml("month_end", closingPeriod).then((html) => {
-            rememberExport({
-              kind: "package",
-              label: `月结资料包 ${closingPeriod}`,
-              fileName: buildExportFileName(["月结资料包", closingPeriod]),
-              resourceType: "closing_bundle",
-              resourceId: `month_end:${closingPeriod}`,
-              periodLabel: closingPeriod
-            });
-            openHtmlPreview(`月结资料包 ${closingPeriod}`, html);
-          })}
-          onOpenAudit={() => void getClosingBundleHtml("audit", inspectionPeriod).then((html) => {
-            rememberExport({
-              kind: "package",
-              label: `审计资料包 ${inspectionPeriod}`,
-              fileName: buildExportFileName(["审计资料包", inspectionPeriod]),
-              resourceType: "closing_bundle",
-              resourceId: `audit:${inspectionPeriod}`,
-              periodLabel: inspectionPeriod
-            });
-            openHtmlPreview(`审计资料包 ${inspectionPeriod}`, html);
-          })}
-          onOpenInspection={() => void getClosingBundleHtml("inspection", inspectionPeriod).then((html) => {
-            rememberExport({
-              kind: "package",
-              label: `稽核资料包 ${inspectionPeriod}`,
-              fileName: buildExportFileName(["稽核资料包", inspectionPeriod]),
-              resourceType: "closing_bundle",
-              resourceId: `inspection:${inspectionPeriod}`,
-              periodLabel: inspectionPeriod
-            });
-            openHtmlPreview(`稽核资料包 ${inspectionPeriod}`, html);
-          })}
-          renderActionButton={btnExport}
-        />
-      )}
-
-      {activeTab === "documents" && (
-        <ExportDocumentsPanel
-          documents={documents}
-          selectedIds={selectedDocumentIds}
-          onToggleSelection={(id) => toggleSelection(id, setSelectedDocumentIds)}
-          onBatchOpen={() => {
-            selectedDocumentIds.forEach((id) => {
-              const document = documents.find((item) => item.id === id);
-              if (document) {
-                void openDocumentTemplate(document);
-              }
-            });
-          }}
-          onOpenDocument={(document) => void openDocumentTemplate(document)}
-          buildFileName={(document) => buildExportFileName([document.title, document.documentType, document.businessEventId])}
-          cellStyle={cellStyle}
-          batchButtonStyle={batchButtonStyle}
-        />
-      )}
-
-      {activeTab === "risk" && (
-        <ExportRiskPanel
-          findings={findings}
-          onOpenFinding={(finding) => void listRiskClosureRecords(finding.id).then((payload) => {
-            const closures = payload.items as RiskClosureRecord[];
-            rememberExport({
-              kind: "risk",
-              label: `风险复盘 ${finding.ruleCode}`,
-              fileName: buildExportFileName(["风险复盘", finding.ruleCode, finding.id]),
-              resourceType: "risk_finding",
-              resourceId: finding.id,
-              periodLabel: null
-            });
-            const html = `
-              <html><head><meta charset="utf-8"><title>${escHtml(finding.title)}</title></head>
-              <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;color:#1f2937;">
-                <h1 style="margin:0 0 8px;">风险复盘记录</h1>
-                <div style="margin-bottom:16px;color:#6b7280;">规则：${escHtml(finding.ruleCode)} ｜ 标题：${escHtml(finding.title)}</div>
-                <div style="margin-bottom:16px;"><strong>说明：</strong>${escHtml(finding.detail)}</div>
-                <h2 style="margin:24px 0 8px;font-size:16px;">关闭记录</h2>
-                ${
-                  closures.length
-                    ? `<ul>${closures.map((record) => `<li><strong>${escHtml(record.closedByName)}</strong> ｜ ${escHtml(record.reviewedAt)} ｜ ${escHtml(record.resolution)}</li>`).join("")}</ul>`
-                    : "<div>暂无关闭记录</div>"
-                }
-              </body></html>
-            `;
-            openHtmlPreview(`风险复盘 ${finding.ruleCode}`, html);
-          })}
-          renderActionButton={btnExport}
-          cellStyle={cellStyle}
-        />
-      )}
-
-      {activeTab === "rnd" && (
-        <ExportRndPanel
-          projects={rndProjects}
-          onOpenProject={(project) => void Promise.all([
-            getRndProjectDetail(project.id),
-            getRndSuperDeductionPackage(project.id)
-          ]).then(([detail, pkg]) => {
-            rememberExport({
-              kind: "rnd",
-              label: `研发资料包 ${project.code}`,
-              fileName: buildExportFileName(["研发资料包", project.code, project.name]),
-              resourceType: "rnd_project",
-              resourceId: project.id,
-              periodLabel: null
-            });
-            const html = `
-              <html><head><meta charset="utf-8"><title>${escHtml(detail.name)}</title></head>
-              <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;color:#1f2937;">
-                <h1 style="margin:0 0 8px;">研发资料包</h1>
-                <div style="margin-bottom:16px;color:#6b7280;">项目：${escHtml(detail.name)} ｜ 编号：${escHtml(detail.code)}</div>
-                <div><strong>费用化：</strong>${escHtml(detail.summary.expenseAmount)}</div>
-                <div><strong>资本化：</strong>${escHtml(detail.summary.capitalizedAmount)}</div>
-                <div><strong>总工时：</strong>${escHtml(detail.summary.totalHours)}</div>
-                <div><strong>加计扣除基数：</strong>${escHtml(pkg.eligibleBase)}</div>
-                <div><strong>建议加计扣除：</strong>${escHtml(pkg.suggestedDeductionAmount)}</div>
-                <h2 style="margin:24px 0 8px;font-size:16px;">检查清单</h2>
-                <ul>${pkg.checklist.map((item) => `<li>${escHtml(item)}</li>`).join("")}</ul>
-              </body></html>
-            `;
-            openHtmlPreview(`研发资料包 ${detail.code}`, html);
-          })}
-          renderActionButton={btnExport}
-          cellStyle={cellStyle}
-        />
-      )}
-
-      {activeTab === "vouchers" && (
-        <ExportVouchersPanel
-          vouchers={vouchers}
-          selectedIds={selectedVoucherIds}
-          onToggleSelection={(id) => toggleSelection(id, setSelectedVoucherIds)}
-          onBatchOpen={() => selectedVoucherIds.forEach((id) => openVoucherPdf(id))}
-          onOpenVoucher={openVoucherPdf}
-          buildFileName={(voucher) => buildExportFileName(["凭证", voucher.id.slice(-8).toUpperCase(), voucher.voucherType])}
-          cellStyle={cellStyle}
-          batchButtonStyle={batchButtonStyle}
-        />
-      )}
-        </>
       )}
     />
   );

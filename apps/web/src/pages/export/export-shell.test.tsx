@@ -13,9 +13,9 @@ const html = renderToStaticMarkup(
     header: createElement("div", null, "header"),
     guidance: createElement("div", null, "guidance"),
     sceneSelector: createElement("div", null, "sceneSelector"),
+    content: createElement("div", null, "content"),
     history: createElement("div", null, "history"),
     archive: createElement("div", null, "archive"),
-    content: createElement("div", null, "content")
   })
 );
 

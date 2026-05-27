@@ -5,6 +5,7 @@ import { ExportArchivePanel } from "./ExportArchivePanel";
 import { ExportAuditPanel } from "./ExportAuditPanel";
 import { ExportHistoryPanel } from "./ExportHistoryPanel";
 import { ExportReportsPanel } from "./ExportReportsPanel";
+import { ExportSceneSummary } from "./ExportSceneSummary";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -116,3 +117,14 @@ const reportsHtml = renderToStaticMarkup(createElement(ExportReportsPanel, {
 
 assert(reportsHtml.includes("财务报表快照导出"), "expected reports panel title");
 assert(reportsHtml.includes("利润表"), "expected reports panel content");
+
+const summaryHtml = renderToStaticMarkup(createElement(ExportSceneSummary, {
+  scene: "reports",
+  title: "财务报表导出",
+  description: "按期间选择报表快照并导出。",
+  highlights: ["1 条快照", "支持批量打开"],
+  pendingCount: 1
+}));
+
+assert(summaryHtml.includes("财务报表导出"), "expected scene summary title");
+assert(summaryHtml.includes("支持批量打开"), "expected scene summary highlight");
