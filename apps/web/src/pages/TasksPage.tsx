@@ -23,11 +23,9 @@ type ViewMode = "list" | "kanban";
 
 const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
   not_started: { color: "default",    icon: <MinusCircleOutlined />,       label: "待开始" },
-  pending:     { color: "default",    icon: <MinusCircleOutlined />,       label: "待处理" },
   in_progress: { color: "processing", icon: <ClockCircleOutlined />,       label: "进行中" },
   in_review:   { color: "warning",    icon: <ExclamationCircleOutlined />, label: "复核中" },
   done:        { color: "success",    icon: <CheckCircleOutlined />,       label: "已完成" },
-  completed:   { color: "success",    icon: <CheckCircleOutlined />,       label: "已完成" },
   blocked:     { color: "error",      icon: <StopOutlined />,              label: "已阻塞" },
   cancelled:   { color: "default",    icon: <StopOutlined />,              label: "已取消" },
 };
@@ -40,7 +38,6 @@ const PRIORITY_CONFIG: Record<string, { color: string; label: string }> = {
 
 const NEXT_STATUS: Partial<Record<TaskStatus, { status: TaskStatus; label: string }>> = {
   not_started: { status: "in_progress", label: "开始执行" },
-  pending:     { status: "in_progress", label: "开始执行" },
   in_progress: { status: "done",        label: "标记完成" },
   in_review:   { status: "done",        label: "复核完成" },
   blocked:     { status: "in_progress", label: "解除阻塞" },
@@ -153,12 +150,12 @@ export function TasksPage() {
   }
 
   const overdueCount = useMemo(() => tasks.filter(task => task.isOverdue).length, [tasks]);
-  const notStartedCount = useMemo(() => tasks.filter(task => task.status === "not_started" || task.status === "pending").length, [tasks]);
+  const notStartedCount = useMemo(() => tasks.filter(task => task.status === "not_started").length, [tasks]);
 
   const kanbanGroups = useMemo(() => ({
-    not_started: tasks.filter(task => task.status === "not_started" || task.status === "pending"),
+    not_started: tasks.filter(task => task.status === "not_started"),
     in_progress: tasks.filter(task => task.status === "in_progress" || task.status === "in_review"),
-    done:        tasks.filter(task => task.status === "done" || task.status === "completed"),
+    done:        tasks.filter(task => task.status === "done"),
     blocked:     tasks.filter(task => task.status === "blocked"),
   }), [tasks]);
 
@@ -206,7 +203,7 @@ export function TasksPage() {
         const isUpdating = updatingId === record.id;
         return (
           <Space size={4} wrap>
-            {next && record.status !== "done" && record.status !== "completed" && record.status !== "cancelled" && (
+            {next && record.status !== "done" && record.status !== "cancelled" && (
               <Button type="primary" size="small" loading={isUpdating} onClick={() => void handleStatusChange(record.id, next.status)}>
                 {next.label}
               </Button>
@@ -313,7 +310,7 @@ export function TasksPage() {
         footer={
           detailTask && (
             <Space>
-              {activeNext && detailTask.status !== "done" && detailTask.status !== "completed" && detailTask.status !== "cancelled" && (
+              {activeNext && detailTask.status !== "done" && detailTask.status !== "cancelled" && (
                 <Button type="primary" loading={updatingId === detailTask.id} onClick={() => void handleStatusChange(detailTask.id, activeNext.status)}>
                   {activeNext.label}
                 </Button>
