@@ -222,77 +222,82 @@ export function AppLayout() {
           left: 0, top: 0, bottom: 0,
         }}
       >
-        {/* Brand */}
-        <div style={{
-          padding: collapsed ? "18px 0 14px" : "18px 16px 14px",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
-          textAlign: collapsed ? "center" : "left",
-          transition: "padding 0.2s",
-        }}>
+        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          {/* Brand */}
           <div style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 34, height: 34, borderRadius: 9,
-            background: "linear-gradient(135deg, #2563eb, #7c3aed)",
-            marginBottom: collapsed ? 0 : 8,
+            padding: collapsed ? "18px 0 14px" : "18px 16px 14px",
+            borderBottom: "1px solid rgba(255,255,255,0.07)",
+            textAlign: collapsed ? "center" : "left",
+            transition: "padding 0.2s",
+            flexShrink: 0,
           }}>
-            <SafetyOutlined style={{ color: "#fff", fontSize: 17 }} />
-          </div>
-          {!collapsed && (
-            <>
-              <div style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>
-                Finance Taxation
-              </div>
-              <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>
-                {SIDEBAR_BRAND_SUBTITLE}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Navigation */}
-        <div style={{ padding: "6px 0", overflowY: "auto", height: "calc(100vh - 130px)" }}>
-          <Menu
-            mode="inline"
-            theme="dark"
-            selectedKeys={[location.pathname]}
-            style={{ background: "transparent", border: "none", fontSize: 13 }}
-            items={navItems}
-            onClick={({ key }) => navigate(key)}
-          />
-        </div>
-
-        {/* User footer */}
-        <div style={{
-          position: "absolute", bottom: 40, left: 0, right: 0,
-          padding: collapsed ? "10px 0" : "10px 14px",
-          borderTop: "1px solid rgba(255,255,255,0.07)",
-          display: "flex", alignItems: "center", gap: 8,
-          justifyContent: collapsed ? "center" : "flex-start",
-        }}>
-          <Avatar
-            size={30}
-            style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)", flexShrink: 0, fontSize: 12, cursor: "default" }}
-          >
-            {initials}
-          </Avatar>
-          {!collapsed && (
-            <>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: "#e2e8f0", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {user.displayName || user.username}
+            <div style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 34, height: 34, borderRadius: 9,
+              background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+              marginBottom: collapsed ? 0 : 8,
+            }}>
+              <SafetyOutlined style={{ color: "#fff", fontSize: 17 }} />
+            </div>
+            {!collapsed && (
+              <>
+                <div style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>
+                  Finance Taxation
                 </div>
-                <div style={{ color: "#475569", fontSize: 11 }}>{roleLabel}</div>
-              </div>
-              <Button
-                type="text"
-                icon={<PoweroffOutlined style={{ fontSize: 13 }} />}
-                size="small"
-                onClick={handleLogout}
-                title="退出登录"
-                style={{ color: "#475569", padding: "0 4px" }}
-              />
-            </>
-          )}
+                <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>
+                  {SIDEBAR_BRAND_SUBTITLE}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Navigation */}
+          <div style={{ padding: "6px 0 12px", overflowY: "auto", flex: 1, minHeight: 0 }}>
+            <Menu
+              mode="inline"
+              theme="dark"
+              selectedKeys={[location.pathname]}
+              style={{ background: "transparent", border: "none", fontSize: 13 }}
+              items={navItems}
+              onClick={({ key }) => navigate(key)}
+            />
+          </div>
+
+          {/* User footer */}
+          <div style={{
+            marginTop: "auto",
+            padding: collapsed ? "12px 0 14px" : "12px 14px 14px",
+            borderTop: "1px solid rgba(255,255,255,0.07)",
+            background: "rgba(8, 15, 28, 0.92)",
+            display: "flex", alignItems: "center", gap: 8,
+            justifyContent: collapsed ? "center" : "flex-start",
+            flexShrink: 0,
+          }}>
+            <Avatar
+              size={30}
+              style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)", flexShrink: 0, fontSize: 12, cursor: "default" }}
+            >
+              {initials}
+            </Avatar>
+            {!collapsed && (
+              <>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: "#e2e8f0", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {user.displayName || user.username}
+                  </div>
+                  <div style={{ color: "#64748b", fontSize: 11 }}>{roleLabel}</div>
+                </div>
+                <Button
+                  type="text"
+                  icon={<PoweroffOutlined style={{ fontSize: 13 }} />}
+                  size="small"
+                  onClick={handleLogout}
+                  title="退出登录"
+                  style={{ color: "#94a3b8", padding: "0 4px" }}
+                />
+              </>
+            )}
+          </div>
         </div>
       </Sider>
 
