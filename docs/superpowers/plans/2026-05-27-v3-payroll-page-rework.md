@@ -26,22 +26,22 @@
 
 ### Task 2: Split employees / payroll / policy sections
 
-- [ ] Extract employees section container
-- [ ] Extract payroll section container
-- [ ] Extract policy section container
-- [ ] Keep existing actions and drilldown behavior intact
-- [ ] Verify typecheck and focused tests
+- [x] Extract employees section container
+- [x] Extract payroll section container
+- [x] Extract policy section container
+- [x] Keep existing actions and drilldown behavior intact
+- [x] Verify typecheck and focused tests
 - [ ] Commit
 
 ### Task 3: Prioritize workflow summary and next-step cues
 
-- [ ] Make payroll section show workflow summary before tables
-- [ ] Normalize payroll entry/result guidance
-- [ ] Verify typecheck and focused tests
+- [x] Make payroll section show workflow summary before tables
+- [x] Normalize payroll entry/result guidance
+- [x] Verify typecheck and focused tests
 - [ ] Commit
 
 ## Progress Update
 
 - `Task 1` 已完成实现与验证，等待本分支提交。
-- `Task 2` 未开始。
-- `Task 3` 未开始。
+- `Task 2` 已完成 employees / payroll / policy 三段容器拆分，现有工资计算、税务复核、风险联动和 drilldown 行为保持不变。
+- `Task 3` 已完成第一轮工资工作流摘要前置展示，并已通过 focused test 与前端 typecheck。

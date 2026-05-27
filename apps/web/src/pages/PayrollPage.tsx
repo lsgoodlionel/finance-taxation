@@ -28,9 +28,13 @@ import { buildPayrollRiskBuckets, buildPayrollVoucherSuggestions } from "./payro
 import { buildPayrollLinkageSummary } from "./payroll-linkage";
 import { buildPayrollTaxReviewSummary } from "./payroll-tax-review";
 import { buildPayrollWorkflow } from "./payroll-workflow";
+import { PayrollEmployeesSection } from "./payroll/PayrollEmployeesSection";
 import { PayrollHeader } from "./payroll/PayrollHeader";
+import { PayrollPolicySection } from "./payroll/PayrollPolicySection";
+import { PayrollRunSection } from "./payroll/PayrollRunSection";
 import { PayrollShell } from "./payroll/PayrollShell";
 import { PayrollTabBar, type PayrollTab } from "./payroll/PayrollTabBar";
+import { PayrollWorkflowSummary } from "./payroll/PayrollWorkflowSummary";
 
 const EMPLOYEE_STATUS_LABELS: Record<string, string> = {
   active: "在职",
@@ -551,14 +555,15 @@ export function PayrollPage() {
 
       {/* ── Tab: 员工管理 ── */}
       {tab === "employees" && (
-        <>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button style={btnPrimary()} onClick={() => { setShowEmpForm(!showEmpForm); setEditingEmp(null); setEmpForm({ ...EMPTY_EMP_FORM }); }}>
-              + 添加员工
-            </button>
-          </div>
-
-          {(showEmpForm || editingEmp) && (
+        <PayrollEmployeesSection
+          toolbar={(
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button style={btnPrimary()} onClick={() => { setShowEmpForm(!showEmpForm); setEditingEmp(null); setEmpForm({ ...EMPTY_EMP_FORM }); }}>
+                + 添加员工
+              </button>
+            </div>
+          )}
+          form={(showEmpForm || editingEmp) ? (
             <div style={panelStyle()}>
               <h3 style={{ margin: "0 0 16px", fontSize: "16px" }}>
                 {editingEmp ? `编辑员工：${editingEmp.name}` : "添加员工"}
@@ -600,98 +605,120 @@ export function PayrollPage() {
                 </button>
               </div>
             </div>
-          )}
-
-          <div style={panelStyle()}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ color: "#6c7a89" }}>
-                  {["姓名", "职位", "入职日期", "基本工资", "状态", "操作"].map((h) => (
-                    <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {employees.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ ...cellStyle(), color: "#aab5c0", textAlign: "center", padding: "32px" }}>
-                      暂无员工数据，点击"添加员工"开始录入
-                    </td>
+          ) : undefined}
+          list={(
+            <div style={panelStyle()}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                <thead>
+                  <tr style={{ color: "#6c7a89" }}>
+                    {["姓名", "职位", "入职日期", "基本工资", "状态", "操作"].map((h) => (
+                      <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
+                    ))}
                   </tr>
-                ) : (
-                  employees.map((emp) => (
-                    <tr key={emp.id}>
-                      <td
-                        style={{
-                          ...cellStyle(),
-                          background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined
-                        }}
-                      >
-                        <div>{emp.name}</div>
-                        <div style={{ color: "#8a9bb0", fontSize: "11px" }}>{emp.idCard}</div>
-                      </td>
-                      <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>{emp.position || "—"}</td>
-                      <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>{emp.hireDate ?? "—"}</td>
-                      <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>¥ {fmt(emp.baseSalary)}</td>
-                      <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>
-                        <span style={{
-                          background: emp.status === "active" ? "#1a7f5a22" : "#8a9bb022",
-                          color: emp.status === "active" ? "#1a7f5a" : "#8a9bb0",
-                          borderRadius: "999px", padding: "2px 10px", fontSize: "12px"
-                        }}>
-                          {EMPLOYEE_STATUS_LABELS[emp.status] ?? emp.status}
-                        </span>
-                      </td>
-                      <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>
-                        <button
-                          onClick={() => startEditEmployee(emp)}
-                          style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #1e2a37", color: "#1e2a37", background: "none", cursor: "pointer" }}
-                        >
-                          编辑
-                        </button>
+                </thead>
+                <tbody>
+                  {employees.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ ...cellStyle(), color: "#aab5c0", textAlign: "center", padding: "32px" }}>
+                        暂无员工数据，点击"添加员工"开始录入
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </>
+                  ) : (
+                    employees.map((emp) => (
+                      <tr key={emp.id}>
+                        <td
+                          style={{
+                            ...cellStyle(),
+                            background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined
+                          }}
+                        >
+                          <div>{emp.name}</div>
+                          <div style={{ color: "#8a9bb0", fontSize: "11px" }}>{emp.idCard}</div>
+                        </td>
+                        <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>{emp.position || "—"}</td>
+                        <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>{emp.hireDate ?? "—"}</td>
+                        <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>¥ {fmt(emp.baseSalary)}</td>
+                        <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>
+                          <span style={{
+                            background: emp.status === "active" ? "#1a7f5a22" : "#8a9bb022",
+                            color: emp.status === "active" ? "#1a7f5a" : "#8a9bb0",
+                            borderRadius: "999px", padding: "2px 10px", fontSize: "12px"
+                          }}>
+                            {EMPLOYEE_STATUS_LABELS[emp.status] ?? emp.status}
+                          </span>
+                        </td>
+                        <td style={{ ...cellStyle(), background: navEmployeeId === emp.id ? "rgba(79,142,247,0.08)" : undefined }}>
+                          <button
+                            onClick={() => startEditEmployee(emp)}
+                            style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "6px", border: "1px solid #1e2a37", color: "#1e2a37", background: "none", cursor: "pointer" }}
+                          >
+                            编辑
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        />
       )}
 
       {/* ── Tab: 工资计算 ── */}
       {tab === "payroll" && (
-        <>
-          <div style={panelStyle()}>
-            <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>计算工资</h3>
-            <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", flexWrap: "wrap" }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-                <span style={{ color: "#6c7a89" }}>工资期间（YYYY-MM）</span>
-                <input
-                  type="month"
-                  value={customPeriod}
-                  onChange={(e) => setCustomPeriod(e.target.value)}
-                  style={{ padding: "8px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px" }}
-                />
-              </label>
-              <button
-                style={{ ...btnPrimary(), opacity: computing ? 0.6 : 1 }}
-                onClick={handleComputePayroll}
-                disabled={computing}
-              >
-                {computing ? "计算中..." : "计算/更新工资"}
-              </button>
-              <button
-                style={{ ...btnSecondary(), opacity: creatingEventPeriod === customPeriod ? 0.6 : 1 }}
-                onClick={handleCreatePayrollEvent}
-                disabled={creatingEventPeriod === selectedPeriod || payrollRecords.length === 0 || !selectedPeriod}
-              >
-                {creatingEventPeriod === selectedPeriod ? "生成事项中..." : "生成工资事项并分析"}
-              </button>
+        <PayrollRunSection
+          summary={payrollWorkflow ? (
+            <PayrollWorkflowSummary
+              summary={payrollWorkflow.summary}
+              highlights={[
+                `${selectedPeriod} 工资期`,
+                `${payrollRecords.length} 条工资记录`,
+                linkedEventId ? "已接入事项主线" : "未接入事项主线"
+              ]}
+              readinessText={payrollLinkage
+                ? (
+                  payrollLinkage.readiness === "pending_confirmation"
+                    ? "仍有工资记录未确认，暂不适合进入税务复核。"
+                    : payrollLinkage.readiness === "pending_event"
+                      ? "工资记录已基本就绪，但尚未生成工资事项。"
+                      : "工资事项已接入主线，可继续进入税务、凭证和风险复核。"
+                )
+                : undefined}
+              pendingActions={payrollTaxReview?.pendingActions}
+            />
+          ) : undefined}
+          controls={(
+            <div style={panelStyle()}>
+              <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>计算工资</h3>
+              <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", flexWrap: "wrap" }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
+                  <span style={{ color: "#6c7a89" }}>工资期间（YYYY-MM）</span>
+                  <input
+                    type="month"
+                    value={customPeriod}
+                    onChange={(e) => setCustomPeriod(e.target.value)}
+                    style={{ padding: "8px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px" }}
+                  />
+                </label>
+                <button
+                  style={{ ...btnPrimary(), opacity: computing ? 0.6 : 1 }}
+                  onClick={handleComputePayroll}
+                  disabled={computing}
+                >
+                  {computing ? "计算中..." : "计算/更新工资"}
+                </button>
+                <button
+                  style={{ ...btnSecondary(), opacity: creatingEventPeriod === customPeriod ? 0.6 : 1 }}
+                  onClick={handleCreatePayrollEvent}
+                  disabled={creatingEventPeriod === selectedPeriod || payrollRecords.length === 0 || !selectedPeriod}
+                >
+                  {creatingEventPeriod === selectedPeriod ? "生成事项中..." : "生成工资事项并分析"}
+                </button>
+              </div>
             </div>
-          </div>
-
-          {periods.length > 0 && (
+          )}
+          history={periods.length > 0 ? (
             <div style={panelStyle()}>
               <h3 style={{ margin: "0 0 12px", fontSize: "15px" }}>历史期间</h3>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -714,9 +741,8 @@ export function PayrollPage() {
                 ))}
               </div>
             </div>
-          )}
-
-          {selectedPeriod && payrollRecords.length > 0 && (
+          ) : undefined}
+          detail={selectedPeriod && payrollRecords.length > 0 ? (
             <div style={panelStyle()}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "12px", flexWrap: "wrap" }}>
                 <h3 style={{ margin: 0, fontSize: "15px" }}>
@@ -1062,19 +1088,18 @@ export function PayrollPage() {
                 </table>
               </div>
             </div>
-          )}
-
-          {selectedPeriod && payrollRecords.length === 0 && (
+          ) : undefined}
+          empty={selectedPeriod && payrollRecords.length === 0 ? (
             <div style={{ ...panelStyle(), color: "#aab5c0", textAlign: "center", padding: "40px" }}>
               {selectedPeriod} 暂无工资数据，请先点击"计算/更新工资"生成记录。
             </div>
-          )}
-        </>
+          ) : undefined}
+        />
       )}
 
       {/* ── Tab: 参数设置 ── */}
       {tab === "policy" && policy && (
-        <div style={panelStyle()}>
+        <PayrollPolicySection content={<div style={panelStyle()}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <h3 style={{ margin: 0, fontSize: "16px" }}>社保/公积金/个税参数</h3>
             {!editingPolicy ? (
@@ -1126,7 +1151,7 @@ export function PayrollPage() {
           <div style={{ marginTop: "20px", padding: "12px 16px", background: "rgba(30,42,55,0.04)", borderRadius: "12px", fontSize: "12px", color: "#6c7a89" }}>
             <strong>个税计算说明：</strong>应纳税所得额 = 应发工资 − 个人社保 − 个人公积金 − 起征点，适用七级超额累进税率（3%～45%）。
           </div>
-        </div>
+        </div>} />
       )}
     </>
   );
