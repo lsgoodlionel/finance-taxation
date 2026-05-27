@@ -39,10 +39,23 @@ import type {
 } from "@finance-taxation/domain-model";
 import { buildPrintableDocumentHtml } from "./document-relations";
 import { buildExportFileName } from "./pdf-export-utils";
-import { buildResultPageSubtitle } from "../lib/entry-guidance";
-import { PageHeader } from "../components/ui/PageHeader";
 import { ResultBanner } from "../components/ui/ResultBanner";
 import { useQueryState } from "../hooks/useQueryState";
+import { ExportArchivePanel } from "./export/ExportArchivePanel";
+import { ExportAuditPanel } from "./export/ExportAuditPanel";
+import { ExportDocumentsPanel } from "./export/ExportDocumentsPanel";
+import { ExportHeader } from "./export/ExportHeader";
+import { ExportHistoryPanel } from "./export/ExportHistoryPanel";
+import { ExportPackagesPanel } from "./export/ExportPackagesPanel";
+import { ExportPayrollPanel } from "./export/ExportPayrollPanel";
+import { ExportReportsPanel } from "./export/ExportReportsPanel";
+import { ExportRiskPanel } from "./export/ExportRiskPanel";
+import { ExportRndPanel } from "./export/ExportRndPanel";
+import { ExportSceneSelector, type ExportSceneKey, type ExportSceneOption } from "./export/ExportSceneSelector";
+import { ExportSceneSummary } from "./export/ExportSceneSummary";
+import { ExportShell } from "./export/ExportShell";
+import { ExportTaxPanel } from "./export/ExportTaxPanel";
+import { ExportVouchersPanel } from "./export/ExportVouchersPanel";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 
@@ -102,6 +115,91 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
   cash_flow: "现金流量表"
 };
 
+const EXPORT_SCENES: ExportSceneOption[] = [
+  { key: "reports", title: "财务报表", description: "报表快照、期间对比和结果页导出。", emoji: "📊" },
+  { key: "payroll", title: "工资材料", description: "工资汇总表、工资条和工资期间材料。", emoji: "💰" },
+  { key: "tax", title: "税务材料", description: "增值税底稿、企业所得税准备和申报资料。", emoji: "🧾" },
+  { key: "packages", title: "批量归档", description: "月结、审计、稽核资料包统一导出。", emoji: "📦" },
+  { key: "documents", title: "单据模板", description: "报销单、票据包和其他正式模板导出。", emoji: "📁" },
+  { key: "risk", title: "风险复盘", description: "风险发现、关闭记录和复盘输出。", emoji: "🔍" },
+  { key: "rnd", title: "研发辅助", description: "研发资料包和加计扣除检查清单。", emoji: "🔬" },
+  { key: "vouchers", title: "凭证导出", description: "凭证打印、批量打开和凭证归档。", emoji: "🧷" }
+];
+
+function buildSceneSummary(
+  scene: ExportSceneKey,
+  context: {
+    periods: PayrollPeriodSummary[];
+    snapshots: ReportSnapshot[];
+    documents: GeneratedDocument[];
+    findings: RiskFinding[];
+    rndProjects: Array<RndProject & { summary: RndProjectSummary }>;
+    vouchers: Voucher[];
+    selectedReportIds: string[];
+    selectedDocumentIds: string[];
+    selectedVoucherIds: string[];
+  }
+) {
+  switch (scene) {
+    case "reports":
+      return {
+        title: "财务报表导出",
+        description: "面向资产负债表、利润表、现金流量表快照。先确认期间和快照，再执行单项或批量打开。",
+        highlights: [`${context.snapshots.length} 条快照`, `已选 ${context.selectedReportIds.length} 项`, "支持批量打开"],
+        pendingCount: context.selectedReportIds.length
+      };
+    case "payroll":
+      return {
+        title: "工资材料导出",
+        description: "用于工资汇总表、工资条和工资期留档。优先按工资期间选择，再导出汇总或全员工资条。",
+        highlights: [`${context.periods.length} 个工资期间`, "工资汇总表", "全员工资条"],
+        pendingCount: context.periods.length
+      };
+    case "tax":
+      return {
+        title: "税务材料导出",
+        description: "面向增值税底稿与企业所得税准备稿。确认申报期间后再打开打印版。",
+        highlights: ["增值税底稿", "企业所得税准备稿", "按期间生成"],
+        pendingCount: 2
+      };
+    case "packages":
+      return {
+        title: "资料包导出",
+        description: "统一处理月结、审计和稽核资料包。先选期间，再分别打开对应资料包。",
+        highlights: ["月结资料包", "审计资料包", "稽核资料包"],
+        pendingCount: 3
+      };
+    case "documents":
+      return {
+        title: "单据模板导出",
+        description: "用于正式单据模板和票据包打印。先确认关联事项，再执行单项或批量打开。",
+        highlights: [`${context.documents.length} 份单据`, `已选 ${context.selectedDocumentIds.length} 项`, "正式模板打印"],
+        pendingCount: context.selectedDocumentIds.length
+      };
+    case "risk":
+      return {
+        title: "风险复盘导出",
+        description: "面向风险发现、关闭记录和复盘输出。先确认规则和事项，再打开复盘记录。",
+        highlights: [`${context.findings.length} 条风险`, "关闭记录", "复盘留档"],
+        pendingCount: context.findings.length
+      };
+    case "rnd":
+      return {
+        title: "研发资料导出",
+        description: "用于研发项目资料包和加计扣除检查清单。优先确认项目编码和费用口径。",
+        highlights: [`${context.rndProjects.length} 个项目`, "加计扣除清单", "研发资料包"],
+        pendingCount: context.rndProjects.length
+      };
+    case "vouchers":
+      return {
+        title: "凭证导出",
+        description: "用于凭证打印和批量打开。先筛选凭证，再按摘要或编号导出。",
+        highlights: [`${context.vouchers.length} 条凭证`, `已选 ${context.selectedVoucherIds.length} 项`, "批量打开"],
+        pendingCount: context.selectedVoucherIds.length
+      };
+  }
+}
+
 function escHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -134,6 +232,18 @@ export function PdfExportPage() {
   const activeTab = (["payroll", "reports", "tax", "packages", "documents", "risk", "rnd", "vouchers"].includes(activeTabState)
     ? activeTabState
     : "reports") as "payroll" | "reports" | "tax" | "packages" | "documents" | "risk" | "rnd" | "vouchers";
+  const activeScene = EXPORT_SCENES.find((item) => item.key === activeTab) ?? EXPORT_SCENES[0]!;
+  const sceneSummary = buildSceneSummary(activeTab, {
+    periods,
+    snapshots,
+    documents,
+    findings,
+    rndProjects,
+    vouchers,
+    selectedReportIds,
+    selectedDocumentIds,
+    selectedVoucherIds
+  });
 
   useEffect(() => {
     async function bootstrap() {
@@ -165,13 +275,6 @@ export function PdfExportPage() {
     }
     bootstrap();
   }, []);
-
-  const tabStyle = (t: typeof activeTab) => ({
-    padding: "8px 20px", borderRadius: "8px", border: "none",
-    cursor: "pointer", fontSize: "14px",
-    background: activeTab === t ? "#1e2a37" : "rgba(255,255,255,0.72)",
-    color: activeTab === t ? "#fff" : "#1e2a37"
-  } as const);
 
   function toggleSelection(id: string, setter: (updater: (current: string[]) => string[]) => void) {
     setter((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
@@ -282,650 +385,271 @@ export function PdfExportPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <PageHeader
-        title="PDF 导出中心"
-        subtitle={buildResultPageSubtitle("PDF 导出")}
-        actions={(
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <button style={tabStyle("reports")} onClick={() => setActiveTabState("reports")}>报表导出</button>
-            <button style={tabStyle("tax")} onClick={() => setActiveTabState("tax")}>税务底稿</button>
-            <button style={tabStyle("packages")} onClick={() => setActiveTabState("packages")}>资料包</button>
-            <button style={tabStyle("documents")} onClick={() => setActiveTabState("documents")}>单据导出</button>
-            <button style={tabStyle("risk")} onClick={() => setActiveTabState("risk")}>风险复盘</button>
-            <button style={tabStyle("rnd")} onClick={() => setActiveTabState("rnd")}>研发资料</button>
-            <button style={tabStyle("payroll")} onClick={() => setActiveTabState("payroll")}>工资导出</button>
-            <button style={tabStyle("vouchers")} onClick={() => setActiveTabState("vouchers")}>凭证导出</button>
-          </div>
-        )}
-      />
-
-      {message ? <ResultBanner tone="info" message={message} /> : null}
-
-      <ResultBanner tone="success" message="打开导出链接后，在浏览器中按 Ctrl+P（Mac: ⌘+P），选择「另存为 PDF」即可保存 PDF 文件。" />
-
-      <div style={panelStyle()}>
-        <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>最近导出记录</h3>
-        {exportHistory.length === 0 ? (
-          <div style={{ color: "#aab5c0", textAlign: "center", padding: "24px" }}>暂无导出记录</div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-            <thead>
-              <tr style={{ color: "#6c7a89" }}>
-                {["时间", "类型", "名称", "建议文件名", "操作"].map((h) => (
-                  <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {exportHistory.map((item) => (
-                <tr key={item.id}>
-                  <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
-                  <td style={cellStyle()}>{item.kind}</td>
-                  <td style={cellStyle()}>{item.label}</td>
-                  <td style={cellStyle()}>
-                    <div>{item.fileName}</div>
-                    <div style={{ fontSize: "11px", color: "#6c7a89", marginTop: "2px" }}>状态：{item.status}</div>
-                  </td>
-                  <td style={cellStyle()}>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      {(item.status === "created" || item.status === "opened") ? btnExport(() => void handleUpdateExportStatus(item.id, "completed"), "标记完成") : null}
-                      {(item.status === "created" || item.status === "opened") ? btnExport(() => void handleUpdateExportStatus(item.id, "failed"), "标记失败") : null}
-                      {(item.status === "failed" || item.status === "completed") ? btnExport(() => void handleUpdateExportStatus(item.id, "opened"), "重试") : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div style={panelStyle()}>
-        <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>导出审计轨迹</h3>
-        {exportAuditLogs.length === 0 ? (
-          <div style={{ color: "#aab5c0", textAlign: "center", padding: "24px" }}>暂无导出审计记录</div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-            <thead>
-              <tr style={{ color: "#6c7a89" }}>
-                {["时间", "动作", "对象", "操作人"].map((h) => (
-                  <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {exportAuditLogs.map((item) => (
-                <tr key={item.id}>
-                  <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
-                  <td style={cellStyle()}>{item.action}</td>
-                  <td style={cellStyle()}>{item.resourceLabel || item.resourceId || "—"}</td>
-                  <td style={cellStyle()}>{item.userName || "系统"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div style={panelStyle()}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-end", marginBottom: "16px", flexWrap: "wrap" }}>
-          <h3 style={{ margin: 0, fontSize: "15px" }}>导出归档索引</h3>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <select value={archiveKindFilter} onChange={(event) => setArchiveKindFilter(event.target.value as ExportArtifactKind | "")} style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", fontSize: "12px" }}>
-              <option value="">全部分类</option>
-              <option value="report">报表</option>
-              <option value="tax">税务</option>
-              <option value="package">资料包</option>
-              <option value="document">单据</option>
-              <option value="risk">风险</option>
-              <option value="rnd">研发</option>
-              <option value="payroll">工资</option>
-              <option value="voucher">凭证</option>
-            </select>
-            <input
-              value={archiveKeyword}
-              onChange={(event) => setArchiveKeyword(event.target.value)}
-              placeholder="搜索标题/文件名/归档键"
-              style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(20,40,60,0.15)", fontSize: "12px", minWidth: "220px" }}
+    <ExportShell
+      header={<ExportHeader activeSceneLabel={activeScene.title} />}
+      guidance={(
+        <>
+          {message ? <ResultBanner tone="info" message={message} /> : null}
+          <ResultBanner tone="success" message="打开导出链接后，在浏览器中按 Ctrl+P（Mac: ⌘+P），选择「另存为 PDF」即可保存 PDF 文件。" />
+        </>
+      )}
+      sceneSelector={(
+        <ExportSceneSelector
+          activeScene={activeTab as ExportSceneKey}
+          options={EXPORT_SCENES}
+          onChange={(key) => setActiveTabState(key)}
+        />
+      )}
+      content={(
+        <>
+          <ExportSceneSummary
+            scene={activeTab}
+            title={sceneSummary.title}
+            description={sceneSummary.description}
+            highlights={sceneSummary.highlights}
+            pendingCount={sceneSummary.pendingCount}
+          />
+          <ExportAuditPanel logs={exportAuditLogs} cellStyle={cellStyle} />
+          {activeTab === "payroll" && (
+            <ExportPayrollPanel
+              periods={periods}
+              onOpenPayrollSummary={(period) => {
+                rememberExport({
+                  kind: "payroll",
+                  label: `${period.period} 工资汇总表`,
+                  fileName: buildExportFileName([period.period, "工资汇总表"]),
+                  resourceType: "payroll_period",
+                  resourceId: period.period,
+                  periodLabel: period.period
+                });
+                openPdf(`/api/pdf/payroll?period=${period.period}`);
+              }}
+              onOpenPayrollSlips={(period) => {
+                rememberExport({
+                  kind: "payroll",
+                  label: `${period.period} 全员工资条`,
+                  fileName: buildExportFileName([period.period, "全员工资条"]),
+                  resourceType: "payroll_period",
+                  resourceId: `${period.period}:slips`,
+                  periodLabel: period.period
+                });
+                openPdf(`/api/pdf/payroll-slip?period=${period.period}`);
+              }}
+              renderActionButton={btnExport}
+              cellStyle={cellStyle}
             />
-          </div>
-        </div>
-        {archiveEntries.length === 0 ? (
-          <div style={{ color: "#aab5c0", textAlign: "center", padding: "24px" }}>暂无归档索引</div>
-        ) : (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {Object.values(
-              archiveEntries.reduce<Record<string, ExportArchiveEntry[]>>((groups, entry) => {
-                const batchNo = entry.archiveKey.split(":")[0] ?? entry.archiveKey;
-                groups[batchNo] = groups[batchNo] ?? [];
-                groups[batchNo].push(entry);
-                return groups;
-              }, {})
-            ).map((items) => {
-              const batchNo = items[0]!.archiveKey.split(":")[0];
-              return (
-                <div key={batchNo} style={{ border: "1px solid rgba(20,40,60,0.08)", borderRadius: "14px", overflow: "hidden" }}>
-                  <div style={{ padding: "10px 14px", background: "rgba(20,40,60,0.04)", fontSize: "12px", fontWeight: 700, color: "#4d5d6c" }}>
-                    批次号：{batchNo} · 共 {items.length} 项
-                  </div>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                    <thead>
-                      <tr style={{ color: "#6c7a89" }}>
-                        {["归档键", "分类", "标题", "对象", "建议文件名", "时间"].map((h) => (
-                          <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((item) => (
-                        <tr key={item.id}>
-                          <td style={cellStyle()}>{item.archiveKey}</td>
-                          <td style={cellStyle()}>{item.kind}</td>
-                          <td style={cellStyle()}>{item.title}</td>
-                          <td style={cellStyle()}>{item.objectId || item.objectType}</td>
-                          <td style={cellStyle()}>{item.fileName}</td>
-                          <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── 工资导出 ── */}
-      {activeTab === "payroll" && (
-        <div style={panelStyle()}>
-          <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>工资汇总表 &amp; 工资条</h3>
-          {periods.length === 0 ? (
-            <div style={{ color: "#aab5c0", textAlign: "center", padding: "32px" }}>暂无工资数据</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ color: "#6c7a89" }}>
-                  {["工资期间", "人数", "实发合计", "状态", "操作"].map((h) => (
-                    <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {periods.map((p) => (
-                  <tr key={p.period}>
-                    <td style={cellStyle()}>{p.period}</td>
-                    <td style={cellStyle()}>{p.headcount} 人</td>
-                    <td style={cellStyle()}>
-                      ¥ {p.totalNetPay.toLocaleString("zh-CN", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={cellStyle()}>
-                      <span style={{ fontSize: "12px", color: p.status === "confirmed" ? "#1a7f5a" : "#8a9bb0" }}>
-                        {p.status === "confirmed" ? "已确认" : p.status === "draft" ? "草稿" : "部分确认"}
-                      </span>
-                    </td>
-                    <td style={{ ...cellStyle(), display: "flex", gap: "6px" }}>
-                      {btnExport(() => {
-                        rememberExport({
-                          kind: "payroll",
-                          label: `${p.period} 工资汇总表`,
-                          fileName: buildExportFileName([p.period, "工资汇总表"]),
-                          resourceType: "payroll_period",
-                          resourceId: p.period,
-                          periodLabel: p.period
-                        });
-                        openPdf(`/api/pdf/payroll?period=${p.period}`);
-                      }, "工资汇总")}
-                      {btnExport(() => {
-                        rememberExport({
-                          kind: "payroll",
-                          label: `${p.period} 全员工资条`,
-                          fileName: buildExportFileName([p.period, "全员工资条"]),
-                          resourceType: "payroll_period",
-                          resourceId: `${p.period}:slips`,
-                          periodLabel: p.period
-                        });
-                        openPdf(`/api/pdf/payroll-slip?period=${p.period}`);
-                      }, "全员工资条")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           )}
-        </div>
-      )}
 
-      {/* ── 报表导出 ── */}
-      {activeTab === "reports" && (
-        <div style={panelStyle()}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", gap: "12px", flexWrap: "wrap" }}>
-            <h3 style={{ margin: 0, fontSize: "15px" }}>财务报表快照导出</h3>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <span style={{ fontSize: "12px", color: "#6c7a89" }}>已选 {selectedReportIds.length} 项</span>
-              <button
-                disabled={selectedReportIds.length === 0}
-                onClick={() => selectedReportIds.forEach((id) => openReportSnapshot(id))}
-                style={{ ...batchButtonStyle, opacity: selectedReportIds.length ? 1 : 0.5 }}
-              >
-                批量打开
-              </button>
-            </div>
-          </div>
-          {snapshots.length === 0 ? (
-            <div style={{ color: "#aab5c0", textAlign: "center", padding: "32px" }}>暂无报表快照，请先在「财务报表」页生成快照</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ color: "#6c7a89" }}>
-                  {["选择", "报表类型", "期间", "快照日期", "建议文件名", "操作"].map((h) => (
-                    <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {snapshots.map((s) => (
-                  <tr key={s.id}>
-                    <td style={cellStyle()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedReportIds.includes(s.id)}
-                        onChange={() => toggleSelection(s.id, setSelectedReportIds)}
-                      />
-                    </td>
-                    <td style={cellStyle()}>{REPORT_TYPE_LABELS[s.reportType] ?? s.reportType}</td>
-                    <td style={cellStyle()}>{s.periodLabel}</td>
-                    <td style={cellStyle()}>{s.snapshotDate}</td>
-                    <td style={cellStyle()}>
-                      {buildExportFileName([REPORT_TYPE_LABELS[s.reportType] ?? s.reportType, s.periodLabel, "快照"])}
-                    </td>
-                    <td style={cellStyle()}>
-                      {btnExport(() => openReportSnapshot(s.id))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {activeTab === "reports" && (
+            <ExportReportsPanel
+              snapshots={snapshots}
+              selectedIds={selectedReportIds}
+              onToggleSelection={(id) => toggleSelection(id, setSelectedReportIds)}
+              onBatchOpen={() => selectedReportIds.forEach((id) => openReportSnapshot(id))}
+              onOpenSnapshot={openReportSnapshot}
+              buildFileName={(snapshot) => buildExportFileName([REPORT_TYPE_LABELS[snapshot.reportType] ?? snapshot.reportType, snapshot.periodLabel, "快照"])}
+              cellStyle={cellStyle}
+              batchButtonStyle={batchButtonStyle}
+            />
           )}
-        </div>
-      )}
 
-      {activeTab === "tax" && (
-        <div style={panelStyle()}>
-          <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>税务底稿与申报准备导出</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "end", marginBottom: "16px" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-              <span style={{ color: "#6c7a89" }}>增值税底稿期间</span>
-              <input
-                type="month"
-                value={vatFilingPeriod}
-                onChange={(event) => setVatFilingPeriod(event.target.value)}
-                style={{ padding: "8px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px" }}
-              />
-            </label>
-            {btnExport(
-              () =>
-                void getTaxPrintableHtml("vat", vatFilingPeriod).then((html) => {
-                  rememberExport({
-                    kind: "tax",
-                    label: `增值税底稿 ${vatFilingPeriod}`,
-                    fileName: buildExportFileName(["增值税底稿", vatFilingPeriod]),
-                    resourceType: "tax_working_paper",
-                    resourceId: `vat:${vatFilingPeriod}`,
-                    periodLabel: vatFilingPeriod
-                  });
-                  openHtmlPreview(`增值税底稿 ${vatFilingPeriod}`, html);
-                }),
-              "打开增值税底稿"
-            )}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "end" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-              <span style={{ color: "#6c7a89" }}>企业所得税准备期间</span>
-              <input
-                value={citFilingPeriod}
-                onChange={(event) => setCitFilingPeriod(event.target.value)}
-                style={{ padding: "8px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px" }}
-                placeholder="例如 2026-Q2"
-              />
-            </label>
-            {btnExport(
-              () =>
-                void getTaxPrintableHtml("corporate_income_tax", citFilingPeriod).then((html) => {
-                  rememberExport({
-                    kind: "tax",
-                    label: `企业所得税准备 ${citFilingPeriod}`,
-                    fileName: buildExportFileName(["企业所得税准备", citFilingPeriod]),
-                    resourceType: "corporate_income_tax_preparation",
-                    resourceId: `cit:${citFilingPeriod}`,
-                    periodLabel: citFilingPeriod
-                  });
-                  openHtmlPreview(`企业所得税准备 ${citFilingPeriod}`, html);
-                }),
-              "打开企业所得税准备稿"
-            )}
-          </div>
-        </div>
-      )}
+          {activeTab === "tax" && (
+            <ExportTaxPanel
+              vatFilingPeriod={vatFilingPeriod}
+              citFilingPeriod={citFilingPeriod}
+              onVatPeriodChange={setVatFilingPeriod}
+              onCitPeriodChange={setCitFilingPeriod}
+              onOpenVat={() => void getTaxPrintableHtml("vat", vatFilingPeriod).then((html) => {
+                rememberExport({
+                  kind: "tax",
+                  label: `增值税底稿 ${vatFilingPeriod}`,
+                  fileName: buildExportFileName(["增值税底稿", vatFilingPeriod]),
+                  resourceType: "tax_working_paper",
+                  resourceId: `vat:${vatFilingPeriod}`,
+                  periodLabel: vatFilingPeriod
+                });
+                openHtmlPreview(`增值税底稿 ${vatFilingPeriod}`, html);
+              })}
+              onOpenCit={() => void getTaxPrintableHtml("corporate_income_tax", citFilingPeriod).then((html) => {
+                rememberExport({
+                  kind: "tax",
+                  label: `企业所得税准备 ${citFilingPeriod}`,
+                  fileName: buildExportFileName(["企业所得税准备", citFilingPeriod]),
+                  resourceType: "corporate_income_tax_preparation",
+                  resourceId: `cit:${citFilingPeriod}`,
+                  periodLabel: citFilingPeriod
+                });
+                openHtmlPreview(`企业所得税准备 ${citFilingPeriod}`, html);
+              })}
+              renderActionButton={btnExport}
+            />
+          )}
 
-      {activeTab === "packages" && (
-        <div style={panelStyle()}>
-          <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>月结 / 审计 / 稽核资料包导出</h3>
-          <div style={{ display: "grid", gap: "16px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "end" }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-                <span style={{ color: "#6c7a89" }}>月结期间</span>
-                <input
-                  type="month"
-                  value={closingPeriod}
-                  onChange={(event) => setClosingPeriod(event.target.value)}
-                  style={{ padding: "8px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px" }}
-                />
-              </label>
-              {btnExport(
-                () =>
-                  void getClosingBundleHtml("month_end", closingPeriod).then((html) => {
-                    rememberExport({
-                      kind: "package",
-                      label: `月结资料包 ${closingPeriod}`,
-                      fileName: buildExportFileName(["月结资料包", closingPeriod]),
-                      resourceType: "closing_bundle",
-                      resourceId: `month_end:${closingPeriod}`,
-                      periodLabel: closingPeriod
-                    });
-                    openHtmlPreview(`月结资料包 ${closingPeriod}`, html);
-                  }),
-                "打开月结资料包"
-              )}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: "12px", alignItems: "end" }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
-                <span style={{ color: "#6c7a89" }}>审计 / 稽核期间</span>
-                <input
-                  value={inspectionPeriod}
-                  onChange={(event) => setInspectionPeriod(event.target.value)}
-                  style={{ padding: "8px", borderRadius: "6px", border: "1px solid #dce3ea", fontSize: "13px" }}
-                  placeholder="例如 2026-Q2"
-                />
-              </label>
-              {btnExport(
-                () =>
-                  void getClosingBundleHtml("audit", inspectionPeriod).then((html) => {
-                    rememberExport({
-                      kind: "package",
-                      label: `审计资料包 ${inspectionPeriod}`,
-                      fileName: buildExportFileName(["审计资料包", inspectionPeriod]),
-                      resourceType: "closing_bundle",
-                      resourceId: `audit:${inspectionPeriod}`,
-                      periodLabel: inspectionPeriod
-                    });
-                    openHtmlPreview(`审计资料包 ${inspectionPeriod}`, html);
-                  }),
-                "打开审计资料包"
-              )}
-              {btnExport(
-                () =>
-                  void getClosingBundleHtml("inspection", inspectionPeriod).then((html) => {
-                    rememberExport({
-                      kind: "package",
-                      label: `稽核资料包 ${inspectionPeriod}`,
-                      fileName: buildExportFileName(["稽核资料包", inspectionPeriod]),
-                      resourceType: "closing_bundle",
-                      resourceId: `inspection:${inspectionPeriod}`,
-                      periodLabel: inspectionPeriod
-                    });
-                    openHtmlPreview(`稽核资料包 ${inspectionPeriod}`, html);
-                  }),
-                "打开稽核资料包"
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+          {activeTab === "packages" && (
+            <ExportPackagesPanel
+              closingPeriod={closingPeriod}
+              inspectionPeriod={inspectionPeriod}
+              onClosingPeriodChange={setClosingPeriod}
+              onInspectionPeriodChange={setInspectionPeriod}
+              onOpenMonthEnd={() => void getClosingBundleHtml("month_end", closingPeriod).then((html) => {
+                rememberExport({
+                  kind: "package",
+                  label: `月结资料包 ${closingPeriod}`,
+                  fileName: buildExportFileName(["月结资料包", closingPeriod]),
+                  resourceType: "closing_bundle",
+                  resourceId: `month_end:${closingPeriod}`,
+                  periodLabel: closingPeriod
+                });
+                openHtmlPreview(`月结资料包 ${closingPeriod}`, html);
+              })}
+              onOpenAudit={() => void getClosingBundleHtml("audit", inspectionPeriod).then((html) => {
+                rememberExport({
+                  kind: "package",
+                  label: `审计资料包 ${inspectionPeriod}`,
+                  fileName: buildExportFileName(["审计资料包", inspectionPeriod]),
+                  resourceType: "closing_bundle",
+                  resourceId: `audit:${inspectionPeriod}`,
+                  periodLabel: inspectionPeriod
+                });
+                openHtmlPreview(`审计资料包 ${inspectionPeriod}`, html);
+              })}
+              onOpenInspection={() => void getClosingBundleHtml("inspection", inspectionPeriod).then((html) => {
+                rememberExport({
+                  kind: "package",
+                  label: `稽核资料包 ${inspectionPeriod}`,
+                  fileName: buildExportFileName(["稽核资料包", inspectionPeriod]),
+                  resourceType: "closing_bundle",
+                  resourceId: `inspection:${inspectionPeriod}`,
+                  periodLabel: inspectionPeriod
+                });
+                openHtmlPreview(`稽核资料包 ${inspectionPeriod}`, html);
+              })}
+              renderActionButton={btnExport}
+            />
+          )}
 
-      {activeTab === "documents" && (
-        <div style={panelStyle()}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", gap: "12px", flexWrap: "wrap" }}>
-            <h3 style={{ margin: 0, fontSize: "15px" }}>单据正式模板导出</h3>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <span style={{ fontSize: "12px", color: "#6c7a89" }}>已选 {selectedDocumentIds.length} 项</span>
-              <button
-                disabled={selectedDocumentIds.length === 0}
-                onClick={() => {
-                  selectedDocumentIds.forEach((id) => {
-                    const document = documents.find((item) => item.id === id);
-                    if (document) {
-                      void openDocumentTemplate(document);
+          {activeTab === "documents" && (
+            <ExportDocumentsPanel
+              documents={documents}
+              selectedIds={selectedDocumentIds}
+              onToggleSelection={(id) => toggleSelection(id, setSelectedDocumentIds)}
+              onBatchOpen={() => {
+                selectedDocumentIds.forEach((id) => {
+                  const document = documents.find((item) => item.id === id);
+                  if (document) {
+                    void openDocumentTemplate(document);
+                  }
+                });
+              }}
+              onOpenDocument={(document) => void openDocumentTemplate(document)}
+              buildFileName={(document) => buildExportFileName([document.title, document.documentType, document.businessEventId])}
+              cellStyle={cellStyle}
+              batchButtonStyle={batchButtonStyle}
+            />
+          )}
+
+          {activeTab === "risk" && (
+            <ExportRiskPanel
+              findings={findings}
+              onOpenFinding={(finding) => void listRiskClosureRecords(finding.id).then((payload) => {
+                const closures = payload.items as RiskClosureRecord[];
+                rememberExport({
+                  kind: "risk",
+                  label: `风险复盘 ${finding.ruleCode}`,
+                  fileName: buildExportFileName(["风险复盘", finding.ruleCode, finding.id]),
+                  resourceType: "risk_finding",
+                  resourceId: finding.id,
+                  periodLabel: null
+                });
+                const html = `
+                  <html><head><meta charset="utf-8"><title>${escHtml(finding.title)}</title></head>
+                  <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;color:#1f2937;">
+                    <h1 style="margin:0 0 8px;">风险复盘记录</h1>
+                    <div style="margin-bottom:16px;color:#6b7280;">规则：${escHtml(finding.ruleCode)} ｜ 标题：${escHtml(finding.title)}</div>
+                    <div style="margin-bottom:16px;"><strong>说明：</strong>${escHtml(finding.detail)}</div>
+                    <h2 style="margin:24px 0 8px;font-size:16px;">关闭记录</h2>
+                    ${
+                      closures.length
+                        ? `<ul>${closures.map((record) => `<li><strong>${escHtml(record.closedByName)}</strong> ｜ ${escHtml(record.reviewedAt)} ｜ ${escHtml(record.resolution)}</li>`).join("")}</ul>`
+                        : "<div>暂无关闭记录</div>"
                     }
-                  });
-                }}
-                style={{ ...batchButtonStyle, opacity: selectedDocumentIds.length ? 1 : 0.5 }}
-              >
-                批量打开
-              </button>
-            </div>
-          </div>
-          {documents.length === 0 ? (
-            <div style={{ color: "#aab5c0", textAlign: "center", padding: "32px" }}>暂无单据数据</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ color: "#6c7a89" }}>
-                  {["选择", "单据名称", "类型", "状态", "事项", "建议文件名", "操作"].map((h) => (
-                    <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((document) => (
-                  <tr key={document.id}>
-                    <td style={cellStyle()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedDocumentIds.includes(document.id)}
-                        onChange={() => toggleSelection(document.id, setSelectedDocumentIds)}
-                      />
-                    </td>
-                    <td style={cellStyle()}>{document.title}</td>
-                    <td style={cellStyle()}>{document.documentType}</td>
-                    <td style={cellStyle()}>{document.status}</td>
-                    <td style={cellStyle()}>{document.businessEventId}</td>
-                    <td style={cellStyle()}>
-                      {buildExportFileName([document.title, document.documentType, document.businessEventId])}
-                    </td>
-                    <td style={cellStyle()}>
-                      {btnExport(
-                        () => void openDocumentTemplate(document),
-                        "打开单据模板"
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                  </body></html>
+                `;
+                openHtmlPreview(`风险复盘 ${finding.ruleCode}`, html);
+              })}
+              renderActionButton={btnExport}
+              cellStyle={cellStyle}
+            />
           )}
-        </div>
-      )}
 
-      {activeTab === "risk" && (
-        <div style={panelStyle()}>
-          <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>风险复盘导出</h3>
-          {findings.length === 0 ? (
-            <div style={{ color: "#aab5c0", textAlign: "center", padding: "32px" }}>暂无风险发现</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ color: "#6c7a89" }}>
-                  {["规则", "优先级", "事项", "标题", "操作"].map((h) => (
-                    <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {findings.map((finding) => (
-                  <tr key={finding.id}>
-                    <td style={cellStyle()}>{finding.ruleCode}</td>
-                    <td style={cellStyle()}>{finding.priority || "—"}</td>
-                    <td style={cellStyle()}>{finding.businessEventId || "—"}</td>
-                    <td style={cellStyle()}>{finding.title}</td>
-                    <td style={cellStyle()}>
-                      {btnExport(
-                        () =>
-                          void listRiskClosureRecords(finding.id).then((payload) => {
-                            const closures = payload.items as RiskClosureRecord[];
-                            rememberExport({
-                              kind: "risk",
-                              label: `风险复盘 ${finding.ruleCode}`,
-                              fileName: buildExportFileName(["风险复盘", finding.ruleCode, finding.id]),
-                              resourceType: "risk_finding",
-                              resourceId: finding.id,
-                              periodLabel: null
-                            });
-                            const html = `
-                              <html><head><meta charset="utf-8"><title>${escHtml(finding.title)}</title></head>
-                              <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;color:#1f2937;">
-                                <h1 style="margin:0 0 8px;">风险复盘记录</h1>
-                                <div style="margin-bottom:16px;color:#6b7280;">规则：${escHtml(finding.ruleCode)} ｜ 标题：${escHtml(finding.title)}</div>
-                                <div style="margin-bottom:16px;"><strong>说明：</strong>${escHtml(finding.detail)}</div>
-                                <h2 style="margin:24px 0 8px;font-size:16px;">关闭记录</h2>
-                                ${
-                                  closures.length
-                                    ? `<ul>${closures.map((record) => `<li><strong>${escHtml(record.closedByName)}</strong> ｜ ${escHtml(record.reviewedAt)} ｜ ${escHtml(record.resolution)}</li>`).join("")}</ul>`
-                                    : "<div>暂无关闭记录</div>"
-                                }
-                              </body></html>
-                            `;
-                            openHtmlPreview(`风险复盘 ${finding.ruleCode}`, html);
-                          }),
-                        "打开复盘记录"
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {activeTab === "rnd" && (
+            <ExportRndPanel
+              projects={rndProjects}
+              onOpenProject={(project) => void Promise.all([
+                getRndProjectDetail(project.id),
+                getRndSuperDeductionPackage(project.id)
+              ]).then(([detail, pkg]) => {
+                rememberExport({
+                  kind: "rnd",
+                  label: `研发资料包 ${project.code}`,
+                  fileName: buildExportFileName(["研发资料包", project.code, project.name]),
+                  resourceType: "rnd_project",
+                  resourceId: project.id,
+                  periodLabel: null
+                });
+                const html = `
+                  <html><head><meta charset="utf-8"><title>${escHtml(detail.name)}</title></head>
+                  <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;color:#1f2937;">
+                    <h1 style="margin:0 0 8px;">研发资料包</h1>
+                    <div style="margin-bottom:16px;color:#6b7280;">项目：${escHtml(detail.name)} ｜ 编号：${escHtml(detail.code)}</div>
+                    <div><strong>费用化：</strong>${escHtml(detail.summary.expenseAmount)}</div>
+                    <div><strong>资本化：</strong>${escHtml(detail.summary.capitalizedAmount)}</div>
+                    <div><strong>总工时：</strong>${escHtml(detail.summary.totalHours)}</div>
+                    <div><strong>加计扣除基数：</strong>${escHtml(pkg.eligibleBase)}</div>
+                    <div><strong>建议加计扣除：</strong>${escHtml(pkg.suggestedDeductionAmount)}</div>
+                    <h2 style="margin:24px 0 8px;font-size:16px;">检查清单</h2>
+                    <ul>${pkg.checklist.map((item) => `<li>${escHtml(item)}</li>`).join("")}</ul>
+                  </body></html>
+                `;
+                openHtmlPreview(`研发资料包 ${detail.code}`, html);
+              })}
+              renderActionButton={btnExport}
+              cellStyle={cellStyle}
+            />
           )}
-        </div>
-      )}
 
-      {activeTab === "rnd" && (
-        <div style={panelStyle()}>
-          <h3 style={{ margin: "0 0 16px", fontSize: "15px" }}>研发资料包导出</h3>
-          {rndProjects.length === 0 ? (
-            <div style={{ color: "#aab5c0", textAlign: "center", padding: "32px" }}>暂无研发项目</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ color: "#6c7a89" }}>
-                  {["项目", "编号", "费用化", "资本化", "操作"].map((h) => (
-                    <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rndProjects.map((project) => (
-                  <tr key={project.id}>
-                    <td style={cellStyle()}>{project.name}</td>
-                    <td style={cellStyle()}>{project.code}</td>
-                    <td style={cellStyle()}>{project.summary.expenseAmount}</td>
-                    <td style={cellStyle()}>{project.summary.capitalizedAmount}</td>
-                    <td style={cellStyle()}>
-                      {btnExport(
-                        () =>
-                          void Promise.all([
-                            getRndProjectDetail(project.id),
-                            getRndSuperDeductionPackage(project.id)
-                          ]).then(([detail, pkg]) => {
-                            rememberExport({
-                              kind: "rnd",
-                              label: `研发资料包 ${project.code}`,
-                              fileName: buildExportFileName(["研发资料包", project.code, project.name]),
-                              resourceType: "rnd_project",
-                              resourceId: project.id,
-                              periodLabel: null
-                            });
-                            const html = `
-                              <html><head><meta charset="utf-8"><title>${escHtml(detail.name)}</title></head>
-                              <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;color:#1f2937;">
-                                <h1 style="margin:0 0 8px;">研发资料包</h1>
-                                <div style="margin-bottom:16px;color:#6b7280;">项目：${escHtml(detail.name)} ｜ 编号：${escHtml(detail.code)}</div>
-                                <div><strong>费用化：</strong>${escHtml(detail.summary.expenseAmount)}</div>
-                                <div><strong>资本化：</strong>${escHtml(detail.summary.capitalizedAmount)}</div>
-                                <div><strong>总工时：</strong>${escHtml(detail.summary.totalHours)}</div>
-                                <div><strong>加计扣除基数：</strong>${escHtml(pkg.eligibleBase)}</div>
-                                <div><strong>建议加计扣除：</strong>${escHtml(pkg.suggestedDeductionAmount)}</div>
-                                <h2 style="margin:24px 0 8px;font-size:16px;">检查清单</h2>
-                                <ul>${pkg.checklist.map((item) => `<li>${escHtml(item)}</li>`).join("")}</ul>
-                              </body></html>
-                            `;
-                            openHtmlPreview(`研发资料包 ${detail.code}`, html);
-                          }),
-                        "打开研发资料包"
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {activeTab === "vouchers" && (
+            <ExportVouchersPanel
+              vouchers={vouchers}
+              selectedIds={selectedVoucherIds}
+              onToggleSelection={(id) => toggleSelection(id, setSelectedVoucherIds)}
+              onBatchOpen={() => selectedVoucherIds.forEach((id) => openVoucherPdf(id))}
+              onOpenVoucher={openVoucherPdf}
+              buildFileName={(voucher) => buildExportFileName(["凭证", voucher.id.slice(-8).toUpperCase(), voucher.voucherType])}
+              cellStyle={cellStyle}
+              batchButtonStyle={batchButtonStyle}
+            />
           )}
-        </div>
+        </>
       )}
-
-      {/* ── 凭证导出 ── */}
-      {activeTab === "vouchers" && (
-        <div style={panelStyle()}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", gap: "12px", flexWrap: "wrap" }}>
-            <h3 style={{ margin: 0, fontSize: "15px" }}>凭证导出（最近 50 条）</h3>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <span style={{ fontSize: "12px", color: "#6c7a89" }}>已选 {selectedVoucherIds.length} 项</span>
-              <button
-                disabled={selectedVoucherIds.length === 0}
-                onClick={() => selectedVoucherIds.forEach((id) => openVoucherPdf(id))}
-                style={{ ...batchButtonStyle, opacity: selectedVoucherIds.length ? 1 : 0.5 }}
-              >
-                批量打开
-              </button>
-            </div>
-          </div>
-          {vouchers.length === 0 ? (
-            <div style={{ color: "#aab5c0", textAlign: "center", padding: "32px" }}>暂无凭证数据</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ color: "#6c7a89" }}>
-                  {["选择", "凭证编号", "类型", "摘要", "状态", "建议文件名", "操作"].map((h) => (
-                    <th key={h} style={{ ...cellStyle(), fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {vouchers.map((v) => (
-                  <tr key={v.id}>
-                    <td style={cellStyle()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedVoucherIds.includes(v.id)}
-                        onChange={() => toggleSelection(v.id, setSelectedVoucherIds)}
-                      />
-                    </td>
-                    <td style={cellStyle()}>{v.id.slice(-8).toUpperCase()}</td>
-                    <td style={cellStyle()}>{v.voucherType}</td>
-                    <td style={cellStyle()}>{v.summary}</td>
-                    <td style={cellStyle()}>{v.status}</td>
-                    <td style={cellStyle()}>
-                      {buildExportFileName(["凭证", v.id.slice(-8).toUpperCase(), v.voucherType])}
-                    </td>
-                    <td style={cellStyle()}>
-                      {btnExport(() => openVoucherPdf(v.id))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+      history={(
+        <ExportHistoryPanel
+          jobs={exportHistory}
+          onUpdateStatus={(jobId, status) => void handleUpdateExportStatus(jobId, status)}
+          renderActionButton={btnExport}
+          cellStyle={cellStyle}
+        />
       )}
-    </div>
+      archive={(
+        <ExportArchivePanel
+          archiveEntries={archiveEntries}
+          archiveKindFilter={archiveKindFilter}
+          archiveKeyword={archiveKeyword}
+          onKindFilterChange={setArchiveKindFilter}
+          onKeywordChange={setArchiveKeyword}
+          cellStyle={cellStyle}
+        />
+      )}
+    />
   );
 }
