@@ -8,15 +8,20 @@ type LedgerHeaderProps = {
 
 export function LedgerHeader({ activeSceneLabel }: LedgerHeaderProps) {
   return (
-    <PageHeader
-      title="总账中心"
-      subtitle={buildResultPageSubtitle("总账中心")}
-      actions={(
-        <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end" }}>
-          <span style={{ fontSize: "12px", color: "#6c7a89" }}>当前场景</span>
-          <strong style={{ fontSize: "14px", color: "#1e2a37" }}>{activeSceneLabel}</strong>
-        </div>
-      )}
-    />
+    <div style={{ display: "grid", gap: "10px" }}>
+      <PageHeader
+        title="总账中心"
+        subtitle={buildResultPageSubtitle("总账中心")}
+        actions={(
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end" }}>
+            <span style={{ fontSize: "12px", color: "#6c7a89" }}>当前场景</span>
+            <strong style={{ fontSize: "14px", color: "#1e2a37" }}>{activeSceneLabel}</strong>
+          </div>
+        )}
+      />
+      <div className="v3-banner" data-tone="info" style={{ fontSize: "13px" }}>
+        这里是结果页工作台。先确认当前场景、过滤条件和账期，再进入分录、余额、日记账或锁账操作。
+      </div>
+    </div>
   );
 }

@@ -54,18 +54,12 @@ export function LedgerContextPanel(props: LedgerContextPanelProps) {
 
   return (
     <aside style={{ display: "grid", gap: "16px" }}>
-      <section
-        style={{
-          display: "grid",
-          gap: "12px",
-          padding: "20px",
-          borderRadius: "20px",
-          background: "rgba(255,255,255,0.82)",
-          border: "1px solid rgba(20,40,60,0.08)"
-        }}
-      >
+      <section className="v3-section-shell" data-tone="muted">
+        <div className="v3-section-heading">
+          <span className="v3-section-kicker">当前提示</span>
+          <h2 className="v3-section-title" style={{ fontSize: "17px" }}>先看范围和数量，再决定是否继续钻取。</h2>
+        </div>
         <div>
-          <div style={{ fontSize: "12px", color: "#6c7a89", marginBottom: "6px" }}>当前提示</div>
           <ResultBanner tone="info" message={message} />
         </div>
         <div style={{ display: "grid", gap: "10px" }}>
@@ -78,17 +72,11 @@ export function LedgerContextPanel(props: LedgerContextPanelProps) {
         </div>
       </section>
 
-      <section
-        style={{
-          display: "grid",
-          gap: "10px",
-          padding: "20px",
-          borderRadius: "20px",
-          background: "rgba(255,255,255,0.82)",
-          border: "1px solid rgba(20,40,60,0.08)"
-        }}
-      >
-        <strong style={{ fontSize: "14px", color: "#1e2a37" }}>当前上下文</strong>
+      <section className="v3-section-shell" data-tone="accent">
+        <div className="v3-section-heading">
+          <span className="v3-section-kicker">当前上下文</span>
+          <h2 className="v3-section-title" style={{ fontSize: "17px" }}>过滤条件和账本口径都在这里确认。</h2>
+        </div>
         <div style={{ fontSize: "13px", color: "#4d5d6c", lineHeight: 1.7 }}>
           <div>场景：{scene}</div>
           <div>凭证过滤：{voucherFilter || "全部"}</div>
