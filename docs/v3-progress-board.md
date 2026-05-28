@@ -4,9 +4,9 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`完成 V3 第二阶段首个结果页重构：Tax`
-- 当前里程碑：`Phase 0 完成；Assistant / Events / Contracts / Payroll / Export Center 已落地到 main，Tax 工作台第一轮结构重构已完成并待合回`
-- 更新时间：`2026-05-27`
+- 当前目标：`合回 Tax 工作台第一轮结果，并继续推进 Ledger / Reports / Risk 与可见性收口`
+- 当前里程碑：`Phase 0 完成；Assistant / Events / Contracts / Payroll / Export Center 已落地到 main；Tax 结果页第一轮结构重构已完成；Layout visibility polish 正在收口`
+- 更新时间：`2026-05-28`
 
 ## 2. V3 Workstreams
 
@@ -18,6 +18,10 @@
 | V3-WS3 | Payroll 工作台重构 | `codex/v3-payroll-page-rework` | ✅ done | 2026-05-27 | shell/header/tab bar、employees / payroll / policy 三段容器、workflow summary、员工表单、工资明细表、参数表单已完成拆分 | 如需继续，仅做视觉收口和更深的数据编辑体验 |
 | V3-WS4 | Export Center 重构 | `codex/v3-export-center-rework` | ✅ done | 2026-05-27 | shell、scene selector、history、archive、audit、8 个场景面板和 summary-first 布局均已完成，导出 API 与状态流保持不变 | 如需继续，进入异步导出和更深的状态机增强 |
 | V3-WS5 | Tax 工作台重构 | `codex/v3-tax-center-rework` | ✅ done | 2026-05-27 | TaxPage 已拆为 shell/header/summary/profile/items/batches/materials 多个面板，单字符串消息改为 banner，批次与资料视图已收敛到 URL 查询参数，底层税务 API 与流程节点保持不变 | 下一页优先进入 `Ledger / Reports / Risk` 之一，继续结果页结构收口 |
+| V3-WS6 | Layout Visibility Polish | `codex/v3-layout-visibility-polish` | 🟡 in_progress | 2026-05-28 | 已修复侧栏 footer 遮挡；`Assistant / Contracts / Payroll / Export` 已完成 hero/section/summary-first 的可见性收口 | 推送分支并继续 `Tax / Ledger / Reports / Risk` 的可见性统一 |
+| V3-WS7 | Ledger 结果页重构 | `codex/v3-ledger-page-rework` | ⏳ pending | 2026-05-28 | 仅有计划分支，占位未开始 | 参考 `bigcapital GeneralLedger` 与 `books GeneralLedger` 做 shell + summary-first |
+| V3-WS8 | Reports 结果页重构 | `codex/v3-reports-page-rework` | ⏳ pending | 2026-05-28 | 仅有计划分支，占位未开始 | 参考 `bigcapital Dashboard/FinancialStatements` 与 `dubbl stat-card/chart` 做图表化收口 |
+| V3-WS9 | Risk / Audit 工作台重构 | `codex/v3-risk-page-rework` | ⏳ pending | 2026-05-28 | 仅有计划分支，占位未开始 | 复用 drilldown 基础设施，参考 `dubbl audit-timeline` 做闭环链路和时间线收口 |
 
 ## 3. 已完成分支与提交
 
@@ -55,6 +59,11 @@
 ### `codex/v3-tax-center-rework`
 - `本次分支` Tax 页壳组件、批次工作台和资料分区拆分
 
+### `codex/v3-layout-visibility-polish`
+- `bad8d61` 修复侧栏 footer 遮挡
+- `c77601c` 强化 Assistant / Contracts 可见性层级
+- `89bc54e` 强化 Payroll / Export 可见性层级
+
 ## 4. 当前验证基线
 
 已通过：
@@ -65,15 +74,21 @@
 - `/Applications/Codex.app/Contents/Resources/node --import tsx apps/web/src/pages/assistant/assistant-shell.test.tsx`
 - `/Applications/Codex.app/Contents/Resources/node --import tsx apps/web/src/pages/events/events-shell.test.tsx`
 - `/Applications/Codex.app/Contents/Resources/node --import tsx apps/web/src/pages/tax/tax-shell.test.tsx`
+- `/Applications/Codex.app/Contents/Resources/node --import tsx apps/web/src/pages/payroll/payroll-shell.test.tsx`
+- `/Applications/Codex.app/Contents/Resources/node --import tsx apps/web/src/pages/export/export-shell.test.tsx`
+- `/Applications/Codex.app/Contents/Resources/node --import tsx apps/web/src/pages/export/export-panels.test.tsx`
 
 ## 5. 下一步顺序
 
-1. 基于当前 Tax 结果，选择下一个高频页进入 V3：`Ledger / Reports / Risk`
-2. 如需继续当前六页，只做视觉一致性、响应式和无障碍收口
-3. 如需深化税务体验，优先补批次状态机、打印前校验与资料区响应式，而不是回退当前 summary-first 结构
+1. 合回 `codex/v3-tax-center-rework`
+2. 推送并收口 `codex/v3-layout-visibility-polish`
+3. 进入 `codex/v3-ledger-page-rework`
+4. 然后进入 `codex/v3-reports-page-rework`
+5. 再进入 `codex/v3-risk-page-rework`
+6. 最后做统一的响应式/无障碍收口，不回退已有 summary-first 结构
 
 ## 6. 接续提示
 
-- 第一阶段五条 V3 分支已合回 `main`，`Tax` 当前在独立 V3 分支上完成并待合回。
+- 第一阶段五条 V3 分支已合回 `main`，`Tax` 当前在独立 V3 分支上完成并待合回，`Layout Visibility Polish` 作为第一阶段的可见性补丁分支单独推进。
 - 新窗口接续时，默认从 `main` 开新 V3 分支，不再从历史 V3 分支继续累积切出。
 - 后续 V3 分支只应在现有设计系统和页面壳基础上扩展，不重复实现 token、shared hooks、shared UI primitives。
