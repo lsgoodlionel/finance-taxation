@@ -150,7 +150,17 @@ export function LedgerPeriodsPanel(props: LedgerPeriodsPanelProps) {
         </div>
       </DataTableShell>
 
-      <DataTableShell title={`期间列表${periods.length > 0 ? `（${periods.length} 个）` : ""}`}>
+      <DataTableShell
+        title={`期间列表${periods.length > 0 ? `（${periods.length} 个）` : ""}`}
+        actions={(
+          <span className="v3-banner" data-tone="warning" style={{ padding: "6px 10px", fontSize: "12px" }}>
+            已锁账期间：{periods.filter((period) => period.isLocked).length}
+          </span>
+        )}
+      >
+        <p className="v3-section-description" style={{ marginBottom: "12px" }}>
+          锁账状态会直接影响该期间凭证是否允许继续过账，操作前应先确认影响范围。
+        </p>
         {periods.length === 0 ? (
           <EmptyState
             title="暂无已锁定期间"

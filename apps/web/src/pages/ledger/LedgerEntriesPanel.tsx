@@ -30,6 +30,9 @@ export function LedgerEntriesPanel(props: LedgerEntriesPanelProps) {
   return (
     <div style={{ display: "grid", gap: "24px" }}>
       <DataTableShell title="过滤条件">
+        <p className="v3-section-description" style={{ marginBottom: "12px" }}>
+          先按凭证编号或事项编号收缩范围，再查看对应过账批次和总账分录。
+        </p>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <input
             value={selectedVoucherId}
@@ -48,7 +51,14 @@ export function LedgerEntriesPanel(props: LedgerEntriesPanelProps) {
         </div>
       </DataTableShell>
 
-      <DataTableShell title="过账批次">
+      <DataTableShell
+        title="过账批次"
+        actions={(
+          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>
+            当前批次数：{batches.length}
+          </span>
+        )}
+      >
         {batches.length === 0 ? (
           <EmptyState title="暂无过账批次" description="当前过滤条件下没有匹配的批次，可调整凭证或事项编号后重试。" />
         ) : (
@@ -77,7 +87,14 @@ export function LedgerEntriesPanel(props: LedgerEntriesPanelProps) {
         )}
       </DataTableShell>
 
-      <DataTableShell title="总账分录">
+      <DataTableShell
+        title="总账分录"
+        actions={(
+          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>
+            当前分录数：{entries.length}
+          </span>
+        )}
+      >
         {entries.length === 0 ? (
           <EmptyState title="暂无总账分录" description="当前过滤条件下没有匹配分录，可恢复全部总账数据后继续查看。" />
         ) : (

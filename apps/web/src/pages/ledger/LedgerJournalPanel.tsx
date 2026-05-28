@@ -142,6 +142,9 @@ export function LedgerJournalPanel(props: LedgerJournalPanelProps) {
       title={`${journalType === "cash" ? "现金" : "银行"}日记账${items.length > 0 ? `（共 ${items.length} 条）` : ""}`}
       actions={filterBar}
     >
+      <p className="v3-section-description" style={{ marginBottom: "12px" }}>
+        先确认资金账类型和日期范围，再查看现金或银行流水与来源凭证的对应关系。
+      </p>
       {items.length === 0 ? (
         <EmptyState
           title="暂无日记账记录"

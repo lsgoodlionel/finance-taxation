@@ -19,7 +19,7 @@
 | V3-WS4 | Export Center 重构 | `codex/v3-export-center-rework` | ✅ done | 2026-05-27 | shell、scene selector、history、archive、audit、8 个场景面板和 summary-first 布局均已完成，导出 API 与状态流保持不变 | 如需继续，进入异步导出和更深的状态机增强 |
 | V3-WS5 | Tax 工作台重构 | `codex/v3-tax-center-rework` | ✅ done | 2026-05-27 | TaxPage 已拆为 shell/header/summary/profile/items/batches/materials 多个面板，单字符串消息改为 banner，批次与资料视图已收敛到 URL 查询参数，底层税务 API 与流程节点保持不变 | 下一页优先进入 `Ledger / Reports / Risk` 之一，继续结果页结构收口 |
 | V3-WS6 | Layout Visibility Polish | `codex/v3-layout-visibility-polish` | 🟡 in_progress | 2026-05-28 | 已修复侧栏 footer 遮挡；`Assistant / Contracts / Payroll / Export` 已完成 hero/section/summary-first 的可见性收口 | 推送分支并继续 `Tax / Ledger / Reports / Risk` 的可见性统一 |
-| V3-WS7 | Ledger 结果页重构 | `codex/v3-ledger-page-rework` | 🟡 in_progress | 2026-05-28 | 已补 plan，shell/header/sceneSelector/sceneSummary/context 第一批已完成 | 下一批进入 summary / balances / journal / entries / periods 五个场景面板的层级收口 |
+| V3-WS7 | Ledger 结果页重构 | `codex/v3-ledger-page-rework` | 🟡 in_progress | 2026-05-28 | 已完成 shell/header/sceneSelector/sceneSummary/context 第一批，以及 summary / balances / journal / entries / periods 五个场景面板第二批层级收口 | 下一批进入更细的 table density、responsive 和空态一致性 |
 | V3-WS8 | Reports 结果页重构 | `codex/v3-reports-page-rework` | ⏳ pending | 2026-05-28 | 仅有计划分支，占位未开始 | 参考 `bigcapital Dashboard/FinancialStatements` 与 `dubbl stat-card/chart` 做图表化收口 |
 | V3-WS9 | Risk / Audit 工作台重构 | `codex/v3-risk-page-rework` | ⏳ pending | 2026-05-28 | 仅有计划分支，占位未开始 | 复用 drilldown 基础设施，参考 `dubbl audit-timeline` 做闭环链路和时间线收口 |
 
