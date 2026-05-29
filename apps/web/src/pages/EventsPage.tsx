@@ -28,6 +28,7 @@ import { ProcessFlowCard } from "../features/process-flow/ProcessFlowCard";
 import { buildProcessFlowPageContext } from "../features/process-flow/page-context";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 import { PageHeader } from "../components/ui/PageHeader";
+import { PageSkeleton } from "../components/ui/PageSkeleton";
 import { ResultBanner } from "../components/ui/ResultBanner";
 import { useQueryState } from "../hooks/useQueryState";
 import { EventsShell } from "./events/EventsShell";
@@ -376,6 +377,10 @@ export function EventsPage() {
       </button>
     </div>
   ) : undefined;
+
+  if (loading === "loading") {
+    return <PageSkeleton variant="detail" rows={6} />;
+  }
 
   return (
     <>
