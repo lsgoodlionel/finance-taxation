@@ -104,6 +104,15 @@ const taxAuditContext = resolveAuditContextFromState({ taxItemId: "tax-1" });
 assert(taxAuditContext?.resourceType === "tax_item", "expected tax item context to derive resource type");
 assert(taxAuditContext?.resourceId === "tax-1", "expected tax item context to derive resource id");
 
+const riskAuditContext = resolveAuditContextFromState({
+  riskFindingId: "risk-2",
+  businessEventId: "evt-2",
+  resourceType: "risk_finding",
+  resourceId: "risk-2"
+});
+assert(riskAuditContext?.resourceType === "risk_finding", "expected risk finding context resource type");
+assert(riskAuditContext?.resourceId === "risk-2", "expected risk finding context resource id");
+
 const closureTargets = buildRiskClosureTargetChain({
   findingId: "risk-1",
   event: {
@@ -115,5 +124,6 @@ assert(closureTargets[0]?.path === "/contracts", "expected closure chain to incl
 assert(closureTargets.some((item) => item.path === "/audit"), "expected closure chain to keep audit target");
 const auditTarget = closureTargets.find((item) => item.path === "/audit" && item.state?.resourceType === "risk_finding");
 assert(auditTarget?.state?.contractId === "contract-1", "expected closure audit target to preserve contract context");
+assert(auditTarget?.state?.riskFindingId === "risk-1", "expected closure audit target to preserve risk finding id");
 
 console.log("drilldown-ok");

@@ -1,4 +1,5 @@
 import type { BusinessEvent, RiskFinding } from "@finance-taxation/domain-model";
+import type { RiskViewFilter } from "./risk/risk-url-state";
 
 export type RiskScopeFilter = "all" | "contract" | "payroll";
 
@@ -32,6 +33,17 @@ export function filterRiskFindingsByScope(
       return Boolean(event.contractId);
     }
     return event.type === "payroll";
+  });
+}
+
+export function filterRiskFindingsByView(findings: RiskFinding[], view: RiskViewFilter) {
+  if (view === "all") {
+    return findings;
+  }
+
+  return findings.filter((finding) => {
+    const isClosed = finding.status !== "open";
+    return view === "closed" ? isClosed : !isClosed;
   });
 }
 
