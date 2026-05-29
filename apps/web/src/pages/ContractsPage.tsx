@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { Segmented } from "antd";
+import { AppstoreOutlined, UnorderedListOutlined } from "@ant-design/icons";
+import { ContractKanbanView } from "./contracts/ContractKanbanView";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Contract, ContractWithEventCount, GeneratedDocument, Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import {
@@ -118,6 +121,7 @@ export function ContractsPage() {
   const [showForm, setShowForm] = useState(false);
   const [message, setMessage] = useState("正在加载合同数据...");
   const [creatingEventContractId, setCreatingEventContractId] = useState<string | null>(null);
+  const [contractView, setContractView] = useState<"list" | "kanban">("list");
 
   const [form, setForm] = useState({
     contractType: "sales",
@@ -332,7 +336,18 @@ export function ContractsPage() {
     });
   }
 
-  const header = <ContractsHeader message={message} onToggleCreate={() => setShowForm((value) => !value)} />;
+  const viewToggle = (
+    <Segmented
+      size="small"
+      value={contractView}
+      onChange={(v) => setContractView(v as "list" | "kanban")}
+      options={[
+        { value: "list", icon: <UnorderedListOutlined />, label: "列表" },
+        { value: "kanban", icon: <AppstoreOutlined />, label: "看板" },
+      ]}
+    />
+  );
+  const header = <ContractsHeader message={message} onToggleCreate={() => setShowForm((value) => !value)} extra={viewToggle} />;
 
   const createForm = showForm ? (
     <div style={panelStyle()}>
@@ -482,6 +497,24 @@ export function ContractsPage() {
       </div>
     </ContractsWorkbench>
   );
+
+  if (contractView === "kanban") {
+    return (
+      <ContractsShell
+        header={header}
+        createForm={createForm}
+        filters={null}
+        list={(
+          <ContractKanbanView
+            contracts={contracts}
+            onSelectContract={(id) => void handleDetail(id)}
+            onContractStatusChange={() => void loadContracts()}
+          />
+        )}
+        detail={null}
+      />
+    );
+  }
 
   return (
     <ContractsShell
