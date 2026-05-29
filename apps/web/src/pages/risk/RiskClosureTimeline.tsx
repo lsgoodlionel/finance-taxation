@@ -1,22 +1,8 @@
+import { Timeline, Typography, Empty, Tag } from "antd";
+import { CheckCircleOutlined, UserOutlined } from "@ant-design/icons";
 import type { RiskClosureRecord } from "@finance-taxation/domain-model";
 
-function panelStyle() {
-  return {
-    background: "rgba(255,255,255,0.82)",
-    borderRadius: "24px",
-    border: "1px solid rgba(20,40,60,0.08)",
-    padding: "24px"
-  } as const;
-}
-
-function cellStyle() {
-  return {
-    borderBottom: "1px solid rgba(20,40,60,0.08)",
-    padding: "10px 8px",
-    textAlign: "left" as const,
-    verticalAlign: "top" as const
-  };
-}
+const { Text } = Typography;
 
 type RiskClosureTimelineProps = {
   selectedFindingId: string;
@@ -24,34 +10,55 @@ type RiskClosureTimelineProps = {
 };
 
 export function RiskClosureTimeline({ selectedFindingId, records }: RiskClosureTimelineProps) {
+  const timelineItems = records.map((record) => ({
+    key: record.id,
+    color: "green",
+    dot: <CheckCircleOutlined style={{ color: "#16a34a", fontSize: 14 }} />,
+    children: (
+      <div style={{ display: "grid", gap: 4 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <Tag icon={<UserOutlined />} color="default" style={{ fontSize: 11 }}>
+            {record.closedByName || "未知操作人"}
+          </Tag>
+          <Text type="secondary" style={{ fontSize: 11 }}>
+            {record.reviewedAt?.slice(0, 16).replace("T", " ") ?? "—"}
+          </Text>
+        </div>
+        <Text style={{ fontSize: 13 }}>{record.resolution}</Text>
+        <Text type="secondary" style={{ fontSize: 10 }}>#{record.id.slice(-8).toUpperCase()}</Text>
+      </div>
+    ),
+  }));
+
   return (
-    <article style={panelStyle()}>
-      <h3 style={{ marginTop: 0 }}>异常关闭与复盘记录</h3>
-      <p>当前查看：{selectedFindingId || "未选择风险发现"}</p>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={cellStyle()}>复盘编号</th>
-            <th style={cellStyle()}>关闭人</th>
-            <th style={cellStyle()}>关闭说明</th>
-            <th style={cellStyle()}>复核时间</th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.length ? records.map((record) => (
-            <tr key={record.id}>
-              <td style={cellStyle()}>{record.id}</td>
-              <td style={cellStyle()}>{record.closedByName}</td>
-              <td style={cellStyle()}>{record.resolution}</td>
-              <td style={cellStyle()}>{record.reviewedAt}</td>
-            </tr>
-          )) : (
-            <tr>
-              <td style={cellStyle()} colSpan={4}>暂无关闭记录。</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </article>
+    <div
+      style={{
+        background: "rgba(255,255,255,0.82)",
+        borderRadius: 24,
+        border: "1px solid rgba(20,40,60,0.08)",
+        padding: 24,
+      }}
+    >
+      <h3 style={{ marginTop: 0, marginBottom: 16 }}>
+        关闭与复盘记录
+        {selectedFindingId && (
+          <Text type="secondary" style={{ fontWeight: 400, fontSize: 12, marginLeft: 8 }}>
+            #{selectedFindingId.slice(-8).toUpperCase()}
+          </Text>
+        )}
+      </h3>
+      {records.length === 0 ? (
+        <Empty
+          description={
+            selectedFindingId
+              ? "当前风险发现暂无关闭记录"
+              : "请先在左侧选择一条风险发现"
+          }
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
+      ) : (
+        <Timeline items={timelineItems} />
+      )}
+    </div>
   );
 }

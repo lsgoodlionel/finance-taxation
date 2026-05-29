@@ -19,6 +19,7 @@ import {
 } from "./risk-scope";
 import { RiskClosureTimeline } from "./risk/RiskClosureTimeline";
 import { RiskFindingsListPanel } from "./risk/RiskFindingsListPanel";
+import { RiskKpiCards } from "./risk/RiskKpiCards";
 import { RiskPageShell } from "./risk/RiskPageShell";
 import { RiskResolutionWorkbench } from "./risk/RiskResolutionWorkbench";
 import { RiskWorkbenchHeader } from "./risk/RiskWorkbenchHeader";
@@ -284,6 +285,7 @@ export function RiskPage() {
             />
           </Fragment>
         }
+        kpiCards={<RiskKpiCards findings={findings} />}
         list={
           <RiskFindingsListPanel
             findings={visibleFindings}

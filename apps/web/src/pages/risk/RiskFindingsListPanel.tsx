@@ -1,23 +1,21 @@
+import { Table, Tag, Typography, Button, Space } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import type { BusinessEvent, RiskFinding } from "@finance-taxation/domain-model";
 import { buildRiskDrilldownTargets } from "../drilldown";
 
-function panelStyle() {
-  return {
-    background: "rgba(255,255,255,0.82)",
-    borderRadius: "24px",
-    border: "1px solid rgba(20,40,60,0.08)",
-    padding: "24px"
-  } as const;
-}
+const { Text } = Typography;
 
-function cellStyle() {
-  return {
-    borderBottom: "1px solid rgba(20,40,60,0.08)",
-    padding: "10px 8px",
-    textAlign: "left" as const,
-    verticalAlign: "top" as const
-  };
-}
+const SEVERITY_COLOR: Record<string, string> = {
+  high: "error",
+  medium: "warning",
+  low: "processing",
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  open: "orange",
+  resolved: "success",
+  dismissed: "default",
+};
 
 type RiskFindingsListPanelProps = {
   findings: RiskFinding[];
@@ -40,69 +38,132 @@ export function RiskFindingsListPanel({
   priorityLabel,
   statusLabel,
   onSelectFinding,
-  onNavigate
+  onNavigate,
 }: RiskFindingsListPanelProps) {
+  const columns: ColumnsType<RiskFinding> = [
+    {
+      title: "严重级别",
+      dataIndex: "severity",
+      key: "severity",
+      width: 80,
+      filters: [
+        { text: "高危", value: "high" },
+        { text: "中危", value: "medium" },
+        { text: "低危", value: "low" },
+      ],
+      onFilter: (value, record) => record.severity === value,
+      render: (v: RiskFinding["severity"]) => (
+        <Tag color={SEVERITY_COLOR[v] ?? "default"}>{severityLabel(v)}</Tag>
+      ),
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      key: "status",
+      width: 80,
+      filters: [
+        { text: "待处理", value: "open" },
+        { text: "已关闭", value: "resolved" },
+        { text: "已忽略", value: "dismissed" },
+      ],
+      onFilter: (value, record) => record.status === value,
+      render: (v: RiskFinding["status"]) => (
+        <Tag color={STATUS_COLOR[v] ?? "default"}>{statusLabel(v)}</Tag>
+      ),
+    },
+    {
+      title: "规则 / 标题",
+      key: "title",
+      render: (_, row) => (
+        <div>
+          <Text type="secondary" style={{ fontSize: 11 }}>{row.ruleCode}</Text>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>{row.title}</div>
+          <Text type="secondary" style={{ fontSize: 12 }}>{row.detail}</Text>
+        </div>
+      ),
+    },
+    {
+      title: "评分",
+      dataIndex: "score",
+      key: "score",
+      width: 60,
+      align: "center",
+      render: (v: number | undefined) => (
+        <Text style={{ fontWeight: 600, color: v && v >= 70 ? "#dc2626" : v && v >= 40 ? "#d97706" : "#64748b" }}>
+          {v ?? "—"}
+        </Text>
+      ),
+    },
+    {
+      title: "优先级",
+      dataIndex: "priority",
+      key: "priority",
+      width: 70,
+      align: "center",
+      render: (v: RiskFinding["priority"]) =>
+        v ? <Tag>{priorityLabel(v)}</Tag> : <Text type="secondary">—</Text>,
+    },
+    {
+      title: "操作",
+      key: "action",
+      width: 120,
+      render: (_, row) => {
+        const linkedEvent = row.businessEventId ? eventMap.get(row.businessEventId) ?? null : null;
+        const targets = buildRiskDrilldownTargets(linkedEvent);
+        const isSelected = selectedFindingId === row.id;
+        return (
+          <Space direction="vertical" size={4}>
+            <Button
+              type={isSelected ? "primary" : "default"}
+              size="small"
+              onClick={() => onSelectFinding(row.id)}
+            >
+              {isSelected ? "当前复盘" : "查看复盘"}
+            </Button>
+            {targets.map((target) => (
+              <Button
+                key={`${row.id}-${target.path}-${target.label}`}
+                size="small"
+                type="link"
+                style={{ padding: 0, height: "auto", fontSize: 11 }}
+                onClick={() => onNavigate(target.path, target.state)}
+              >
+                {target.label}
+              </Button>
+            ))}
+          </Space>
+        );
+      },
+    },
+  ];
+
   return (
-    <article style={panelStyle()}>
-      <h3 style={{ marginTop: 0 }}>
+    <div
+      style={{
+        background: "rgba(255,255,255,0.82)",
+        borderRadius: 24,
+        border: "1px solid rgba(20,40,60,0.08)",
+        padding: 24,
+      }}
+    >
+      <h3 style={{ marginTop: 0, marginBottom: 16 }}>
         风险发现{navEventId ? `（当前事项 ${navEventId}）` : ""}
+        {findings.length > 0 && (
+          <Text type="secondary" style={{ fontWeight: 400, fontSize: 13, marginLeft: 8 }}>
+            共 {findings.length} 条
+          </Text>
+        )}
       </h3>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={cellStyle()}>规则</th>
-            <th style={cellStyle()}>严重级别</th>
-            <th style={cellStyle()}>状态</th>
-            <th style={cellStyle()}>评分</th>
-            <th style={cellStyle()}>优先级</th>
-            <th style={cellStyle()}>事项</th>
-            <th style={cellStyle()}>标题</th>
-            <th style={cellStyle()}>说明</th>
-          </tr>
-        </thead>
-        <tbody>
-          {findings.map((finding) => {
-            const linkedEvent = finding.businessEventId ? eventMap.get(finding.businessEventId) ?? null : null;
-            const targets = buildRiskDrilldownTargets(linkedEvent);
-            const isSelected = selectedFindingId === finding.id;
-            return (
-              <tr key={finding.id} style={{ background: isSelected ? "rgba(79,142,247,0.06)" : "transparent" }}>
-                <td style={cellStyle()}>{finding.ruleCode}</td>
-                <td style={cellStyle()}>{severityLabel(finding.severity)}</td>
-                <td style={cellStyle()}>{statusLabel(finding.status)}</td>
-                <td style={cellStyle()}>{finding.score ?? "—"}</td>
-                <td style={cellStyle()}>{finding.priority ? priorityLabel(finding.priority) : "—"}</td>
-                <td style={cellStyle()}>{finding.businessEventId || "—"}</td>
-                <td style={cellStyle()}>{finding.title}</td>
-                <td style={cellStyle()}>
-                  <div>{finding.detail}</div>
-                  {targets.length ? (
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
-                      {targets.map((target) => (
-                        <button key={`${finding.id}-${target.path}-${target.label}`} style={{ fontSize: "11px", padding: "3px 10px" }} onClick={() => onNavigate(target.path, target.state)}>
-                          {target.label}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
-                    <button style={{ fontSize: "12px", padding: "4px 10px" }} onClick={() => onSelectFinding(finding.id)}>
-                      {isSelected ? "当前复盘" : "查看复盘"}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-          {findings.length === 0 ? (
-            <tr>
-              <td colSpan={8} style={{ ...cellStyle(), textAlign: "center", color: "#9aa5b4", padding: "24px" }}>
-                当前筛选范围内暂无风险发现
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </article>
+      <Table<RiskFinding>
+        dataSource={findings}
+        columns={columns}
+        rowKey="id"
+        size="small"
+        pagination={{ pageSize: 15, showSizeChanger: false, hideOnSinglePage: true }}
+        rowClassName={(row) => (row.id === selectedFindingId ? "ant-table-row-selected" : "")}
+        locale={{ emptyText: "当前筛选范围内暂无风险发现" }}
+        style={{ fontSize: 13 }}
+      />
+    </div>
   );
 }
