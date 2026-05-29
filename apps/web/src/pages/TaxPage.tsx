@@ -39,6 +39,7 @@ import { TaxMaterialsPanel, type TaxMaterialKey } from "./tax/TaxMaterialsPanel"
 import { TaxProfilePanel } from "./tax/TaxProfilePanel";
 import { TaxShell } from "./tax/TaxShell";
 import type { TaxBatchDetail, TaxNotice } from "./tax/taxTypes";
+import { TaxCalendar } from "./tax/TaxCalendar";
 import { TaxWorkspaceSummary } from "./tax/TaxWorkspaceSummary";
 
 const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
@@ -314,6 +315,7 @@ export function TaxPage() {
         guidance={<ResultBanner tone={notice.tone} message={notice.message} />}
         summary={(
           <>
+            <TaxCalendar batches={batches} />
             <TaxWorkspaceSummary
               itemCount={items.length}
               batchCount={batches.length}
