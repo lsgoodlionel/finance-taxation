@@ -11,86 +11,96 @@ import {
   unlockPeriod
 } from "../lib/api";
 import type { AccountingPeriod } from "../lib/api";
+import { useQueryState } from "../hooks/useQueryState";
+import { LedgerBalancesPanel } from "./ledger/LedgerBalancesPanel";
+import { LedgerContextPanel } from "./ledger/LedgerContextPanel";
+import { LedgerEntriesPanel } from "./ledger/LedgerEntriesPanel";
+import { LedgerHeader } from "./ledger/LedgerHeader";
+import { LedgerJournalPanel } from "./ledger/LedgerJournalPanel";
+import { LedgerPeriodsPanel } from "./ledger/LedgerPeriodsPanel";
+import { LedgerSceneSelector } from "./ledger/LedgerSceneSelector";
+import { LedgerSceneSummary } from "./ledger/LedgerSceneSummary";
+import { LedgerShell } from "./ledger/LedgerShell";
+import { LedgerSummaryPanel } from "./ledger/LedgerSummaryPanel";
+import {
+  type JournalItem,
+  type LedgerBalanceItem,
+  LEDGER_SCENE_OPTIONS,
+  type LedgerSceneKey,
+  type LedgerSummaryItem,
+  isLedgerSceneKey
+} from "./ledger/types";
 
-type ActiveTab = "summary" | "balances" | "journal" | "entries" | "periods";
-
-interface JournalItem {
-  id: string;
-  accountCode: string;
-  accountName: string;
-  summary: string;
-  debit: string;
-  credit: string;
-  balance: string;
-  postedAt: string;
-  voucherId: string;
-}
-
-function panelStyle() {
-  return {
-    background: "rgba(255,255,255,0.82)",
-    borderRadius: "24px",
-    border: "1px solid rgba(20,40,60,0.08)",
-    padding: "24px"
-  } as const;
-}
-
-function tableStyle() {
-  return { width: "100%", borderCollapse: "collapse" as const };
-}
-
-function cellStyle() {
-  return {
-    borderBottom: "1px solid rgba(20,40,60,0.08)",
-    padding: "10px 8px",
-    textAlign: "left" as const
-  };
-}
-
-function numCell() {
-  return { ...cellStyle(), textAlign: "right" as const, fontVariantNumeric: "tabular-nums" as const };
-}
-
-function tabBtn(active: boolean, onClick: () => void, label: string) {
-  return (
-    <button
-      key={label}
-      onClick={onClick}
-      style={{
-        padding: "8px 18px",
-        borderRadius: "20px",
-        border: "none",
-        cursor: "pointer",
-        fontWeight: active ? 700 : 400,
-        background: active ? "#1e2a37" : "transparent",
-        color: active ? "#fff" : "#4d5d6c"
-      }}
-    >
-      {label}
-    </button>
-  );
+function buildSceneSummary(
+  scene: LedgerSceneKey,
+  context: {
+    entryCount: number;
+    batchCount: number;
+    summaryCount: number;
+    balanceCount: number;
+    journalCount: number;
+    lockedPeriodCount: number;
+    voucherFilter: string;
+    eventFilter: string;
+    journalType: "cash" | "bank";
+  }
+) {
+  switch (scene) {
+    case "summary":
+      return {
+        title: "科目汇总总览",
+        description: "先看累计借贷发生额，再决定是否继续钻取到科目余额或具体分录。",
+        highlights: [`${context.summaryCount} 个科目`, `${context.entryCount} 条分录`, `${context.batchCount} 个过账批次`],
+        pendingCount: context.summaryCount
+      };
+    case "balances":
+      return {
+        title: "科目余额复核",
+        description: "适合月结前检查余额结构，确认异常科目后再回到分录场景追踪来源。",
+        highlights: [`${context.balanceCount} 个余额科目`, `${context.entryCount} 条分录`, "月结前复核"],
+        pendingCount: context.balanceCount
+      };
+    case "journal":
+      return {
+        title: `${context.journalType === "cash" ? "现金" : "银行"}日记账`,
+        description: "按资金账类型和日期区间查看流水，用于核对资金收付与凭证来源。",
+        highlights: [`${context.journalCount} 条记录`, context.journalType === "cash" ? "现金（1001）" : "银行存款（1002）", "支持日期过滤"],
+        pendingCount: context.journalCount
+      };
+    case "entries":
+      return {
+        title: "总账分录与过账批次",
+        description: "按凭证编号或事项编号过滤，快速定位过账来源并查看完整会计分录。",
+        highlights: [`${context.entryCount} 条分录`, `${context.batchCount} 个批次`, context.voucherFilter || context.eventFilter ? "已启用过滤" : "当前查看全部"],
+        pendingCount: context.entryCount
+      };
+    case "periods":
+      return {
+        title: "会计期间锁账",
+        description: "关闭账期后锁定期间，防止已结账月份被继续过账或篡改。",
+        highlights: [`${context.lockedPeriodCount} 个期间`, "支持新增锁账", "支持解锁回退"],
+        pendingCount: context.lockedPeriodCount
+      };
+  }
 }
 
 export function LedgerPage() {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [batches, setBatches] = useState<LedgerPostingBatch[]>([]);
-  const [summary, setSummary] = useState<
-    Array<{ accountCode: string; accountName: string; debit: string; credit: string }>
-  >([]);
-  const [balances, setBalances] = useState<
-    Array<{ accountCode: string; accountName: string; debit: string; credit: string; balance: string }>
-  >([]);
+  const [summary, setSummary] = useState<LedgerSummaryItem[]>([]);
+  const [balances, setBalances] = useState<LedgerBalanceItem[]>([]);
   const [journal, setJournal] = useState<JournalItem[]>([]);
   const [journalType, setJournalType] = useState<"cash" | "bank">("cash");
   const [journalFrom, setJournalFrom] = useState("");
   const [journalTo, setJournalTo] = useState("");
   const [message, setMessage] = useState("正在准备总账数据。");
-  const [selectedVoucherId, setSelectedVoucherId] = useState<string>("");
-  const [selectedEventId, setSelectedEventId] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
+  const [selectedVoucherId, setSelectedVoucherId] = useState("");
+  const [selectedEventId, setSelectedEventId] = useState("");
   const [periods, setPeriods] = useState<AccountingPeriod[]>([]);
   const [newPeriod, setNewPeriod] = useState("");
   const [periodOp, setPeriodOp] = useState<string | null>(null);
+  const [sceneQuery, setSceneQuery] = useQueryState("ledgerTab", "summary");
+  const activeScene = isLedgerSceneKey(sceneQuery) ? sceneQuery : "summary";
 
   useEffect(() => {
     async function bootstrap() {
@@ -115,6 +125,22 @@ export function LedgerPage() {
     void bootstrap();
   }, []);
 
+  useEffect(() => {
+    if (activeScene === "journal") {
+      void loadJournal();
+      return;
+    }
+    if (activeScene === "periods") {
+      void loadPeriods();
+    }
+  }, [activeScene]);
+
+  useEffect(() => {
+    if (!isLedgerSceneKey(sceneQuery)) {
+      setSceneQuery("summary");
+    }
+  }, [sceneQuery, setSceneQuery]);
+
   async function filterLedger(filters: { voucherId?: string; businessEventId?: string }) {
     const [entriesPayload, batchesPayload] = await Promise.all([
       listLedgerEntries(filters),
@@ -133,8 +159,8 @@ export function LedgerPage() {
     try {
       const payload = await listAccountingPeriods();
       setPeriods(payload.items);
-    } catch (err) {
-      setMessage((err as Error).message);
+    } catch (error) {
+      setMessage((error as Error).message);
     }
   }
 
@@ -144,8 +170,8 @@ export function LedgerPage() {
       await lockPeriod(period);
       await loadPeriods();
       setMessage(`期间 ${period} 已锁账。`);
-    } catch (err) {
-      setMessage((err as Error).message);
+    } catch (error) {
+      setMessage((error as Error).message);
     } finally {
       setPeriodOp(null);
     }
@@ -157,8 +183,8 @@ export function LedgerPage() {
       await unlockPeriod(period);
       await loadPeriods();
       setMessage(`期间 ${period} 已解锁。`);
-    } catch (err) {
-      setMessage((err as Error).message);
+    } catch (error) {
+      setMessage((error as Error).message);
     } finally {
       setPeriodOp(null);
     }
@@ -181,370 +207,131 @@ export function LedgerPage() {
         to: journalTo || undefined
       });
       setJournal(payload.items);
-      setMessage(
-        `${journalType === "cash" ? "现金" : "银行"}日记账已加载，共 ${payload.total} 条记录。`
-      );
+      setMessage(`${journalType === "cash" ? "现金" : "银行"}日记账已加载，共 ${payload.total} 条记录。`);
     } catch (error) {
       setMessage((error as Error).message);
     }
   }
 
+  function renderScene() {
+    switch (activeScene) {
+      case "summary":
+        return <LedgerSummaryPanel items={summary} />;
+      case "balances":
+        return <LedgerBalancesPanel items={balances} />;
+      case "journal":
+        return (
+          <LedgerJournalPanel
+            items={journal}
+            journalType={journalType}
+            journalFrom={journalFrom}
+            journalTo={journalTo}
+            onJournalTypeChange={setJournalType}
+            onJournalFromChange={setJournalFrom}
+            onJournalToChange={setJournalTo}
+            onLoadJournal={() => {
+              void loadJournal();
+            }}
+          />
+        );
+      case "entries":
+        return (
+          <LedgerEntriesPanel
+            entries={entries}
+            batches={batches}
+            selectedVoucherId={selectedVoucherId}
+            selectedEventId={selectedEventId}
+            onVoucherIdChange={setSelectedVoucherId}
+            onEventIdChange={setSelectedEventId}
+            onFilter={() => {
+              void filterLedger({
+                voucherId: selectedVoucherId || undefined,
+                businessEventId: selectedEventId || undefined
+              });
+            }}
+            onClear={() => {
+              setSelectedVoucherId("");
+              setSelectedEventId("");
+              void filterLedger({});
+            }}
+          />
+        );
+      case "periods":
+        return (
+          <LedgerPeriodsPanel
+            periods={periods}
+            newPeriod={newPeriod}
+            periodOp={periodOp}
+            onNewPeriodChange={setNewPeriod}
+            onLockNew={() => {
+              void handleLockNew();
+            }}
+            onLock={(period) => {
+              void handleLock(period);
+            }}
+            onUnlock={(period) => {
+              void handleUnlock(period);
+            }}
+          />
+        );
+    }
+  }
+
+  const activeOption = LEDGER_SCENE_OPTIONS.find((option) => option.key === activeScene) ?? {
+    key: "summary",
+    title: "科目汇总",
+    description: "查看累计借贷发生额，快速判断总账覆盖范围。",
+    emoji: "📚"
+  };
+  const sceneSummary = buildSceneSummary(activeScene, {
+    entryCount: entries.length,
+    batchCount: batches.length,
+    summaryCount: summary.length,
+    balanceCount: balances.length,
+    journalCount: journal.length,
+    lockedPeriodCount: periods.length,
+    voucherFilter: selectedVoucherId,
+    eventFilter: selectedEventId,
+    journalType
+  });
+
   return (
-    <section style={{ display: "grid", gap: "20px" }}>
-      <article style={panelStyle()}>
-        <h2 style={{ marginTop: 0 }}>总账中心</h2>
-        <p style={{ lineHeight: 1.8, color: "#4d5d6c" }}>{message}</p>
-      </article>
-
-      {/* Tab bar */}
-      <div
-        style={{
-          display: "flex",
-          gap: "8px",
-          background: "rgba(255,255,255,0.6)",
-          borderRadius: "24px",
-          border: "1px solid rgba(20,40,60,0.08)",
-          padding: "6px 10px"
-        }}
-      >
-        {tabBtn(activeTab === "summary", () => setActiveTab("summary"), "科目汇总")}
-        {tabBtn(activeTab === "balances", () => setActiveTab("balances"), "科目余额")}
-        {tabBtn(activeTab === "journal", () => { setActiveTab("journal"); void loadJournal(); }, "现金/银行日记账")}
-        {tabBtn(activeTab === "entries", () => setActiveTab("entries"), "总账分录")}
-        {tabBtn(activeTab === "periods", () => { setActiveTab("periods"); void loadPeriods(); }, "期间锁账")}
-      </div>
-
-      {/* ── 科目汇总 ── */}
-      {activeTab === "summary" && (
-        <article style={panelStyle()}>
-          <h3 style={{ marginTop: 0 }}>科目汇总</h3>
-          <table style={tableStyle()}>
-            <thead>
-              <tr>
-                <th style={cellStyle()}>科目编码</th>
-                <th style={cellStyle()}>科目名称</th>
-                <th style={numCell()}>借方累计</th>
-                <th style={numCell()}>贷方累计</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.map((item) => (
-                <tr key={`${item.accountCode}-${item.accountName}`}>
-                  <td style={cellStyle()}>{item.accountCode}</td>
-                  <td style={cellStyle()}>{item.accountName}</td>
-                  <td style={numCell()}>{item.debit}</td>
-                  <td style={numCell()}>{item.credit}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </article>
+    <LedgerShell
+      header={<LedgerHeader activeSceneLabel={activeOption.title} />}
+      summary={(
+        <LedgerSceneSummary
+          scene={activeScene}
+          title={sceneSummary.title}
+          description={sceneSummary.description}
+          highlights={sceneSummary.highlights}
+          pendingCount={sceneSummary.pendingCount}
+        />
       )}
-
-      {/* ── 科目余额 ── */}
-      {activeTab === "balances" && (
-        <article style={panelStyle()}>
-          <h3 style={{ marginTop: 0 }}>科目余额</h3>
-          <table style={tableStyle()}>
-            <thead>
-              <tr>
-                <th style={cellStyle()}>科目编码</th>
-                <th style={cellStyle()}>科目名称</th>
-                <th style={numCell()}>借方累计</th>
-                <th style={numCell()}>贷方累计</th>
-                <th style={numCell()}>余额</th>
-              </tr>
-            </thead>
-            <tbody>
-              {balances.map((item) => (
-                <tr key={`${item.accountCode}-${item.accountName}-balance`}>
-                  <td style={cellStyle()}>{item.accountCode}</td>
-                  <td style={cellStyle()}>{item.accountName}</td>
-                  <td style={numCell()}>{item.debit}</td>
-                  <td style={numCell()}>{item.credit}</td>
-                  <td style={{ ...numCell(), fontWeight: 600 }}>{item.balance}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </article>
+      sceneSelector={(
+        <LedgerSceneSelector
+          activeScene={activeScene}
+          options={LEDGER_SCENE_OPTIONS}
+          onChange={(scene) => setSceneQuery(scene)}
+        />
       )}
-
-      {/* ── 现金/银行日记账 ── */}
-      {activeTab === "journal" && (
-        <article style={panelStyle()}>
-          <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap", marginBottom: "16px" }}>
-            <h3 style={{ margin: 0 }}>日记账</h3>
-            <div style={{ display: "flex", gap: "8px", background: "rgba(20,40,60,0.06)", borderRadius: "12px", padding: "4px" }}>
-              <button
-                onClick={() => setJournalType("cash")}
-                style={{
-                  padding: "4px 14px", borderRadius: "8px", border: "none", cursor: "pointer",
-                  background: journalType === "cash" ? "#1e2a37" : "transparent",
-                  color: journalType === "cash" ? "#fff" : "#4d5d6c"
-                }}
-              >
-                现金（1001）
-              </button>
-              <button
-                onClick={() => setJournalType("bank")}
-                style={{
-                  padding: "4px 14px", borderRadius: "8px", border: "none", cursor: "pointer",
-                  background: journalType === "bank" ? "#1e2a37" : "transparent",
-                  color: journalType === "bank" ? "#fff" : "#4d5d6c"
-                }}
-              >
-                银行存款（1002）
-              </button>
-            </div>
-            <input
-              value={journalFrom}
-              onChange={(e) => setJournalFrom(e.target.value)}
-              placeholder="开始日期 2026-01-01"
-              style={{ width: "150px" }}
-            />
-            <input
-              value={journalTo}
-              onChange={(e) => setJournalTo(e.target.value)}
-              placeholder="结束日期 2026-12-31"
-              style={{ width: "150px" }}
-            />
-            <button onClick={() => void loadJournal()}>查询</button>
-          </div>
-          {journal.length === 0 ? (
-            <p style={{ color: "#aaa" }}>暂无日记账记录，请点击「查询」加载。</p>
-          ) : (
-            <table style={tableStyle()}>
-              <thead>
-                <tr>
-                  <th style={cellStyle()}>日期</th>
-                  <th style={cellStyle()}>科目</th>
-                  <th style={cellStyle()}>摘要</th>
-                  <th style={numCell()}>借方</th>
-                  <th style={numCell()}>贷方</th>
-                  <th style={numCell()}>余额</th>
-                  <th style={cellStyle()}>来源凭证</th>
-                </tr>
-              </thead>
-              <tbody>
-                {journal.map((item) => {
-                  const bal = Number(item.balance);
-                  return (
-                    <tr key={item.id}>
-                      <td style={cellStyle()}>{item.postedAt?.slice(0, 10)}</td>
-                      <td style={cellStyle()}>
-                        <span style={{ fontSize: "12px", color: "#4d5d6c" }}>{item.accountCode}</span>{" "}
-                        {item.accountName}
-                      </td>
-                      <td style={cellStyle()}>{item.summary}</td>
-                      <td style={numCell()}>{Number(item.debit) > 0 ? item.debit : ""}</td>
-                      <td style={numCell()}>{Number(item.credit) > 0 ? item.credit : ""}</td>
-                      <td style={{ ...numCell(), color: bal < 0 ? "#c0392b" : "inherit" }}>{item.balance}</td>
-                      <td style={{ ...cellStyle(), fontSize: "11px", color: "#4d5d6c" }}>
-                        {item.voucherId?.slice(-8).toUpperCase()}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </article>
+      content={renderScene()}
+      context={(
+        <LedgerContextPanel
+          scene={activeScene}
+          message={message}
+          entryCount={entries.length}
+          batchCount={batches.length}
+          summaryCount={summary.length}
+          balanceCount={balances.length}
+          journalCount={journal.length}
+          lockedPeriodCount={periods.length}
+          voucherFilter={selectedVoucherId}
+          eventFilter={selectedEventId}
+          journalType={journalType}
+          journalFrom={journalFrom}
+          journalTo={journalTo}
+        />
       )}
-
-      {/* ── 期间锁账 ── */}
-      {activeTab === "periods" && (
-        <article style={panelStyle()}>
-          <h3 style={{ marginTop: 0 }}>会计期间锁账管理</h3>
-          <p style={{ color: "#4d5d6c", fontSize: "13px", marginBottom: "16px" }}>
-            锁账后，该会计期间内的凭证将无法过账，防止账期关闭后的数据篡改。
-          </p>
-
-          {/* 新增锁账 */}
-          <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
-            <input
-              value={newPeriod}
-              onChange={(e) => setNewPeriod(e.target.value)}
-              placeholder="输入期间 YYYY-MM，如 2026-05"
-              style={{ width: "200px" }}
-            />
-            <button
-              onClick={() => void handleLockNew()}
-              disabled={!newPeriod || periodOp !== null}
-              style={{
-                background: "#c0392b", color: "#fff", border: "none",
-                padding: "8px 16px", borderRadius: "8px", cursor: "pointer"
-              }}
-            >
-              锁定该期间
-            </button>
-          </div>
-
-          {/* 期间列表 */}
-          {periods.length === 0 ? (
-            <p style={{ color: "#aaa" }}>暂无已锁定期间记录。</p>
-          ) : (
-            <table style={tableStyle()}>
-              <thead>
-                <tr>
-                  <th style={cellStyle()}>会计期间</th>
-                  <th style={cellStyle()}>状态</th>
-                  <th style={cellStyle()}>锁定时间</th>
-                  <th style={cellStyle()}>操作人</th>
-                  <th style={cellStyle()}>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {periods.map((p) => (
-                  <tr key={p.id}>
-                    <td style={{ ...cellStyle(), fontWeight: 600 }}>{p.period}</td>
-                    <td style={cellStyle()}>
-                      <span
-                        style={{
-                          display: "inline-block",
-                          padding: "2px 10px",
-                          borderRadius: "12px",
-                          fontSize: "12px",
-                          background: p.isLocked ? "rgba(192,57,43,0.12)" : "rgba(39,174,96,0.12)",
-                          color: p.isLocked ? "#c0392b" : "#27ae60",
-                          fontWeight: 600
-                        }}
-                      >
-                        {p.isLocked ? "🔒 已锁账" : "🔓 未锁账"}
-                      </span>
-                    </td>
-                    <td style={cellStyle()}>{p.lockedAt ? p.lockedAt.slice(0, 16).replace("T", " ") : "—"}</td>
-                    <td style={cellStyle()}>{p.lockedBy ?? "—"}</td>
-                    <td style={cellStyle()}>
-                      {p.isLocked ? (
-                        <button
-                          onClick={() => void handleUnlock(p.period)}
-                          disabled={periodOp === p.period}
-                          style={{
-                            background: "transparent", border: "1px solid #27ae60",
-                            color: "#27ae60", padding: "4px 12px", borderRadius: "6px",
-                            cursor: "pointer", fontSize: "12px"
-                          }}
-                        >
-                          {periodOp === p.period ? "处理中…" : "解锁"}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => void handleLock(p.period)}
-                          disabled={periodOp === p.period}
-                          style={{
-                            background: "transparent", border: "1px solid #c0392b",
-                            color: "#c0392b", padding: "4px 12px", borderRadius: "6px",
-                            cursor: "pointer", fontSize: "12px"
-                          }}
-                        >
-                          {periodOp === p.period ? "处理中…" : "锁账"}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </article>
-      )}
-
-      {/* ── 总账分录 ── */}
-      {activeTab === "entries" && (
-        <>
-          <article style={panelStyle()}>
-            <h3 style={{ marginTop: 0 }}>过滤条件</h3>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <input
-                value={selectedVoucherId}
-                onChange={(event) => setSelectedVoucherId(event.target.value)}
-                placeholder="输入凭证编号过滤"
-                style={{ flex: 1 }}
-              />
-              <input
-                value={selectedEventId}
-                onChange={(event) => setSelectedEventId(event.target.value)}
-                placeholder="输入事项编号过滤"
-                style={{ flex: 1 }}
-              />
-              <button
-                onClick={() =>
-                  void filterLedger({
-                    voucherId: selectedVoucherId || undefined,
-                    businessEventId: selectedEventId || undefined
-                  })
-                }
-              >
-                过滤
-              </button>
-              <button
-                onClick={() => {
-                  setSelectedVoucherId("");
-                  setSelectedEventId("");
-                  void filterLedger({});
-                }}
-              >
-                清空
-              </button>
-            </div>
-          </article>
-          <article style={panelStyle()}>
-            <h3 style={{ marginTop: 0 }}>过账批次</h3>
-            <table style={tableStyle()}>
-              <thead>
-                <tr>
-                  <th style={cellStyle()}>批次编号</th>
-                  <th style={cellStyle()}>凭证</th>
-                  <th style={cellStyle()}>事项</th>
-                  <th style={cellStyle()}>分录数</th>
-                  <th style={cellStyle()}>过账时间</th>
-                </tr>
-              </thead>
-              <tbody>
-                {batches.map((item) => (
-                  <tr key={item.id}>
-                    <td style={cellStyle()}>{item.id}</td>
-                    <td style={cellStyle()}>{item.voucherId}</td>
-                    <td style={cellStyle()}>{item.businessEventId}</td>
-                    <td style={cellStyle()}>{item.entryIds.length}</td>
-                    <td style={cellStyle()}>{item.postedAt}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </article>
-          <article style={panelStyle()}>
-            <h3 style={{ marginTop: 0 }}>总账分录</h3>
-            <table style={tableStyle()}>
-              <thead>
-                <tr>
-                  <th style={cellStyle()}>日期</th>
-                  <th style={cellStyle()}>摘要</th>
-                  <th style={cellStyle()}>科目</th>
-                  <th style={numCell()}>借方</th>
-                  <th style={numCell()}>贷方</th>
-                  <th style={cellStyle()}>来源凭证</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((item) => (
-                  <tr key={item.id}>
-                    <td style={cellStyle()}>{item.entryDate}</td>
-                    <td style={cellStyle()}>{item.summary}</td>
-                    <td style={cellStyle()}>
-                      {item.accountCode} / {item.accountName}
-                    </td>
-                    <td style={numCell()}>{item.debit}</td>
-                    <td style={numCell()}>{item.credit}</td>
-                    <td style={cellStyle()}>{item.voucherId}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </article>
-        </>
-      )}
-    </section>
+    />
   );
 }
