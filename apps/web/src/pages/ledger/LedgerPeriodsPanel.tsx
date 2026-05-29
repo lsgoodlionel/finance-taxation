@@ -1,8 +1,11 @@
-import React from "react";
+import { Modal, Table, Tag, Typography, Button, Input, Space, Alert } from "antd";
+import { LockOutlined, UnlockOutlined } from "@ant-design/icons";
+import type { ColumnsType } from "antd/es/table";
 import { DataTableShell } from "../../components/ui/DataTableShell";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { cellStyle, tableStyle } from "./ledgerTableStyles";
 import type { AccountingPeriod } from "../../lib/api";
+
+const { Text } = Typography;
 
 type LedgerPeriodsPanelProps = {
   periods: AccountingPeriod[];
@@ -14,123 +17,154 @@ type LedgerPeriodsPanelProps = {
   onUnlock: (period: string) => void;
 };
 
+function confirmLock(period: string, onConfirm: () => void) {
+  Modal.confirm({
+    title: `锁定会计期间 ${period}`,
+    content: (
+      <div style={{ lineHeight: 1.7 }}>
+        <p>锁账后，该会计期间内的凭证将<strong>无法过账</strong>，防止账期关闭后的数据篡改。</p>
+        <p style={{ color: "#dc2626", marginBottom: 0 }}>此操作不可在无授权情况下自动回退，请谨慎确认。</p>
+      </div>
+    ),
+    okText: "确认锁账",
+    okButtonProps: { danger: true },
+    cancelText: "取消",
+    onOk: onConfirm,
+  });
+}
+
+function confirmUnlock(period: string, onConfirm: () => void) {
+  Modal.confirm({
+    title: `解锁会计期间 ${period}`,
+    content: (
+      <div style={{ lineHeight: 1.7 }}>
+        <p>解锁后，该会计期间内可以重新过账，存在数据被修改的风险。</p>
+        <p style={{ color: "#d97706", marginBottom: 0 }}>建议仅在错误修正时解锁，操作后应及时重新锁账。</p>
+      </div>
+    ),
+    okText: "确认解锁",
+    cancelText: "取消",
+    onOk: onConfirm,
+  });
+}
+
 export function LedgerPeriodsPanel(props: LedgerPeriodsPanelProps) {
-  const {
-    periods,
-    newPeriod,
-    periodOp,
-    onNewPeriodChange,
-    onLockNew,
-    onLock,
-    onUnlock
-  } = props;
+  const { periods, newPeriod, periodOp, onNewPeriodChange, onLockNew, onLock, onUnlock } = props;
+
+  const columns: ColumnsType<AccountingPeriod> = [
+    {
+      title: "会计期间",
+      dataIndex: "period",
+      key: "period",
+      render: (v: string) => <Text strong>{v}</Text>,
+    },
+    {
+      title: "状态",
+      key: "status",
+      render: (_, row) =>
+        row.isLocked ? (
+          <Tag icon={<LockOutlined />} color="error">已锁账</Tag>
+        ) : (
+          <Tag icon={<UnlockOutlined />} color="success">未锁账</Tag>
+        ),
+    },
+    {
+      title: "锁定时间",
+      dataIndex: "lockedAt",
+      key: "lockedAt",
+      render: (v: string | null) =>
+        v ? (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {v.slice(0, 16).replace("T", " ")}
+          </Text>
+        ) : (
+          <Text type="secondary">—</Text>
+        ),
+    },
+    {
+      title: "操作人",
+      dataIndex: "lockedBy",
+      key: "lockedBy",
+      render: (v: string | null) => <Text type="secondary">{v ?? "—"}</Text>,
+    },
+    {
+      title: "操作",
+      key: "action",
+      render: (_, row) =>
+        row.isLocked ? (
+          <Button
+            size="small"
+            icon={<UnlockOutlined />}
+            loading={periodOp === row.period}
+            onClick={() => confirmUnlock(row.period, () => onUnlock(row.period))}
+          >
+            解锁
+          </Button>
+        ) : (
+          <Button
+            size="small"
+            danger
+            icon={<LockOutlined />}
+            loading={periodOp === row.period}
+            onClick={() => confirmLock(row.period, () => onLock(row.period))}
+          >
+            锁账
+          </Button>
+        ),
+    },
+  ];
 
   return (
-    <div style={{ display: "grid", gap: "24px" }}>
-      <DataTableShell title="会计期间锁账管理">
-        <div style={{ display: "grid", gap: "16px" }}>
-          <p style={{ color: "#4d5d6c", fontSize: "13px", margin: 0, lineHeight: 1.7 }}>
-            锁账后，该会计期间内的凭证将无法过账，防止账期关闭后的数据篡改。
-          </p>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-            <input
+    <div style={{ display: "grid", gap: 24 }}>
+      <DataTableShell title="新增锁账期间">
+        <div style={{ display: "grid", gap: 12 }}>
+          <Alert
+            type="warning"
+            showIcon
+            message="锁账前请确认该期间内的凭证均已复核完毕，锁账后凭证无法过账。"
+            style={{ fontSize: 13 }}
+          />
+          <Space>
+            <Input
               value={newPeriod}
-              onChange={(event) => onNewPeriodChange(event.target.value)}
+              onChange={(e) => onNewPeriodChange(e.target.value)}
               placeholder="输入期间 YYYY-MM，如 2026-05"
-              style={{ width: "220px" }}
+              style={{ width: 220 }}
+              status={newPeriod && !/^\d{4}-\d{2}$/.test(newPeriod) ? "error" : undefined}
             />
-            <button
-              onClick={onLockNew}
-              disabled={!newPeriod || periodOp !== null}
-              style={{
-                background: "#c0392b",
-                color: "#fff",
-                border: "none",
-                padding: "8px 16px",
-                borderRadius: "8px",
-                cursor: "pointer"
+            <Button
+              type="primary"
+              danger
+              icon={<LockOutlined />}
+              disabled={!newPeriod || !/^\d{4}-\d{2}$/.test(newPeriod)}
+              loading={periodOp !== null}
+              onClick={() => {
+                if (newPeriod) {
+                  confirmLock(newPeriod, onLockNew);
+                }
               }}
             >
               锁定该期间
-            </button>
-          </div>
+            </Button>
+          </Space>
         </div>
       </DataTableShell>
 
-      <DataTableShell title="期间列表">
+      <DataTableShell title={`期间列表${periods.length > 0 ? `（${periods.length} 个）` : ""}`}>
         {periods.length === 0 ? (
-          <EmptyState title="暂无已锁定期间" description="进入该场景后会加载已存在的期间记录，当前可先新增一个待锁账期间。" />
+          <EmptyState
+            title="暂无已锁定期间"
+            description="进入该场景后会加载已存在的期间记录，当前可先新增一个待锁账期间。"
+          />
         ) : (
-          <table style={tableStyle()}>
-            <thead>
-              <tr>
-                <th style={cellStyle()}>会计期间</th>
-                <th style={cellStyle()}>状态</th>
-                <th style={cellStyle()}>锁定时间</th>
-                <th style={cellStyle()}>操作人</th>
-                <th style={cellStyle()}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {periods.map((period) => (
-                <tr key={period.id}>
-                  <td style={{ ...cellStyle(), fontWeight: 600 }}>{period.period}</td>
-                  <td style={cellStyle()}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "2px 10px",
-                        borderRadius: "12px",
-                        fontSize: "12px",
-                        background: period.isLocked ? "rgba(192,57,43,0.12)" : "rgba(39,174,96,0.12)",
-                        color: period.isLocked ? "#c0392b" : "#27ae60",
-                        fontWeight: 600
-                      }}
-                    >
-                      {period.isLocked ? "🔒 已锁账" : "🔓 未锁账"}
-                    </span>
-                  </td>
-                  <td style={cellStyle()}>{period.lockedAt ? period.lockedAt.slice(0, 16).replace("T", " ") : "—"}</td>
-                  <td style={cellStyle()}>{period.lockedBy ?? "—"}</td>
-                  <td style={cellStyle()}>
-                    {period.isLocked ? (
-                      <button
-                        onClick={() => onUnlock(period.period)}
-                        disabled={periodOp === period.period}
-                        style={{
-                          background: "transparent",
-                          border: "1px solid #27ae60",
-                          color: "#27ae60",
-                          padding: "4px 12px",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontSize: "12px"
-                        }}
-                      >
-                        {periodOp === period.period ? "处理中…" : "解锁"}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => onLock(period.period)}
-                        disabled={periodOp === period.period}
-                        style={{
-                          background: "transparent",
-                          border: "1px solid #c0392b",
-                          color: "#c0392b",
-                          padding: "4px 12px",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontSize: "12px"
-                        }}
-                      >
-                        {periodOp === period.period ? "处理中…" : "锁账"}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Table<AccountingPeriod>
+            dataSource={periods}
+            columns={columns}
+            rowKey="id"
+            size="small"
+            pagination={false}
+            style={{ fontSize: 13 }}
+          />
         )}
       </DataTableShell>
     </div>
