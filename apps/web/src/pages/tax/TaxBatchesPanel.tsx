@@ -45,38 +45,49 @@ export function TaxBatchesPanel({
   onArchiveBatch
 }: TaxBatchesPanelProps) {
   const { t } = useI18n();
+  const readyCount = batches.filter((item) => item.status === "ready" || item.status === "review_required").length;
 
   return (
-    <section style={{ display: "grid", gridTemplateColumns: "1.05fr 0.95fr", gap: "20px" }}>
+    <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
       <article style={panelStyle()}>
         <h3 style={{ marginTop: 0 }}>申报批次列表</h3>
         <p style={{ margin: "0 0 12px", color: "#5c6b7a", lineHeight: 1.7 }}>
           用批次承接税务事项，固定复核、提交与留档顺序，避免把申报动作散落在不同材料块中。
         </p>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={cellStyle()}>批次编号</th>
-              <th style={cellStyle()}>税种</th>
-              <th style={cellStyle()}>状态</th>
-              <th style={cellStyle()}>事项数</th>
-            </tr>
-          </thead>
-          <tbody>
-            {batches.map((item) => (
-              <tr
-                key={item.id}
-                onClick={() => onSelectBatch(item.id)}
-                style={{ cursor: "pointer", background: item.id === selectedBatchId ? "rgba(30,42,55,0.06)" : "transparent" }}
-              >
-                <td style={cellStyle()}>{item.id}</td>
-                <td style={cellStyle()}>{item.taxType}</td>
-                <td style={cellStyle()}>{t(TAX_BATCH_STATUS_LABELS, item.status)}</td>
-                <td style={cellStyle()}>{item.itemIds.length}</td>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
+          <span style={{ borderRadius: "999px", padding: "6px 10px", fontSize: "12px", background: "rgba(79,142,247,0.08)", color: "#2563eb" }}>
+            批次数：{batches.length}
+          </span>
+          <span style={{ borderRadius: "999px", padding: "6px 10px", fontSize: "12px", background: "rgba(217,119,6,0.08)", color: "#b45309" }}>
+            待处理：{readyCount}
+          </span>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", minWidth: "560px", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={cellStyle()}>批次编号</th>
+                <th style={cellStyle()}>税种</th>
+                <th style={cellStyle()}>状态</th>
+                <th style={cellStyle()}>事项数</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {batches.map((item) => (
+                <tr
+                  key={item.id}
+                  onClick={() => onSelectBatch(item.id)}
+                  style={{ cursor: "pointer", background: item.id === selectedBatchId ? "rgba(30,42,55,0.06)" : "transparent" }}
+                >
+                  <td style={cellStyle()}>{item.id}</td>
+                  <td style={cellStyle()}>{item.taxType}</td>
+                  <td style={cellStyle()}>{t(TAX_BATCH_STATUS_LABELS, item.status)}</td>
+                  <td style={cellStyle()}>{item.itemIds.length}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </article>
       <article style={panelStyle()}>
         <h3 style={{ marginTop: 0 }}>批次工作台</h3>
@@ -95,7 +106,7 @@ export function TaxBatchesPanel({
               <button onClick={onReviewBatch} style={actionButtonStyle()}>保存复核</button>
               <button onClick={onArchiveBatch} style={actionButtonStyle()}>留档批次</button>
             </div>
-            <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
               <div style={{ display: "grid", gap: "8px" }}>
                 <select
                   value={reviewForm.reviewResult}

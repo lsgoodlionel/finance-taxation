@@ -28,7 +28,7 @@ export function TaxWorkspaceSummary({
             先确认纳税人口径与税率规则，再复核税务事项和申报批次，最后进入底稿、资料生成与打印。
           </p>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
           <div style={miniStatStyle()}>
             <div style={{ fontSize: "12px", color: "#6c7a89" }}>税务事项</div>
             <strong style={{ display: "block", marginTop: "8px", fontSize: "24px" }}>{itemCount}</strong>
@@ -53,10 +53,12 @@ export function TaxWorkspaceSummary({
               : <>当前高亮税务事项 <strong>{navTaxItemId}</strong>，方便在批次与资料区继续追踪。</>}
           </div>
         ) : (
-          <EmptyState
-            title="当前无上游 drilldown 限定"
-            description="你可以从经营事项、单据或凭证页进入本页，也可以直接在本页按批次和资料类型完成复核。"
-          />
+          <div style={{ borderRadius: "14px", padding: "14px 16px", background: "rgba(20,40,60,0.04)", border: "1px solid rgba(20,40,60,0.08)" }}>
+            <EmptyState
+              title="当前无上游 drilldown 限定"
+              description="你可以从经营事项、单据或凭证页进入本页，也可以直接在本页按批次和资料类型完成复核。"
+            />
+          </div>
         )}
       </div>
     </article>

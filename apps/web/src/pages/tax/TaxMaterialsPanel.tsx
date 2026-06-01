@@ -74,7 +74,7 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
             先切换资料视图，再生成对应底稿或准备稿；打印动作保留在已生成结果之后，避免空打印。
           </p>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
           {(Object.keys(MATERIAL_META) as TaxMaterialKey[]).map((key) => (
             <button
               key={key}
@@ -100,8 +100,8 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
           </div>
           {activeMaterial === "vat" && (
             <div style={{ display: "grid", gap: "12px" }}>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <input value={vatFilingPeriod} onChange={(event) => onVatPeriodChange(event.target.value)} placeholder="申报期" />
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <input value={vatFilingPeriod} onChange={(event) => onVatPeriodChange(event.target.value)} placeholder="申报期" style={{ minWidth: "180px" }} />
                 <button onClick={onGenerateVat} style={actionButtonStyle("primary")}>生成底稿</button>
                 <button onClick={onPrintVat} style={actionButtonStyle()}>打印底稿</button>
               </div>
@@ -115,28 +115,30 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
                     <div>简易计税额：{vatPaper.simplifiedTaxAmount}</div>
                     <div>应纳增值税：{vatPaper.payableVatAmount}</div>
                   </div>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr>
-                        <th style={cellStyle()}>类型</th>
-                        <th style={cellStyle()}>说明</th>
-                        <th style={cellStyle()}>税率</th>
-                        <th style={cellStyle()}>计税基础</th>
-                        <th style={cellStyle()}>税额</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {vatPaper.lines.map((line) => (
-                        <tr key={line.id}>
-                          <td style={cellStyle()}>{line.sourceType}</td>
-                          <td style={cellStyle()}>{line.description}</td>
-                          <td style={cellStyle()}>{line.taxRate}%</td>
-                          <td style={cellStyle()}>{line.taxableAmount}</td>
-                          <td style={cellStyle()}>{line.taxAmount}</td>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", minWidth: "720px", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={cellStyle()}>类型</th>
+                          <th style={cellStyle()}>说明</th>
+                          <th style={cellStyle()}>税率</th>
+                          <th style={cellStyle()}>计税基础</th>
+                          <th style={cellStyle()}>税额</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {vatPaper.lines.map((line) => (
+                          <tr key={line.id}>
+                            <td style={cellStyle()}>{line.sourceType}</td>
+                            <td style={cellStyle()}>{line.description}</td>
+                            <td style={cellStyle()}>{line.taxRate}%</td>
+                            <td style={cellStyle()}>{line.taxableAmount}</td>
+                            <td style={cellStyle()}>{line.taxAmount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </>
               ) : (
                 <p style={{ margin: 0, color: "#6c7a89" }}>尚未生成增值税底稿。</p>
@@ -145,8 +147,8 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
           )}
           {activeMaterial === "iit" && (
             <div style={{ display: "grid", gap: "12px" }}>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <input value={iitFilingPeriod} onChange={(event) => onIitPeriodChange(event.target.value)} placeholder="申报期" />
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <input value={iitFilingPeriod} onChange={(event) => onIitPeriodChange(event.target.value)} placeholder="申报期" style={{ minWidth: "180px" }} />
                 <button onClick={onGenerateIit} style={actionButtonStyle("primary")}>生成个税资料</button>
               </div>
               {iitMaterials ? (
@@ -168,8 +170,8 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
           )}
           {activeMaterial === "stamp" && (
             <div style={{ display: "grid", gap: "12px" }}>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <input value={stampFilingPeriod} onChange={(event) => onStampPeriodChange(event.target.value)} placeholder="申报期" />
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <input value={stampFilingPeriod} onChange={(event) => onStampPeriodChange(event.target.value)} placeholder="申报期" style={{ minWidth: "180px" }} />
                 <button onClick={onGenerateStamp} style={actionButtonStyle("primary")}>汇总税务事项</button>
               </div>
               {stampAndSurtax ? (
@@ -190,8 +192,8 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
           )}
           {activeMaterial === "cit" && (
             <div style={{ display: "grid", gap: "12px" }}>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <input value={incomeTaxPeriod} onChange={(event) => onIncomeTaxPeriodChange(event.target.value)} placeholder="申报期" />
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <input value={incomeTaxPeriod} onChange={(event) => onIncomeTaxPeriodChange(event.target.value)} placeholder="申报期" style={{ minWidth: "180px" }} />
                 <button onClick={onGenerateCit} style={actionButtonStyle("primary")}>生成准备稿</button>
                 <button onClick={onPrintCit} style={actionButtonStyle()}>打印准备稿</button>
               </div>
