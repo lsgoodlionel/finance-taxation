@@ -42,9 +42,12 @@ import { EmptyState } from "../components/ui/EmptyState";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   sales: "销售合同",
+  sale: "销售合同",
   procurement: "采购合同",
+  purchase: "采购合同",
   lease: "租赁合同",
   service: "服务合同",
+  loan: "借款合同",
   other: "其他"
 };
 

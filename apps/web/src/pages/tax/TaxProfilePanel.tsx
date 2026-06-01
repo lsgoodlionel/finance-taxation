@@ -2,6 +2,24 @@ import React from "react";
 import type { TaxpayerProfile, TaxRuleProfile } from "@finance-taxation/domain-model";
 import { actionButtonStyle, cellStyle, panelStyle } from "./taxStyles";
 
+const TAXPAYER_TYPE_LABELS: Record<TaxProfilePanelProps["profileForm"]["taxpayerType"], string> = {
+  general_vat: "一般纳税人",
+  small_scale: "小规模纳税人",
+  general_simplified: "一般纳税人简易计税"
+};
+
+const PROFILE_STATUS_LABELS: Record<string, string> = {
+  active: "生效中",
+  inactive: "已停用",
+  draft: "草稿"
+};
+
+const FILING_FREQUENCY_LABELS: Record<string, string> = {
+  monthly: "按月申报",
+  quarterly: "按季申报",
+  yearly: "按年申报"
+};
+
 type TaxProfilePanelProps = {
   profiles: TaxpayerProfile[];
   profileForm: {
@@ -70,9 +88,9 @@ export function TaxProfilePanel({
             <tbody>
               {profiles.map((profile) => (
                 <tr key={profile.id}>
-                  <td style={cellStyle()}>{profile.taxpayerType}</td>
+                  <td style={cellStyle()}>{TAXPAYER_TYPE_LABELS[profile.taxpayerType] ?? profile.taxpayerType}</td>
                   <td style={cellStyle()}>{profile.effectiveFrom}</td>
-                  <td style={cellStyle()}>{profile.status}</td>
+                  <td style={cellStyle()}>{PROFILE_STATUS_LABELS[profile.status] ?? profile.status}</td>
                   <td style={cellStyle()}>{profile.notes || "—"}</td>
                 </tr>
               ))}
@@ -94,8 +112,8 @@ export function TaxProfilePanel({
           {ruleProfile ? (
             <div style={{ display: "grid", gap: "10px", lineHeight: 1.8 }}>
               <div>税种：{ruleProfile.taxType}</div>
-              <div>纳税人口径：{ruleProfile.taxpayerType}</div>
-              <div>申报频率：{ruleProfile.filingFrequency}</div>
+              <div>纳税人口径：{TAXPAYER_TYPE_LABELS[ruleProfile.taxpayerType] ?? ruleProfile.taxpayerType}</div>
+              <div>申报频率：{FILING_FREQUENCY_LABELS[ruleProfile.filingFrequency] ?? ruleProfile.filingFrequency}</div>
               <div>默认税率：{ruleProfile.defaultRate}%</div>
               <div>推导申报期：{ruleProfile.filingPeriod}</div>
             </div>

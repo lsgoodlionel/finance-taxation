@@ -13,6 +13,16 @@ import {
   getVatWorkingPaper, submitTaxFilingBatch, reviewTaxFilingBatch,
 } from "../../lib/api";
 
+const BATCH_STATUS_LABELS: Record<string, string> = {
+  draft: "草稿",
+  ready: "待提交",
+  review_required: "待复核",
+  submitted: "已提交",
+  reviewed: "已复核",
+  filed: "已申报",
+  archived: "已归档"
+};
+
 const { Text, Title } = Typography;
 
 interface VatDeclarationWizardProps {
@@ -101,7 +111,9 @@ export function VatDeclarationWizard({
                 <Tag color="blue">增值税（VAT）</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="当前状态">
-                <Tag color={batch.status === "submitted" || batch.status === "archived" ? "success" : "default"}>{batch.status}</Tag>
+                <Tag color={batch.status === "submitted" || batch.status === "archived" ? "success" : "default"}>
+                  {BATCH_STATUS_LABELS[batch.status] ?? batch.status}
+                </Tag>
               </Descriptions.Item>
             </Descriptions>
           )}
