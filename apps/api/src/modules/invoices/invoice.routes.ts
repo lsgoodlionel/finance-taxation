@@ -13,7 +13,7 @@ import { query, queryOne } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
-import { verifyInvoiceLocally, ocrExtractInvoice } from "./invoice-verify.js";
+import { verifyInvoiceWithConfig, verifyInvoiceLocally, ocrExtractInvoice } from "./invoice-verify.js";
 
 // ── 发票列表 ──────────────────────────────────────────────────────────────────
 
@@ -117,7 +117,8 @@ export async function verifyInvoice(req: ApiRequest, res: ServerResponse, invoic
   );
   if (!invoice) { json(res, 404, { error: "发票不存在" }); return; }
 
-  const result = await verifyInvoiceLocally({
+  // P2: 使用配置的服务商进行验真（默认 local，可在设置中切换为 baiwang/nuonuo/etax）
+  const result = await verifyInvoiceWithConfig(cid, {
     invoiceCode: invoice.invoice_code ?? "",
     invoiceNo: invoice.invoice_no,
     invoiceDate: invoice.invoice_date,

@@ -1495,3 +1495,71 @@ export async function ocrInvoice(data: { imageBase64?: string; text?: string }) 
 export async function deleteInvoice(id: string) {
   return request<{ ok: boolean }>(`/api/invoices/${id}`, { method: "DELETE" });
 }
+
+// ─── P2: Integration Configuration ───────────────────────────────────────────
+
+export interface IntegrationProviderMeta {
+  id: string;
+  name: string;
+  description: string;
+  requiresApiKey: boolean;
+  requiresApiSecret: boolean;
+  requiresAppId: boolean;
+  requiresEndpoint: boolean;
+  docsUrl: string;
+  freeQuota: string;
+}
+
+export interface IntegrationConfig {
+  configType: string;
+  provider: string;
+  apiKey: string | null;
+  apiSecret: string | null;
+  appId: string | null;
+  endpointUrl: string | null;
+  extraConfig: Record<string, string>;
+  enabled: boolean;
+  lastTestOk: boolean | null;
+  lastTestAt: string | null;
+  lastTestMsg: string | null;
+  updatedAt: string;
+}
+
+export async function listIntegrationConfigs() {
+  return request<{
+    items: IntegrationConfig[];
+    providers: Record<string, IntegrationProviderMeta[]>;
+  }>("/api/settings/integrations");
+}
+
+export async function getIntegrationConfig(configType: string) {
+  return request<{
+    config: IntegrationConfig;
+    providers: IntegrationProviderMeta[];
+  }>(`/api/settings/integrations/${configType}`);
+}
+
+export async function upsertIntegrationConfig(
+  configType: string,
+  data: {
+    provider: string;
+    apiKey?: string;
+    apiSecret?: string;
+    appId?: string;
+    endpointUrl?: string;
+    extraConfig?: Record<string, string>;
+    enabled?: boolean;
+  },
+) {
+  return request<{ ok: boolean; config: IntegrationConfig | null }>(
+    `/api/settings/integrations/${configType}`,
+    { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) },
+  );
+}
+
+export async function testIntegrationConfig(configType: string) {
+  return request<{ ok: boolean; message: string; provider: string }>(
+    `/api/settings/integrations/${configType}/test`,
+    { method: "POST" },
+  );
+}
