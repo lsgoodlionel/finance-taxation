@@ -144,6 +144,12 @@ import {
   getUserList,
   updateCompanySettings
 } from "./modules/settings/routes.js";
+import {
+  listIntegrationConfigs,
+  getIntegrationConfig,
+  upsertIntegrationConfig,
+  testIntegrationConfig,
+} from "./modules/settings/integration-config.routes.js";
 import { login, logout, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
@@ -1108,6 +1114,27 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("dashboard.view", req, res))) return;
     if (req.method === "GET") return getUserList(req, res);
+  }
+
+  // ── P2: 外部对接配置 ─────────────────────────────────────────────────────────
+  if (url.pathname === "/api/settings/integrations") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("dashboard.view", req, res))) return;
+    if (req.method === "GET") return listIntegrationConfigs(req, res);
+  }
+  const integrationTypeMatch = url.pathname.match(/^\/api\/settings\/integrations\/([^/]+)$/);
+  if (integrationTypeMatch?.[1] && !url.pathname.endsWith("/test")) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("dashboard.view", req, res))) return;
+    const configType = integrationTypeMatch[1];
+    if (req.method === "GET") return getIntegrationConfig(req, res, configType);
+    if (req.method === "PUT") { await readJsonBody(req); return upsertIntegrationConfig(req, res, configType); }
+  }
+  const integrationTestMatch = url.pathname.match(/^\/api\/settings\/integrations\/([^/]+)\/test$/);
+  if (integrationTestMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("dashboard.view", req, res))) return;
+    if (req.method === "POST") return testIntegrationConfig(req, res, integrationTestMatch[1]);
   }
 
   // ── P1: 税务申报文件导出 ─────────────────────────────────────────────────────
