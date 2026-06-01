@@ -40,6 +40,7 @@ import { TaxProfilePanel } from "./tax/TaxProfilePanel";
 import { TaxShell } from "./tax/TaxShell";
 import type { TaxBatchDetail, TaxNotice } from "./tax/taxTypes";
 import { TaxCalendar } from "./tax/TaxCalendar";
+import { VatDeclarationWizard } from "./tax/VatDeclarationWizard";
 import { TaxWorkspaceSummary } from "./tax/TaxWorkspaceSummary";
 
 const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
@@ -104,6 +105,7 @@ export function TaxPage() {
     message: "正在准备税务数据。"
   });
   const [showHelp, setShowHelp] = useState(false);
+  const [vatWizardOpen, setVatWizardOpen] = useState(false);
 
   useEffect(() => {
     async function bootstrap() {
@@ -315,7 +317,7 @@ export function TaxPage() {
         guidance={<ResultBanner tone={notice.tone} message={notice.message} />}
         summary={(
           <>
-            <TaxCalendar batches={batches} />
+            <TaxCalendar batches={batches} onStartVatDeclaration={() => setVatWizardOpen(true)} />
             <TaxWorkspaceSummary
               itemCount={items.length}
               batchCount={batches.length}
@@ -382,6 +384,16 @@ export function TaxPage() {
             onPrintCit={() => void handlePrintCit()}
           />
         )}
+      />
+      <VatDeclarationWizard
+        open={vatWizardOpen}
+        filingPeriod={vatFilingPeriod}
+        batch={batches.find(b => b.taxType === "vat" && b.filingPeriod === vatFilingPeriod) ?? null}
+        onClose={() => setVatWizardOpen(false)}
+        onComplete={() => {
+          setVatWizardOpen(false);
+          setNotice({ tone: "success", message: `增值税申报 ${vatFilingPeriod} 已完成。` });
+        }}
       />
     </section>
   );
