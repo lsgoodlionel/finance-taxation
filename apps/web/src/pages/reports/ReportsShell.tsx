@@ -13,7 +13,7 @@ export function ReportsShell({ header, sidebar, workbench }: ReportsShellProps) 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "320px minmax(0, 1fr)",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
           gap: "24px",
           alignItems: "start"
         }}

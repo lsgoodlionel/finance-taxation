@@ -79,11 +79,29 @@ export function ReportsSidebar(props: ReportsSidebarProps) {
   } = props;
 
   return (
-    <aside style={{ display: "grid", gap: "20px", position: "sticky", top: 0 }}>
+    <aside style={{ display: "grid", gap: "20px", position: "sticky", top: "16px" }}>
       <section style={cardStyle()}>
         <div style={{ display: "grid", gap: "4px" }}>
           <span style={sectionTitleStyle()}>期间上下文</span>
           <strong style={{ fontSize: "16px", color: "#1e2a37" }}>先固定报表口径，再决定查看和输出</strong>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+            gap: "10px"
+          }}
+        >
+          <div style={{ padding: "10px 12px", borderRadius: "14px", background: "rgba(15,118,110,0.08)" }}>
+            <div style={{ fontSize: "11px", color: "#0f766e" }}>当前期间</div>
+            <strong style={{ fontSize: "14px", color: "#134e4a" }}>
+              {periodType === "month" ? `${year}-${String(month).padStart(2, "0")}` : periodType === "quarter" ? `${year} Q${quarter}` : `${year}`}
+            </strong>
+          </div>
+          <div style={{ padding: "10px 12px", borderRadius: "14px", background: "rgba(37,99,235,0.08)" }}>
+            <div style={{ fontSize: "11px", color: "#1d4ed8" }}>快照数量</div>
+            <strong style={{ fontSize: "14px", color: "#1e3a8a" }}>{snapshots.length}</strong>
+          </div>
         </div>
         <div style={{ display: "grid", gap: "10px" }}>
           <label style={{ display: "grid", gap: "6px" }}>
