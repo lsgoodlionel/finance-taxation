@@ -1,4 +1,4 @@
-import React, { type ReactNode } from "react";
+import React, { type ReactNode, useId } from "react";
 
 type DataTableShellProps = {
   title?: string;
@@ -7,11 +7,16 @@ type DataTableShellProps = {
 };
 
 export function DataTableShell({ title, actions, children }: DataTableShellProps) {
+  const titleId = useId();
+
   return (
-    <section className="v3-table-shell">
+    <section
+      className="v3-table-shell"
+      aria-labelledby={title ? titleId : undefined}
+    >
       {title || actions ? (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-          {title ? <h3 style={{ margin: 0, fontSize: "15px" }}>{title}</h3> : <span />}
+          {title ? <h3 id={titleId} style={{ margin: 0, fontSize: "15px" }}>{title}</h3> : <span />}
           {actions}
         </div>
       ) : null}

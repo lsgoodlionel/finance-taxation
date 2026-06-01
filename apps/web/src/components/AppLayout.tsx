@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
-  Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin,
+  Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid,
 } from "antd";
 import {
   RobotOutlined, UnorderedListOutlined, CheckSquareOutlined, DashboardOutlined,
   FileTextOutlined, TeamOutlined, FolderOpenOutlined, AuditOutlined, BarChartOutlined,
   LineChartOutlined, CalculatorOutlined, ExperimentOutlined, AlertOutlined, FileSearchOutlined,
-  BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined,
+  BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined, MenuOutlined,
 } from "@ant-design/icons";
 import { getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
 import { LOGIN_GATE_SUBTITLE, SIDEBAR_BRAND_SUBTITLE } from "../lib/entry-guidance";
@@ -164,12 +164,17 @@ function LoginGate({ onLogin }: { onLogin: (user: User) => void }) {
   );
 }
 
+const { useBreakpoint } = Grid;
+
 export function AppLayout() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const screens = useBreakpoint();
+  const isMobile = !screens.lg;
 
   useEffect(() => {
     const token = getStoredToken();
@@ -205,6 +210,134 @@ export function AppLayout() {
     user.roleIds.includes("role-finance-director") || user.roleIds.includes("cfo") ? "财务总监" :
     user.roleIds.includes("role-accountant") || user.roleIds.includes("accountant") ? "会计" : "成员";
 
+  // Shared sidebar content for both desktop Sider and mobile Drawer
+  const sidebarContent = (showFull: boolean) => (
+    <div style={{ background: "#0f172a", height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Brand */}
+      <div style={{
+        padding: showFull ? "18px 16px 14px" : "18px 0 14px",
+        borderBottom: "1px solid rgba(255,255,255,0.07)",
+        textAlign: showFull ? "left" : "center",
+      }}>
+        <div style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 34, height: 34, borderRadius: 9,
+          background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+          marginBottom: showFull ? 8 : 0,
+        }}>
+          <SafetyOutlined style={{ color: "#fff", fontSize: 17 }} />
+        </div>
+        {showFull && (
+          <>
+            <div style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>
+              Finance Taxation
+            </div>
+            <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>
+              {SIDEBAR_BRAND_SUBTITLE}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
+        <Menu
+          mode="inline"
+          theme="dark"
+          selectedKeys={[location.pathname]}
+          style={{ background: "transparent", border: "none", fontSize: 13 }}
+          items={navItems}
+          inlineCollapsed={!showFull}
+          onClick={({ key }) => {
+            navigate(key);
+            if (isMobile) setDrawerOpen(false);
+          }}
+          aria-label="主导航菜单"
+        />
+      </div>
+
+      {/* User footer */}
+      <div style={{
+        padding: showFull ? "10px 14px" : "10px 0",
+        borderTop: "1px solid rgba(255,255,255,0.07)",
+        display: "flex", alignItems: "center", gap: 8,
+        justifyContent: showFull ? "flex-start" : "center",
+      }}>
+        <Avatar
+          size={30}
+          style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)", flexShrink: 0, fontSize: 12, cursor: "default" }}
+          aria-label={`当前用户：${user.displayName || user.username}`}
+        >
+          {initials}
+        </Avatar>
+        {showFull && (
+          <>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: "#e2e8f0", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {user.displayName || user.username}
+              </div>
+              <div style={{ color: "#475569", fontSize: 11 }}>{roleLabel}</div>
+            </div>
+            <Button
+              type="text"
+              icon={<PoweroffOutlined style={{ fontSize: 13 }} />}
+              size="small"
+              onClick={handleLogout}
+              aria-label="退出登录"
+              title="退出登录"
+              style={{ color: "#475569", padding: "0 4px" }}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Layout style={{ minHeight: "100vh", background: "#f1f5f9" }}>
+        {/* Mobile top header */}
+        <div style={{
+          position: "sticky", top: 0, zIndex: 100,
+          background: "#0f172a", padding: "12px 16px",
+          display: "flex", alignItems: "center", gap: 12,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+        }}>
+          <Button
+            type="text"
+            icon={<MenuOutlined style={{ color: "#f1f5f9", fontSize: 18 }} />}
+            onClick={() => setDrawerOpen(true)}
+            aria-label="打开导航菜单"
+            style={{ padding: "0 4px" }}
+          />
+          <div style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 28, height: 28, borderRadius: 7,
+            background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+          }}>
+            <SafetyOutlined style={{ color: "#fff", fontSize: 14 }} />
+          </div>
+          <span style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700 }}>Finance Taxation</span>
+        </div>
+
+        <Drawer
+          placement="left"
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          width={256}
+          styles={{ body: { padding: 0, background: "#0f172a" }, header: { display: "none" } }}
+          aria-label="导航抽屉"
+        >
+          {sidebarContent(true)}
+        </Drawer>
+
+        <Content style={{ padding: "16px" }}>
+          <Outlet />
+        </Content>
+      </Layout>
+    );
+  }
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
       <Sider
@@ -216,89 +349,14 @@ export function AppLayout() {
         style={{
           background: "#0f172a",
           boxShadow: "2px 0 8px rgba(0,0,0,0.15)",
-          overflow: "auto",
+          overflow: "hidden",
           height: "100vh",
           position: "fixed",
           left: 0, top: 0, bottom: 0,
         }}
+        aria-label="侧边导航栏"
       >
-        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          {/* Brand */}
-          <div style={{
-            padding: collapsed ? "18px 0 14px" : "18px 16px 14px",
-            borderBottom: "1px solid rgba(255,255,255,0.07)",
-            textAlign: collapsed ? "center" : "left",
-            transition: "padding 0.2s",
-            flexShrink: 0,
-          }}>
-            <div style={{
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 34, height: 34, borderRadius: 9,
-              background: "linear-gradient(135deg, #2563eb, #7c3aed)",
-              marginBottom: collapsed ? 0 : 8,
-            }}>
-              <SafetyOutlined style={{ color: "#fff", fontSize: 17 }} />
-            </div>
-            {!collapsed && (
-              <>
-                <div style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>
-                  Finance Taxation
-                </div>
-                <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>
-                  {SIDEBAR_BRAND_SUBTITLE}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Navigation */}
-          <div style={{ padding: "6px 0 12px", overflowY: "auto", flex: 1, minHeight: 0 }}>
-            <Menu
-              mode="inline"
-              theme="dark"
-              selectedKeys={[location.pathname]}
-              style={{ background: "transparent", border: "none", fontSize: 13 }}
-              items={navItems}
-              onClick={({ key }) => navigate(key)}
-            />
-          </div>
-
-          {/* User footer */}
-          <div style={{
-            marginTop: "auto",
-            padding: collapsed ? "12px 0 14px" : "12px 14px 14px",
-            borderTop: "1px solid rgba(255,255,255,0.07)",
-            background: "rgba(8, 15, 28, 0.92)",
-            display: "flex", alignItems: "center", gap: 8,
-            justifyContent: collapsed ? "center" : "flex-start",
-            flexShrink: 0,
-          }}>
-            <Avatar
-              size={30}
-              style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)", flexShrink: 0, fontSize: 12, cursor: "default" }}
-            >
-              {initials}
-            </Avatar>
-            {!collapsed && (
-              <>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: "#e2e8f0", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {user.displayName || user.username}
-                  </div>
-                  <div style={{ color: "#64748b", fontSize: 11 }}>{roleLabel}</div>
-                </div>
-                <Button
-                  type="text"
-                  icon={<PoweroffOutlined style={{ fontSize: 13 }} />}
-                  size="small"
-                  onClick={handleLogout}
-                  title="退出登录"
-                  style={{ color: "#94a3b8", padding: "0 4px" }}
-                />
-              </>
-            )}
-          </div>
-        </div>
+        {sidebarContent(!collapsed)}
       </Sider>
 
       <Layout style={{ marginLeft: collapsed ? 64 : 224, transition: "margin-left 0.2s", background: "#f1f5f9", minHeight: "100vh" }}>
