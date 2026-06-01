@@ -80,12 +80,19 @@
 
 ## 5. 下一步顺序
 
-1. 合回 `codex/v3-tax-center-rework`
-2. 推送并收口 `codex/v3-layout-visibility-polish`
-3. 进入 `codex/v3-ledger-page-rework`
-4. 然后进入 `codex/v3-reports-page-rework`
-5. 再进入 `codex/v3-risk-page-rework`
-6. 最后做统一的响应式/无障碍收口，不回退已有 summary-first 结构
+1. 第一波并行：`Tax / Ledger / Reports / Risk`
+2. 第二波串行：`Layout Visibility Polish`
+3. 最后统一更新进度板、合回 `main`、重建 Docker
+
+## 5.1 并行执行索引
+
+- 新窗口统一参考：
+  - [docs/v3-parallel-execution-index.md](/Users/lionel/Develop/FT/docs/v3-parallel-execution-index.md)
+- 并行阶段不要修改：
+  - `docs/v3-progress-board.md`
+  - `docs/v3-upgrade-spec.md`
+  - `apps/web/src/styles/global.css`
+- 这些共享文件留到各车道完成后统一收口
 
 ## 6. 接续提示
 
