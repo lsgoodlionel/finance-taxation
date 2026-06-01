@@ -36,6 +36,31 @@ export function RiskResolutionWorkbench({
       <h3 style={{ marginTop: 0 }}>整改工作台</h3>
       {finding ? (
         <div style={{ display: "grid", gap: "16px" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: "10px"
+            }}
+          >
+            <div style={{ padding: "10px 12px", borderRadius: "14px", background: "rgba(248,113,113,0.10)" }}>
+              <div style={{ fontSize: "11px", color: "#991b1b" }}>风险级别</div>
+              <strong style={{ fontSize: "15px", color: "#7f1d1d" }}>{finding.severity}</strong>
+            </div>
+            <div style={{ padding: "10px 12px", borderRadius: "14px", background: "rgba(37,99,235,0.08)" }}>
+              <div style={{ fontSize: "11px", color: "#1d4ed8" }}>优先级</div>
+              <strong style={{ fontSize: "15px", color: "#1e3a8a" }}>{finding.priority}</strong>
+            </div>
+            <div style={{ padding: "10px 12px", borderRadius: "14px", background: "rgba(22,163,74,0.10)" }}>
+              <div style={{ fontSize: "11px", color: "#166534" }}>当前状态</div>
+              <strong style={{ fontSize: "15px", color: "#14532d" }}>{finding.status}</strong>
+            </div>
+            <div style={{ padding: "10px 12px", borderRadius: "14px", background: "rgba(245,158,11,0.12)" }}>
+              <div style={{ fontSize: "11px", color: "#9a3412" }}>对象链条</div>
+              <strong style={{ fontSize: "15px", color: "#7c2d12" }}>{closureTargets.length}</strong>
+            </div>
+          </div>
+
           <div style={{ padding: "14px 16px", borderRadius: "16px", background: "rgba(79,142,247,0.08)" }}>
             <div style={{ fontSize: "12px", color: "#6c7a89" }}>当前风险</div>
             <div style={{ fontSize: "18px", fontWeight: 700 }}>{finding.title}</div>
@@ -46,7 +71,17 @@ export function RiskResolutionWorkbench({
             <div style={{ fontSize: "13px", color: "#6c7a89" }}>关联对象链</div>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               {closureTargets.map((target) => (
-                <button key={`closure-${target.path}-${target.label}`} style={{ fontSize: "12px", padding: "4px 10px" }} onClick={() => onNavigate(target.path, target.state)}>
+                <button
+                  key={`closure-${target.path}-${target.label}`}
+                  style={{
+                    fontSize: "12px",
+                    padding: "6px 12px",
+                    borderRadius: "999px",
+                    border: "1px solid rgba(20,40,60,0.12)",
+                    background: "rgba(255,255,255,0.92)"
+                  }}
+                  onClick={() => onNavigate(target.path, target.state)}
+                >
                   {target.label}
                 </button>
               ))}
@@ -66,9 +101,19 @@ export function RiskResolutionWorkbench({
           </div>
 
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <button onClick={onOpenAudit} style={{ fontSize: "12px", padding: "6px 12px" }}>查看审计</button>
+            <button
+              onClick={onOpenAudit}
+              style={{ fontSize: "12px", padding: "8px 14px", borderRadius: "999px", border: "1px solid rgba(20,40,60,0.12)", background: "#fff" }}
+            >
+              查看审计
+            </button>
             {finding.status !== "resolved" ? (
-              <button onClick={onCloseFinding} style={{ fontSize: "12px", padding: "6px 12px" }}>标记已关闭</button>
+              <button
+                onClick={onCloseFinding}
+                style={{ fontSize: "12px", padding: "8px 14px", borderRadius: "999px", border: "none", background: "#2563eb", color: "#fff" }}
+              >
+                标记已关闭
+              </button>
             ) : null}
           </div>
         </div>
