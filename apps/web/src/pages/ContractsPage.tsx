@@ -35,6 +35,8 @@ import { ContractMetadataGrid } from "./contracts/ContractMetadataGrid";
 import { ContractTimelinePanel } from "./contracts/ContractTimelinePanel";
 import { ContractCreateForm } from "./contracts/ContractCreateForm";
 import { ContractsTable } from "./contracts/ContractsTable";
+import { ContractDrawer } from "./contracts/ContractDrawer";
+import { ContractCloseWizard } from "./contracts/ContractCloseWizard";
 import { EmptyState } from "../components/ui/EmptyState";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
@@ -118,6 +120,9 @@ export function ContractsPage() {
   const [showForm, setShowForm] = useState(false);
   const [message, setMessage] = useState("正在加载合同数据...");
   const [creatingEventContractId, setCreatingEventContractId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [closeWizardOpen, setCloseWizardOpen] = useState(false);
+  const [closeStatus, setCloseStatus] = useState<"fulfilled" | "terminated">("fulfilled");
 
   const [form, setForm] = useState({
     contractType: "sales",
@@ -382,7 +387,7 @@ export function ContractsPage() {
             contractTypeLabels={CONTRACT_TYPE_LABELS}
             statusLabels={STATUS_LABELS}
             statusColor={STATUS_COLOR}
-            onOpenDetail={(contractId) => void handleDetail(contractId)}
+            onOpenDetail={(contractId) => { void handleDetail(contractId); setDrawerOpen(true); }}
             onCreateEvent={(contract) => void handleCreateEvent(contract)}
             onClose={(contract, status) => void handleClose(contract, status)}
           />
@@ -484,12 +489,37 @@ export function ContractsPage() {
   );
 
   return (
-    <ContractsShell
-      header={header}
-      createForm={createForm}
-      filters={filters}
-      list={list}
-      detail={detailView}
-    />
+    <>
+      <ContractsShell
+        header={header}
+        createForm={createForm}
+        filters={filters}
+        list={list}
+        detail={detailView}
+      />
+      {/* Multi-tab contract drawer */}
+      <ContractDrawer
+        detail={detail}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onCloseContract={(status) => {
+          setCloseStatus(status);
+          setDrawerOpen(false);
+          setCloseWizardOpen(true);
+        }}
+        onOpenEvent={(eventId) => navigateWithEvent("/events", eventId)}
+      />
+      {/* 3-step close wizard */}
+      <ContractCloseWizard
+        contract={detail?.contract ?? null}
+        closeStatus={closeStatus}
+        open={closeWizardOpen}
+        onClose={() => setCloseWizardOpen(false)}
+        onConfirm={async (status, _notes) => {
+          if (detail) await handleClose(detail.contract, status);
+          setCloseWizardOpen(false);
+        }}
+      />
+    </>
   );
 }
