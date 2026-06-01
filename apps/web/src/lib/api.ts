@@ -1271,3 +1271,227 @@ export async function testAiConnection(data: {
     body: JSON.stringify(data)
   });
 }
+
+// ─── P1: Tax Integration — Declaration Export ─────────────────────────────────
+
+/** 下载申报文件（返回 Blob URL，由调用方触发浏览器下载） */
+export async function downloadDeclarationFile(
+  type: "vat-xml" | "iit-csv" | "si-csv" | "fund-csv",
+  period: string,
+): Promise<{ blobUrl: string; fileName: string }> {
+  const token = getStoredToken();
+  const res = await fetch(
+    `/api/tax-integration/${type}?period=${encodeURIComponent(period)}`,
+    { headers: { Authorization: `Bearer ${token ?? ""}` } },
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "下载失败" })) as { error?: string };
+    throw new Error(err.error ?? `HTTP ${res.status}`);
+  }
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const nameMatch = disposition.match(/filename="?([^";]+)"?/);
+  const fileName = nameMatch?.[1] ? decodeURIComponent(nameMatch[1]) : `${type}-${period}`;
+  const blob = await res.blob();
+  return { blobUrl: URL.createObjectURL(blob), fileName };
+}
+
+export async function listDeclarationSubmissions(period?: string) {
+  const q = period ? `?period=${encodeURIComponent(period)}` : "";
+  return request<{ items: DeclarationSubmission[]; total: number }>(
+    `/api/tax-integration/submissions${q}`,
+  );
+}
+
+export async function confirmDeclarationSubmission(id: string, submissionRef?: string) {
+  return request<{ ok: boolean }>(`/api/tax-integration/submissions/${id}/confirm`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ submissionRef }),
+  });
+}
+
+export interface DeclarationSubmission {
+  id: string;
+  taxType: string;       // 'vat'|'iit'|'si'|'housing_fund'
+  filingPeriod: string;
+  submissionMode: string;
+  fileFormat: string;
+  fileName: string;
+  submissionRef: string | null;
+  status: "generated" | "uploaded" | "confirmed" | "rejected";
+  errorMessage: string | null;
+  submittedAt: string | null;
+  confirmedAt: string | null;
+  createdByName: string;
+  createdAt: string;
+}
+
+// ─── P1: Bank Accounts & Statements ─────────────────────────────────────────
+
+export interface BankAccount {
+  id: string;
+  bank_name: string;
+  bank_code: string | null;
+  account_no: string;
+  account_name: string;
+  currency: string;
+  is_primary: boolean;
+  is_payroll: boolean;
+  notes: string;
+  created_at: string;
+}
+
+export interface BankStatement {
+  id: string;
+  transaction_date: string;
+  value_date: string | null;
+  amount: number;
+  balance: number | null;
+  counterparty_name: string | null;
+  counterparty_no: string | null;
+  description: string | null;
+  match_status: "unmatched" | "auto" | "manual" | "excluded";
+  matched_voucher_id: string | null;
+  matched_event_id: string | null;
+  transaction_ref: string | null;
+  imported_at: string;
+}
+
+export async function listBankAccounts() {
+  return request<{ items: BankAccount[]; total: number }>("/api/banking/accounts");
+}
+
+export async function createBankAccount(data: {
+  bankName: string; bankCode?: string; accountNo: string; accountName: string;
+  currency?: string; isPrimary?: boolean; isPayroll?: boolean; notes?: string;
+}) {
+  return request<{ id: string; ok: boolean }>("/api/banking/accounts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function listBankStatements(params?: {
+  dateFrom?: string; dateTo?: string; matchStatus?: string; page?: number; pageSize?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params?.dateFrom)    q.set("date_from", params.dateFrom);
+  if (params?.dateTo)      q.set("date_to", params.dateTo);
+  if (params?.matchStatus) q.set("match_status", params.matchStatus);
+  if (params?.page)        q.set("page", String(params.page));
+  if (params?.pageSize)    q.set("page_size", String(params.pageSize));
+  const qs = q.toString();
+  return request<{ items: BankStatement[]; total: number; page: number; pageSize: number }>(
+    `/api/banking/statements${qs ? "?" + qs : ""}`,
+  );
+}
+
+export async function importBankStatements(csvText: string, accountId?: string) {
+  const token = getStoredToken();
+  const url = accountId
+    ? `/api/banking/statements/import?account_id=${encodeURIComponent(accountId)}`
+    : "/api/banking/statements/import";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain; charset=utf-8", Authorization: `Bearer ${token ?? ""}` },
+    body: csvText,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "导入失败" })) as { error?: string };
+    throw new Error(err.error ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<{
+    ok: boolean; detectedFormat: string; totalRows: number;
+    inserted: number; skipped: number; errorRows: number; importBatch: string;
+  }>;
+}
+
+export async function getBankUnmatchedSummary() {
+  return request<Record<string, { count: number; totalAmount: number }>>("/api/banking/statements/unmatched");
+}
+
+export async function matchBankStatement(id: string, data: {
+  voucherId?: string; eventId?: string; matchStatus?: string;
+}) {
+  return request<{ ok: boolean }>(`/api/banking/statements/${id}/match`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+// ─── P1: Invoices ─────────────────────────────────────────────────────────────
+
+export interface Invoice {
+  id: string;
+  direction: "input" | "output";
+  invoice_type: string;
+  invoice_code: string | null;
+  invoice_no: string;
+  invoice_date: string;
+  seller_name: string;
+  seller_tax_no: string;
+  buyer_name: string;
+  buyer_tax_no: string;
+  amount: number;
+  tax_amount: number;
+  total_amount: number;
+  tax_rate: number;
+  verify_status: "pending" | "verified" | "invalid" | "error";
+  verify_message: string | null;
+  verified_at: string | null;
+  business_event_id: string | null;
+  document_id: string | null;
+  source: "manual" | "ocr" | "import";
+  notes: string;
+  created_at: string;
+}
+
+export async function listInvoices(params?: {
+  direction?: string; verifyStatus?: string; dateFrom?: string; dateTo?: string;
+  page?: number; pageSize?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params?.direction)    q.set("direction", params.direction);
+  if (params?.verifyStatus) q.set("verify_status", params.verifyStatus);
+  if (params?.dateFrom)     q.set("date_from", params.dateFrom);
+  if (params?.dateTo)       q.set("date_to", params.dateTo);
+  if (params?.page)         q.set("page", String(params.page));
+  if (params?.pageSize)     q.set("page_size", String(params.pageSize));
+  const qs = q.toString();
+  return request<{ items: Invoice[]; total: number; page: number; pageSize: number }>(
+    `/api/invoices${qs ? "?" + qs : ""}`,
+  );
+}
+
+export async function createInvoice(data: {
+  direction?: string; invoiceType?: string; invoiceCode?: string;
+  invoiceNo: string; invoiceDate: string; sellerName: string;
+  sellerTaxNo?: string; buyerName?: string; buyerTaxNo?: string;
+  amount?: number; taxAmount?: number; totalAmount?: number; taxRate?: number;
+  businessEventId?: string; source?: string; notes?: string;
+}) {
+  return request<{ id: string; ok: boolean }>("/api/invoices", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function verifyInvoice(id: string) {
+  return request<{ verifyStatus: string; message: string }>(`/api/invoices/${id}/verify`, {
+    method: "POST",
+  });
+}
+
+export async function ocrInvoice(data: { imageBase64?: string; text?: string }) {
+  return request<{ extracted: Record<string, unknown> | null; confidence: string }>(
+    "/api/invoices/ocr",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) },
+  );
+}
+
+export async function deleteInvoice(id: string) {
+  return request<{ ok: boolean }>(`/api/invoices/${id}`, { method: "DELETE" });
+}
