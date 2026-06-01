@@ -32,6 +32,7 @@ interface TaxObligation {
 interface Props {
   batches: TaxFilingBatch[];
   currentPeriod?: string;   // YYYY-MM format
+  onStartVatDeclaration?: () => void;
 }
 
 function getCurrentPeriod(): string {
@@ -43,7 +44,7 @@ function isQuarterEnd(month: number): boolean {
   return month === 3 || month === 6 || month === 9 || month === 12;
 }
 
-export function TaxCalendar({ batches, currentPeriod }: Props) {
+export function TaxCalendar({ batches, currentPeriod, onStartVatDeclaration }: Props) {
   const period = currentPeriod ?? getCurrentPeriod();
   const parts = period.split("-");
   const year = parseInt(parts[0] ?? "2024", 10);
@@ -162,6 +163,18 @@ export function TaxCalendar({ batches, currentPeriod }: Props) {
                     : "草稿"
                   }
                 </Text>
+              )}
+              {o.taxType === "vat" && onStartVatDeclaration && o.status !== "filed" && (
+                <button
+                  onClick={onStartVatDeclaration}
+                  style={{
+                    marginTop: 4, padding: "3px 10px", fontSize: 11, borderRadius: 6,
+                    border: `1px solid ${o.color}66`, background: `${o.color}0d`,
+                    color: o.color, cursor: "pointer",
+                  }}
+                >
+                  开始申报向导 →
+                </button>
               )}
             </div>
           </Col>
