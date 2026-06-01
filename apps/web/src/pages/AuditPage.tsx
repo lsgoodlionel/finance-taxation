@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type { AuditLog } from "@finance-taxation/domain-model";
-import { listAuditLogs } from "../lib/api";
+import { describePageLoadError, listAuditLogs } from "../lib/api";
 import { normalizeDrilldownState, resolveAuditContextFromState } from "./drilldown";
 import { resolveInitialAuditExpansion } from "./risk-scope";
 import { AuditDetailPanel } from "./audit/AuditDetailPanel";
@@ -86,8 +86,8 @@ export function AuditPage() {
       setTotal(res.total);
       setOffset(off);
       setMessage(`${rid ? `当前对象 ${rid}：` : ""}共 ${res.total} 条审计记录`);
-    } catch {
-      setMessage("加载失败，请检查后端连接。");
+    } catch (error) {
+      setMessage(describePageLoadError(error));
     } finally {
       setLoading(false);
     }

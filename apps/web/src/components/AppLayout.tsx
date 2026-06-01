@@ -9,7 +9,7 @@ import {
   LineChartOutlined, CalculatorOutlined, ExperimentOutlined, AlertOutlined, FileSearchOutlined,
   BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined, MenuOutlined,
 } from "@ant-design/icons";
-import { getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
+import { AUTH_EXPIRED_EVENT, getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
 import { LOGIN_GATE_SUBTITLE, SIDEBAR_BRAND_SUBTITLE } from "../lib/entry-guidance";
 
 const { Sider, Content } = Layout;
@@ -184,6 +184,16 @@ export function AppLayout() {
       .catch(() => {})
       .finally(() => setChecking(false));
   }, []);
+
+  useEffect(() => {
+    function handleAuthExpired() {
+      setUser(null);
+      navigate("/", { replace: true });
+    }
+
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+  }, [navigate]);
 
   async function handleLogout() {
     try { await logoutSession(); } catch {

@@ -6,6 +6,7 @@ import {
   closeContract,
   createEvent,
   createContract,
+  describePageLoadError,
   getContractDetail,
   listEvents,
   listContracts
@@ -160,8 +161,8 @@ export function ContractsPage() {
     async function bootstrap() {
       try {
         await loadContracts();
-      } catch {
-        setMessage("加载失败，请检查后端连接。");
+      } catch (error) {
+        setMessage(describePageLoadError(error));
       }
     }
     bootstrap();

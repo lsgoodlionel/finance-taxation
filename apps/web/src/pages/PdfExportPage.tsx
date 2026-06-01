@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   createExportJob,
+  describePageLoadError,
   getDocumentDetail,
   getClosingBundleHtml,
   getRndProjectDetail,
@@ -269,8 +270,8 @@ export function PdfExportPage() {
         setArchiveEntries(archiveRes.items);
         setExportAuditLogs(auditRes.items);
         setMessage("这里是最终导出中心。下方统一汇总工资、报表、税务底稿、资料包和凭证的打印版入口。");
-      } catch {
-        setMessage("加载失败，请检查后端连接。");
+      } catch (error) {
+        setMessage(describePageLoadError(error));
       }
     }
     bootstrap();
