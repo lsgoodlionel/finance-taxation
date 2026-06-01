@@ -1,4 +1,4 @@
-import { Table, Typography, Pagination, Space, Button, Segmented } from "antd";
+import { Table, Typography, Pagination, Space, Button, Segmented, Input } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useQueryState } from "../../hooks/useQueryState";
 import { DataTableShell } from "../../components/ui/DataTableShell";
@@ -112,29 +112,36 @@ export function LedgerJournalPanel(props: LedgerJournalPanelProps) {
   }
 
   const filterBar = (
-    <Space wrap size={8}>
-      <Segmented
-        value={journalType}
-        options={[
-          { label: "现金（1001）", value: "cash" },
-          { label: "银行存款（1002）", value: "bank" },
-        ]}
-        onChange={(v) => onJournalTypeChange(v as "cash" | "bank")}
-      />
-      <input
-        value={journalFrom}
-        onChange={(e) => onJournalFromChange(e.target.value)}
-        placeholder="开始日期 2026-01-01"
-        style={{ width: 150, padding: "4px 8px", borderRadius: 6, border: "1px solid #d1d5db" }}
-      />
-      <input
-        value={journalTo}
-        onChange={(e) => onJournalToChange(e.target.value)}
-        placeholder="结束日期 2026-12-31"
-        style={{ width: 150, padding: "4px 8px", borderRadius: 6, border: "1px solid #d1d5db" }}
-      />
-      <Button type="primary" size="small" onClick={onLoadJournal}>查询</Button>
-    </Space>
+    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+      <Space wrap size={8}>
+        <Segmented
+          value={journalType}
+          options={[
+            { label: "现金（1001）", value: "cash" },
+            { label: "银行存款（1002）", value: "bank" },
+          ]}
+          onChange={(v) => onJournalTypeChange(v as "cash" | "bank")}
+        />
+        <Input
+          value={journalFrom}
+          onChange={(e) => onJournalFromChange(e.target.value)}
+          placeholder="开始日期 2026-01-01"
+          style={{ width: 160 }}
+        />
+        <Input
+          value={journalTo}
+          onChange={(e) => onJournalToChange(e.target.value)}
+          placeholder="结束日期 2026-12-31"
+          style={{ width: 160 }}
+        />
+        <Button type="primary" size="small" onClick={onLoadJournal}>查询</Button>
+      </Space>
+      {items.length > 0 ? (
+        <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>
+          当前页：{safePage}/{Math.max(1, totalPages)}
+        </span>
+      ) : null}
+    </div>
   );
 
   return (
@@ -159,6 +166,7 @@ export function LedgerJournalPanel(props: LedgerJournalPanelProps) {
             size="small"
             pagination={false}
             style={{ fontSize: 13 }}
+            scroll={{ x: 860 }}
           />
           {items.length > PAGE_SIZE && (
             <div style={{ display: "flex", justifyContent: "flex-end" }}>

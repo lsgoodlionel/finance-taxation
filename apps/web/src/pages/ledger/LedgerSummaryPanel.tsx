@@ -78,28 +78,6 @@ const COLUMNS: ColumnsType<TreeRow> = [
     render: (code: string, row) =>
       row.isGroup ? (
         <Tag color="blue" style={{ fontWeight: 600 }}>{code}</Tag>
-=======
-export function LedgerSummaryPanel({ items }: LedgerSummaryPanelProps) {
-  const totalDebit = items.reduce((sum, item) => sum + Number(item.debit), 0);
-  const totalCredit = items.reduce((sum, item) => sum + Number(item.credit), 0);
-
-  return (
-    <DataTableShell
-      title="科目汇总"
-      actions={(
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>科目数：{items.length}</span>
-          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>借方累计：{totalDebit}</span>
-          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>贷方累计：{totalCredit}</span>
-        </div>
-      )}
-    >
-      <p className="v3-section-description" style={{ marginBottom: "4px" }}>
-        用于先确认当前总账覆盖范围和累计发生额，再决定是否进一步钻取到余额或明细分录。
-      </p>
-      {items.length === 0 ? (
-        <EmptyState title="暂无科目汇总" description="当前没有可展示的借贷累计，请先确认是否已有过账数据。" />
->>>>>>> ff7ce94 (Polish V3 ledger scene panels)
       ) : (
         <Text type="secondary" style={{ fontSize: 12 }}>{code}</Text>
       ),

@@ -116,7 +116,14 @@ export function LedgerPeriodsPanel(props: LedgerPeriodsPanelProps) {
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
-      <DataTableShell title="新增锁账期间">
+      <DataTableShell
+        title="新增锁账期间"
+        actions={(
+          <span className="v3-banner" data-tone="warning" style={{ padding: "6px 10px", fontSize: "12px" }}>
+            待管理期间：{periods.length}
+          </span>
+        )}
+      >
         <div style={{ display: "grid", gap: 12 }}>
           <Alert
             type="warning"
@@ -124,7 +131,7 @@ export function LedgerPeriodsPanel(props: LedgerPeriodsPanelProps) {
             message="锁账前请确认该期间内的凭证均已复核完毕，锁账后凭证无法过账。"
             style={{ fontSize: 13 }}
           />
-          <Space>
+          <Space wrap size={10}>
             <Input
               value={newPeriod}
               onChange={(e) => onNewPeriodChange(e.target.value)}
@@ -174,6 +181,7 @@ export function LedgerPeriodsPanel(props: LedgerPeriodsPanelProps) {
             size="small"
             pagination={false}
             style={{ fontSize: 13 }}
+            scroll={{ x: 760 }}
           />
         )}
       </DataTableShell>
