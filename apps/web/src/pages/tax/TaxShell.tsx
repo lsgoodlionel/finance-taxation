@@ -11,12 +11,14 @@ type TaxShellProps = {
 
 export function TaxShell({ header, guidance, summary, taxItems, batches, materials }: TaxShellProps) {
   return (
-    <div style={{ display: "grid", gap: "24px" }}>
+    <div className="v3-result-shell">
       {header}
       {guidance}
       {summary}
-      {taxItems}
-      {batches}
+      <div className="v3-result-grid v3-result-grid--wide">
+        {taxItems}
+        {batches}
+      </div>
       {materials}
     </div>
   );

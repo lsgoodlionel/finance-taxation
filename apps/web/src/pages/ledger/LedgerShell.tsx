@@ -10,18 +10,11 @@ type LedgerShellProps = {
 
 export function LedgerShell({ header, summary, sceneSelector, content, context }: LedgerShellProps) {
   return (
-    <div style={{ display: "grid", gap: "24px" }}>
+    <div className="v3-result-shell">
       {header}
       {summary}
       {sceneSelector}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.3fr) minmax(280px, 0.7fr)",
-          gap: "24px",
-          alignItems: "start"
-        }}
-      >
+      <div className="v3-result-grid v3-result-grid--wide">
         {content}
         {context}
       </div>

@@ -10,12 +10,12 @@ type RiskPageShellProps = {
 
 export function RiskPageShell({ header, kpiCards, list, detail, timeline }: RiskPageShellProps) {
   return (
-    <div style={{ display: "grid", gap: "24px" }}>
+    <div className="v3-result-shell">
       {header}
       {kpiCards}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.05fr) minmax(360px, 0.95fr)", gap: "24px", alignItems: "start" }}>
+      <div className="v3-result-grid v3-result-grid--wide">
         {list}
-        <div style={{ display: "grid", gap: "24px" }}>
+        <div className="v3-result-stack">
           {detail}
           {timeline}
         </div>
