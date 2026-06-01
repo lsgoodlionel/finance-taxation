@@ -1390,14 +1390,18 @@ apps/web/src/
    - `docs/v2-development-summary.md`
    - `docs/v3-upgrade-spec.md`
    - `docs/v3-progress-board.md`
-2. 先合回
+   - `docs/v3-parallel-execution-index.md`
+2. 第一波并行执行已完成
    - `v3-tax-center-rework`
-   - `v3-layout-visibility-polish`
-3. 再按顺序做
    - `v3-ledger-page-rework`
    - `v3-reports-page-rework`
    - `v3-risk-page-rework`
-4. 最后做统一 `responsive + accessibility + visibility polish`
+3. 第二波串行收口正在进行
+   - `v3-layout-visibility-polish`
+4. 接下来统一做
+   - `progress board` 回写
+   - `main` 集成
+   - `responsive + accessibility + visibility polish`
 
 ---
 

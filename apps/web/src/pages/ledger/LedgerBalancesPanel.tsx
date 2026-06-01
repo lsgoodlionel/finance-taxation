@@ -139,6 +139,7 @@ const COLUMNS: ColumnsType<TreeRow> = [
 ];
 
 export function LedgerBalancesPanel({ items }: LedgerBalancesPanelProps) {
+  const nonZeroBalances = items.filter((item) => Number(item.balance) !== 0).length;
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
 
   if (items.length === 0) {
@@ -152,7 +153,18 @@ export function LedgerBalancesPanel({ items }: LedgerBalancesPanelProps) {
   const treeData = buildTree(items);
 
   return (
-    <DataTableShell title={`科目余额（${treeData.length} 类 / ${items.length} 个科目）`}>
+    <DataTableShell
+      title={`科目余额（${treeData.length} 类 / ${items.length} 个科目）`}
+      actions={(
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>余额科目：{items.length}</span>
+          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>非零余额：{nonZeroBalances}</span>
+        </div>
+      )}
+    >
+      <p className="v3-section-description" style={{ marginBottom: "12px" }}>
+        适合月结前复核各科目余额结构，先看余额规模，再追踪异常科目来源。
+      </p>
       <Table<TreeRow>
         dataSource={treeData}
         columns={COLUMNS}
