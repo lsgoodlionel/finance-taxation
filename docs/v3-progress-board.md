@@ -104,8 +104,12 @@
 2. ✅ `auth-session-ux`、`knowledge-page-rework`、后端 `p3-reconciliation-engine`（含 P1/P2/P3 + 迁移修复）已合回 `main`
 3. ✅ `main` 总体验证通过：API typecheck + 93 测试、Web typecheck + 45 测试文件全绿
 4. ✅ `DocumentsPage` 已重构为 V3 summary-first 工作台（652→214 行）并合回 main
-5. ⏳ 统一 `responsive`（Drawer→BottomSheet、断点折叠）与 `accessibility`（aria-*、键盘焦点、抽屉/步骤语义）
-6. ⏳ `main` Docker 重建验证（需本地 PostgreSQL，当前未运行）
+5. ✅ 全局 responsive / accessibility 收口（global.css 集中）：
+   - 键盘焦点可见性 `:focus-visible` 统一轮廓
+   - 尊重 `prefers-reduced-motion` 系统偏好
+   - 超小屏（≤640px）结果网格折叠为单列
+   - 工作台卡片内宽表格窄屏横向滚动
+6. ⏳ `main` Docker 重建验证（需本地 PostgreSQL）
 
 ## 6. 接续提示
 

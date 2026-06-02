@@ -316,3 +316,44 @@ body {
   color: #fff;
   box-shadow: 0 18px 34px rgba(20, 40, 60, 0.16);
 }
+
+/* ── Accessibility: 键盘焦点可见性 ──────────────────────────────────────────
+   多数交互元素使用内联样式且无 :focus 态。集中提供统一的键盘焦点轮廓，
+   仅在键盘导航时显示（:focus-visible），不影响鼠标点击。 */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--v3-color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Accessibility: 尊重系统「减少动态效果」偏好 ──────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Responsive: 超小屏避免结果网格因 minmax(320px) 溢出 ───────────────────── */
+@media (max-width: 640px) {
+  .v3-result-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Responsive: 工作台卡片内的宽表格在窄屏可横向滚动而非撑破布局 ───────────── */
+.v3-workbench-card table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
