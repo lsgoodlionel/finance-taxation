@@ -122,6 +122,7 @@ import {
 } from "./modules/payroll/transfer.routes.js";
 import { socialSecurityClosureRoute } from "./modules/payroll/social-security.routes.js";
 import { syncStatementsRoute, submitTransferApiRoute } from "./modules/banking/bank-api.routes.js";
+import { getCloseStatus } from "./modules/close/close.routes.js";
 import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
   payrollPdf,
@@ -1305,6 +1306,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
       await readJsonBody(req);
       return upsertReconRulesRoute(req, res);
     }
+  }
+
+  // ── 月度结账状态聚合 ──────────────────────────────────────────────────────
+  if (url.pathname === "/api/close/status") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return getCloseStatus(req, res);
   }
 
   // ── P5: 银行 API 直连——自动拉流水并对账 ───────────────────────────────────

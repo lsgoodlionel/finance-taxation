@@ -8,6 +8,7 @@ import { PdfExportPage } from "./pages/PdfExportPage";
 import { ContractsPage } from "./pages/ContractsPage";
 import { PayrollPage } from "./pages/PayrollPage";
 import { PayrollTransferPage } from "./pages/PayrollTransferPage";
+import { MonthEndClosePage } from "./pages/MonthEndClosePage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { EventsPage } from "./pages/EventsPage";
 import { LedgerPage } from "./pages/LedgerPage";
@@ -31,6 +32,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/assistant" replace /> },
       { path: "dashboard/chairman", element: <ChairmanDashboardPage /> },
+      { path: "close", element: <MonthEndClosePage /> },
       { path: "events", element: <EventsPage /> },
       { path: "tasks", element: <TasksPage /> },
       { path: "documents", element: <DocumentsPage /> },

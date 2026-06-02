@@ -4,7 +4,7 @@ import {
   Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid,
 } from "antd";
 import {
-  RobotOutlined, UnorderedListOutlined, CheckSquareOutlined, DashboardOutlined,
+  RobotOutlined, UnorderedListOutlined, CheckSquareOutlined, DashboardOutlined, CheckCircleOutlined,
   FileTextOutlined, TeamOutlined, FolderOpenOutlined, AuditOutlined, BarChartOutlined,
   LineChartOutlined, CalculatorOutlined, ExperimentOutlined, AlertOutlined, FileSearchOutlined,
   BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined, MenuOutlined,
@@ -34,6 +34,7 @@ const navItems = [
       { key: "/events", icon: <UnorderedListOutlined />, label: "经营事项总线" },
       { key: "/tasks", icon: <CheckSquareOutlined />, label: "任务中心" },
       { key: "/dashboard/chairman", icon: <DashboardOutlined />, label: "董事长驾驶舱" },
+      { key: "/close", icon: <CheckCircleOutlined />, label: "月度结账" },
     ],
   },
   {
