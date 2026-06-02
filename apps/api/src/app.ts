@@ -120,6 +120,7 @@ import {
   downloadBatchFileRoute,
   disburseBatchRoute
 } from "./modules/payroll/transfer.routes.js";
+import { socialSecurityClosureRoute } from "./modules/payroll/social-security.routes.js";
 import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
   payrollPdf,
@@ -881,6 +882,14 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("payroll.view", req, res))) return;
     if (req.method === "GET") return getPayrollPeriods(req, res);
+  }
+
+  // ── P4: 社保联动（工资关账 → 社保申报 + 三险一金凭证）──────────────────────
+  const ssClosureMatch = url.pathname.match(/^\/api\/payroll\/periods\/([^/]+)\/social-security-closure$/);
+  if (ssClosureMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.manage", req, res))) return;
+    if (req.method === "POST") return socialSecurityClosureRoute(req, res, ssClosureMatch[1]);
   }
 
   if (url.pathname === "/api/payroll/compute") {
