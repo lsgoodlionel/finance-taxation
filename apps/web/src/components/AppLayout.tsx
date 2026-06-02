@@ -8,6 +8,7 @@ import {
   FileTextOutlined, TeamOutlined, FolderOpenOutlined, AuditOutlined, BarChartOutlined,
   LineChartOutlined, CalculatorOutlined, ExperimentOutlined, AlertOutlined, FileSearchOutlined,
   BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined, MenuOutlined,
+  BankOutlined, ProfileOutlined,
 } from "@ant-design/icons";
 import { AUTH_EXPIRED_EVENT, getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
 import { LOGIN_GATE_SUBTITLE, SIDEBAR_BRAND_SUBTITLE } from "../lib/entry-guidance";
@@ -70,6 +71,15 @@ const navItems = [
       { key: "/rnd", icon: <ExperimentOutlined />, label: "研发辅助账" },
       { key: "/risk", icon: <AlertOutlined />, label: "风险勾稽" },
       { key: "/audit", icon: <FileSearchOutlined />, label: "审计日志" },
+    ],
+  },
+  {
+    key: "g-integration",
+    label: "外部系统对接",
+    type: "group" as const,
+    children: [
+      { key: "/invoices", icon: <ProfileOutlined />, label: "发票台账" },
+      { key: "/banking",  icon: <BankOutlined />,    label: "银行管理" },
     ],
   },
   {

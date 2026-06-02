@@ -144,10 +144,49 @@ import {
   getUserList,
   updateCompanySettings
 } from "./modules/settings/routes.js";
+import {
+  listIntegrationConfigs,
+  getIntegrationConfig,
+  upsertIntegrationConfig,
+  testIntegrationConfig,
+} from "./modules/settings/integration-config.routes.js";
 import { login, logout, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
 import { readJsonBody } from "./utils/body.js";
+// P1 外部系统对接模块
+import {
+  exportVatXml,
+  exportIitCsv,
+  exportSiCsv,
+  exportFundCsv,
+  listSubmissions,
+  confirmSubmission,
+} from "./modules/tax-integration/declaration-export.routes.js";
+import {
+  listBankAccounts,
+  createBankAccount,
+  listBankStatements,
+  importBankStatements,
+  matchStatement,
+  getUnmatchedSummary,
+} from "./modules/banking/bank.routes.js";
+import {
+  runReconciliationRoute,
+  listCandidatesRoute,
+  confirmCandidateRoute,
+  rejectCandidateRoute,
+  getReconRulesRoute,
+  upsertReconRulesRoute,
+} from "./modules/banking/recon.routes.js";
+import {
+  listInvoices,
+  createInvoice,
+  updateInvoice,
+  verifyInvoice,
+  ocrInvoice,
+  deleteInvoice,
+} from "./modules/invoices/invoice.routes.js";
 
 async function router(req: ApiRequest, res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
@@ -1083,6 +1122,152 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("dashboard.view", req, res))) return;
     if (req.method === "GET") return getUserList(req, res);
+  }
+
+  // ── P2: 外部对接配置 ─────────────────────────────────────────────────────────
+  if (url.pathname === "/api/settings/integrations") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("dashboard.view", req, res))) return;
+    if (req.method === "GET") return listIntegrationConfigs(req, res);
+  }
+  const integrationTypeMatch = url.pathname.match(/^\/api\/settings\/integrations\/([^/]+)$/);
+  if (integrationTypeMatch?.[1] && !url.pathname.endsWith("/test")) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("dashboard.view", req, res))) return;
+    const configType = integrationTypeMatch[1];
+    if (req.method === "GET") return getIntegrationConfig(req, res, configType);
+    if (req.method === "PUT") { await readJsonBody(req); return upsertIntegrationConfig(req, res, configType); }
+  }
+  const integrationTestMatch = url.pathname.match(/^\/api\/settings\/integrations\/([^/]+)\/test$/);
+  if (integrationTestMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("dashboard.view", req, res))) return;
+    if (req.method === "POST") return testIntegrationConfig(req, res, integrationTestMatch[1]);
+  }
+
+  // ── P1: 税务申报文件导出 ─────────────────────────────────────────────────────
+  if (url.pathname === "/api/tax-integration/vat-xml") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.manage", req, res))) return;
+    if (req.method === "GET") return exportVatXml(req, res);
+  }
+  if (url.pathname === "/api/tax-integration/iit-csv") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.manage", req, res))) return;
+    if (req.method === "GET") return exportIitCsv(req, res);
+  }
+  if (url.pathname === "/api/tax-integration/si-csv") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.manage", req, res))) return;
+    if (req.method === "GET") return exportSiCsv(req, res);
+  }
+  if (url.pathname === "/api/tax-integration/fund-csv") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.manage", req, res))) return;
+    if (req.method === "GET") return exportFundCsv(req, res);
+  }
+  if (url.pathname === "/api/tax-integration/submissions") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.view", req, res))) return;
+    if (req.method === "GET") return listSubmissions(req, res);
+  }
+  const submissionConfirmMatch = url.pathname.match(/^\/api\/tax-integration\/submissions\/([^/]+)\/confirm$/);
+  if (submissionConfirmMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.manage", req, res))) return;
+    if (req.method === "PATCH") return confirmSubmission(req, res, submissionConfirmMatch[1]);
+  }
+
+  // ── P1: 银行账户与流水 ────────────────────────────────────────────────────
+  if (url.pathname === "/api/banking/accounts") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET")  return listBankAccounts(req, res);
+    if (req.method === "POST") {
+      await readJsonBody(req);
+      return createBankAccount(req, res);
+    }
+  }
+  if (url.pathname === "/api/banking/statements") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return listBankStatements(req, res);
+  }
+  if (url.pathname === "/api/banking/statements/import") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") return importBankStatements(req, res);
+  }
+  if (url.pathname === "/api/banking/statements/unmatched") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return getUnmatchedSummary(req, res);
+  }
+  const stmtMatchRoute = url.pathname.match(/^\/api\/banking\/statements\/([^/]+)\/match$/);
+  if (stmtMatchRoute?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "PATCH") {
+      await readJsonBody(req);
+      return matchStatement(req, res, stmtMatchRoute[1]);
+    }
+  }
+
+  // ── P3: 对账引擎 ──────────────────────────────────────────────────────────
+  if (url.pathname === "/api/banking/reconciliation/run") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") {
+      await readJsonBody(req);
+      return runReconciliationRoute(req, res);
+    }
+  }
+  if (url.pathname === "/api/banking/reconciliation/candidates") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return listCandidatesRoute(req, res);
+  }
+  const candidateConfirmRoute = url.pathname.match(/^\/api\/banking\/reconciliation\/candidates\/([^/]+)\/confirm$/);
+  if (candidateConfirmRoute?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") return confirmCandidateRoute(req, res, candidateConfirmRoute[1]);
+  }
+  const candidateRejectRoute = url.pathname.match(/^\/api\/banking\/reconciliation\/candidates\/([^/]+)\/reject$/);
+  if (candidateRejectRoute?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") return rejectCandidateRoute(req, res, candidateRejectRoute[1]);
+  }
+  if (url.pathname === "/api/banking/reconciliation/rules") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return getReconRulesRoute(req, res);
+    if (req.method === "PUT") {
+      await readJsonBody(req);
+      return upsertReconRulesRoute(req, res);
+    }
+  }
+
+  // ── P1: 发票台账 ─────────────────────────────────────────────────────────
+  if (url.pathname === "/api/invoices") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return listInvoices(req, res);
+    if (req.method === "POST") {
+      await readJsonBody(req);
+      return createInvoice(req, res);
+    }
+  }
+  if (url.pathname === "/api/invoices/ocr") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") {
+      await readJsonBody(req);
+      return ocrInvoice(req, res);
+    }
+  }
+  const invoiceVerifyMatch = url.pathname.match(/^\/api\/invoices\/([^/]+)\/verify$/);
+  if (invoiceVerifyMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") return verifyInvoice(req, res, invoiceVerifyMatch[1]);
+  }
+  const invoiceDetailMatch = url.pathname.match(/^\/api\/invoices\/([^/]+)$/);
+  if (invoiceDetailMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "PATCH") {
+      await readJsonBody(req);
+      return updateInvoice(req, res, invoiceDetailMatch[1]);
+    }
+    if (req.method === "DELETE") return deleteInvoice(req, res, invoiceDetailMatch[1]);
   }
 
   return json(res, 404, { error: "Not Found" });

@@ -10,8 +10,9 @@ import {
 } from "../lib/api";
 import type { CompanyProfile, AiConfigResponse, AiProviderInfo } from "../lib/api";
 import { buildResultPageSubtitle } from "../lib/entry-guidance";
+import { IntegrationSettingsTab } from "./settings/IntegrationSettingsTab";
 
-type Tab = "company" | "ai" | "display" | "about";
+type Tab = "company" | "ai" | "integration" | "display" | "about";
 
 // ─── Shared layout helpers ────────────────────────────────────────────────────
 
@@ -652,12 +653,14 @@ export function SettingsPage() {
       }}>
         {tabBtn(tab === "company", () => setTab("company"), "公司信息")}
         {tabBtn(tab === "ai", () => setTab("ai"), "AI 配置")}
+        {tabBtn(tab === "integration", () => setTab("integration"), "外部对接")}
         {tabBtn(tab === "display", () => setTab("display"), "显示设置")}
         {tabBtn(tab === "about", () => setTab("about"), "关于系统")}
       </div>
 
       {tab === "company" && <CompanyTab />}
       {tab === "ai" && <AiConfigTab />}
+      {tab === "integration" && <IntegrationSettingsTab />}
       {tab === "display" && <DisplayTab />}
       {tab === "about" && <AboutTab />}
     </div>

@@ -18,6 +18,8 @@ import { TasksPage } from "./pages/TasksPage";
 import { VouchersPage } from "./pages/VouchersPage";
 import { AuditPage } from "./pages/AuditPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
+import { BankingPage } from "./pages/banking/BankingPage";
+import { InvoicesPage } from "./pages/invoices/InvoicesPage";
 import { LEGACY_ENTRY_ALIASES } from "./lib/entry-guidance";
 
 const router = createBrowserRouter([
@@ -43,7 +45,9 @@ const router = createBrowserRouter([
       { path: "audit", element: <AuditPage /> },
       { path: "knowledge", element: <KnowledgePage /> },
       { path: "boss-qa", element: <Navigate to={LEGACY_ENTRY_ALIASES["boss-qa"]} replace /> },
-      { path: "settings", element: <SettingsPage /> }
+      { path: "settings", element: <SettingsPage /> },
+      { path: "banking", element: <BankingPage /> },
+      { path: "invoices", element: <InvoicesPage /> },
     ]
   }
 ]);

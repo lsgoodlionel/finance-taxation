@@ -41,6 +41,7 @@ import { TaxShell } from "./tax/TaxShell";
 import type { TaxBatchDetail, TaxNotice } from "./tax/taxTypes";
 import { TaxCalendar } from "./tax/TaxCalendar";
 import { VatDeclarationWizard } from "./tax/VatDeclarationWizard";
+import { DeclarationExportPanel } from "./tax/DeclarationExportPanel";
 import { TaxWorkspaceSummary } from "./tax/TaxWorkspaceSummary";
 
 const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
@@ -385,6 +386,7 @@ export function TaxPage() {
           />
         )}
       />
+      <DeclarationExportPanel currentPeriod={vatFilingPeriod} />
       <VatDeclarationWizard
         open={vatWizardOpen}
         filingPeriod={vatFilingPeriod}
