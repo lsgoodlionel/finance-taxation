@@ -9,6 +9,7 @@
  *   - 关联到经营事项
  */
 import { useState, useEffect, useCallback, useRef } from "react";
+import { PageHeader } from "../../components/ui/PageHeader";
 import {
   Typography, Card, Table, Tag, Button, Space, Modal, Form, Input,
   Select, DatePicker, Alert, Tabs, Statistic, Row, Col, Upload, Empty, Skeleton,
@@ -26,7 +27,7 @@ import {
   type Invoice,
 } from "../../lib/api";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const VERIFY_COLOR: Record<string, string> = {
   pending: "default", verified: "success", invalid: "error", error: "warning",
@@ -229,19 +230,21 @@ export function InvoicesPage() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <Title level={4} style={{ margin: 0 }}>发票台账</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>管理进销项发票，验真防假，关联经营事项</Text>
-        </div>
-        <Space>
-          <Button icon={<CameraOutlined />} onClick={() => setOcrOpen(true)}>OCR 识别</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>手动录入</Button>
-          <Button icon={<SyncOutlined />} onClick={() => void load()} />
-        </Space>
-      </div>
+    <div style={{ display: "grid", gap: 24 }}>
+      {/* Hero header */}
+      <section className="v3-hero-shell">
+        <PageHeader
+          title="发票台账"
+          subtitle="管理进销项发票，验真防假，关联经营事项"
+          actions={(
+            <Space>
+              <Button icon={<CameraOutlined />} onClick={() => setOcrOpen(true)}>OCR 识别</Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>手动录入</Button>
+              <Button icon={<SyncOutlined />} onClick={() => void load()} />
+            </Space>
+          )}
+        />
+      </section>
 
       {/* KPI */}
       <Row gutter={[16, 16]}>

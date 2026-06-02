@@ -8,6 +8,7 @@
  *   - 未匹配汇总
  */
 import { useState, useEffect, useCallback } from "react";
+import { PageHeader } from "../../components/ui/PageHeader";
 import {
   Typography, Card, Row, Col, Button, Space, Table, Tag, Upload, Alert,
   Statistic, Tabs, Modal, Form, Input, Switch, Empty, Skeleton, Select,
@@ -25,7 +26,7 @@ import {
   type BankAccount, type BankStatement,
 } from "../../lib/api";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const MATCH_STATUS_COLOR: Record<string, string> = {
   unmatched: "warning", auto: "processing", manual: "success", excluded: "default",
@@ -156,18 +157,20 @@ export function BankingPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <Title level={4} style={{ margin: 0 }}>银行管理</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>管理银行账户、导入银行流水、自动对账凭证</Text>
-        </div>
-        <Space>
-          <Button icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>添加银行账户</Button>
-          <Button icon={<SyncOutlined />} onClick={() => void load()}>刷新</Button>
-        </Space>
-      </div>
+    <div style={{ display: "grid", gap: 24 }}>
+      {/* Hero header */}
+      <section className="v3-hero-shell">
+        <PageHeader
+          title="银行管理"
+          subtitle="管理银行账户、导入银行流水、自动对账凭证"
+          actions={(
+            <Space>
+              <Button icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>添加银行账户</Button>
+              <Button icon={<SyncOutlined />} onClick={() => void load()}>刷新</Button>
+            </Space>
+          )}
+        />
+      </section>
 
       {/* KPI */}
       <Row gutter={[16, 16]}>

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { PageHeader } from "../components/ui/PageHeader";
 import { useLocation } from "react-router-dom";
 import { Card, Space, Tag, Alert, Tooltip, Button, Segmented, Skeleton, Typography } from "antd";
 import {
@@ -84,13 +85,13 @@ export function TasksPage() {
   const notStartedCount = useMemo(() => tasks.filter(t => t.status === "not_started").length, [tasks]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Page header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <Title level={4} style={{ margin: 0, color: "#0f172a" }}>任务中心</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>{buildResultPageSubtitle("任务中心")}</Text>
-        </div>
+    <div style={{ display: "grid", gap: 24 }}>
+      {/* Hero header */}
+      <section className="v3-hero-shell">
+        <PageHeader
+          title="任务中心"
+          subtitle={buildResultPageSubtitle("任务中心")}
+          actions={(
         <Space wrap>
           {notStartedCount > 0 && (
             <Tag icon={<ClockCircleOutlined />} color="blue">{notStartedCount} 待开始</Tag>
@@ -130,7 +131,9 @@ export function TasksPage() {
             />
           </Tooltip>
         </Space>
-      </div>
+          )}
+        />
+      </section>
 
       {/* Alert banners */}
       {overdueCount > 0 && (

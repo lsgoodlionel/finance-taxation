@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useI18n, type Lang } from "../lib/i18n";
+import { PageHeader } from "../components/ui/PageHeader";
 import {
   getCompanyProfile,
   updateCompanyProfile,
@@ -635,28 +636,20 @@ export function SettingsPage() {
   const [tab, setTab] = useState<Tab>("company");
 
   return (
-    <div style={{ display: "grid", gap: "20px" }}>
-      <div className="page-header">
-        <div>
-          <div className="page-title">系统设置</div>
-          <div className="page-subtitle">{buildResultPageSubtitle("系统设置")}</div>
-        </div>
-      </div>
+    <div style={{ display: "grid", gap: "24px" }}>
+      <section className="v3-hero-shell">
+        <PageHeader title="系统设置" subtitle={buildResultPageSubtitle("系统设置")} />
+      </section>
 
-      <div style={{
-        display: "flex",
-        gap: "8px",
-        background: "rgba(255,255,255,0.6)",
-        borderRadius: "24px",
-        border: "1px solid rgba(20,40,60,0.08)",
-        padding: "6px 10px"
-      }}>
-        {tabBtn(tab === "company", () => setTab("company"), "公司信息")}
-        {tabBtn(tab === "ai", () => setTab("ai"), "AI 配置")}
-        {tabBtn(tab === "integration", () => setTab("integration"), "外部对接")}
-        {tabBtn(tab === "display", () => setTab("display"), "显示设置")}
-        {tabBtn(tab === "about", () => setTab("about"), "关于系统")}
-      </div>
+      <section className="v3-section-shell" data-tone="muted">
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {tabBtn(tab === "company", () => setTab("company"), "公司信息")}
+          {tabBtn(tab === "ai", () => setTab("ai"), "AI 配置")}
+          {tabBtn(tab === "integration", () => setTab("integration"), "外部对接")}
+          {tabBtn(tab === "display", () => setTab("display"), "显示设置")}
+          {tabBtn(tab === "about", () => setTab("about"), "关于系统")}
+        </div>
+      </section>
 
       {tab === "company" && <CompanyTab />}
       {tab === "ai" && <AiConfigTab />}
