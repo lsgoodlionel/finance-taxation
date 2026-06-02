@@ -6,12 +6,13 @@ import {
 import { getDashboardChairman, type DashboardData } from "../lib/api";
 import { CHAIRMAN_DASHBOARD_SUBTITLE } from "../lib/entry-guidance";
 import { PageSkeleton } from "../components/ui/PageSkeleton";
+import { PageHeader } from "../components/ui/PageHeader";
 import { DashboardKpiCards } from "./dashboard/DashboardKpiCards";
 import { DashboardTrendChart } from "./dashboard/DashboardTrendChart";
 import { DashboardPieChart } from "./dashboard/DashboardPieChart";
 import { DashboardAlertCards } from "./dashboard/DashboardAlertCards";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 function AiSummaryCard({ aiSummary }: { aiSummary: DashboardData["aiSummary"] }) {
   return (
@@ -138,44 +139,46 @@ export function ChairmanDashboardPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Page header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <Title level={4} style={{ margin: 0, color: "#0f172a" }}>董事长驾驶舱</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>{CHAIRMAN_DASHBOARD_SUBTITLE}</Text>
-        </div>
-        <Space>
-          <Tag icon={<CheckCircleOutlined />} color="success">系统正常</Tag>
-          <Tag color="blue">{data.aiSummary.date}</Tag>
-        </Space>
-      </div>
+    <div style={{ display: "grid", gap: 24 }}>
+      {/* Hero header */}
+      <section className="v3-hero-shell">
+        <PageHeader
+          title="董事长驾驶舱"
+          subtitle={CHAIRMAN_DASHBOARD_SUBTITLE}
+          actions={(
+            <Space>
+              <Tag icon={<CheckCircleOutlined />} color="success">系统正常</Tag>
+              <Tag color="blue">{data.aiSummary.date}</Tag>
+            </Space>
+          )}
+        />
+      </section>
 
-      {/* KPI cards */}
-      <DashboardKpiCards data={data} />
+      {/* KPI 概览（summary-first）*/}
+      <section className="v3-section-shell" data-tone="accent">
+        <DashboardKpiCards data={data} />
+      </section>
 
-      {/* Charts row */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={14}>
-          <DashboardTrendChart data={data} />
-        </Col>
-        <Col xs={24} lg={10}>
-          <DashboardPieChart data={data} />
-        </Col>
-      </Row>
+      {/* Charts */}
+      <section className="v3-section-shell">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={14}><DashboardTrendChart data={data} /></Col>
+          <Col xs={24} lg={10}><DashboardPieChart data={data} /></Col>
+        </Row>
+      </section>
 
-      {/* Profit summary + AI summary */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={12}>
-          <ProfitSummaryCard profitOverview={data.profitOverview} />
-        </Col>
-        <Col xs={24} lg={12}>
-          <AiSummaryCard aiSummary={data.aiSummary} />
-        </Col>
-      </Row>
+      {/* Profit + AI summary */}
+      <section className="v3-section-shell" data-tone="muted">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={12}><ProfitSummaryCard profitOverview={data.profitOverview} /></Col>
+          <Col xs={24} lg={12}><AiSummaryCard aiSummary={data.aiSummary} /></Col>
+        </Row>
+      </section>
 
-      {/* Alert / risk cards */}
-      <DashboardAlertCards riskBoard={data.riskBoard} queues={data.queues} />
+      {/* Alerts */}
+      <section className="v3-section-shell">
+        <DashboardAlertCards riskBoard={data.riskBoard} queues={data.queues} />
+      </section>
     </div>
   );
 }

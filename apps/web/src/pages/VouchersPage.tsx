@@ -12,11 +12,12 @@ import {
 import { normalizeDrilldownState } from "./drilldown";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
+import { PageHeader } from "../components/ui/PageHeader";
 import { VouchersList } from "./vouchers/VouchersList";
 import { VoucherDetailPanel } from "./vouchers/VoucherDetailPanel";
 import { VoucherCreateModal } from "./vouchers/VoucherCreateModal";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 export function VouchersPage() {
   const location = useLocation();
@@ -195,26 +196,20 @@ export function VouchersPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Page header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <Title level={4} style={{ margin: 0, color: "#0f172a" }}>凭证中心</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            管理借贷凭证草稿、审核与过账，影响总账和财务报表
-          </Text>
-        </div>
-        <Space>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setModalOpen(true)}
-          >
-            按模板生成
-          </Button>
-          <Button icon={<QuestionCircleOutlined />} size="small" />
-        </Space>
-      </div>
+    <div style={{ display: "grid", gap: 24 }}>
+      {/* Hero header */}
+      <section className="v3-hero-shell">
+        <PageHeader
+          title="凭证中心"
+          subtitle="管理借贷凭证草稿、审核与过账，影响总账和财务报表"
+          actions={(
+            <Space>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>按模板生成</Button>
+              <Button icon={<QuestionCircleOutlined />} size="small" />
+            </Space>
+          )}
+        />
+      </section>
 
       {navEventId && (
         <Alert
@@ -235,43 +230,45 @@ export function VouchersPage() {
       )}
 
       {/* Main layout: list + detail */}
-      {loading ? (
-        <Card style={{ borderRadius: 12 }}>
-          <Skeleton active paragraph={{ rows: 8 }} />
-        </Card>
-      ) : (
-        <Row gutter={[16, 16]}>
-          {/* Left: voucher list with status tabs */}
-          <Col xs={24} lg={13}>
-            <Card
-              title={<Space><Text strong>凭证对象</Text></Space>}
-              style={{ borderRadius: 12 }}
-              styles={{ body: { padding: "0 0 8px" } }}
-            >
-              <VouchersList
-                vouchers={vouchers}
-                selectedId={selectedId}
-                onSelect={id => void handleSelect(id)}
-              />
-            </Card>
-          </Col>
+      <section className="v3-section-shell">
+        {loading ? (
+          <Card style={{ borderRadius: 12 }}>
+            <Skeleton active paragraph={{ rows: 8 }} />
+          </Card>
+        ) : (
+          <Row gutter={[16, 16]}>
+            {/* Left: voucher list with status tabs */}
+            <Col xs={24} lg={13}>
+              <Card
+                title={<Space><Text strong>凭证对象</Text></Space>}
+                style={{ borderRadius: 12 }}
+                styles={{ body: { padding: "0 0 8px" } }}
+              >
+                <VouchersList
+                  vouchers={vouchers}
+                  selectedId={selectedId}
+                  onSelect={id => void handleSelect(id)}
+                />
+              </Card>
+            </Col>
 
-          {/* Right: voucher detail */}
-          <Col xs={24} lg={11}>
-            <Card style={{ borderRadius: 12 }}>
-              <VoucherDetailPanel
-                detail={detail}
-                validation={validation}
-                updating={updating}
-                onValidate={handleValidate}
-                onApprove={handleApprove}
-                onPost={handlePost}
-                onSummaryUpdate={handleSummaryUpdate}
-              />
-            </Card>
-          </Col>
-        </Row>
-      )}
+            {/* Right: voucher detail */}
+            <Col xs={24} lg={11}>
+              <Card style={{ borderRadius: 12 }}>
+                <VoucherDetailPanel
+                  detail={detail}
+                  validation={validation}
+                  updating={updating}
+                  onValidate={handleValidate}
+                  onApprove={handleApprove}
+                  onPost={handlePost}
+                  onSummaryUpdate={handleSummaryUpdate}
+                />
+              </Card>
+            </Col>
+          </Row>
+        )}
+      </section>
 
       {/* Create modal */}
       <VoucherCreateModal
