@@ -14,6 +14,7 @@ import {
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "../components/ui/PageHeader";
+import { usePeriod } from "../lib/period-context";
 import {
   listTransferBatches, getTransferBatch, buildTransferBatch, approveTransferBatch,
   disburseTransferBatch, downloadTransferFile, closeSocialSecurity,
@@ -30,17 +31,17 @@ const STATUS_TAG: Record<string, { color: string; label: string }> = {
   confirmed: { color: "success",    label: "已对账" },
 };
 
-function currentPeriod(): string {
-  return new Date().toISOString().slice(0, 7);
-}
-
 export function PayrollTransferPage() {
+  const { period: globalPeriod } = usePeriod();
   const [batches, setBatches] = useState<PayrollTransferBatch[]>([]);
   const [selected, setSelected] = useState<{ batch: PayrollTransferBatch; lines: PayrollTransferLine[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [genPeriod, setGenPeriod] = useState(currentPeriod());
-  const [ssPeriod, setSsPeriod] = useState(currentPeriod());
+  const [genPeriod, setGenPeriod] = useState(globalPeriod);
+  const [ssPeriod, setSsPeriod] = useState(globalPeriod);
+
+  // 全局期间变化时同步页内默认期间
+  useEffect(() => { setGenPeriod(globalPeriod); setSsPeriod(globalPeriod); }, [globalPeriod]);
   const [ssResult, setSsResult] = useState<string | null>(null);
 
   const loadBatches = useCallback(async () => {

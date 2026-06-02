@@ -11,6 +11,7 @@ import {
   BankOutlined, ProfileOutlined,
 } from "@ant-design/icons";
 import { AUTH_EXPIRED_EVENT, getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
+import { GlobalPeriodPicker } from "./GlobalPeriodPicker";
 import { LOGIN_GATE_SUBTITLE, SIDEBAR_BRAND_SUBTITLE } from "../lib/entry-guidance";
 
 const { Sider, Content } = Layout;
@@ -346,6 +347,7 @@ export function AppLayout() {
             <SafetyOutlined style={{ color: "#fff", fontSize: 14 }} />
           </div>
           <span style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700 }}>Finance Taxation</span>
+          <div style={{ marginLeft: "auto" }}><GlobalPeriodPicker compact /></div>
         </div>
 
         <Drawer
@@ -388,6 +390,15 @@ export function AppLayout() {
       </Sider>
 
       <Layout style={{ marginLeft: collapsed ? 64 : 224, transition: "margin-left 0.2s", background: "#f1f5f9", minHeight: "100vh" }}>
+        {/* Top bar with global period picker */}
+        <div style={{
+          position: "sticky", top: 0, zIndex: 50,
+          background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)",
+          borderBottom: "1px solid rgba(20,40,60,0.08)",
+          padding: "10px 28px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16,
+        }}>
+          <GlobalPeriodPicker />
+        </div>
         <Content style={{ padding: "24px 28px" }}>
           <Outlet />
         </Content>
