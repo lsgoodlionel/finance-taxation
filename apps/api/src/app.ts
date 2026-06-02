@@ -172,6 +172,14 @@ import {
   getUnmatchedSummary,
 } from "./modules/banking/bank.routes.js";
 import {
+  runReconciliationRoute,
+  listCandidatesRoute,
+  confirmCandidateRoute,
+  rejectCandidateRoute,
+  getReconRulesRoute,
+  upsertReconRulesRoute,
+} from "./modules/banking/recon.routes.js";
+import {
   listInvoices,
   createInvoice,
   updateInvoice,
@@ -1197,6 +1205,37 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "PATCH") {
       await readJsonBody(req);
       return matchStatement(req, res, stmtMatchRoute[1]);
+    }
+  }
+
+  // ── P3: 对账引擎 ──────────────────────────────────────────────────────────
+  if (url.pathname === "/api/banking/reconciliation/run") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") {
+      await readJsonBody(req);
+      return runReconciliationRoute(req, res);
+    }
+  }
+  if (url.pathname === "/api/banking/reconciliation/candidates") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return listCandidatesRoute(req, res);
+  }
+  const candidateConfirmRoute = url.pathname.match(/^\/api\/banking\/reconciliation\/candidates\/([^/]+)\/confirm$/);
+  if (candidateConfirmRoute?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") return confirmCandidateRoute(req, res, candidateConfirmRoute[1]);
+  }
+  const candidateRejectRoute = url.pathname.match(/^\/api\/banking\/reconciliation\/candidates\/([^/]+)\/reject$/);
+  if (candidateRejectRoute?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") return rejectCandidateRoute(req, res, candidateRejectRoute[1]);
+  }
+  if (url.pathname === "/api/banking/reconciliation/rules") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return getReconRulesRoute(req, res);
+    if (req.method === "PUT") {
+      await readJsonBody(req);
+      return upsertReconRulesRoute(req, res);
     }
   }
 

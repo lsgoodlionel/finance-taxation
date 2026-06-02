@@ -9,11 +9,12 @@
  */
 
 import type { ServerResponse } from "node:http";
-import { query, queryOne } from "../../db/client.js";
+import { query } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { parseBankStatementCsv } from "./statement-parser.js";
+import { runReconciliation } from "./reconciliation.js";
 
 // ── Bank accounts ─────────────────────────────────────────────────────────────
 
@@ -110,7 +111,7 @@ export async function importBankStatements(req: ApiRequest, res: ServerResponse)
     } catch { skipped++; }
   }
 
-  void autoMatchImported(cid, importBatch);
+  void runReconciliation(cid, { importBatch });
   writeAudit({ companyId: cid, action: "banking.statement.imported", resourceType: "bank_statement",
     changes: { format: parsed.detectedFormat, inserted, skipped } });
   json(res, 200, { ok: true, detectedFormat: parsed.detectedFormat, totalRows: parsed.totalRows,
@@ -140,38 +141,6 @@ export async function getUnmatchedSummary(req: ApiRequest, res: ServerResponse):
     r.match_status, { count: parseInt(r.count, 10), totalAmount: parseFloat(r.total_amount ?? "0") },
   ]));
   json(res, 200, summary);
-}
-
-// ── Auto-reconciliation ───────────────────────────────────────────────────────
-
-async function autoMatchImported(cid: string, importBatch: string) {
-  const unmatched = await query<{
-    id: string; transaction_date: string; amount: string; description: string | null;
-  }>(
-    "SELECT id, transaction_date, amount, description FROM bank_statements WHERE company_id=$1 AND import_batch=$2 AND match_status='unmatched'",
-    [cid, importBatch],
-  );
-
-  for (const stmt of unmatched) {
-    const amt = Math.abs(parseFloat(stmt.amount));
-    const voucher = await queryOne<{ id: string }>(
-      `SELECT v.id FROM vouchers v
-       WHERE v.company_id = $1 AND v.status = 'posted'
-         AND abs(
-           (SELECT coalesce(sum(debit::numeric),0) FROM voucher_lines WHERE voucher_id = v.id)
-           - $2
-         ) < 0.01
-         AND date(v.created_at) BETWEEN $3::date - interval '3 days' AND $3::date + interval '3 days'
-       ORDER BY abs(date(v.created_at) - $3::date) ASC LIMIT 1`,
-      [cid, amt, stmt.transaction_date],
-    );
-    if (voucher) {
-      await query(
-        "UPDATE bank_statements SET match_status='auto', matched_voucher_id=$1 WHERE id=$2",
-        [voucher.id, stmt.id],
-      );
-    }
-  }
 }
 
 function readBodyText(req: ApiRequest): Promise<string> {
