@@ -14,6 +14,7 @@ import {
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "../components/ui/PageHeader";
+import { SalaryAccountDrawer } from "./payroll-transfer/SalaryAccountDrawer";
 import { usePeriod } from "../lib/period-context";
 import {
   listTransferBatches, getTransferBatch, buildTransferBatch, approveTransferBatch,
@@ -43,6 +44,7 @@ export function PayrollTransferPage() {
   // 全局期间变化时同步页内默认期间
   useEffect(() => { setGenPeriod(globalPeriod); setSsPeriod(globalPeriod); }, [globalPeriod]);
   const [ssResult, setSsResult] = useState<string | null>(null);
+  const [acctOpen, setAcctOpen] = useState(false);
 
   const loadBatches = useCallback(async () => {
     setLoading(true);
@@ -139,7 +141,8 @@ export function PayrollTransferPage() {
   return (
     <div style={{ display: "grid", gap: 24 }}>
       <section className="v3-hero-shell">
-        <PageHeader title="工资代发与社保" subtitle="生成银行代发文件、推进代发流程，并在工资关账后一键生成社保申报与三险一金凭证。" />
+        <PageHeader title="工资代发与社保" subtitle="生成银行代发文件、推进代发流程，并在工资关账后一键生成社保申报与三险一金凭证。"
+          actions={<Button onClick={() => setAcctOpen(true)}>维护工资账号</Button>} />
       </section>
 
       <section className="v3-section-shell" data-tone="accent">
@@ -230,6 +233,12 @@ export function PayrollTransferPage() {
           </section>
         </div>
       </div>
+
+      <SalaryAccountDrawer
+        open={acctOpen}
+        onClose={() => setAcctOpen(false)}
+        onSaved={() => { if (selected) void selectBatch(selected.batch.id); }}
+      />
     </div>
   );
 }
