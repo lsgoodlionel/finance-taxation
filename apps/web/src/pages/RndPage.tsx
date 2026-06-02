@@ -12,10 +12,11 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, ExperimentOutlined, RightOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
+import { PageHeader } from "../components/ui/PageHeader";
 import { RndKpiCards } from "./rnd/RndKpiCards";
 import { RndCostWizard } from "./rnd/RndCostWizard";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const STATUS_COLOR: Record<string, string> = {
   planning:  "default",
@@ -118,26 +119,28 @@ export function RndPage() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Page header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <Title level={4} style={{ margin: 0, color: "#0f172a" }}>研发辅助账</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            归集研发费用、计算加计扣除基数，满足高新技术企业税务合规要求
-          </Text>
-        </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-          新建研发项目
-        </Button>
-      </div>
+    <div style={{ display: "grid", gap: 24 }}>
+      {/* Hero header */}
+      <section className="v3-hero-shell">
+        <PageHeader
+          title="研发辅助账"
+          subtitle="归集研发费用、计算加计扣除基数，满足高新技术企业税务合规要求"
+          actions={(
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+              新建研发项目
+            </Button>
+          )}
+        />
+      </section>
 
       {loading ? (
         <Skeleton active paragraph={{ rows: 6 }} />
       ) : (
         <>
           {/* KPI cards */}
-          <RndKpiCards projects={projects} />
+          <section className="v3-section-shell" data-tone="accent">
+            <RndKpiCards projects={projects} />
+          </section>
 
           {projects.length === 0 && (
             <Alert
