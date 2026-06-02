@@ -73,6 +73,18 @@ export async function generateSocialSecurityClosure(
     throw new Error("period 格式应为 YYYY-MM");
   }
 
+  // 幂等保护：同期已关账（存在未作废的社保申报事项）则拒绝重复生成
+  const existingClosure = await queryOne<{ id: string }>(
+    `SELECT id FROM business_events
+     WHERE company_id = $1 AND type = 'social_security_filing'
+       AND occurred_on = $2::date AND status <> 'archived'
+     LIMIT 1`,
+    [companyId, `${period}-01`],
+  );
+  if (existingClosure) {
+    throw new Error(`期间 ${period} 已关账（社保申报事项 ${existingClosure.id}）。如需重做，请先作废原事项与三险一金凭证`);
+  }
+
   const agg = await aggregatePeriod(companyId, period);
   if (agg.headcount === 0) {
     throw new Error(`期间 ${period} 没有工资记录`);
