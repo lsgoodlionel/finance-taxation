@@ -1163,6 +1163,21 @@ export async function downloadTransferFile(batchId: string, format: "generic" | 
   return resp.blob();
 }
 
+// ── 全局搜索 ─────────────────────────────────────────────────────────────────
+
+export interface SearchResult {
+  type: string;
+  typeLabel: string;
+  id: string;
+  label: string;
+  sublabel: string;
+  path: string;
+}
+
+export async function globalSearch(q: string) {
+  return request<{ results: SearchResult[]; total: number }>(`/api/search?q=${encodeURIComponent(q)}`);
+}
+
 // ── 统一待办收件箱 ───────────────────────────────────────────────────────────
 
 export interface InboxItem {
