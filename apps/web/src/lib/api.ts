@@ -1154,6 +1154,21 @@ export async function downloadTransferFile(batchId: string, format: "generic" | 
   return resp.blob();
 }
 
+// ── 统一待办收件箱 ───────────────────────────────────────────────────────────
+
+export interface InboxItem {
+  key: string;
+  label: string;
+  count: number;
+  tone: "warning" | "info";
+  actionPath: string;
+  hint: string;
+}
+
+export async function getInbox() {
+  return request<{ items: InboxItem[]; totalPending: number }>("/api/inbox");
+}
+
 // ── 月度结账状态 ─────────────────────────────────────────────────────────────
 
 export interface CloseStep {
