@@ -3,9 +3,9 @@ import React, { type ReactNode } from "react";
 type ContractsShellProps = {
   header: ReactNode;
   createForm?: ReactNode;
-  filters: ReactNode;
+  filters: ReactNode | null;
   list: ReactNode;
-  detail?: ReactNode;
+  detail?: ReactNode | null;
 };
 
 export function ContractsShell({ header, createForm, filters, list, detail }: ContractsShellProps) {
