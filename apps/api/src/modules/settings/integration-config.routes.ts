@@ -18,6 +18,7 @@ import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { testInvoiceVerifyProvider } from "../invoices/invoice-verify.js";
+import { BANK_API_PROVIDERS, testBankApiProvider } from "../banking/bank-api.js";
 
 // ── 内置提供商信息 ─────────────────────────────────────────────────────────────
 
@@ -149,9 +150,17 @@ export async function listIntegrationConfigs(req: ApiRequest, res: ServerRespons
       lastTestOk: null, lastTestAt: null, lastTestMsg: null, updatedAt: "",
     });
   }
+  if (!configMap.has("bank_api")) {
+    configMap.set("bank_api", {
+      configType: "bank_api", provider: "manual",
+      apiKey: null, apiSecret: null, appId: null, endpointUrl: null,
+      extraConfig: {}, enabled: true,
+      lastTestOk: null, lastTestAt: null, lastTestMsg: null, updatedAt: "",
+    });
+  }
   json(res, 200, {
     items: Array.from(configMap.values()),
-    providers: { invoice_verify: INVOICE_VERIFY_PROVIDERS },
+    providers: { invoice_verify: INVOICE_VERIFY_PROVIDERS, bank_api: BANK_API_PROVIDERS },
   });
 }
 
@@ -163,9 +172,12 @@ export async function getIntegrationConfig(
     "SELECT * FROM integration_configs WHERE company_id=$1 AND config_type=$2",
     [cid, configType],
   );
-  const providers = configType === "invoice_verify" ? INVOICE_VERIFY_PROVIDERS : [];
+  const providers = configType === "invoice_verify" ? INVOICE_VERIFY_PROVIDERS
+    : configType === "bank_api" ? BANK_API_PROVIDERS
+    : [];
+  const defaultProvider = configType === "bank_api" ? "manual" : "local";
   json(res, 200, {
-    config: row ? rowToDto(row) : { configType, provider: "local", enabled: true },
+    config: row ? rowToDto(row) : { configType, provider: defaultProvider, enabled: true },
     providers,
   });
 }
@@ -252,7 +264,7 @@ export async function testIntegrationConfig(
 ): Promise<void> {
   const cid = req.auth!.companyId;
 
-  if (configType !== "invoice_verify") {
+  if (configType !== "invoice_verify" && configType !== "bank_api") {
     json(res, 400, { error: `${configType} 类型的测试暂未支持` }); return;
   }
 
@@ -261,14 +273,24 @@ export async function testIntegrationConfig(
     [cid, configType],
   );
 
-  const provider = row?.provider ?? "local";
-  const result = await testInvoiceVerifyProvider({
-    provider,
-    apiKey:      row?.api_key      ?? null,
-    apiSecret:   row?.api_secret   ?? null,
-    appId:       row?.app_id       ?? null,
-    endpointUrl: row?.endpoint_url ?? null,
-  });
+  const defaultProvider = configType === "bank_api" ? "manual" : "local";
+  const provider = row?.provider ?? defaultProvider;
+  const result = configType === "bank_api"
+    ? await testBankApiProvider({
+        provider,
+        apiKey:      row?.api_key      ?? null,
+        apiSecret:   row?.api_secret   ?? null,
+        appId:       row?.app_id       ?? null,
+        endpointUrl: row?.endpoint_url ?? null,
+        extraConfig: (row?.extra_config as Record<string, string>) ?? {},
+      })
+    : await testInvoiceVerifyProvider({
+        provider,
+        apiKey:      row?.api_key      ?? null,
+        apiSecret:   row?.api_secret   ?? null,
+        appId:       row?.app_id       ?? null,
+        endpointUrl: row?.endpoint_url ?? null,
+      });
 
   // 更新测试结果
   if (row) {
@@ -304,6 +326,29 @@ export async function loadInvoiceVerifyConfig(companyId: string): Promise<{
   );
   return {
     provider:    row?.provider     ?? "local",
+    apiKey:      row?.api_key      ?? null,
+    apiSecret:   row?.api_secret   ?? null,
+    appId:       row?.app_id       ?? null,
+    endpointUrl: row?.endpoint_url ?? null,
+    extraConfig: (row?.extra_config as Record<string, string>) ?? {},
+  };
+}
+
+/** P5：读取银行 API 直连配置（内部供 bank-api 调用）。 */
+export async function loadBankApiConfig(companyId: string): Promise<{
+  provider: string;
+  apiKey: string | null;
+  apiSecret: string | null;
+  appId: string | null;
+  endpointUrl: string | null;
+  extraConfig: Record<string, string>;
+}> {
+  const row = await queryOne<IntegrationConfigRow>(
+    "SELECT * FROM integration_configs WHERE company_id=$1 AND config_type='bank_api' AND enabled=true",
+    [companyId],
+  );
+  return {
+    provider:    row?.provider     ?? "manual",
     apiKey:      row?.api_key      ?? null,
     apiSecret:   row?.api_secret   ?? null,
     appId:       row?.app_id       ?? null,
