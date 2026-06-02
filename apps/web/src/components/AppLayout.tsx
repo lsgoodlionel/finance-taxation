@@ -9,7 +9,7 @@ import {
   LineChartOutlined, CalculatorOutlined, ExperimentOutlined, AlertOutlined, FileSearchOutlined,
   BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined, MenuOutlined,
 } from "@ant-design/icons";
-import { getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
+import { AUTH_EXPIRED_EVENT, getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
 import { LOGIN_GATE_SUBTITLE, SIDEBAR_BRAND_SUBTITLE } from "../lib/entry-guidance";
 
 const { Sider, Content } = Layout;
@@ -95,6 +95,7 @@ function LoginGate({ onLogin }: { onLogin: (user: User) => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form] = Form.useForm();
+  const displayError = error === "AUTH_REQUIRED" ? "登录状态已失效，请重新输入账号密码。" : error;
 
   async function handleSubmit(values: { username: string; password: string }) {
     setError("");
@@ -103,7 +104,13 @@ function LoginGate({ onLogin }: { onLogin: (user: User) => void }) {
       const result = await login(values.username, values.password);
       onLogin(result.user as User);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "登录失败");
+      const nextError =
+        err instanceof Error && err.message === "AUTH_REQUIRED"
+          ? "登录状态已失效，请重新输入账号密码。"
+          : err instanceof Error
+            ? err.message
+            : "登录失败";
+      setError(nextError);
     } finally {
       setLoading(false);
     }
@@ -143,9 +150,9 @@ function LoginGate({ onLogin }: { onLogin: (user: User) => void }) {
           <Form.Item name="password" label="密码" rules={[{ required: true, message: "请输入密码" }]}>
             <Input.Password placeholder="请输入密码" />
           </Form.Item>
-          {error && (
+          {displayError && (
             <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12, padding: "8px 12px", background: "#fee2e2", borderRadius: 6 }}>
-              {error}
+              {displayError}
             </div>
           )}
           <Button type="primary" htmlType="submit" block loading={loading} style={{ height: 44, fontSize: 15 }}>
@@ -184,6 +191,16 @@ export function AppLayout() {
       .catch(() => {})
       .finally(() => setChecking(false));
   }, []);
+
+  useEffect(() => {
+    function handleAuthExpired() {
+      setUser(null);
+      navigate("/", { replace: true });
+    }
+
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+  }, [navigate]);
 
   async function handleLogout() {
     try { await logoutSession(); } catch {

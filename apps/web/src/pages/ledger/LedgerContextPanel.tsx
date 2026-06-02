@@ -2,6 +2,14 @@ import React from "react";
 import { ResultBanner } from "../../components/ui/ResultBanner";
 import type { LedgerSceneKey } from "./types";
 
+const SCENE_LABELS: Record<LedgerSceneKey, string> = {
+  summary: "科目汇总",
+  balances: "科目余额",
+  journal: "现金/银行日记账",
+  entries: "总账分录",
+  periods: "期间锁账"
+};
+
 type LedgerContextPanelProps = {
   scene: LedgerSceneKey;
   message: string;
@@ -78,7 +86,7 @@ export function LedgerContextPanel(props: LedgerContextPanelProps) {
           <h2 className="v3-section-title" style={{ fontSize: "17px" }}>过滤条件和账本口径都在这里确认。</h2>
         </div>
         <div style={{ fontSize: "13px", color: "#4d5d6c", lineHeight: 1.7 }}>
-          <div>场景：{scene}</div>
+          <div>场景：{SCENE_LABELS[scene]}</div>
           <div>凭证过滤：{voucherFilter || "全部"}</div>
           <div>事项过滤：{eventFilter || "全部"}</div>
           <div>资金账：{journalType === "cash" ? "现金（1001）" : "银行存款（1002）"}</div>

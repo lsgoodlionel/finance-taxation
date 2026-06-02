@@ -14,10 +14,7 @@ export function ContractsShell({ header, createForm, filters, list, detail }: Co
       <section className="v3-hero-shell">{header}</section>
       {createForm ? <section className="v3-section-shell">{createForm}</section> : null}
       <section className="v3-section-shell" data-tone="muted">{filters}</section>
-      <div
-        className="v3-workbench-grid"
-        style={{ gridTemplateColumns: detail ? "minmax(0, 1.05fr) minmax(360px, 0.95fr)" : "1fr" }}
-      >
+      <div className={detail ? "v3-result-grid v3-result-grid--wide" : "v3-workbench-grid"}>
         <div className="v3-workbench-card">{list}</div>
         {detail ? <div className="v3-workbench-card">{detail}</div> : null}
       </div>

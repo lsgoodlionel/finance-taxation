@@ -6,6 +6,7 @@ import {
   closeContract,
   createEvent,
   createContract,
+  describePageLoadError,
   getContractDetail,
   listEvents,
   listContracts
@@ -41,9 +42,12 @@ import { EmptyState } from "../components/ui/EmptyState";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   sales: "销售合同",
+  sale: "销售合同",
   procurement: "采购合同",
+  purchase: "采购合同",
   lease: "租赁合同",
   service: "服务合同",
+  loan: "借款合同",
   other: "其他"
 };
 
@@ -160,8 +164,8 @@ export function ContractsPage() {
     async function bootstrap() {
       try {
         await loadContracts();
-      } catch {
-        setMessage("加载失败，请检查后端连接。");
+      } catch (error) {
+        setMessage(describePageLoadError(error));
       }
     }
     bootstrap();

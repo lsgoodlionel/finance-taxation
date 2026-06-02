@@ -39,6 +39,12 @@ const MATERIAL_META: Record<TaxMaterialKey, { title: string; description: string
   cit: { title: "企业所得税准备", description: "面向预缴与汇算准备、调整提示和清单。" }
 };
 
+const TAXPAYER_TYPE_LABELS: Record<string, string> = {
+  general_vat: "一般纳税人",
+  small_scale: "小规模纳税人",
+  general_simplified: "一般纳税人简易计税"
+};
+
 export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
   const {
     activeMaterial,
@@ -108,7 +114,7 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
               {vatPaper ? (
                 <>
                   <div style={{ lineHeight: 1.8 }}>
-                    <div>纳税人口径：{vatPaper.taxpayerType}</div>
+                    <div>纳税人口径：{TAXPAYER_TYPE_LABELS[vatPaper.taxpayerType] ?? vatPaper.taxpayerType}</div>
                     <div>申报期：{vatPaper.filingPeriod}</div>
                     <div>销项税额：{vatPaper.outputTaxAmount}</div>
                     <div>进项税额：{vatPaper.inputTaxAmount}</div>

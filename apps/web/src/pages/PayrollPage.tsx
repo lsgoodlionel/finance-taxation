@@ -7,6 +7,7 @@ import {
   computePayroll,
   confirmPayroll,
   createEmployee,
+  describePageLoadError,
   getIndividualIncomeTaxMaterials,
   getPayrollPeriods,
   getPayrollPolicy,
@@ -174,8 +175,8 @@ export function PayrollPage() {
     async function bootstrap() {
       try {
         await loadAll();
-      } catch {
-        setMessage("加载失败，请检查后端连接。");
+      } catch (error) {
+        setMessage(describePageLoadError(error));
       }
     }
     bootstrap();

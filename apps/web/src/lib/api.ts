@@ -50,10 +50,12 @@ import type {
   VatWorkingPaper,
   Voucher
 } from "@finance-taxation/domain-model";
+import { describePageLoadError, isAuthRequiredError } from "./request-errors";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
 const REFRESH_TOKEN_KEY = "finance-taxation-v2-refresh-token";
+export const AUTH_EXPIRED_EVENT = "finance-taxation-v2-auth-expired";
 
 interface AccessUser {
   id: string;
@@ -134,6 +136,23 @@ function getStoredRefreshToken() {
   return window.localStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
+function clearStoredSession() {
+  window.localStorage.removeItem(TOKEN_KEY);
+  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+function emitAuthExpired() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
+}
+
+function throwAuthRequired() {
+  clearStoredSession();
+  emitAuthExpired();
+  throw new Error("AUTH_REQUIRED");
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getStoredToken();
   const headers = new Headers(init?.headers);
@@ -164,6 +183,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
   }
 
+  if (response.status === 401) {
+    throwAuthRequired();
+  }
+
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
     throw new Error(payload?.error || `Request failed: ${response.status}`);
@@ -182,6 +205,9 @@ async function requestText(path: string, init?: RequestInit): Promise<string> {
     ...init,
     headers
   });
+  if (response.status === 401) {
+    throwAuthRequired();
+  }
   if (!response.ok) {
     const payload = (await response.text().catch(() => "")) || `Request failed: ${response.status}`;
     throw new Error(payload);
@@ -201,6 +227,10 @@ async function requestMultipart<T>(path: string, formData: FormData, timeoutMs =
     body: formData,
     signal: AbortSignal.timeout(timeoutMs)
   });
+
+  if (response.status === 401) {
+    throwAuthRequired();
+  }
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -244,9 +274,10 @@ export async function getCurrentUser() {
 
 export async function logoutSession() {
   await request<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
-  localStorage.removeItem("finance-taxation-v2-token");
-  localStorage.removeItem("finance-taxation-v2-refresh-token");
+  clearStoredSession();
 }
+
+export { describePageLoadError, isAuthRequiredError } from "./request-errors";
 
 export async function getMenu() {
   return request<{ items: MenuNode[] }>("/api/access/menu");
