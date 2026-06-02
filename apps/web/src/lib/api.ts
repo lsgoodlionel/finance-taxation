@@ -1091,6 +1091,80 @@ export async function confirmPayroll(recordId: string) {
   });
 }
 
+// ── P3 工资代发 ───────────────────────────────────────────────────────────────
+
+export interface PayrollTransferBatch {
+  id: string;
+  payroll_period: string;
+  total_amount: string;
+  employee_count: number;
+  status: "draft" | "approved" | "exported" | "disbursed" | "confirmed";
+  bank_transfer_ref: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayrollTransferLine {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  salary_account: string;
+  salary_bank: string;
+  amount: string;
+  status: "normal" | "skipped";
+}
+
+export async function listTransferBatches() {
+  return request<{ items: PayrollTransferBatch[]; total: number }>("/api/payroll/transfer/batches");
+}
+
+export async function getTransferBatch(batchId: string) {
+  return request<{ batch: PayrollTransferBatch; lines: PayrollTransferLine[] }>(
+    `/api/payroll/transfer/batches/${batchId}`
+  );
+}
+
+export async function buildTransferBatch(period: string, bankAccountId?: string) {
+  return request<{ ok: boolean; batchId: string; employeeCount: number; totalAmount: number; skipped: number }>(
+    "/api/payroll/transfer/batches",
+    { method: "POST", body: JSON.stringify({ period, bankAccountId }) }
+  );
+}
+
+export async function approveTransferBatch(batchId: string) {
+  return request<{ ok: boolean }>(`/api/payroll/transfer/batches/${batchId}/approve`, {
+    method: "POST", body: JSON.stringify({})
+  });
+}
+
+export async function disburseTransferBatch(batchId: string, bankTransferRef?: string) {
+  return request<{ ok: boolean; eventId: string }>(`/api/payroll/transfer/batches/${batchId}/disburse`, {
+    method: "POST", body: JSON.stringify({ bankTransferRef })
+  });
+}
+
+export async function downloadTransferFile(batchId: string, format: "generic" | "cmb") {
+  const token = window.localStorage.getItem("finance-taxation-v2-token") ?? "";
+  const base = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
+  const resp = await fetch(`${base}/api/payroll/transfer/batches/${batchId}/file?format=${format}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!resp.ok) throw new Error(`导出失败 HTTP ${resp.status}`);
+  return resp.blob();
+}
+
+// ── P4 社保联动 ───────────────────────────────────────────────────────────────
+
+export async function closeSocialSecurity(period: string) {
+  return request<{
+    ok: boolean; eventId: string; taskId: string; voucherIds: string[];
+    summary: { period: string; socialSecurityEmployer: number; socialSecurityEmployee: number; housingFundEmployer: number; housingFundEmployee: number };
+  }>(`/api/payroll/periods/${encodeURIComponent(period)}/social-security-closure`, {
+    method: "POST", body: JSON.stringify({})
+  });
+}
+
 export async function getRndTrend(months?: number) {
   const q = months ? `?months=${months}` : "";
   return request<{
