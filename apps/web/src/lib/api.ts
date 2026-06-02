@@ -1605,6 +1605,7 @@ export interface Invoice {
   verified_at: string | null;
   business_event_id: string | null;
   document_id: string | null;
+  voucher_id: string | null;
   source: "manual" | "ocr" | "import";
   notes: string;
   created_at: string;
@@ -1656,6 +1657,12 @@ export async function ocrInvoice(data: { imageBase64?: string; text?: string }) 
 
 export async function deleteInvoice(id: string) {
   return request<{ ok: boolean }>(`/api/invoices/${id}`, { method: "DELETE" });
+}
+
+export async function generateInvoiceVoucher(id: string) {
+  return request<{ ok: boolean; voucherId: string; eventId: string; summary: string }>(
+    `/api/invoices/${id}/voucher`, { method: "POST", body: JSON.stringify({}) }
+  );
 }
 
 // ─── P2: Integration Configuration ───────────────────────────────────────────
