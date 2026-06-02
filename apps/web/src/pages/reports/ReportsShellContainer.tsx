@@ -170,6 +170,7 @@ export function ReportsShellContainer() {
         <ReportsHeader
           activeViewLabel={getWorkbenchViewLabel(activeView)}
           onNavigateToExportCenter={() => navigate("/pdf-export")}
+          onNavigateToTax={() => navigate("/tax")}
         />
       )}
       sidebar={(

@@ -5,9 +5,10 @@ import { buildResultPageSubtitle } from "../../lib/entry-guidance";
 type ReportsHeaderProps = {
   activeViewLabel: string;
   onNavigateToExportCenter: () => void;
+  onNavigateToTax: () => void;
 };
 
-export function ReportsHeader({ activeViewLabel, onNavigateToExportCenter }: ReportsHeaderProps) {
+export function ReportsHeader({ activeViewLabel, onNavigateToExportCenter, onNavigateToTax }: ReportsHeaderProps) {
   return (
     <PageHeader
       title="财务报表中心"
@@ -18,6 +19,9 @@ export function ReportsHeader({ activeViewLabel, onNavigateToExportCenter }: Rep
             <span style={{ fontSize: "12px", color: "#6c7a89" }}>当前视图</span>
             <strong style={{ fontSize: "14px", color: "#1e2a37" }}>{activeViewLabel}</strong>
           </div>
+          <button className="btn btn-outline" onClick={onNavigateToTax}>
+            去税务申报
+          </button>
           <button className="btn btn-outline" onClick={onNavigateToExportCenter}>
             前往 PDF 导出中心
           </button>

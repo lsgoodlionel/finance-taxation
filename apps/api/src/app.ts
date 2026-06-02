@@ -126,6 +126,7 @@ import { syncStatementsRoute, submitTransferApiRoute } from "./modules/banking/b
 import { getCloseStatus } from "./modules/close/close.routes.js";
 import { getInbox } from "./modules/inbox/inbox.routes.js";
 import { globalSearch } from "./modules/search/search.routes.js";
+import { getSetupStatus } from "./modules/setup/setup.routes.js";
 import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
   payrollPdf,
@@ -1326,6 +1327,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
   if (url.pathname === "/api/search") {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "GET") return globalSearch(req, res);
+  }
+
+  // ── 设置就绪度 ────────────────────────────────────────────────────────────
+  if (url.pathname === "/api/setup/status") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return getSetupStatus(req, res);
   }
 
   // ── 统一待办收件箱 ────────────────────────────────────────────────────────

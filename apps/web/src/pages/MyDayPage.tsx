@@ -11,7 +11,7 @@ import {
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "../components/ui/PageHeader";
-import { getInbox, type InboxItem } from "../lib/api";
+import { getInbox, getSetupStatus, type InboxItem, type SetupItem } from "../lib/api";
 
 const { Text } = Typography;
 
@@ -19,14 +19,16 @@ export function MyDayPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<InboxItem[]>([]);
   const [totalPending, setTotalPending] = useState(0);
+  const [setup, setSetup] = useState<{ items: SetupItem[]; doneCount: number; total: number; ready: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getInbox();
+      const [data, setupData] = await Promise.all([getInbox(), getSetupStatus().catch(() => null)]);
       setItems(data.items);
       setTotalPending(data.totalPending);
+      setSetup(setupData);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -53,6 +55,37 @@ export function MyDayPage() {
           )}
         />
       </section>
+
+      {setup && !setup.ready && (
+        <section className="v3-section-shell" data-tone="muted">
+          <Space direction="vertical" size={10} style={{ width: "100%" }}>
+            <Space style={{ justifyContent: "space-between", width: "100%" }}>
+              <Text strong>🚀 快速开始（{setup.doneCount}/{setup.total} 已完成）</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>完成基础配置后即可顺畅跑通日常财税</Text>
+            </Space>
+            <Row gutter={[12, 12]}>
+              {setup.items.map((s) => (
+                <Col key={s.key} xs={24} sm={12} lg={8}>
+                  <div onClick={() => !s.done && navigate(s.actionPath)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
+                      borderRadius: 10, border: "1px solid rgba(20,40,60,0.08)",
+                      background: s.done ? "rgba(22,163,74,0.06)" : "#fff",
+                      cursor: s.done ? "default" : "pointer", opacity: s.done ? 0.75 : 1,
+                    }}>
+                    <span style={{ fontSize: 16 }}>{s.done ? "✅" : "⬜"}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Text strong={!s.done} delete={s.done} style={{ fontSize: 13 }}>{s.label}</Text>
+                      {!s.done && <div style={{ fontSize: 11, color: "#94a3b8" }}>{s.hint}</div>}
+                    </div>
+                    {!s.done && <RightOutlined style={{ color: "#94a3b8", fontSize: 11 }} />}
+                  </div>
+                </Col>
+              ))}
+            </Row>
+          </Space>
+        </section>
+      )}
 
       <section className="v3-section-shell" data-tone="accent">
         <Row gutter={16} align="middle">
