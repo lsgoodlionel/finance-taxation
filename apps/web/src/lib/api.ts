@@ -1163,6 +1163,20 @@ export async function downloadTransferFile(batchId: string, format: "generic" | 
   return resp.blob();
 }
 
+// ── 设置就绪度 ───────────────────────────────────────────────────────────────
+
+export interface SetupItem {
+  key: string;
+  label: string;
+  done: boolean;
+  actionPath: string;
+  hint: string;
+}
+
+export async function getSetupStatus() {
+  return request<{ items: SetupItem[]; doneCount: number; total: number; ready: boolean }>("/api/setup/status");
+}
+
 // ── 全局搜索 ─────────────────────────────────────────────────────────────────
 
 export interface SearchResult {
