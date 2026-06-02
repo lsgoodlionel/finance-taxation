@@ -4,8 +4,8 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`Phase 4 收尾——重构剩余单体页（Documents），统一 responsive / accessibility`
-- 当前里程碑：`所有 V3 结果页（Assistant/Events/Contracts/Payroll/Export/Tax/Ledger/Reports/Risk）、auth 会话 UX、Knowledge 重构、以及后端 P1/P2/P3 外部对接均已合回 main；KnowledgePage 已拆为 summary-first 工作台（627→277 行）；DocumentsPage 为最后一个待拆单体页`
+- 当前目标：`Phase 4 收尾——剩余仅 responsive / accessibility 统一深化`
+- 当前里程碑：`所有页面已完成 V3 结构化重构并合回 main；KnowledgePage（627→277）、DocumentsPage（652→214）两个最后的单体页已拆为 summary-first 工作台；后端 P1/P2/P3 外部对接 + 迁移修复均已在 main`
 - 更新时间：`2026-06-02`
 
 ## 2. V3 Workstreams
@@ -103,7 +103,7 @@
 1. ✅ 全部 V3 结果页分支 + `layout-visibility-polish` 已合回 `main`
 2. ✅ `auth-session-ux`、`knowledge-page-rework`、后端 `p3-reconciliation-engine`（含 P1/P2/P3 + 迁移修复）已合回 `main`
 3. ✅ `main` 总体验证通过：API typecheck + 93 测试、Web typecheck + 45 测试文件全绿
-4. ⏳ 重构 `DocumentsPage`（最后一个单体页，652 行）为 V3 summary-first 工作台
+4. ✅ `DocumentsPage` 已重构为 V3 summary-first 工作台（652→214 行）并合回 main
 5. ⏳ 统一 `responsive`（Drawer→BottomSheet、断点折叠）与 `accessibility`（aria-*、键盘焦点、抽屉/步骤语义）
 6. ⏳ `main` Docker 重建验证（需本地 PostgreSQL，当前未运行）
 
