@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
-  Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid, Badge,
+  Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid, Badge, Breadcrumb,
 } from "antd";
 import {
   RobotOutlined, UnorderedListOutlined, CheckSquareOutlined, DashboardOutlined, CheckCircleOutlined, InboxOutlined, SearchOutlined,
@@ -15,6 +15,22 @@ import { GlobalPeriodPicker } from "./GlobalPeriodPicker";
 import { CommandPalette, useCommandPalette } from "./CommandPalette";
 
 type NavBadges = Record<string, number>;
+
+/** 根据当前路由从导航树推导面包屑 [分组, 页面]。 */
+function buildBreadcrumb(pathname: string): { group: string; page: string } | null {
+  let best: { group: string; page: string; len: number } | null = null;
+  for (const group of navItems) {
+    for (const child of group.children ?? []) {
+      const key = child.key;
+      if (pathname === key || pathname.startsWith(key + "/")) {
+        if (!best || key.length > best.len) {
+          best = { group: group.label, page: typeof child.label === "string" ? child.label : key, len: key.length };
+        }
+      }
+    }
+  }
+  return best ? { group: best.group, page: best.page } : null;
+}
 
 /** 把待办数量贴到对应导航项的 label 上（红色 Badge）。 */
 function decorateNav(items: typeof navItems, badges: NavBadges) {
@@ -451,8 +467,18 @@ export function AppLayout() {
           position: "sticky", top: 0, zIndex: 50,
           background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)",
           borderBottom: "1px solid rgba(20,40,60,0.08)",
-          padding: "10px 28px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16,
+          padding: "10px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
         }}>
+          {(() => {
+            const bc = buildBreadcrumb(location.pathname);
+            return (
+              <Breadcrumb
+                items={bc ? [{ title: bc.group }, { title: bc.page }] : [{ title: "首页" }]}
+                style={{ fontSize: 13 }}
+              />
+            );
+          })()}
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <button
             onClick={() => cmd.setOpen(true)}
             aria-label="全局搜索"
@@ -466,6 +492,7 @@ export function AppLayout() {
             <kbd style={{ fontSize: 11, color: "#94a3b8", border: "1px solid #e2e8f0", borderRadius: 4, padding: "0 5px", background: "#fff" }}>⌘K</kbd>
           </button>
           <GlobalPeriodPicker />
+          </div>
         </div>
         <Content style={{ padding: "24px 28px" }}>
           <Outlet />
