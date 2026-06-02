@@ -123,6 +123,7 @@ import {
 import { socialSecurityClosureRoute } from "./modules/payroll/social-security.routes.js";
 import { syncStatementsRoute, submitTransferApiRoute } from "./modules/banking/bank-api.routes.js";
 import { getCloseStatus } from "./modules/close/close.routes.js";
+import { getInbox } from "./modules/inbox/inbox.routes.js";
 import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
   payrollPdf,
@@ -1306,6 +1307,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
       await readJsonBody(req);
       return upsertReconRulesRoute(req, res);
     }
+  }
+
+  // ── 统一待办收件箱 ────────────────────────────────────────────────────────
+  if (url.pathname === "/api/inbox") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return getInbox(req, res);
   }
 
   // ── 月度结账状态聚合 ──────────────────────────────────────────────────────

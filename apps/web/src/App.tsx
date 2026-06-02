@@ -9,6 +9,7 @@ import { ContractsPage } from "./pages/ContractsPage";
 import { PayrollPage } from "./pages/PayrollPage";
 import { PayrollTransferPage } from "./pages/PayrollTransferPage";
 import { MonthEndClosePage } from "./pages/MonthEndClosePage";
+import { MyDayPage } from "./pages/MyDayPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { EventsPage } from "./pages/EventsPage";
 import { LedgerPage } from "./pages/LedgerPage";
@@ -31,6 +32,7 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { index: true, element: <Navigate to="/assistant" replace /> },
+      { path: "inbox", element: <MyDayPage /> },
       { path: "dashboard/chairman", element: <ChairmanDashboardPage /> },
       { path: "close", element: <MonthEndClosePage /> },
       { path: "events", element: <EventsPage /> },
