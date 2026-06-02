@@ -112,6 +112,14 @@ import {
   updateEmployee,
   updatePayrollPolicy
 } from "./modules/payroll/routes.js";
+import {
+  buildBatchRoute,
+  listBatchesRoute,
+  getBatchRoute,
+  approveBatchRoute,
+  downloadBatchFileRoute,
+  disburseBatchRoute
+} from "./modules/payroll/transfer.routes.js";
 import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
   payrollPdf,
@@ -891,6 +899,47 @@ async function router(req: ApiRequest, res: ServerResponse) {
       if (!(await requirePermission("payroll.manage", req, res))) return;
       return syncPayrollReviewLedgers(req, res);
     }
+  }
+
+  // ── P3: 工资代发 ──────────────────────────────────────────────────────────
+  if (url.pathname === "/api/payroll/transfer/batches") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") {
+      if (!(await requirePermission("payroll.view", req, res))) return;
+      return listBatchesRoute(req, res);
+    }
+    if (req.method === "POST") {
+      if (!(await requirePermission("payroll.manage", req, res))) return;
+      await readJsonBody(req);
+      return buildBatchRoute(req, res);
+    }
+  }
+  const transferFileMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/file$/);
+  if (transferFileMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.view", req, res))) return;
+    if (req.method === "GET") return downloadBatchFileRoute(req, res, transferFileMatch[1]);
+  }
+  const transferApproveMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/approve$/);
+  if (transferApproveMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.manage", req, res))) return;
+    if (req.method === "POST") return approveBatchRoute(req, res, transferApproveMatch[1]);
+  }
+  const transferDisburseMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/disburse$/);
+  if (transferDisburseMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.manage", req, res))) return;
+    if (req.method === "POST") {
+      await readJsonBody(req);
+      return disburseBatchRoute(req, res, transferDisburseMatch[1]);
+    }
+  }
+  const transferBatchMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)$/);
+  if (transferBatchMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.view", req, res))) return;
+    if (req.method === "GET") return getBatchRoute(req, res, transferBatchMatch[1]);
   }
 
   if (url.pathname === "/api/payroll") {
