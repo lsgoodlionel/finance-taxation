@@ -2,21 +2,20 @@
  * 外部系统对接设置面板
  * 嵌入 SettingsPage「外部对接」Tab
  *
- * 功能：
- *   - 显示当前发票验真服务商及连接状态
- *   - 切换服务商（local / etax / baiwang / nuonuo / custom）
- *   - 填写 API Key / Secret / AppId / Endpoint
- *   - 测试连接（显示真实响应结果）
- *   - 显示发票验真统计（已验/未验/不合规）
+ * 支持多对接类型（顶部切换）：
+ *   - invoice_verify 发票验真（local / etax / baiwang / nuonuo / custom）
+ *   - bank_api       银行直连（manual / cmb / ccb / custom）
+ *
+ * 通用能力：切换服务商、填写 API Key / Secret / AppId / Endpoint、测试连接、查看状态。
  */
 import { useState, useEffect, useCallback } from "react";
 import {
-  Card, Form, Select, Input, Button, Space, Alert, Tag, Descriptions, Typography,
-  Row, Col, Statistic, Divider, Tooltip, Spin,
+  Card, Form, Select, Input, Button, Space, Alert, Tag, Typography,
+  Row, Col, Statistic, Divider, Tooltip, Spin, Segmented,
 } from "antd";
 import {
   CheckCircleOutlined, CloseCircleOutlined, QuestionCircleOutlined,
-  ApiOutlined, SafetyOutlined, LinkOutlined, ExperimentOutlined,
+  ApiOutlined, SafetyOutlined, LinkOutlined, ExperimentOutlined, BankOutlined,
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import {
@@ -29,11 +28,39 @@ const { Text, Link } = Typography;
 
 const PLACEHOLDER_MASKED = "••••••••";
 
+type ConfigType = "invoice_verify" | "bank_api";
+
+interface ConfigTypeMeta {
+  label: string;
+  defaultProvider: string;
+  title: string;
+  endpointPlaceholder: string;
+  endpointHint: string;
+}
+
+const CONFIG_TYPE_META: Record<ConfigType, ConfigTypeMeta> = {
+  invoice_verify: {
+    label: "发票验真",
+    defaultProvider: "local",
+    title: "发票验真服务商配置",
+    endpointPlaceholder: "https://your-api.example.com/invoice/verify",
+    endpointHint: "POST 接口，规范：{invoiceCode,invoiceNo,invoiceDate,totalAmount} → {valid:bool,message:string}",
+  },
+  bank_api: {
+    label: "银行直连",
+    defaultProvider: "manual",
+    title: "银行 API 直连配置",
+    endpointPlaceholder: "https://api.bank.example.com/enterprise",
+    endpointHint: "POST 接口：流水 {accountNo,dateFrom,dateTo}→{statements:[...]}；代发 {lines:[...]}→{ok,ref}",
+  },
+};
+
 interface IntegrationSettingsTabProps {
   companyId?: string;
 }
 
 export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
+  const [configType, setConfigType] = useState<ConfigType>("invoice_verify");
   const [config, setConfig]       = useState<IntegrationConfig | null>(null);
   const [providers, setProviders] = useState<IntegrationProviderMeta[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -43,40 +70,34 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
   const [invoiceStats, setInvoiceStats] = useState({ pending: 0, verified: 0, invalid: 0, total: 0 });
   const [form] = Form.useForm();
 
-  const load = useCallback(async () => {
+  const typeMeta = CONFIG_TYPE_META[configType];
+
+  const load = useCallback(async (type: ConfigType) => {
     setLoading(true);
+    setTestResult(null);
     try {
-      const [cfgData, invData] = await Promise.all([
-        listIntegrationConfigs(),
-        listInvoices({ pageSize: 1 }).catch(() => ({ total: 0, items: [] })),
-      ]);
-      const invoiceCfg = cfgData.items.find(i => i.configType === "invoice_verify");
-      setConfig(invoiceCfg ?? null);
-      setProviders(cfgData.providers.invoice_verify ?? []);
+      const cfgData = await listIntegrationConfigs();
+      const current = cfgData.items.find(i => i.configType === type) ?? null;
+      setConfig(current);
+      setProviders(cfgData.providers[type] ?? []);
 
-      // 取验真统计（近期）
-      const [pendingR, verifiedR, invalidR] = await Promise.all([
-        listInvoices({ verifyStatus: "pending",  pageSize: 1 }).catch(() => ({ total: 0, items: [] })),
-        listInvoices({ verifyStatus: "verified", pageSize: 1 }).catch(() => ({ total: 0, items: [] })),
-        listInvoices({ verifyStatus: "invalid",  pageSize: 1 }).catch(() => ({ total: 0, items: [] })),
-      ]);
-      setInvoiceStats({
-        pending:  pendingR.total,
-        verified: verifiedR.total,
-        invalid:  invalidR.total,
-        total:    invData.total,
-      });
-
-      if (invoiceCfg) {
-        form.setFieldsValue({
-          provider:    invoiceCfg.provider,
-          endpointUrl: invoiceCfg.endpointUrl ?? "",
-          enabled:     invoiceCfg.enabled,
-          // 不回填脱敏字段
-        });
-      } else {
-        form.setFieldsValue({ provider: "local", enabled: true });
+      // 发票验真统计仅在发票类型下加载
+      if (type === "invoice_verify") {
+        const [invData, pendingR, verifiedR, invalidR] = await Promise.all([
+          listInvoices({ pageSize: 1 }).catch(() => ({ total: 0, items: [] })),
+          listInvoices({ verifyStatus: "pending",  pageSize: 1 }).catch(() => ({ total: 0, items: [] })),
+          listInvoices({ verifyStatus: "verified", pageSize: 1 }).catch(() => ({ total: 0, items: [] })),
+          listInvoices({ verifyStatus: "invalid",  pageSize: 1 }).catch(() => ({ total: 0, items: [] })),
+        ]);
+        setInvoiceStats({ pending: pendingR.total, verified: verifiedR.total, invalid: invalidR.total, total: invData.total });
       }
+
+      form.setFieldsValue({
+        provider:    current?.provider ?? CONFIG_TYPE_META[type].defaultProvider,
+        endpointUrl: current?.endpointUrl ?? "",
+        enabled:     current?.enabled ?? true,
+        apiKey:      "", apiSecret: "", appId: "",
+      });
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -84,7 +105,7 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
     }
   }, [form]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(configType); }, [load, configType]);
 
   async function handleSave() {
     const values = await form.validateFields();
@@ -95,14 +116,13 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
         provider:    values.provider as string,
         endpointUrl: values.endpointUrl || undefined,
         enabled:     values.enabled ?? true,
-        // 仅当用户输入了非脱敏值时才更新
         ...(values.apiKey    && !values.apiKey.includes("•")    ? { apiKey:    values.apiKey    } : {}),
         ...(values.apiSecret && !values.apiSecret.includes("•") ? { apiSecret: values.apiSecret } : {}),
         ...(values.appId     && !values.appId.includes("•")     ? { appId:     values.appId     } : {}),
       };
-      await upsertIntegrationConfig("invoice_verify", payload);
+      await upsertIntegrationConfig(configType, payload);
       toast.success("对接配置已保存");
-      await load();
+      await load(configType);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -114,11 +134,11 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await testIntegrationConfig("invoice_verify");
+      const result = await testIntegrationConfig(configType);
       setTestResult({ ok: result.ok, message: result.message });
       if (result.ok) toast.success(`测试成功：${result.message}`);
       else toast.error(`测试失败：${result.message}`);
-      await load(); // 刷新 lastTestOk
+      await load(configType);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -126,36 +146,57 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
     }
   }
 
-  const selectedProvider = Form.useWatch("provider", form) as string ?? "local";
+  const selectedProvider = Form.useWatch("provider", form) as string ?? typeMeta.defaultProvider;
   const meta = providers.find(p => p.id === selectedProvider);
 
   if (loading) return <div style={{ padding: 40, textAlign: "center" }}><Spin /></div>;
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      {/* 发票验真统计 */}
-      <Card
-        size="small"
-        title={<Space><SafetyOutlined style={{ color: "#2563eb" }} /><Text strong>发票验真统计</Text></Space>}
-        style={{ borderRadius: 10 }}
-      >
-        <Row gutter={[16, 8]}>
-          {[
-            { label: "发票总数", value: invoiceStats.total, color: "#475569" },
-            { label: "待验真",   value: invoiceStats.pending,  color: invoiceStats.pending > 0 ? "#d97706" : "#64748b" },
-            { label: "已验真",   value: invoiceStats.verified, color: "#16a34a" },
-            { label: "不合规",   value: invoiceStats.invalid,  color: invoiceStats.invalid > 0 ? "#dc2626" : "#64748b" },
-          ].map(s => (
-            <Col key={s.label} span={6}>
-              <Statistic title={s.label} value={s.value} valueStyle={{ fontSize: 18, color: s.color }} />
-            </Col>
-          ))}
-        </Row>
-        {invoiceStats.invalid > 0 && (
-          <Alert type="error" showIcon style={{ marginTop: 12 }}
-            message={`${invoiceStats.invalid} 张发票验真不合规，存在税务风险，请在「发票台账」中处理`} />
-        )}
-      </Card>
+      {/* 对接类型切换 */}
+      <Segmented
+        value={configType}
+        onChange={(v) => setConfigType(v as ConfigType)}
+        options={[
+          { label: <Space><SafetyOutlined />发票验真</Space>, value: "invoice_verify" },
+          { label: <Space><BankOutlined />银行直连</Space>, value: "bank_api" },
+        ]}
+      />
+
+      {/* 发票验真统计（仅发票类型）*/}
+      {configType === "invoice_verify" && (
+        <Card
+          size="small"
+          title={<Space><SafetyOutlined style={{ color: "#2563eb" }} /><Text strong>发票验真统计</Text></Space>}
+          style={{ borderRadius: 10 }}
+        >
+          <Row gutter={[16, 8]}>
+            {[
+              { label: "发票总数", value: invoiceStats.total, color: "#475569" },
+              { label: "待验真",   value: invoiceStats.pending,  color: invoiceStats.pending > 0 ? "#d97706" : "#64748b" },
+              { label: "已验真",   value: invoiceStats.verified, color: "#16a34a" },
+              { label: "不合规",   value: invoiceStats.invalid,  color: invoiceStats.invalid > 0 ? "#dc2626" : "#64748b" },
+            ].map(s => (
+              <Col key={s.label} span={6}>
+                <Statistic title={s.label} value={s.value} valueStyle={{ fontSize: 18, color: s.color }} />
+              </Col>
+            ))}
+          </Row>
+          {invoiceStats.invalid > 0 && (
+            <Alert type="error" showIcon style={{ marginTop: 12 }}
+              message={`${invoiceStats.invalid} 张发票验真不合规，存在税务风险，请在「发票台账」中处理`} />
+          )}
+        </Card>
+      )}
+
+      {/* 银行直连能力说明（仅银行类型）*/}
+      {configType === "bank_api" && (
+        <Alert
+          type="info" showIcon icon={<BankOutlined />}
+          message="银行 API 直连"
+          description="配置后可自动拉取银行流水并触发对账，以及通过 API 推送工资代发指令。未配置（手工模式）时继续使用 CSV 流水导入与网银上传代发文件。"
+        />
+      )}
 
       {/* 当前对接状态 */}
       {config && (
@@ -164,11 +205,9 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
           showIcon
           icon={config.lastTestOk === true ? <CheckCircleOutlined /> :
                 config.lastTestOk === false ? <CloseCircleOutlined /> : <ApiOutlined />}
-          message={
-            config.lastTestOk === true  ? `当前使用：${providers.find(p => p.id === config.provider)?.name ?? config.provider} · 上次测试通过` :
-            config.lastTestOk === false ? `当前使用：${providers.find(p => p.id === config.provider)?.name ?? config.provider} · 上次测试失败` :
-            `当前使用：${providers.find(p => p.id === config.provider)?.name ?? config.provider} · 尚未测试`
-          }
+          message={`当前使用：${providers.find(p => p.id === config.provider)?.name ?? config.provider} · ${
+            config.lastTestOk === true ? "上次测试通过" : config.lastTestOk === false ? "上次测试失败" : "尚未测试"
+          }`}
           description={config.lastTestMsg && (
             <Text type="secondary" style={{ fontSize: 12 }}>{config.lastTestAt?.slice(0, 16).replace("T", " ")} — {config.lastTestMsg}</Text>
           )}
@@ -177,7 +216,7 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
 
       {/* 配置表单 */}
       <Card
-        title={<Space><ApiOutlined style={{ color: "#7c3aed" }} /><Text strong>发票验真服务商配置</Text></Space>}
+        title={<Space><ApiOutlined style={{ color: "#7c3aed" }} /><Text strong>{typeMeta.title}</Text></Space>}
         style={{ borderRadius: 10 }}
         extra={
           <Space>
@@ -191,8 +230,7 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
         }
       >
         <Form form={form} layout="vertical" size="middle">
-          {/* 服务商选择 */}
-          <Form.Item name="provider" label="验真服务商" rules={[{ required: true }]}>
+          <Form.Item name="provider" label="服务商" rules={[{ required: true }]}>
             <Select
               options={providers.map(p => ({
                 value: p.id,
@@ -209,7 +247,6 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
             />
           </Form.Item>
 
-          {/* 服务商说明卡片 */}
           {meta && (
             <div style={{
               padding: "12px 16px", borderRadius: 8, marginBottom: 16,
@@ -226,91 +263,55 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
             </div>
           )}
 
-          {/* 动态字段 */}
           {meta?.requiresApiKey && (
-            <Form.Item
-              name="apiKey"
-              label={
-                <Space>
-                  <span>API Key</span>
-                  <Tooltip title={
-                    selectedProvider === "etax_nsrsbh" ? "国税平台颁发的企业接入令牌" :
-                    selectedProvider === "baiwang"     ? "百望云开放平台 → 应用管理 → API Key" :
-                    selectedProvider === "nuonuo"      ? "诺诺开放平台 → 应用详情 → Access Token" :
-                    "服务商提供的 API 密钥"
-                  }>
-                    <QuestionCircleOutlined style={{ color: "#94a3b8" }} />
-                  </Tooltip>
-                </Space>
-              }
-            >
-              <Input.Password
-                placeholder={config?.apiKey ? PLACEHOLDER_MASKED : "请输入 API Key"}
-                style={{ maxWidth: 360 }}
-                autoComplete="off"
-              />
+            <Form.Item name="apiKey" label={
+              <Space><span>API Key</span>
+                <Tooltip title="服务商提供的 API 密钥 / 接入令牌">
+                  <QuestionCircleOutlined style={{ color: "#94a3b8" }} />
+                </Tooltip>
+              </Space>
+            }>
+              <Input.Password placeholder={config?.apiKey ? PLACEHOLDER_MASKED : "请输入 API Key"} style={{ maxWidth: 360 }} autoComplete="off" />
             </Form.Item>
           )}
 
           {meta?.requiresApiSecret && (
-            <Form.Item
-              name="apiSecret"
-              label={
-                <Space>
-                  <span>{selectedProvider === "nuonuo" ? "Secret / Token Secret" : "API Secret"}</span>
-                  <Tooltip title="与 API Key 配套的密钥，用于请求签名">
-                    <QuestionCircleOutlined style={{ color: "#94a3b8" }} />
-                  </Tooltip>
-                </Space>
-              }
-            >
-              <Input.Password
-                placeholder={config?.apiSecret ? PLACEHOLDER_MASKED : "请输入 API Secret"}
-                style={{ maxWidth: 360 }}
-                autoComplete="off"
-              />
+            <Form.Item name="apiSecret" label={
+              <Space><span>API Secret</span>
+                <Tooltip title="与 API Key 配套的密钥，用于请求签名">
+                  <QuestionCircleOutlined style={{ color: "#94a3b8" }} />
+                </Tooltip>
+              </Space>
+            }>
+              <Input.Password placeholder={config?.apiSecret ? PLACEHOLDER_MASKED : "请输入 API Secret"} style={{ maxWidth: 360 }} autoComplete="off" />
             </Form.Item>
           )}
 
           {meta?.requiresAppId && (
-            <Form.Item
-              name="appId"
-              label={
-                <Space>
-                  <span>App ID / 应用编号</span>
-                  <Tooltip title="百望云开放平台 → 应用管理中的 appId">
-                    <QuestionCircleOutlined style={{ color: "#94a3b8" }} />
-                  </Tooltip>
-                </Space>
-              }
-            >
-              <Input
-                placeholder={config?.appId ? PLACEHOLDER_MASKED : "请输入 App ID"}
-                style={{ maxWidth: 360 }}
-                autoComplete="off"
-              />
+            <Form.Item name="appId" label={
+              <Space><span>App ID / 应用编号</span>
+                <Tooltip title="开放平台应用管理中的 appId">
+                  <QuestionCircleOutlined style={{ color: "#94a3b8" }} />
+                </Tooltip>
+              </Space>
+            }>
+              <Input placeholder={config?.appId ? PLACEHOLDER_MASKED : "请输入 App ID"} style={{ maxWidth: 360 }} autoComplete="off" />
             </Form.Item>
           )}
 
           {meta?.requiresEndpoint && (
-            <Form.Item
-              name="endpointUrl"
-              label={
-                <Space>
-                  <span>接口地址（Endpoint URL）</span>
-                  <Tooltip title="POST 接口地址，规范：{invoiceCode,invoiceNo,invoiceDate,totalAmount} → {valid:bool,message:string}">
-                    <QuestionCircleOutlined style={{ color: "#94a3b8" }} />
-                  </Tooltip>
-                </Space>
-              }
-              rules={[{ type: "url", message: "请输入完整的 HTTPS URL" }]}
-            >
-              <Input placeholder="https://your-api.example.com/invoice/verify" style={{ maxWidth: 480 }} />
+            <Form.Item name="endpointUrl" label={
+              <Space><span>接口地址（Endpoint URL）</span>
+                <Tooltip title={typeMeta.endpointHint}>
+                  <QuestionCircleOutlined style={{ color: "#94a3b8" }} />
+                </Tooltip>
+              </Space>
+            } rules={[{ type: "url", message: "请输入完整的 HTTPS URL" }]}>
+              <Input placeholder={typeMeta.endpointPlaceholder} style={{ maxWidth: 480 }} />
             </Form.Item>
           )}
         </Form>
 
-        {/* 测试结果 */}
         {testResult && (
           <Alert
             type={testResult.ok ? "success" : "error"}
@@ -323,27 +324,11 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
         )}
 
         <Divider style={{ margin: "16px 0" }} />
-
-        {/* 各服务商快速指引 */}
-        <div>
-          <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 8 }}>
-            各服务商接入指引
-          </Text>
-          <Descriptions size="small" column={1} style={{ fontSize: 12 }}>
-            <Descriptions.Item label={<Text style={{ fontSize: 11 }}>本地规则</Text>}>
-              <Text type="secondary" style={{ fontSize: 11 }}>无需配置，基于格式规则验证发票号码、代码、日期、金额。不联网，不消耗配额。</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label={<Text style={{ fontSize: 11 }}>国税平台</Text>}>
-              <Text type="secondary" style={{ fontSize: 11 }}>登录全国电子税务局 → 申请企业接口 → 获取 token，每天免费100次。适合小批量验真。</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label={<Text style={{ fontSize: 11 }}>百望云</Text>}>
-              <Text type="secondary" style={{ fontSize: 11 }}>注册百望开发者账号 → 创建应用 → 获取 apiKey + appId，商业付费，支持批量、实时、附图验真。</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label={<Text style={{ fontSize: 11 }}>诺诺网</Text>}>
-              <Text type="secondary" style={{ fontSize: 11 }}>注册诺诺开放平台 → 创建应用 → 获取 accessToken + secret，适合已使用诺诺开票的企业。</Text>
-            </Descriptions.Item>
-          </Descriptions>
-        </div>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {configType === "invoice_verify"
+            ? "提示：local 本地规则无需联网；接入国税/百望/诺诺需对应平台凭证。敏感字段保存后以掩码显示，留空则保留原值。"
+            : "提示：manual 手工模式无需配置；招行/建行直连需企业网银证书与开放平台签约。敏感字段保存后以掩码显示，留空则保留原值。"}
+        </Text>
       </Card>
     </Space>
   );
