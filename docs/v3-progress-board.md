@@ -4,8 +4,8 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`Phase 4 收尾——剩余仅 responsive / accessibility 统一深化`
-- 当前里程碑：`所有页面已完成 V3 结构化重构并合回 main；KnowledgePage（627→277）、DocumentsPage（652→214）两个最后的单体页已拆为 summary-first 工作台；后端 P1/P2/P3 外部对接 + 迁移修复均已在 main`
+- 当前目标：`V3.0 升级全部完成——所有分支已封闭合回 main`
+- 当前里程碑：`所有页面 V3 结构化重构 + 全局 responsive/accessibility 收口 + 合同看板（@dnd-kit 拖拽）+ PayrollRunWizard 工资向导 均已合回 main；后端外部对接 P1–P5 全部落库上线；无未封闭远程分支`
 - 更新时间：`2026-06-02`
 
 ## 2. V3 Workstreams
