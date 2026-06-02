@@ -110,7 +110,8 @@ import {
   listPayrollReviewLedgers,
   syncPayrollReviewLedgers,
   updateEmployee,
-  updatePayrollPolicy
+  updatePayrollPolicy,
+  updateSalaryAccounts
 } from "./modules/payroll/routes.js";
 import {
   buildBatchRoute,
@@ -910,6 +911,16 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "POST") {
       if (!(await requirePermission("payroll.manage", req, res))) return;
       return syncPayrollReviewLedgers(req, res);
+    }
+  }
+
+  // ── P1-6: 批量维护工资账号 ────────────────────────────────────────────────
+  if (url.pathname === "/api/payroll/employees/salary-accounts") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.manage", req, res))) return;
+    if (req.method === "PATCH") {
+      await readJsonBody(req);
+      return updateSalaryAccounts(req, res);
     }
   }
 

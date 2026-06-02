@@ -25,6 +25,8 @@ interface EmployeeRow {
   base_salary: string | number;
   status: Employee["status"];
   notes: string;
+  salary_account?: string | null;
+  salary_bank?: string | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -102,6 +104,8 @@ function mapEmployee(row: EmployeeRow): Employee {
     baseSalary: Number(row.base_salary),
     status: row.status,
     notes: row.notes,
+    salaryAccount: row.salary_account ?? "",
+    salaryBank: row.salary_bank ?? "",
     createdAt: toIso(row.created_at) ?? "",
     updatedAt: toIso(row.updated_at) ?? ""
   };
@@ -275,6 +279,33 @@ export async function updateEmployee(req: ApiRequest, res: ServerResponse, emplo
     ]
   );
   return json(res, 200, { employee: mapEmployee(row!) });
+}
+
+// ─── 批量维护工资发放账号（P1-6）─────────────────────────────────────────────
+
+export async function updateSalaryAccounts(req: ApiRequest, res: ServerResponse) {
+  const companyId = req.auth!.companyId;
+  const body = (req.body ?? {}) as {
+    items?: { employeeId: string; salaryAccount?: string; salaryBank?: string }[];
+  };
+  if (!Array.isArray(body.items) || body.items.length === 0) {
+    return json(res, 400, { error: "items 不能为空" });
+  }
+  let updated = 0;
+  for (const it of body.items) {
+    if (!it.employeeId) continue;
+    const rows = await query<{ id: string }>(
+      `update employees set salary_account = $1, salary_bank = $2, updated_at = now()
+       where id = $3 and company_id = $4 returning id`,
+      [it.salaryAccount ?? "", it.salaryBank ?? "", it.employeeId, companyId],
+    );
+    if (rows.length > 0) updated++;
+  }
+  writeAudit({
+    companyId, userId: req.auth!.userId, action: "payroll.salary_accounts.updated",
+    resourceType: "employee", changes: { updated, total: body.items.length },
+  });
+  return json(res, 200, { ok: true, updated });
 }
 
 // ─── Payroll Policy ───────────────────────────────────────────────────────────

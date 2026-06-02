@@ -1091,6 +1091,15 @@ export async function confirmPayroll(recordId: string) {
   });
 }
 
+export async function updateSalaryAccounts(
+  items: { employeeId: string; salaryAccount?: string; salaryBank?: string }[]
+) {
+  return request<{ ok: boolean; updated: number }>("/api/payroll/employees/salary-accounts", {
+    method: "PATCH",
+    body: JSON.stringify({ items })
+  });
+}
+
 // ── P3 工资代发 ───────────────────────────────────────────────────────────────
 
 export interface PayrollTransferBatch {

@@ -754,6 +754,8 @@ export interface Employee {
   baseSalary: number;
   status: EmployeeStatus;
   notes: string;
+  salaryAccount?: string;
+  salaryBank?: string;
   createdAt: string;
   updatedAt: string;
 }
