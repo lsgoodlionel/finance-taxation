@@ -6,6 +6,7 @@ import { AssistantPage } from "./pages/AssistantPage";
 import { PdfExportPage } from "./pages/PdfExportPage";
 import { ContractsPage } from "./pages/ContractsPage";
 import { PayrollPage } from "./pages/PayrollPage";
+import { PayrollTransferPage } from "./pages/PayrollTransferPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { EventsPage } from "./pages/EventsPage";
 import { LedgerPage } from "./pages/LedgerPage";
@@ -40,6 +41,7 @@ const router = createBrowserRouter([
       { path: "risk", element: <RiskPage /> },
       { path: "contracts", element: <ContractsPage /> },
       { path: "payroll", element: <PayrollPage /> },
+      { path: "payroll/transfer", element: <PayrollTransferPage /> },
       { path: "assistant", element: <AssistantPage /> },
       { path: "pdf-export", element: <PdfExportPage /> },
       { path: "audit", element: <AuditPage /> },

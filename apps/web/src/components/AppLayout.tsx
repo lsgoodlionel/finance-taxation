@@ -42,6 +42,7 @@ const navItems = [
     children: [
       { key: "/contracts", icon: <FileTextOutlined />, label: "合同管理" },
       { key: "/payroll", icon: <TeamOutlined />, label: "工资管理" },
+      { key: "/payroll/transfer", icon: <BankOutlined />, label: "工资代发与社保" },
     ],
   },
   {
