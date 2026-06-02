@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
-  Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid,
+  Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid, Badge,
 } from "antd";
 import {
   RobotOutlined, UnorderedListOutlined, CheckSquareOutlined, DashboardOutlined, CheckCircleOutlined, InboxOutlined,
@@ -10,8 +10,31 @@ import {
   BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined, MenuOutlined,
   BankOutlined, ProfileOutlined,
 } from "@ant-design/icons";
-import { AUTH_EXPIRED_EVENT, getStoredToken, getCurrentUser, login, logoutSession } from "../lib/api";
+import { AUTH_EXPIRED_EVENT, getStoredToken, getCurrentUser, login, logoutSession, getInbox } from "../lib/api";
 import { GlobalPeriodPicker } from "./GlobalPeriodPicker";
+
+type NavBadges = Record<string, number>;
+
+/** 把待办数量贴到对应导航项的 label 上（红色 Badge）。 */
+function decorateNav(items: typeof navItems, badges: NavBadges) {
+  return items.map((group) => ({
+    ...group,
+    children: group.children?.map((child) => {
+      const count = badges[child.key] ?? 0;
+      if (count <= 0) return child;
+      return {
+        ...child,
+        label: (
+          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{child.label}</span>
+            <Badge count={count} size="small" overflowCount={99}
+              style={{ backgroundColor: "#dc2626", boxShadow: "none" }} />
+          </span>
+        ),
+      };
+    }),
+  }));
+}
 import { LOGIN_GATE_SUBTITLE, SIDEBAR_BRAND_SUBTITLE } from "../lib/entry-guidance";
 
 const { Sider, Content } = Layout;
@@ -192,10 +215,33 @@ export function AppLayout() {
   const [checking, setChecking] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [badges, setBadges] = useState<NavBadges>({});
   const navigate = useNavigate();
   const location = useLocation();
   const screens = useBreakpoint();
   const isMobile = !screens.lg;
+
+  // 拉取待办数量，贴成导航角标（登录后 + 切换路由时刷新）
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    void getInbox()
+      .then((data) => {
+        if (cancelled) return;
+        const by = (k: string) => data.items.find((i) => i.key === k)?.count ?? 0;
+        setBadges({
+          "/inbox": data.totalPending,
+          "/tasks": by("overdue_tasks") + by("todo_tasks"),
+          "/events": by("pending_events"),
+          "/invoices": by("pending_invoices"),
+          "/documents": by("awaiting_docs"),
+          "/vouchers": by("draft_vouchers"),
+          "/banking": by("unmatched_statements"),
+        });
+      })
+      .catch(() => { /* 角标非关键，失败静默 */ });
+    return () => { cancelled = true; };
+  }, [user, location.pathname]);
 
   useEffect(() => {
     const token = getStoredToken();
@@ -277,7 +323,7 @@ export function AppLayout() {
           theme="dark"
           selectedKeys={[location.pathname]}
           style={{ background: "transparent", border: "none", fontSize: 13 }}
-          items={navItems}
+          items={decorateNav(navItems, badges)}
           inlineCollapsed={!showFull}
           onClick={({ key }) => {
             navigate(key);
