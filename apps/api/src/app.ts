@@ -121,6 +121,7 @@ import {
   disburseBatchRoute
 } from "./modules/payroll/transfer.routes.js";
 import { socialSecurityClosureRoute } from "./modules/payroll/social-security.routes.js";
+import { syncStatementsRoute, submitTransferApiRoute } from "./modules/banking/bank-api.routes.js";
 import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
   payrollPdf,
@@ -944,6 +945,15 @@ async function router(req: ApiRequest, res: ServerResponse) {
       return disburseBatchRoute(req, res, transferDisburseMatch[1]);
     }
   }
+  const transferSubmitApiMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/submit-api$/);
+  if (transferSubmitApiMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.manage", req, res))) return;
+    if (req.method === "POST") {
+      await readJsonBody(req);
+      return submitTransferApiRoute(req, res, transferSubmitApiMatch[1]);
+    }
+  }
   const transferBatchMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)$/);
   if (transferBatchMatch?.[1]) {
     if (!(await requireAuth(req, res))) return;
@@ -1294,6 +1304,15 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "PUT") {
       await readJsonBody(req);
       return upsertReconRulesRoute(req, res);
+    }
+  }
+
+  // ── P5: 银行 API 直连——自动拉流水并对账 ───────────────────────────────────
+  if (url.pathname === "/api/banking/sync-statements") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") {
+      await readJsonBody(req);
+      return syncStatementsRoute(req, res);
     }
   }
 
