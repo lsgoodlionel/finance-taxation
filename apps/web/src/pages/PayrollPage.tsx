@@ -24,6 +24,7 @@ import {
   updateEmployee,
   updatePayrollPolicy
 } from "../lib/api";
+import { usePeriod } from "../lib/period-context";
 import { buildPayrollEventInput } from "./payroll-event";
 import { buildPayrollArtifactSummary, resolvePayrollLinkedEventId } from "./payroll-closure";
 import { buildPayrollRiskBuckets, buildPayrollVoucherSuggestions } from "./payroll-guidance";
@@ -148,12 +149,13 @@ export function PayrollPage() {
   const [empForm, setEmpForm] = useState({ ...EMPTY_EMP_FORM });
 
   // payroll tab
+  const { period: globalPeriod } = usePeriod();
   const [periods, setPeriods] = useState<PayrollPeriodSummary[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState("");
-  const [customPeriod, setCustomPeriod] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [customPeriod, setCustomPeriod] = useState(globalPeriod);
+
+  // 全局期间变化时同步「计算工资」默认期间
+  useEffect(() => { setCustomPeriod(globalPeriod); }, [globalPeriod]);
   const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
   const [computing, setComputing] = useState(false);
   const [linkedEventIds, setLinkedEventIds] = useState<Record<string, string>>({});

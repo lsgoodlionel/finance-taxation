@@ -1,5 +1,6 @@
 import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
 import { LanguageProvider } from "./lib/i18n";
+import { PeriodProvider } from "./lib/period-context";
 import { AppLayout } from "./components/AppLayout";
 import { ChairmanDashboardPage } from "./pages/ChairmanDashboardPage";
 import { AssistantPage } from "./pages/AssistantPage";
@@ -57,7 +58,9 @@ const router = createBrowserRouter([
 export function App() {
   return (
     <LanguageProvider>
-      <RouterProvider router={router} />
+      <PeriodProvider>
+        <RouterProvider router={router} />
+      </PeriodProvider>
     </LanguageProvider>
   );
 }
