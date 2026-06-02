@@ -1154,6 +1154,24 @@ export async function downloadTransferFile(batchId: string, format: "generic" | 
   return resp.blob();
 }
 
+// ── 月度结账状态 ─────────────────────────────────────────────────────────────
+
+export interface CloseStep {
+  key: string;
+  label: string;
+  status: "done" | "pending" | "todo";
+  detail: string;
+  count: number;
+  actionPath: string;
+}
+
+export async function getCloseStatus(period: string) {
+  return request<{
+    period: string; steps: CloseStep[]; doneCount: number; total: number;
+    canLock: boolean; locked: boolean;
+  }>(`/api/close/status?period=${encodeURIComponent(period)}`);
+}
+
 // ── P4 社保联动 ───────────────────────────────────────────────────────────────
 
 export async function closeSocialSecurity(period: string) {
