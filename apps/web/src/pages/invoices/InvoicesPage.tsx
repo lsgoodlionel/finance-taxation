@@ -9,6 +9,7 @@
  *   - 关联到经营事项
  */
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import {
   Typography, Card, Table, Tag, Button, Space, Modal, Form, Input,
@@ -23,7 +24,7 @@ import { toast } from "sonner";
 import dayjs from "dayjs";
 import type { RcFile } from "antd/es/upload";
 import {
-  listInvoices, createInvoice, verifyInvoice, ocrInvoice, deleteInvoice,
+  listInvoices, createInvoice, verifyInvoice, ocrInvoice, deleteInvoice, generateInvoiceVoucher,
   type Invoice,
 } from "../../lib/api";
 
@@ -41,9 +42,11 @@ const INV_TYPE_LABELS: Record<string, string> = {
 };
 
 export function InvoicesPage() {
+  const navigate = useNavigate();
   const [invoices, setInvoices]     = useState<Invoice[]>([]);
   const [loading, setLoading]       = useState(true);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [genVoucherId, setGenVoucherId] = useState<string | null>(null);
   const [addOpen, setAddOpen]       = useState(false);
   const [ocrOpen, setOcrOpen]       = useState(false);
   const [ocrText, setOcrText]       = useState("");
@@ -98,6 +101,19 @@ export function InvoicesPage() {
       toast.error((err as Error).message);
     } finally {
       setVerifyingId(null);
+    }
+  }
+
+  async function handleGenVoucher(id: string) {
+    setGenVoucherId(id);
+    try {
+      const r = await generateInvoiceVoucher(id);
+      toast.success(`已生成凭证草稿：${r.summary}`);
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setGenVoucherId(null);
     }
   }
 
@@ -214,7 +230,7 @@ export function InvoicesPage() {
       render: (v: string) => <Tag color={VERIFY_COLOR[v] ?? "default"} style={{ fontSize: 10 }}>{VERIFY_LABELS[v] ?? v}</Tag>,
     },
     {
-      title: "操作", key: "actions", width: 100,
+      title: "操作", key: "actions", width: 180,
       render: (_: unknown, record: Invoice) => (
         <Space size={4}>
           {record.verify_status === "pending" && (
@@ -223,6 +239,12 @@ export function InvoicesPage() {
               onClick={() => void handleVerify(record.id)}>
               验真
             </Button>
+          )}
+          {record.voucher_id ? (
+            <Button size="small" type="link" onClick={() => navigate("/vouchers")}>已生成凭证</Button>
+          ) : (
+            <Button size="small" type="link" loading={genVoucherId === record.id}
+              onClick={() => void handleGenVoucher(record.id)}>生成凭证</Button>
           )}
         </Space>
       ),

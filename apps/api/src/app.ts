@@ -200,6 +200,7 @@ import {
   verifyInvoice,
   ocrInvoice,
   deleteInvoice,
+  generateInvoiceVoucher,
 } from "./modules/invoices/invoice.routes.js";
 
 async function router(req: ApiRequest, res: ServerResponse) {
@@ -1368,6 +1369,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
   if (invoiceVerifyMatch?.[1]) {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "POST") return verifyInvoice(req, res, invoiceVerifyMatch[1]);
+  }
+  const invoiceVoucherMatch = url.pathname.match(/^\/api\/invoices\/([^/]+)\/voucher$/);
+  if (invoiceVoucherMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.post", req, res))) return;
+    if (req.method === "POST") return generateInvoiceVoucher(req, res, invoiceVoucherMatch[1]);
   }
   const invoiceDetailMatch = url.pathname.match(/^\/api\/invoices\/([^/]+)$/);
   if (invoiceDetailMatch?.[1]) {
