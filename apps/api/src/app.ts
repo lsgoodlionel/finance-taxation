@@ -125,6 +125,7 @@ import { socialSecurityClosureRoute } from "./modules/payroll/social-security.ro
 import { syncStatementsRoute, submitTransferApiRoute } from "./modules/banking/bank-api.routes.js";
 import { getCloseStatus } from "./modules/close/close.routes.js";
 import { getInbox } from "./modules/inbox/inbox.routes.js";
+import { globalSearch } from "./modules/search/search.routes.js";
 import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
   payrollPdf,
@@ -1318,6 +1319,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
       await readJsonBody(req);
       return upsertReconRulesRoute(req, res);
     }
+  }
+
+  // ── 全局搜索 ──────────────────────────────────────────────────────────────
+  if (url.pathname === "/api/search") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return globalSearch(req, res);
   }
 
   // ── 统一待办收件箱 ────────────────────────────────────────────────────────

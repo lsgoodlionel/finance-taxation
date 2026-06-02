@@ -4,7 +4,7 @@ import {
   Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid, Badge,
 } from "antd";
 import {
-  RobotOutlined, UnorderedListOutlined, CheckSquareOutlined, DashboardOutlined, CheckCircleOutlined, InboxOutlined,
+  RobotOutlined, UnorderedListOutlined, CheckSquareOutlined, DashboardOutlined, CheckCircleOutlined, InboxOutlined, SearchOutlined,
   FileTextOutlined, TeamOutlined, FolderOpenOutlined, AuditOutlined, BarChartOutlined,
   LineChartOutlined, CalculatorOutlined, ExperimentOutlined, AlertOutlined, FileSearchOutlined,
   BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined, MenuOutlined,
@@ -12,6 +12,7 @@ import {
 } from "@ant-design/icons";
 import { AUTH_EXPIRED_EVENT, getStoredToken, getCurrentUser, login, logoutSession, getInbox } from "../lib/api";
 import { GlobalPeriodPicker } from "./GlobalPeriodPicker";
+import { CommandPalette, useCommandPalette } from "./CommandPalette";
 
 type NavBadges = Record<string, number>;
 
@@ -216,6 +217,7 @@ export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [badges, setBadges] = useState<NavBadges>({});
+  const cmd = useCommandPalette();
   const navigate = useNavigate();
   const location = useLocation();
   const screens = useBreakpoint();
@@ -373,6 +375,7 @@ export function AppLayout() {
   if (isMobile) {
     return (
       <Layout style={{ minHeight: "100vh", background: "#f1f5f9" }}>
+        <CommandPalette open={cmd.open} onClose={() => cmd.setOpen(false)} />
         {/* Mobile top header */}
         <div style={{
           position: "sticky", top: 0, zIndex: 100,
@@ -395,7 +398,11 @@ export function AppLayout() {
             <SafetyOutlined style={{ color: "#fff", fontSize: 14 }} />
           </div>
           <span style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700 }}>Finance Taxation</span>
-          <div style={{ marginLeft: "auto" }}><GlobalPeriodPicker compact /></div>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+            <Button type="text" icon={<SearchOutlined style={{ color: "#f1f5f9", fontSize: 16 }} />}
+              onClick={() => cmd.setOpen(true)} aria-label="全局搜索" style={{ padding: "0 4px" }} />
+            <GlobalPeriodPicker compact />
+          </div>
         </div>
 
         <Drawer
@@ -418,6 +425,7 @@ export function AppLayout() {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
+      <CommandPalette open={cmd.open} onClose={() => cmd.setOpen(false)} />
       <Sider
         collapsible
         collapsed={collapsed}
@@ -445,6 +453,18 @@ export function AppLayout() {
           borderBottom: "1px solid rgba(20,40,60,0.08)",
           padding: "10px 28px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16,
         }}>
+          <button
+            onClick={() => cmd.setOpen(true)}
+            aria-label="全局搜索"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer",
+              background: "#f1f5f9", border: "1px solid rgba(20,40,60,0.1)", borderRadius: 8,
+              padding: "5px 12px", color: "#64748b", fontSize: 13, minWidth: 200,
+            }}>
+            <SearchOutlined />
+            <span style={{ flex: 1, textAlign: "left" }}>搜索…</span>
+            <kbd style={{ fontSize: 11, color: "#94a3b8", border: "1px solid #e2e8f0", borderRadius: 4, padding: "0 5px", background: "#fff" }}>⌘K</kbd>
+          </button>
           <GlobalPeriodPicker />
         </div>
         <Content style={{ padding: "24px 28px" }}>
