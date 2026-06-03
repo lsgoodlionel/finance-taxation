@@ -1198,6 +1198,19 @@ export async function assessCompleteness(businessEventId: string) {
   });
 }
 
+export interface AuditReviewResult {
+  ok: boolean;
+  resultId: string;
+  riskLevel: "high" | "medium" | "low" | "clean";
+  findings: string[];
+  sampleSize: number;
+  recommendation: string;
+}
+
+export async function auditReview() {
+  return request<AuditReviewResult>("/api/ai/audit/review", { method: "POST", body: JSON.stringify({}) });
+}
+
 export async function acceptAiResult(resultId: string, accepted: boolean) {
   return request<{ ok: boolean }>(`/api/ai/results/${resultId}/accept`, {
     method: "POST", body: JSON.stringify({ accepted })
