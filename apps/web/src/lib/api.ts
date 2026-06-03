@@ -1163,6 +1163,24 @@ export async function downloadTransferFile(batchId: string, format: "generic" | 
   return resp.blob();
 }
 
+// ── P7 现金流前瞻 ────────────────────────────────────────────────────────────
+
+export interface CashForecast {
+  cashBalance: number;
+  expectedInflow: number;
+  expectedOutflow: number;
+  projectedBalance: number;
+  salaryNeed: number;
+  canPaySalary: boolean;
+  gap: number;
+  verdict: string;
+}
+
+export async function getCashForecast(period?: string) {
+  const q = period ? `?period=${encodeURIComponent(period)}` : "";
+  return request<{ period: string; forecast: CashForecast }>(`/api/forecast/cash${q}`);
+}
+
 // ── P6 AI Agents ─────────────────────────────────────────────────────────────
 
 export interface AccountingSuggestion {
