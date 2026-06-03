@@ -1163,6 +1163,31 @@ export async function downloadTransferFile(batchId: string, format: "generic" | 
   return resp.blob();
 }
 
+// ── P6 AI Agents ─────────────────────────────────────────────────────────────
+
+export interface AccountingSuggestion {
+  ok: boolean;
+  resultId: string;
+  templateKey: string | null;
+  voucherType: string;
+  lines: { id: string; summary: string; accountCode: string; accountName: string; debit: string; credit: string }[];
+  rationale: string;
+  confidence: number;
+  needsReview: boolean;
+}
+
+export async function suggestAccounting(businessEventId: string) {
+  return request<AccountingSuggestion>("/api/ai/accounting/suggest", {
+    method: "POST", body: JSON.stringify({ businessEventId })
+  });
+}
+
+export async function acceptAiResult(resultId: string, accepted: boolean) {
+  return request<{ ok: boolean }>(`/api/ai/results/${resultId}/accept`, {
+    method: "POST", body: JSON.stringify({ accepted })
+  });
+}
+
 // ── 设置就绪度 ───────────────────────────────────────────────────────────────
 
 export interface SetupItem {
