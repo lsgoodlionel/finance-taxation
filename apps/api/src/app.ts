@@ -129,6 +129,7 @@ import { globalSearch } from "./modules/search/search.routes.js";
 import { getSetupStatus } from "./modules/setup/setup.routes.js";
 import { suggestAccounting, assessEventCompleteness, auditReview, getAiResults, acceptAiResult } from "./modules/ai-agents/routes.js";
 import { getCashForecast } from "./modules/forecast/routes.js";
+import { listCounterparties, createCounterparty, updateCounterparty } from "./modules/counterparties/routes.js";
 import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
   payrollPdf,
@@ -1352,6 +1353,18 @@ async function router(req: ApiRequest, res: ServerResponse) {
   if (aiAcceptMatch?.[1]) {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "POST") { await readJsonBody(req); return acceptAiResult(req, res, aiAcceptMatch[1]); }
+  }
+
+  // ── P7: 往来单位 ──────────────────────────────────────────────────────────
+  if (url.pathname === "/api/counterparties") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return listCounterparties(req, res);
+    if (req.method === "POST") { await readJsonBody(req); return createCounterparty(req, res); }
+  }
+  const cpMatch = url.pathname.match(/^\/api\/counterparties\/([^/]+)$/);
+  if (cpMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "PATCH") { await readJsonBody(req); return updateCounterparty(req, res, cpMatch[1]); }
   }
 
   // ── P7: 现金流前瞻 ────────────────────────────────────────────────────────

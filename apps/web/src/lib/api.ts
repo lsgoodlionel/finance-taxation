@@ -1163,6 +1163,38 @@ export async function downloadTransferFile(batchId: string, format: "generic" | 
   return resp.blob();
 }
 
+// ── P7 往来单位 ──────────────────────────────────────────────────────────────
+
+export interface Counterparty {
+  id: string | null;
+  name: string;
+  category: string;
+  taxNo: string;
+  contactName: string;
+  contactPhone: string;
+  creditLimit: number;
+  creditDays: number;
+  riskLevel: string;
+  notes: string;
+  receivable: number;
+  receivableCount: number;
+  payable: number;
+  payableCount: number;
+  registered: boolean;
+}
+
+export async function listCounterparties() {
+  return request<{ items: Counterparty[]; total: number }>("/api/counterparties");
+}
+
+export async function createCounterparty(data: Record<string, unknown>) {
+  return request<{ id: string; ok: boolean }>("/api/counterparties", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateCounterparty(id: string, data: Record<string, unknown>) {
+  return request<{ ok: boolean }>(`/api/counterparties/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
 // ── P7 现金流前瞻 ────────────────────────────────────────────────────────────
 
 export interface CashForecast {
