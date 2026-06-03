@@ -108,6 +108,7 @@ function buildBossSystemPrompt(ctx: {
   riskEventCount: number;
   pendingTaskCount: number;
   recentEvents: string;
+  cashForecast: string;
 }): string {
   const profitEstimate = ctx.revenueThisMonth - ctx.expenseThisMonth;
   return `你是「AI财税助手」，专为 ${ctx.companyName} 的董事长/总经理提供即席财务问答。
@@ -124,6 +125,9 @@ function buildBossSystemPrompt(ctx: {
 | 本月利润估算 | ¥${fmt(profitEstimate)} |
 | 高风险事项数 | ${ctx.riskEventCount} 件 |
 | 待处理任务数 | ${ctx.pendingTaskCount} 件 |
+
+## 资金前瞻
+${ctx.cashForecast}
 
 ## 近期经营事项（最多 10 条）
 ${ctx.recentEvents || "暂无数据"}
@@ -196,6 +200,15 @@ async function loadBossContext(companyId: string) {
   const riskEventCount = eventsRes.filter((e) => e.status === "blocked").length;
   const pendingTaskCount = Number(pendingTasksRes[0]?.cnt ?? 0);
 
+  // P7-B1：资金前瞻（注入老板问答上下文，可回答「还能发工资吗」）
+  let cashForecast = "暂无资金前瞻数据";
+  try {
+    const { gatherCashForecastInput } = await import("../forecast/routes.js");
+    const { buildCashForecast } = await import("../forecast/cash-forecast.js");
+    const fc = buildCashForecast(await gatherCashForecastInput(companyId, currentMonth));
+    cashForecast = `- 可动用资金 ¥${fmt(fc.cashBalance)}，本期工资社保刚性支出 ¥${fmt(fc.salaryNeed)}\n- ${fc.verdict}`;
+  } catch { /* 前瞻失败不阻塞问答 */ }
+
   const recentEvents = eventsRes.length === 0
     ? ""
     : eventsRes
@@ -212,7 +225,8 @@ async function loadBossContext(companyId: string) {
     expenseThisMonth,
     riskEventCount,
     pendingTaskCount,
-    recentEvents
+    recentEvents,
+    cashForecast
   };
 }
 

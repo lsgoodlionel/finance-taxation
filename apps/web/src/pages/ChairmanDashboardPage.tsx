@@ -11,6 +11,7 @@ import { DashboardKpiCards } from "./dashboard/DashboardKpiCards";
 import { DashboardTrendChart } from "./dashboard/DashboardTrendChart";
 import { DashboardPieChart } from "./dashboard/DashboardPieChart";
 import { DashboardAlertCards } from "./dashboard/DashboardAlertCards";
+import { CashForecastCard } from "./dashboard/CashForecastCard";
 
 const { Text } = Typography;
 
@@ -165,6 +166,11 @@ export function ChairmanDashboardPage() {
           <Col xs={24} lg={14}><DashboardTrendChart data={data} /></Col>
           <Col xs={24} lg={10}><DashboardPieChart data={data} /></Col>
         </Row>
+      </section>
+
+      {/* Cash forecast */}
+      <section className="v3-section-shell">
+        <CashForecastCard />
       </section>
 
       {/* Profit + AI summary */}
