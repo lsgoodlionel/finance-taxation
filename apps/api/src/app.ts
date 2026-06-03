@@ -129,6 +129,7 @@ import { globalSearch } from "./modules/search/search.routes.js";
 import { getSetupStatus } from "./modules/setup/setup.routes.js";
 import { suggestAccounting, assessEventCompleteness, auditReview, getAiResults, acceptAiResult } from "./modules/ai-agents/routes.js";
 import { getCashForecast } from "./modules/forecast/routes.js";
+import { getTaxDeadlines } from "./modules/tax/deadlines.routes.js";
 import { listCounterparties, createCounterparty, updateCounterparty } from "./modules/counterparties/routes.js";
 import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
@@ -1365,6 +1366,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
   if (cpMatch?.[1]) {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "PATCH") { await readJsonBody(req); return updateCounterparty(req, res, cpMatch[1]); }
+  }
+
+  // ── P7: 申报到期提醒 ──────────────────────────────────────────────────────
+  if (url.pathname === "/api/tax/deadlines") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return getTaxDeadlines(req, res);
   }
 
   // ── P7: 现金流前瞻 ────────────────────────────────────────────────────────

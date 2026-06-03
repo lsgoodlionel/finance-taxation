@@ -1163,6 +1163,22 @@ export async function downloadTransferFile(batchId: string, format: "generic" | 
   return resp.blob();
 }
 
+// ── P7 申报到期 ──────────────────────────────────────────────────────────────
+
+export interface TaxDeadline {
+  taxType: string;
+  label: string;
+  dueDate: string;
+  daysLeft: number;
+  filed: boolean;
+  urgent: boolean;
+}
+
+export async function getTaxDeadlines(period?: string) {
+  const q = period ? `?period=${encodeURIComponent(period)}` : "";
+  return request<{ period: string; deadlines: TaxDeadline[]; urgentCount: number }>(`/api/tax/deadlines${q}`);
+}
+
 // ── P7 往来单位 ──────────────────────────────────────────────────────────────
 
 export interface Counterparty {

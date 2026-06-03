@@ -11,7 +11,8 @@ import {
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "../components/ui/PageHeader";
-import { getInbox, getSetupStatus, type InboxItem, type SetupItem } from "../lib/api";
+import { getInbox, getSetupStatus, getTaxDeadlines, type InboxItem, type SetupItem, type TaxDeadline } from "../lib/api";
+import { usePeriod } from "../lib/period-context";
 
 const { Text } = Typography;
 
@@ -20,21 +21,26 @@ export function MyDayPage() {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [totalPending, setTotalPending] = useState(0);
   const [setup, setSetup] = useState<{ items: SetupItem[]; doneCount: number; total: number; ready: boolean } | null>(null);
+  const [deadlines, setDeadlines] = useState<TaxDeadline[]>([]);
   const [loading, setLoading] = useState(true);
+  const { period } = usePeriod();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, setupData] = await Promise.all([getInbox(), getSetupStatus().catch(() => null)]);
+      const [data, setupData, dl] = await Promise.all([
+        getInbox(), getSetupStatus().catch(() => null), getTaxDeadlines(period).catch(() => null),
+      ]);
       setItems(data.items);
       setTotalPending(data.totalPending);
       setSetup(setupData);
+      setDeadlines(dl?.deadlines ?? []);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [period]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -80,6 +86,30 @@ export function MyDayPage() {
                     </div>
                     {!s.done && <RightOutlined style={{ color: "#94a3b8", fontSize: 11 }} />}
                   </div>
+                </Col>
+              ))}
+            </Row>
+          </Space>
+        </section>
+      )}
+
+      {deadlines.length > 0 && (
+        <section className="v3-section-shell">
+          <Space direction="vertical" size={8} style={{ width: "100%" }}>
+            <Text strong>📅 申报到期提醒（{period}）</Text>
+            <Row gutter={[12, 12]}>
+              {deadlines.map((d) => (
+                <Col key={d.taxType} xs={24} sm={12} lg={6}>
+                  <Card size="small" style={{ borderRadius: 10, borderLeft: `3px solid ${d.filed ? "#16a34a" : d.urgent ? "#dc2626" : "#2563eb"}` }}
+                    styles={{ body: { padding: "10px 14px" } }}>
+                    <Text strong style={{ fontSize: 13 }}>{d.label}</Text>
+                    <div style={{ fontSize: 11, color: "#94a3b8", margin: "2px 0" }}>截止 {d.dueDate}</div>
+                    {d.filed
+                      ? <Tag color="success">已申报</Tag>
+                      : d.daysLeft < 0
+                        ? <Tag color="error">已逾期 {-d.daysLeft} 天</Tag>
+                        : <Tag color={d.urgent ? "error" : "blue"}>剩 {d.daysLeft} 天</Tag>}
+                  </Card>
                 </Col>
               ))}
             </Row>
