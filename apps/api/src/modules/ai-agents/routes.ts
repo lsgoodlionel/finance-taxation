@@ -6,12 +6,13 @@
  */
 
 import type { ServerResponse } from "node:http";
-import { queryOne } from "../../db/client.js";
+import { query, queryOne } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { withAiRun, recordAiResult, listAiResults, setResultAccepted } from "../../services/ai-runs.js";
 import { suggestAccountingEntry } from "./accounting-agent.js";
+import { assessCompleteness } from "./completeness-agent.js";
 
 export async function suggestAccounting(req: ApiRequest, res: ServerResponse): Promise<void> {
   const cid = req.auth!.companyId;
@@ -44,6 +45,50 @@ export async function suggestAccounting(req: ApiRequest, res: ServerResponse): P
   writeAudit({ companyId: cid, userId: req.auth!.userId, action: "ai.accounting.suggested",
     resourceType: "business_event", resourceId: event.id, changes: { resultId: result.resultId } });
   json(res, 200, { ok: true, resultId: result.resultId, ...result.suggestion });
+}
+
+export async function assessEventCompleteness(req: ApiRequest, res: ServerResponse): Promise<void> {
+  const cid = req.auth!.companyId;
+  const body = (req.body ?? {}) as { businessEventId?: string };
+  if (!body.businessEventId) { json(res, 400, { error: "businessEventId 为必填项" }); return; }
+
+  const event = await queryOne<{ id: string; type: string; title: string; contract_id: string | null }>(
+    "SELECT id, type, title, contract_id FROM business_events WHERE id=$1 AND company_id=$2",
+    [body.businessEventId, cid],
+  );
+  if (!event) { json(res, 404, { error: "经营事项不存在" }); return; }
+
+  const cnt = async (sql: string) => {
+    const r = await queryOne<{ n: string }>(sql, [event.id, cid]);
+    return parseInt(r?.n ?? "0", 10);
+  };
+  const [invoices, docs, vouchers] = await Promise.all([
+    cnt("SELECT count(*)::text n FROM invoices WHERE business_event_id=$1 AND company_id=$2"),
+    cnt("SELECT count(*)::text n FROM generated_documents WHERE business_event_id=$1 AND company_id=$2"),
+    cnt("SELECT count(*)::text n FROM vouchers WHERE business_event_id=$1 AND company_id=$2"),
+  ]);
+
+  const result = await withAiRun(
+    { companyId: cid, agentType: "completeness", inputSummary: `${event.type} · ${event.title}`, model: "rule-based", createdBy: req.auth!.userId },
+    async (runId) => {
+      const assessment = assessCompleteness({
+        type: event.type, hasContract: !!event.contract_id,
+        hasInvoice: invoices > 0, hasDocument: docs > 0, hasVoucher: vouchers > 0,
+      });
+      const resultId = await recordAiResult({
+        runId, companyId: cid, agentType: "completeness",
+        resultType: assessment.blocked ? "finding" : "suggestion",
+        resourceType: "business_event", resourceId: event.id,
+        content: { required: assessment.required, missing: assessment.missing, blocked: assessment.blocked },
+        summary: assessment.recommendation, confidence: assessment.score,
+      });
+      return { resultId, assessment };
+    },
+  );
+
+  writeAudit({ companyId: cid, userId: req.auth!.userId, action: "ai.completeness.assessed",
+    resourceType: "business_event", resourceId: event.id, changes: { missing: result.assessment.missing.length } });
+  json(res, 200, { ok: true, resultId: result.resultId, ...result.assessment });
 }
 
 export async function getAiResults(req: ApiRequest, res: ServerResponse): Promise<void> {

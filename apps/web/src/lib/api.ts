@@ -1182,6 +1182,22 @@ export async function suggestAccounting(businessEventId: string) {
   });
 }
 
+export interface CompletenessResult {
+  ok: boolean;
+  resultId: string;
+  required: string[];
+  missing: string[];
+  score: number;
+  blocked: boolean;
+  recommendation: string;
+}
+
+export async function assessCompleteness(businessEventId: string) {
+  return request<CompletenessResult>("/api/ai/completeness/assess", {
+    method: "POST", body: JSON.stringify({ businessEventId })
+  });
+}
+
 export async function acceptAiResult(resultId: string, accepted: boolean) {
   return request<{ ok: boolean }>(`/api/ai/results/${resultId}/accept`, {
     method: "POST", body: JSON.stringify({ accepted })
