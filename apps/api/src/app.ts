@@ -130,6 +130,7 @@ import { getSetupStatus } from "./modules/setup/setup.routes.js";
 import { suggestAccounting, assessEventCompleteness, auditReview, getAiResults, acceptAiResult } from "./modules/ai-agents/routes.js";
 import { getCashForecast } from "./modules/forecast/routes.js";
 import { getTaxDeadlines } from "./modules/tax/deadlines.routes.js";
+import { listPlans, getSubscription, subscribePlan, confirmPayment, listPayments } from "./modules/billing/routes.js";
 import { listCounterparties, createCounterparty, updateCounterparty } from "./modules/counterparties/routes.js";
 import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
@@ -1375,6 +1376,29 @@ async function router(req: ApiRequest, res: ServerResponse) {
   if (cpMatch?.[1]) {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "PATCH") { await readJsonBody(req); return updateCounterparty(req, res, cpMatch[1]); }
+  }
+
+  // ── P8-C3: 订阅计费 ───────────────────────────────────────────────────────
+  if (url.pathname === "/api/billing/plans") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return listPlans(req, res);
+  }
+  if (url.pathname === "/api/billing/subscription") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return getSubscription(req, res);
+  }
+  if (url.pathname === "/api/billing/subscribe") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") { await readJsonBody(req); return subscribePlan(req, res); }
+  }
+  if (url.pathname === "/api/billing/payments") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return listPayments(req, res);
+  }
+  const payConfirmMatch = url.pathname.match(/^\/api\/billing\/payments\/([^/]+)\/confirm$/);
+  if (payConfirmMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") { await readJsonBody(req); return confirmPayment(req, res, payConfirmMatch[1]); }
   }
 
   // ── P7: 申报到期提醒 ──────────────────────────────────────────────────────
