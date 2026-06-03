@@ -227,12 +227,21 @@ async function router(req: ApiRequest, res: ServerResponse) {
     }
   }
 
-  if (req.method === "GET" && url.pathname === "/health") {
-    return json(res, 200, {
-      ok: true,
+  if (req.method === "GET" && (url.pathname === "/health" || url.pathname === "/api/health")) {
+    let dbOk = false;
+    let dbLatencyMs: number | null = null;
+    try {
+      const t0 = Date.now();
+      await query("SELECT 1");
+      dbLatencyMs = Date.now() - t0;
+      dbOk = true;
+    } catch { dbOk = false; }
+    return json(res, dbOk ? 200 : 503, {
+      ok: dbOk,
       service: env.appName,
-      phase: "sprint-0",
-      modules: ["auth", "events", "tasks", "ledger", "tax"]
+      db: { ok: dbOk, latencyMs: dbLatencyMs },
+      uptimeSec: Math.round(process.uptime()),
+      timestamp: new Date().toISOString(),
     });
   }
 
