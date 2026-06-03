@@ -10,6 +10,7 @@ import { PayrollPage } from "./pages/PayrollPage";
 import { PayrollTransferPage } from "./pages/PayrollTransferPage";
 import { MonthEndClosePage } from "./pages/MonthEndClosePage";
 import { MyDayPage } from "./pages/MyDayPage";
+import { CounterpartiesPage } from "./pages/CounterpartiesPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { EventsPage } from "./pages/EventsPage";
 import { LedgerPage } from "./pages/LedgerPage";
@@ -45,6 +46,7 @@ const router = createBrowserRouter([
       { path: "rnd", element: <RndPage /> },
       { path: "risk", element: <RiskPage /> },
       { path: "contracts", element: <ContractsPage /> },
+      { path: "counterparties", element: <CounterpartiesPage /> },
       { path: "payroll", element: <PayrollPage /> },
       { path: "payroll/transfer", element: <PayrollTransferPage /> },
       { path: "assistant", element: <AssistantPage /> },

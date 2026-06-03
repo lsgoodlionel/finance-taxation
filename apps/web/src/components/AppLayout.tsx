@@ -84,6 +84,7 @@ const navItems = [
     type: "group" as const,
     children: [
       { key: "/contracts", icon: <FileTextOutlined />, label: "合同管理" },
+      { key: "/counterparties", icon: <TeamOutlined />, label: "往来单位" },
       { key: "/payroll", icon: <TeamOutlined />, label: "工资管理" },
       { key: "/payroll/transfer", icon: <BankOutlined />, label: "工资代发与社保" },
     ],
