@@ -127,7 +127,7 @@ import { getCloseStatus } from "./modules/close/close.routes.js";
 import { getInbox } from "./modules/inbox/inbox.routes.js";
 import { globalSearch } from "./modules/search/search.routes.js";
 import { getSetupStatus } from "./modules/setup/setup.routes.js";
-import { suggestAccounting, getAiResults, acceptAiResult } from "./modules/ai-agents/routes.js";
+import { suggestAccounting, assessEventCompleteness, getAiResults, acceptAiResult } from "./modules/ai-agents/routes.js";
 import { chat as assistantChat, ocr as assistantOcr } from "./modules/assistant/routes.js";
 import {
   payrollPdf,
@@ -1334,6 +1334,10 @@ async function router(req: ApiRequest, res: ServerResponse) {
   if (url.pathname === "/api/ai/accounting/suggest") {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "POST") { await readJsonBody(req); return suggestAccounting(req, res); }
+  }
+  if (url.pathname === "/api/ai/completeness/assess") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") { await readJsonBody(req); return assessEventCompleteness(req, res); }
   }
   if (url.pathname === "/api/ai/results") {
     if (!(await requireAuth(req, res))) return;

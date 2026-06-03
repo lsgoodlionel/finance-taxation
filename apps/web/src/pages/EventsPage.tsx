@@ -35,6 +35,7 @@ import { EventsShell } from "./events/EventsShell";
 import { EventListPanel } from "./events/EventListPanel";
 import { EventCreatePanel } from "./events/EventCreatePanel";
 import { EventDetailPanel } from "./events/EventDetailPanel";
+import { AiEventInsights } from "./events/AiEventInsights";
 
 const EVENT_TYPE_KEYS = [
   "sales", "procurement", "expense", "payroll",
@@ -398,6 +399,7 @@ export function EventsPage() {
           >
         {detail ? (
           <div>
+            {selectedEventId && <AiEventInsights businessEventId={selectedEventId} />}
             <ResultBanner
               tone="info"
               message={`下游对象：任务 ${detail.tasks.length} 项、单据 ${detail.generatedDocuments.length} 份、凭证 ${detail.vouchers.length} 张、税务事项 ${detail.taxItems.length} 条。建议先完成当前步骤，再进入对应结果页。`}
