@@ -13,6 +13,7 @@ import { writeAudit } from "../../services/audit.js";
 import { withAiRun, recordAiResult, listAiResults, setResultAccepted } from "../../services/ai-runs.js";
 import { suggestAccountingEntry } from "./accounting-agent.js";
 import { assessCompleteness } from "./completeness-agent.js";
+import { buildAuditReview } from "./audit-agent.js";
 
 export async function suggestAccounting(req: ApiRequest, res: ServerResponse): Promise<void> {
   const cid = req.auth!.companyId;
@@ -89,6 +90,40 @@ export async function assessEventCompleteness(req: ApiRequest, res: ServerRespon
   writeAudit({ companyId: cid, userId: req.auth!.userId, action: "ai.completeness.assessed",
     resourceType: "business_event", resourceId: event.id, changes: { missing: result.assessment.missing.length } });
   json(res, 200, { ok: true, resultId: result.resultId, ...result.assessment });
+}
+
+export async function auditReview(req: ApiRequest, res: ServerResponse): Promise<void> {
+  const cid = req.auth!.companyId;
+  const n = async (sql: string) => {
+    const r = await queryOne<{ n: string }>(sql, [cid]);
+    return parseInt(r?.n ?? "0", 10);
+  };
+  const [openHigh, openMedium, openLow, draftVouchers, unmatched, posted] = await Promise.all([
+    n("SELECT count(*)::text n FROM risk_findings WHERE company_id=$1 AND status='open' AND severity='high'"),
+    n("SELECT count(*)::text n FROM risk_findings WHERE company_id=$1 AND status='open' AND severity='medium'"),
+    n("SELECT count(*)::text n FROM risk_findings WHERE company_id=$1 AND status='open' AND severity='low'"),
+    n("SELECT count(*)::text n FROM vouchers WHERE company_id=$1 AND status='draft'"),
+    n("SELECT count(*)::text n FROM bank_statements WHERE company_id=$1 AND match_status='unmatched'"),
+    n("SELECT count(*)::text n FROM vouchers WHERE company_id=$1 AND status='posted'"),
+  ]);
+
+  const result = await withAiRun(
+    { companyId: cid, agentType: "audit", inputSummary: "全量审计勾稽", model: "rule-based", createdBy: req.auth!.userId },
+    async (runId) => {
+      const review = buildAuditReview({ openHigh, openMedium, openLow, draftVouchers, unmatchedStatements: unmatched, postedVouchers: posted });
+      const resultId = await recordAiResult({
+        runId, companyId: cid, agentType: "audit",
+        resultType: review.riskLevel === "clean" ? "suggestion" : "finding",
+        content: { riskLevel: review.riskLevel, findings: review.findings, sampleSize: review.sampleSize },
+        summary: review.recommendation, confidence: review.riskLevel === "clean" ? 0.8 : 0.6,
+      });
+      return { resultId, review };
+    },
+  );
+
+  writeAudit({ companyId: cid, userId: req.auth!.userId, action: "ai.audit.reviewed",
+    resourceType: "company", changes: { riskLevel: result.review.riskLevel } });
+  json(res, 200, { ok: true, resultId: result.resultId, ...result.review });
 }
 
 export async function getAiResults(req: ApiRequest, res: ServerResponse): Promise<void> {
