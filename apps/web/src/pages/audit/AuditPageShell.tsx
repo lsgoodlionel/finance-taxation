@@ -1,4 +1,5 @@
 import React, { type ReactNode } from "react";
+import { FinanceFlowBar } from "../../components/FinanceFlowBar";
 
 type AuditPageShellProps = {
   header: ReactNode;
@@ -11,6 +12,7 @@ export function AuditPageShell({ header, filters, list, detail }: AuditPageShell
   return (
     <div style={{ display: "grid", gap: "24px" }}>
       <section className="v3-hero-shell">{header}</section>
+      <FinanceFlowBar current="audit" />
       <section className="v3-section-shell" data-tone="muted">{filters}</section>
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.1fr) minmax(320px, 0.9fr)", gap: "24px", alignItems: "start" }}>
         {list}

@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { DocumentsShell } from "./DocumentsShell";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -9,12 +10,12 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 const html = renderToStaticMarkup(
-  createElement(DocumentsShell, {
+  createElement(MemoryRouter, null, createElement(DocumentsShell, {
     header: createElement("div", null, "header"),
     summary: createElement("div", null, "summary"),
     list: createElement("div", null, "list"),
     detail: createElement("div", null, "detail")
-  })
+  }))
 );
 
 assert(html.includes("header"), "expected documents shell header slot");

@@ -1,4 +1,5 @@
 import React, { type ReactNode } from "react";
+import { FinanceFlowBar } from "../../components/FinanceFlowBar";
 
 type TaxShellProps = {
   header: ReactNode;
@@ -13,6 +14,7 @@ export function TaxShell({ header, guidance, summary, taxItems, batches, materia
   return (
     <div className="v3-result-shell">
       {header}
+      <FinanceFlowBar current="tax" />
       {guidance}
       {summary}
       <div className="v3-result-grid v3-result-grid--wide">
