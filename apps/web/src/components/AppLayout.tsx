@@ -7,7 +7,7 @@ import {
   RobotOutlined, UnorderedListOutlined, CheckSquareOutlined, DashboardOutlined, CheckCircleOutlined, InboxOutlined, SearchOutlined,
   FileTextOutlined, TeamOutlined, FolderOpenOutlined, AuditOutlined, BarChartOutlined,
   LineChartOutlined, CalculatorOutlined, ExperimentOutlined, AlertOutlined, FileSearchOutlined,
-  BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined, MenuOutlined, CrownOutlined,
+  BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined, MenuOutlined, CrownOutlined, BulbOutlined,
   BankOutlined, ProfileOutlined,
 } from "@ant-design/icons";
 import { AUTH_EXPIRED_EVENT, getStoredToken, getCurrentUser, login, logoutSession, getInbox } from "../lib/api";
@@ -144,6 +144,7 @@ const navItems = [
     children: [
       { key: "/settings", icon: <SettingOutlined />, label: "系统设置" },
       { key: "/billing", icon: <CrownOutlined />, label: "订阅与计费" },
+      { key: "/feedback", icon: <BulbOutlined />, label: "反馈与升级" },
     ],
   },
 ];

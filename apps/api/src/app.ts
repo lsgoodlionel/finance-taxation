@@ -130,6 +130,7 @@ import { getSetupStatus } from "./modules/setup/setup.routes.js";
 import { suggestAccounting, assessEventCompleteness, auditReview, getAiResults, acceptAiResult } from "./modules/ai-agents/routes.js";
 import { getCashForecast } from "./modules/forecast/routes.js";
 import { getArchivePackage } from "./modules/archive/package.routes.js";
+import { submitFeedback, listFeedback, consolidateFeedbackRoute, listProposals, decideProposal } from "./modules/feedback/routes.js";
 import { getTaxDeadlines } from "./modules/tax/deadlines.routes.js";
 import { listPlans, getSubscription, subscribePlan, confirmPayment, listPayments } from "./modules/billing/routes.js";
 import { listCounterparties, createCounterparty, updateCounterparty } from "./modules/counterparties/routes.js";
@@ -1406,6 +1407,27 @@ async function router(req: ApiRequest, res: ServerResponse) {
   if (url.pathname === "/api/tax/deadlines") {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "GET") return getTaxDeadlines(req, res);
+  }
+
+  // ── Phase9 任务2: 反馈与升级需求 ──────────────────────────────────────────
+  if (url.pathname === "/api/feedback") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return listFeedback(req, res);
+    if (req.method === "POST") { await readJsonBody(req); return submitFeedback(req, res); }
+  }
+  if (url.pathname === "/api/feedback/consolidate") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "POST") { await readJsonBody(req); return consolidateFeedbackRoute(req, res); }
+  }
+  if (url.pathname === "/api/proposals") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return listProposals(req, res);
+  }
+  const proposalDecideMatch = url.pathname.match(/^\/api\/proposals\/([^/]+)\/decide$/);
+  if (proposalDecideMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("settings.manage", req, res))) return;
+    if (req.method === "POST") { await readJsonBody(req); return decideProposal(req, res, proposalDecideMatch[1]); }
   }
 
   // ── Phase9-F9: 财税资料包 ─────────────────────────────────────────────────
