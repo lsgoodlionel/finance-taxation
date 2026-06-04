@@ -1250,6 +1250,25 @@ export async function updateCounterparty(id: string, data: Record<string, unknow
   return request<{ ok: boolean }>(`/api/counterparties/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 }
 
+// ── F9 财税资料包 ────────────────────────────────────────────────────────────
+
+export interface ArchiveSection { stage: string; label: string; count: number; detail: string; complete: boolean }
+export interface ArchivePackage {
+  period: string;
+  company: { name: string; creditCode: string };
+  sections: ArchiveSection[];
+  completeCount: number;
+  total: number;
+  archived: boolean;
+  readyToArchive: boolean;
+  generatedAt: string;
+}
+
+export async function getArchivePackage(period?: string) {
+  const q = period ? `?period=${encodeURIComponent(period)}` : "";
+  return request<ArchivePackage>(`/api/archive/package${q}`);
+}
+
 // ── P7 现金流前瞻 ────────────────────────────────────────────────────────────
 
 export interface CashForecast {

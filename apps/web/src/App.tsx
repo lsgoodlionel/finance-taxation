@@ -12,6 +12,7 @@ import { MonthEndClosePage } from "./pages/MonthEndClosePage";
 import { MyDayPage } from "./pages/MyDayPage";
 import { CounterpartiesPage } from "./pages/CounterpartiesPage";
 import { BillingPage } from "./pages/BillingPage";
+import { ArchivePackagePage } from "./pages/ArchivePackagePage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { EventsPage } from "./pages/EventsPage";
 import { LedgerPage } from "./pages/LedgerPage";
@@ -43,6 +44,7 @@ const router = createBrowserRouter([
       { path: "vouchers", element: <VouchersPage /> },
       { path: "ledger", element: <LedgerPage /> },
       { path: "reports", element: <ReportsPage /> },
+      { path: "archive-package", element: <ArchivePackagePage /> },
       { path: "tax", element: <TaxPage /> },
       { path: "rnd", element: <RndPage /> },
       { path: "risk", element: <RiskPage /> },
