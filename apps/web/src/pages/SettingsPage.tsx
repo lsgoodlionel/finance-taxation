@@ -443,7 +443,11 @@ function CompanyTab() {
     }
   }
 
-  if (!profile) return <div className="state-loading">加载中…</div>;
+  if (!profile) {
+    return message
+      ? <div className="state-loading" style={{ color: "#dc2626" }}>加载公司信息失败：{message}</div>
+      : <div className="state-loading">加载中…</div>;
+  }
 
   return (
     <article style={panelStyle()}>
