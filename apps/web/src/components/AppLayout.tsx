@@ -98,6 +98,7 @@ const navItems = [
       { key: "/vouchers", icon: <AuditOutlined />, label: "凭证中心" },
       { key: "/ledger", icon: <BarChartOutlined />, label: "总账中心" },
       { key: "/reports", icon: <LineChartOutlined />, label: "财务报表" },
+      { key: "/archive-package", icon: <FolderOpenOutlined />, label: "财税资料包" },
     ],
   },
   {

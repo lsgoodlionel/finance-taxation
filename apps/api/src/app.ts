@@ -129,6 +129,7 @@ import { globalSearch } from "./modules/search/search.routes.js";
 import { getSetupStatus } from "./modules/setup/setup.routes.js";
 import { suggestAccounting, assessEventCompleteness, auditReview, getAiResults, acceptAiResult } from "./modules/ai-agents/routes.js";
 import { getCashForecast } from "./modules/forecast/routes.js";
+import { getArchivePackage } from "./modules/archive/package.routes.js";
 import { getTaxDeadlines } from "./modules/tax/deadlines.routes.js";
 import { listPlans, getSubscription, subscribePlan, confirmPayment, listPayments } from "./modules/billing/routes.js";
 import { listCounterparties, createCounterparty, updateCounterparty } from "./modules/counterparties/routes.js";
@@ -1405,6 +1406,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
   if (url.pathname === "/api/tax/deadlines") {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "GET") return getTaxDeadlines(req, res);
+  }
+
+  // ── Phase9-F9: 财税资料包 ─────────────────────────────────────────────────
+  if (url.pathname === "/api/archive/package") {
+    if (!(await requireAuth(req, res))) return;
+    if (req.method === "GET") return getArchivePackage(req, res);
   }
 
   // ── P7: 现金流前瞻 ────────────────────────────────────────────────────────
