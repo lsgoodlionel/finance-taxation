@@ -1,4 +1,5 @@
 import React, { type ReactNode } from "react";
+import { FinanceFlowBar } from "../../components/FinanceFlowBar";
 
 type DocumentsShellProps = {
   header: ReactNode;
@@ -11,6 +12,7 @@ export function DocumentsShell({ header, summary, list, detail }: DocumentsShell
   return (
     <div style={{ display: "grid", gap: "24px" }}>
       <section className="v3-hero-shell">{header}</section>
+      <FinanceFlowBar current="documents" />
       <section className="v3-section-shell" data-tone="accent">{summary}</section>
       <div className="v3-result-grid v3-result-grid--wide">
         <div className="v3-workbench-card">

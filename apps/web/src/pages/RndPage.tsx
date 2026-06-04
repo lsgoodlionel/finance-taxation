@@ -13,6 +13,7 @@ import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, ExperimentOutlined, RightOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "../components/ui/PageHeader";
+import { FinanceFlowBar } from "../components/FinanceFlowBar";
 import { RndKpiCards } from "./rnd/RndKpiCards";
 import { RndCostWizard } from "./rnd/RndCostWizard";
 
@@ -132,6 +133,8 @@ export function RndPage() {
           )}
         />
       </section>
+
+      <FinanceFlowBar current="ledger" />
 
       {loading ? (
         <Skeleton active paragraph={{ rows: 6 }} />

@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { AuditPageShell } from "./AuditPageShell";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -9,12 +10,12 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 const html = renderToStaticMarkup(
-  createElement(AuditPageShell, {
+  createElement(MemoryRouter, null, createElement(AuditPageShell, {
     header: createElement("div", null, "audit-header"),
     filters: createElement("div", null, "audit-filters"),
     list: createElement("div", null, "audit-list"),
     detail: createElement("div", null, "audit-detail")
-  })
+  }))
 );
 
 assert(html.includes("audit-header"), "expected audit shell header slot");

@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { TaxShell } from "./TaxShell";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -9,14 +10,14 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 const html = renderToStaticMarkup(
-  createElement(TaxShell, {
+  createElement(MemoryRouter, null, createElement(TaxShell, {
     header: createElement("div", null, "header"),
     guidance: createElement("div", null, "guidance"),
     summary: createElement("div", null, "summary"),
     taxItems: createElement("div", null, "taxItems"),
     batches: createElement("div", null, "batches"),
     materials: createElement("div", null, "materials")
-  })
+  }))
 );
 
 assert(html.includes("header"), "expected tax shell header slot");

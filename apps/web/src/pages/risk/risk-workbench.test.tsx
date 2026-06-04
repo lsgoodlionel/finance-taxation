@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { RiskPageShell } from "./RiskPageShell";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -9,12 +10,12 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 const html = renderToStaticMarkup(
-  createElement(RiskPageShell, {
+  createElement(MemoryRouter, null, createElement(RiskPageShell, {
     header: createElement("div", null, "risk-header"),
     list: createElement("div", null, "risk-list"),
     detail: createElement("div", null, "risk-detail"),
     timeline: createElement("div", null, "risk-timeline")
-  })
+  }))
 );
 
 assert(html.includes("risk-header"), "expected risk shell header slot");
