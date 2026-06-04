@@ -13,6 +13,7 @@ import { MyDayPage } from "./pages/MyDayPage";
 import { CounterpartiesPage } from "./pages/CounterpartiesPage";
 import { BillingPage } from "./pages/BillingPage";
 import { ArchivePackagePage } from "./pages/ArchivePackagePage";
+import { FeedbackPage } from "./pages/FeedbackPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { EventsPage } from "./pages/EventsPage";
 import { LedgerPage } from "./pages/LedgerPage";
@@ -59,6 +60,7 @@ const router = createBrowserRouter([
       { path: "boss-qa", element: <Navigate to={LEGACY_ENTRY_ALIASES["boss-qa"]} replace /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "billing", element: <BillingPage /> },
+      { path: "feedback", element: <FeedbackPage /> },
       { path: "banking", element: <BankingPage /> },
       { path: "invoices", element: <InvoicesPage /> },
     ]
