@@ -1221,16 +1221,16 @@ Phase 4 → 其余辅助页收口
 
 建议不要沿用当前 `p0/p1/p2` 分支继续堆交互重构，而应从 `main` 另开 V3 分支：
 
-1. `codex/v3-design-system-foundation` ✅
-2. `codex/v3-assistant-events-flow` ✅
-3. `codex/v3-contracts-page-rework` ✅
-4. `codex/v3-payroll-page-rework` ✅
-5. `codex/v3-export-center-rework` ✅
-6. `codex/v3-tax-center-rework` 🟡 待合回
-7. `codex/v3-layout-visibility-polish` 🟡 进行中
-8. `codex/v3-ledger-page-rework` ⏳ 下一条
-9. `codex/v3-reports-page-rework` ⏳ 下一条
-10. `codex/v3-risk-page-rework` ⏳ 下一条
+1. `codex/v3-design-system-foundation` ✅ 已合回
+2. `codex/v3-assistant-events-flow` ✅ 已合回
+3. `codex/v3-contracts-page-rework` ✅ 已合回
+4. `codex/v3-payroll-page-rework` ✅ 已合回
+5. `codex/v3-export-center-rework` ✅ 已合回
+6. `codex/v3-tax-center-rework` ✅ 已合回
+7. `codex/v3-layout-visibility-polish` ✅ 已合回
+8. `codex/v3-ledger-page-rework` ✅ 已合回
+9. `codex/v3-reports-page-rework` ✅ 已合回
+10. `codex/v3-risk-page-rework` ✅ 已合回
 
 每个分支只做页面结构与交互层升级，尽量复用现有业务对象层和接口，不重新发明底层能力。
 
