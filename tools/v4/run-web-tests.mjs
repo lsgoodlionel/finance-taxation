@@ -27,7 +27,7 @@ const testFiles = (await collectTests(webSourceRoot)).sort();
 for (const testFile of testFiles) {
   const result = spawnSync(
     process.execPath,
-    ["--import", "tsx", "--test", relative(repoRoot, testFile)],
+    ["--import", "tsx", relative(repoRoot, testFile)],
     {
       cwd: repoRoot,
       env: { ...process.env, NODE_ENV: "test" },
