@@ -1,5 +1,5 @@
 import type { ServerResponse } from "node:http";
-import type { Task } from "@finance-taxation/domain-model";
+import type { Task, TaskStatus } from "@finance-taxation/domain-model";
 import { queryOne } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import type { ApiRequest } from "../../types.js";
@@ -7,14 +7,16 @@ import { buildTaskTree, hasCompanyWideAccess, listCompanyTasks } from "../events
 import { writeAudit } from "../../services/audit.js";
 import { isTaskOverdue } from "./overdue.js";
 
-export const VALID_TASK_STATUSES = new Set([
+const VALID_TASK_STATUS_VALUES = [
   "not_started",
   "in_progress",
   "in_review",
-  "done",
   "blocked",
+  "done",
   "cancelled"
-]);
+] as const satisfies readonly TaskStatus[];
+
+export const VALID_TASK_STATUSES: ReadonlySet<string> = new Set(VALID_TASK_STATUS_VALUES);
 
 function scopeTasks(rows: Task[], req: ApiRequest) {
   const companyRows = rows.filter((row) => row.companyId === req.auth!.companyId);
