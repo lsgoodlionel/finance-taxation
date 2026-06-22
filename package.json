@@ -13,6 +13,13 @@
     "check:progress": "node tools/check-progress-board.mjs docs/v2-progress-board.md",
     "typecheck:v2": "npm run -w @finance-taxation/web typecheck && npm run -w @finance-taxation/api typecheck",
     "test": "npm run test -w @finance-taxation/api",
+    "test:api": "npm run -w @finance-taxation/api test:serial",
+    "test:web": "node tools/v4/run-web-tests.mjs",
+    "test:unit": "npm run test:api && npm run test:web",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "v4:report": "tsx tools/v4/generate-acceptance-report.ts",
+    "verify:v4": "npm run typecheck:v2 && npm run test:unit && npm run check:progress",
     "verify": "npm run check:prototype && npm run check:backend-js && npm run check:data && npm run check:progress"
   }
 }

@@ -7,7 +7,14 @@ import { buildTaskTree, hasCompanyWideAccess, listCompanyTasks } from "../events
 import { writeAudit } from "../../services/audit.js";
 import { isTaskOverdue } from "./overdue.js";
 
-const VALID_STATUSES = new Set(["not_started", "in_progress", "completed", "blocked", "cancelled"]);
+export const VALID_TASK_STATUSES = new Set([
+  "not_started",
+  "in_progress",
+  "in_review",
+  "done",
+  "blocked",
+  "cancelled"
+]);
 
 function scopeTasks(rows: Task[], req: ApiRequest) {
   const companyRows = rows.filter((row) => row.companyId === req.auth!.companyId);
@@ -74,8 +81,8 @@ export async function updateTask(req: ApiRequest, res: ServerResponse, taskId: s
   const companyId = req.auth!.companyId;
   const body = (req.body ?? {}) as { status?: string; notes?: string };
 
-  if (body.status !== undefined && !VALID_STATUSES.has(body.status)) {
-    return json(res, 400, { error: `无效状态，可选值：${[...VALID_STATUSES].join(", ")}` });
+  if (body.status !== undefined && !VALID_TASK_STATUSES.has(body.status)) {
+    return json(res, 400, { error: `无效状态，可选值：${[...VALID_TASK_STATUSES].join(", ")}` });
   }
 
   const existing = await queryOne<{ id: string; title: string; status: string }>(
