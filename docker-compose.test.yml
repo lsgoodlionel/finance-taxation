@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: finance_taxation
+      POSTGRES_PASSWORD: finance_taxation
+      POSTGRES_DB: finance_taxation_v4_test
+    ports:
+      - "55433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finance_taxation -d finance_taxation_v4_test"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgres://finance_taxation:finance_taxation@db:5432/finance_taxation_v4_test
+      HOST: 0.0.0.0
+      PORT: "3100"
+      NODE_ENV: test
+      JWT_SECRET: v4-test-only-secret-not-for-production
+      ANTHROPIC_API_KEY: ""
+    ports:
+      - "33100:3100"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "55173:80"
+    depends_on:
+      api:
+        condition: service_healthy

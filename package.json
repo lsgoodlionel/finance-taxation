@@ -20,6 +20,12 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "v4:report": "tsx tools/v4/generate-acceptance-report.ts",
+    "v4:test:db:start": "docker compose -p finance-taxation-v4-test -f docker-compose.test.yml up -d db",
+    "v4:test:app:start": "docker compose -p finance-taxation-v4-test -f docker-compose.test.yml up -d --build api web",
+    "v4:test:stack:start": "npm run v4:test:db:start && npm run v4:test:app:start",
+    "v4:test:stack:stop": "docker compose -p finance-taxation-v4-test -f docker-compose.test.yml down -v",
+    "v4:test:db:reset": "tsx tools/v4/reset-test-db.ts",
+    "v4:test:setup": "npm run v4:test:db:start && npm run v4:test:db:reset && npm run v4:test:app:start",
     "verify:v4": "npm run typecheck:v2 && npm run test:unit && npm run check:progress",
     "verify": "npm run check:prototype && npm run check:backend-js && npm run check:data && npm run check:progress"
   }
