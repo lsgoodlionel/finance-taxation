@@ -1,4 +1,5 @@
 import { readdir } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -51,6 +52,10 @@ async function runWebTests() {
   console.log(`web tests passed: ${testFiles.length}`);
 }
 
-if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
+const entryPath = process.argv[1];
+if (
+  entryPath &&
+  realpathSync(resolve(entryPath)) === realpathSync(fileURLToPath(import.meta.url))
+) {
   await runWebTests();
 }

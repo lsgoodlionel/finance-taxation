@@ -7,15 +7,16 @@ import { buildTaskTree, hasCompanyWideAccess, listCompanyTasks } from "../events
 import { writeAudit } from "../../services/audit.js";
 import { isTaskOverdue } from "./overdue.js";
 
-const VALID_TASK_STATUS_VALUES = [
-  "not_started",
-  "in_progress",
-  "in_review",
-  "done",
-  "blocked",
-  "cancelled"
-] as const satisfies readonly TaskStatus[];
+const VALID_TASK_STATUS_MAP = {
+  not_started: true,
+  in_progress: true,
+  in_review: true,
+  done: true,
+  blocked: true,
+  cancelled: true
+} satisfies Record<TaskStatus, true>;
 
+const VALID_TASK_STATUS_VALUES = Object.keys(VALID_TASK_STATUS_MAP) as TaskStatus[];
 export const VALID_TASK_STATUSES: ReadonlySet<string> = new Set(VALID_TASK_STATUS_VALUES);
 
 function scopeTasks(rows: Task[], req: ApiRequest) {
