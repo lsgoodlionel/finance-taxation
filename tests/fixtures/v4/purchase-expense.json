@@ -1,0 +1,98 @@
+[
+  {
+    "id": "PUR-STD-001",
+    "kind": "purchase_expense",
+    "input": {
+      "companyId": "cmp-v4-tech",
+      "employeeId": "usr-v4-employee",
+      "departmentId": "dept-v4-sales",
+      "title": "临时购买办公显示器",
+      "amount": 1280,
+      "occurredOn": "2026-04-08",
+      "invoiceNo": "V4-PUR-0001",
+      "providedDocumentTypes": ["expense_claim", "invoice_bundle"]
+    },
+    "expected": {
+      "amount": 1280,
+      "classification": "low_value_consumable",
+      "documentTypes": ["expense_claim", "invoice_bundle"],
+      "accounting": "借记低值易耗品和进项税额，贷记其他应付款",
+      "tax": "合规增值税专用发票在 2026-04 认证抵扣",
+      "exceptions": [],
+      "risks": [],
+      "requiresFinalAuthorization": false
+    }
+  },
+  {
+    "id": "PUR-MISSING-001",
+    "kind": "purchase_expense",
+    "input": {
+      "companyId": "cmp-v4-tech",
+      "employeeId": "usr-v4-employee",
+      "departmentId": "dept-v4-sales",
+      "title": "客户活动用品采购缺少发票",
+      "amount": 860,
+      "occurredOn": "2026-04-10",
+      "providedDocumentTypes": ["expense_claim"]
+    },
+    "expected": {
+      "amount": 860,
+      "classification": "sales_expense",
+      "documentTypes": ["expense_claim", "invoice_bundle"],
+      "accounting": "暂不生成正式凭证，补票后计入销售费用",
+      "tax": "缺少发票不得抵扣进项税，企业所得税税前扣除待核验",
+      "exceptions": ["missing_invoice_bundle"],
+      "risks": ["unsupported_tax_deduction"],
+      "requiresFinalAuthorization": false
+    }
+  },
+  {
+    "id": "PUR-DUP-001",
+    "kind": "purchase_expense",
+    "input": {
+      "companyId": "cmp-v4-tech",
+      "employeeId": "usr-v4-employee",
+      "departmentId": "dept-v4-sales",
+      "title": "重复提交办公耗材采购",
+      "amount": 1280,
+      "occurredOn": "2026-04-08",
+      "invoiceNo": "V4-PUR-0001",
+      "providedDocumentTypes": ["expense_claim", "invoice_bundle"]
+    },
+    "expected": {
+      "amount": 1280,
+      "classification": "low_value_consumable",
+      "documentTypes": ["expense_claim", "invoice_bundle"],
+      "accounting": "阻止重复入账，不新增凭证",
+      "tax": "阻止同一发票重复抵扣",
+      "exceptions": ["duplicate_invoice"],
+      "risks": ["duplicate_reimbursement"],
+      "requiresFinalAuthorization": false
+    }
+  },
+  {
+    "id": "PUR-CLASS-001",
+    "kind": "purchase_expense",
+    "input": {
+      "companyId": "cmp-v4-tech",
+      "employeeId": "usr-v4-manager",
+      "departmentId": "dept-v4-sales",
+      "title": "高价值研发工作站误分类办公用品",
+      "amount": 26800,
+      "occurredOn": "2026-04-18",
+      "invoiceNo": "V4-PUR-0004",
+      "claimedClassification": "office_supplies",
+      "providedDocumentTypes": ["purchase_request", "invoice_bundle", "acceptance_record"]
+    },
+    "expected": {
+      "amount": 26800,
+      "classification": "fixed_asset",
+      "documentTypes": ["purchase_request", "invoice_bundle", "acceptance_record"],
+      "accounting": "改按固定资产确认并自次月计提折旧",
+      "tax": "进项税可按规定抵扣，所得税按固定资产折旧扣除",
+      "exceptions": ["classification_conflict"],
+      "risks": ["expense_overstatement"],
+      "requiresFinalAuthorization": true
+    }
+  }
+]

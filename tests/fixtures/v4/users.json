@@ -1,0 +1,65 @@
+[
+  {
+    "id": "usr-v4-chairman",
+    "companyId": "cmp-v4-group",
+    "departmentId": "dept-v4-chairman",
+    "username": "v4_chairman",
+    "displayName": "V4 董事长",
+    "role": "chairman",
+    "roleCode": "role-chairman"
+  },
+  {
+    "id": "usr-v4-employee",
+    "companyId": "cmp-v4-tech",
+    "departmentId": "dept-v4-sales",
+    "username": "v4_employee",
+    "displayName": "V4 经办员工",
+    "role": "employee",
+    "roleCode": "role-viewer"
+  },
+  {
+    "id": "usr-v4-manager",
+    "companyId": "cmp-v4-tech",
+    "departmentId": "dept-v4-sales",
+    "username": "v4_manager",
+    "displayName": "V4 部门经理",
+    "role": "manager",
+    "roleCode": "role-finance-director"
+  },
+  {
+    "id": "usr-v4-accountant",
+    "companyId": "cmp-v4-tech",
+    "departmentId": "dept-v4-finance",
+    "username": "v4_accountant",
+    "displayName": "V4 会计",
+    "role": "accountant",
+    "roleCode": "role-accountant"
+  },
+  {
+    "id": "usr-v4-cashier",
+    "companyId": "cmp-v4-tech",
+    "departmentId": "dept-v4-finance",
+    "username": "v4_cashier",
+    "displayName": "V4 出纳",
+    "role": "cashier",
+    "roleCode": "role-viewer"
+  },
+  {
+    "id": "usr-v4-tax",
+    "companyId": "cmp-v4-service",
+    "departmentId": "dept-v4-hr",
+    "username": "v4_tax",
+    "displayName": "V4 税务专员",
+    "role": "tax",
+    "roleCode": "role-accountant"
+  },
+  {
+    "id": "usr-v4-auditor",
+    "companyId": "cmp-v4-group",
+    "departmentId": "dept-v4-chairman",
+    "username": "v4_auditor",
+    "displayName": "V4 审计员",
+    "role": "auditor",
+    "roleCode": "role-viewer"
+  }
+]

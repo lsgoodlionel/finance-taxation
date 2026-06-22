@@ -1,0 +1,102 @@
+[
+  {
+    "id": "TRV-STD-001",
+    "kind": "travel_expense",
+    "input": {
+      "companyId": "cmp-v4-tech",
+      "employeeId": "usr-v4-employee",
+      "departmentId": "dept-v4-sales",
+      "title": "上海客户拜访差旅报销",
+      "amount": 3560,
+      "occurredOn": "2026-04-22",
+      "tripStart": "2026-04-20",
+      "tripEnd": "2026-04-22",
+      "providedDocumentTypes": ["travel_request", "expense_claim", "transport_invoice", "hotel_invoice"]
+    },
+    "expected": {
+      "amount": 3560,
+      "classification": "travel_expense",
+      "documentTypes": ["travel_request", "expense_claim", "transport_invoice", "hotel_invoice"],
+      "accounting": "借记销售费用和可抵扣进项税额，贷记其他应付款",
+      "tax": "符合差旅制度的交通住宿票据按规定抵扣并税前扣除",
+      "exceptions": [],
+      "risks": [],
+      "requiresFinalAuthorization": false
+    }
+  },
+  {
+    "id": "TRV-MISSING-001",
+    "kind": "travel_expense",
+    "input": {
+      "companyId": "cmp-v4-tech",
+      "employeeId": "usr-v4-employee",
+      "departmentId": "dept-v4-sales",
+      "title": "北京展会差旅缺少住宿发票",
+      "amount": 4280,
+      "occurredOn": "2026-05-10",
+      "tripStart": "2026-05-07",
+      "tripEnd": "2026-05-10",
+      "providedDocumentTypes": ["travel_request", "expense_claim", "transport_invoice"]
+    },
+    "expected": {
+      "amount": 4280,
+      "classification": "travel_expense",
+      "documentTypes": ["travel_request", "expense_claim", "transport_invoice", "hotel_invoice"],
+      "accounting": "住宿部分暂缓入账，其他合规差旅费用可暂估",
+      "tax": "缺失住宿发票部分不得抵扣且税前扣除待补证",
+      "exceptions": ["missing_hotel_invoice"],
+      "risks": ["unsupported_travel_cost"],
+      "requiresFinalAuthorization": false
+    }
+  },
+  {
+    "id": "TRV-DUP-001",
+    "kind": "travel_expense",
+    "input": {
+      "companyId": "cmp-v4-tech",
+      "employeeId": "usr-v4-employee",
+      "departmentId": "dept-v4-sales",
+      "title": "重复提交上海客户拜访差旅",
+      "amount": 3560,
+      "occurredOn": "2026-04-22",
+      "duplicateOf": "TRV-STD-001",
+      "providedDocumentTypes": ["travel_request", "expense_claim", "transport_invoice", "hotel_invoice"]
+    },
+    "expected": {
+      "amount": 3560,
+      "classification": "travel_expense",
+      "documentTypes": ["travel_request", "expense_claim", "transport_invoice", "hotel_invoice"],
+      "accounting": "阻止重复报销并保持原凭证不变",
+      "tax": "阻止重复抵扣交通住宿进项税",
+      "exceptions": ["duplicate_trip_claim"],
+      "risks": ["duplicate_reimbursement"],
+      "requiresFinalAuthorization": false
+    }
+  },
+  {
+    "id": "TRV-TIME-001",
+    "kind": "travel_expense",
+    "input": {
+      "companyId": "cmp-v4-tech",
+      "employeeId": "usr-v4-manager",
+      "departmentId": "dept-v4-sales",
+      "title": "跨期差旅报销计入错误月份",
+      "amount": 6920,
+      "occurredOn": "2026-05-03",
+      "tripStart": "2026-04-28",
+      "tripEnd": "2026-05-03",
+      "claimedPeriod": "2026-05",
+      "providedDocumentTypes": ["travel_request", "expense_claim", "transport_invoice", "hotel_invoice"]
+    },
+    "expected": {
+      "amount": 6920,
+      "classification": "travel_expense_accrual",
+      "documentTypes": ["travel_request", "expense_claim", "transport_invoice", "hotel_invoice"],
+      "accounting": "按权责发生制拆分 2026-04 与 2026-05 的差旅费用",
+      "tax": "发票抵扣期按认证月份处理，所得税费用按实际归属期确认",
+      "exceptions": ["accounting_period_conflict"],
+      "risks": ["cutoff_misstatement"],
+      "requiresFinalAuthorization": true
+    }
+  }
+]

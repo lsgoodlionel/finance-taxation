@@ -1,0 +1,44 @@
+{
+  "group": {
+    "id": "cmp-v4-group",
+    "name": "V4 验收集团"
+  },
+  "subsidiaries": [
+    {
+      "id": "cmp-v4-tech",
+      "name": "V4 科技子公司",
+      "parentId": "cmp-v4-group"
+    },
+    {
+      "id": "cmp-v4-service",
+      "name": "V4 服务子公司",
+      "parentId": "cmp-v4-group"
+    }
+  ],
+  "departments": [
+    {
+      "id": "dept-v4-chairman",
+      "companyId": "cmp-v4-group",
+      "name": "董事长办公室",
+      "leaderUserId": "usr-v4-chairman"
+    },
+    {
+      "id": "dept-v4-sales",
+      "companyId": "cmp-v4-tech",
+      "name": "销售部",
+      "leaderUserId": "usr-v4-manager"
+    },
+    {
+      "id": "dept-v4-finance",
+      "companyId": "cmp-v4-tech",
+      "name": "财务部",
+      "leaderUserId": "usr-v4-accountant"
+    },
+    {
+      "id": "dept-v4-hr",
+      "companyId": "cmp-v4-service",
+      "name": "人力资源部",
+      "leaderUserId": "usr-v4-tax"
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+[
+  {
+    "id": "CON-STD-001",
+    "kind": "contract_revenue",
+    "input": {
+      "companyId": "cmp-v4-service",
+      "employeeId": "usr-v4-tax",
+      "departmentId": "dept-v4-hr",
+      "title": "年度财税咨询服务收入",
+      "amount": 120000,
+      "occurredOn": "2026-04-30",
+      "contractNo": "V4-CON-0001",
+      "providedDocumentTypes": ["service_contract", "acceptance_record", "output_invoice"]
+    },
+    "expected": {
+      "amount": 120000,
+      "classification": "service_revenue",
+      "documentTypes": ["service_contract", "acceptance_record", "output_invoice"],
+      "accounting": "按验收完成确认主营业务收入和应收账款",
+      "tax": "按 2026-04 增值税纳税义务确认销项税并计入企业所得税收入",
+      "exceptions": [],
+      "risks": [],
+      "requiresFinalAuthorization": true
+    }
+  },
+  {
+    "id": "CON-MISSING-001",
+    "kind": "contract_revenue",
+    "input": {
+      "companyId": "cmp-v4-service",
+      "employeeId": "usr-v4-tax",
+      "departmentId": "dept-v4-hr",
+      "title": "系统实施服务缺少验收单",
+      "amount": 88000,
+      "occurredOn": "2026-05-15",
+      "contractNo": "V4-CON-0002",
+      "providedDocumentTypes": ["service_contract", "output_invoice"]
+    },
+    "expected": {
+      "amount": 88000,
+      "classification": "deferred_service_revenue",
+      "documentTypes": ["service_contract", "acceptance_record", "output_invoice"],
+      "accounting": "缺少履约验收证据，暂不确认主营业务收入",
+      "tax": "已开票部分按税法确认增值税义务，会计与所得税收入时点待核验",
+      "exceptions": ["missing_acceptance_record"],
+      "risks": ["premature_revenue_recognition"],
+      "requiresFinalAuthorization": true
+    }
+  },
+  {
+    "id": "CON-DUP-001",
+    "kind": "contract_revenue",
+    "input": {
+      "companyId": "cmp-v4-service",
+      "employeeId": "usr-v4-tax",
+      "departmentId": "dept-v4-hr",
+      "title": "重复导入年度财税咨询合同",
+      "amount": 120000,
+      "occurredOn": "2026-04-30",
+      "contractNo": "V4-CON-0001",
+      "duplicateOf": "CON-STD-001",
+      "providedDocumentTypes": ["service_contract", "acceptance_record", "output_invoice"]
+    },
+    "expected": {
+      "amount": 120000,
+      "classification": "service_revenue",
+      "documentTypes": ["service_contract", "acceptance_record", "output_invoice"],
+      "accounting": "阻止重复确认收入和应收账款",
+      "tax": "阻止重复生成销项税额",
+      "exceptions": ["duplicate_contract"],
+      "risks": ["revenue_overstatement"],
+      "requiresFinalAuthorization": true
+    }
+  },
+  {
+    "id": "CON-TIME-001",
+    "kind": "contract_revenue",
+    "input": {
+      "companyId": "cmp-v4-service",
+      "employeeId": "usr-v4-tax",
+      "departmentId": "dept-v4-hr",
+      "title": "跨期订阅服务一次性确认收入",
+      "amount": 240000,
+      "occurredOn": "2026-06-01",
+      "contractNo": "V4-CON-0004",
+      "serviceStart": "2026-06-01",
+      "serviceEnd": "2027-05-31",
+      "claimedRecognition": "upfront",
+      "providedDocumentTypes": ["service_contract", "billing_schedule", "output_invoice"]
+    },
+    "expected": {
+      "amount": 240000,
+      "classification": "deferred_subscription_revenue",
+      "documentTypes": ["service_contract", "billing_schedule", "output_invoice"],
+      "accounting": "合同负债按 12 个月履约期间分期结转收入",
+      "tax": "增值税按开票或收款义务时点确认，所得税收入按适用规则分期核验",
+      "exceptions": ["revenue_timing_conflict"],
+      "risks": ["premature_revenue_recognition", "tax_accounting_timing_difference"],
+      "requiresFinalAuthorization": true
+    }
+  }
+]
