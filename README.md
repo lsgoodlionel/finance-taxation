@@ -140,6 +140,16 @@ docker compose up -d
 
 ### 方式二：本地开发
 
+### V4 验收环境
+
+V4 验收必须使用独立测试数据库，不得连接生产数据库或日常开发数据库。
+
+```bash
+npm run v4:test:setup
+npm run test:e2e
+npm run v4:report
+```
+
 #### 环境依赖
 
 - Node.js >= 18
