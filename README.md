@@ -138,8 +138,6 @@ docker compose up -d
 - **Anthropic Claude**：在 `.env.docker` 中填入 `ANTHROPIC_API_KEY`
 - **本地 Ollama**：保持 key 为空，填入 `OLLAMA_BASE_URL` 和 `OLLAMA_MODEL`，重启 api 容器生效
 
-### 方式二：本地开发
-
 ### V4 验收环境
 
 V4 验收必须使用独立测试数据库，不得连接生产数据库或日常开发数据库。
@@ -149,6 +147,8 @@ npm run v4:test:setup
 npm run test:e2e
 npm run v4:report
 ```
+
+### 方式二：本地开发
 
 #### 环境依赖
 
