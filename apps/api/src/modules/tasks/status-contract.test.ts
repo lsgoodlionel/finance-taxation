@@ -7,8 +7,8 @@ test("task status contract matches the V4 workflow", () => {
     "not_started",
     "in_progress",
     "in_review",
-    "blocked",
     "done",
+    "blocked",
     "cancelled"
   ]);
 });

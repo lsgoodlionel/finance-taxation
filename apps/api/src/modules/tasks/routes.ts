@@ -11,8 +11,8 @@ const VALID_TASK_STATUS_VALUES = [
   "not_started",
   "in_progress",
   "in_review",
-  "blocked",
   "done",
+  "blocked",
   "cancelled"
 ] as const satisfies readonly TaskStatus[];
 
