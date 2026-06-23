@@ -102,6 +102,11 @@ export function resolveCanonicalContractScenario(
   if (typeof duplicateOf !== "string" || duplicateOf.trim() === "") {
     return fixture;
   }
+  if (duplicateOf === fixture.id) {
+    throw new Error(
+      `Duplicate contract fixture ${fixture.id} must not reference itself via duplicateOf`
+    );
+  }
 
   const canonical = scenarios.find((scenario) => scenario.id === duplicateOf);
   if (!canonical) {

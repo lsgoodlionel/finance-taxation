@@ -97,6 +97,32 @@ test("duplicate contract fixtures require a referenced canonical scenario", () =
   );
 });
 
+test("duplicate contract fixtures reject self-referential canonical references", () => {
+  const duplicate = {
+    id: "CON-DUP-SELF",
+    kind: "contract_revenue",
+    input: {
+      companyId: "cmp-v4-service",
+      contractNo: "V4-CON-0001",
+      duplicateOf: "CON-DUP-SELF"
+    },
+    expected: {
+      amount: 120000,
+      documentTypes: ["service_contract"],
+      accounting: "ok",
+      tax: "ok",
+      exceptions: [],
+      risks: [],
+      requiresFinalAuthorization: true
+    }
+  } satisfies ScenarioFixture;
+
+  assert.throws(
+    () => resolveCanonicalContractScenario(duplicate, [duplicate]),
+    /must not reference itself via duplicateOf/
+  );
+});
+
 test("duplicate contract fixtures require the referenced scenario to be contract revenue", () => {
   const nonContract = {
     id: "PUR-STD-001",
