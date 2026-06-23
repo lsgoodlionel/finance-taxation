@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   buildDepartmentNameById,
   countSeedContracts,
+  resolveCanonicalContractScenario,
   resolveSeedContractId
 } from "./seed-acceptance-data.ts";
 import {
@@ -49,7 +50,7 @@ test("duplicate contract fixtures reuse the standard contract seed id", async ()
     validateScenarioFixture(scenario);
   }
 
-  const contracts = scenarios.map((scenario) => resolveSeedContractId(scenario));
+  const contracts = scenarios.map((scenario) => resolveSeedContractId(scenario, scenarios));
 
   assert.deepEqual(contracts, [
     "CON-STD-001-contract",
@@ -58,6 +59,137 @@ test("duplicate contract fixtures reuse the standard contract seed id", async ()
     "CON-TIME-001-contract"
   ]);
   assert.equal(countSeedContracts(scenarios), 3);
+});
+
+test("duplicate contract fixtures require a referenced canonical scenario", () => {
+  const canonical = {
+    id: "CON-STD-001",
+    kind: "contract_revenue",
+    input: {
+      companyId: "cmp-v4-service",
+      contractNo: "V4-CON-0001"
+    },
+    expected: {
+      amount: 120000,
+      documentTypes: ["service_contract"],
+      accounting: "ok",
+      tax: "ok",
+      exceptions: [],
+      risks: [],
+      requiresFinalAuthorization: true
+    }
+  } satisfies ScenarioFixture;
+
+  const duplicate = {
+    id: "CON-DUP-999",
+    kind: "contract_revenue",
+    input: {
+      companyId: "cmp-v4-service",
+      contractNo: "V4-CON-0001",
+      duplicateOf: "CON-MISSING"
+    },
+    expected: canonical.expected
+  } satisfies ScenarioFixture;
+
+  assert.throws(
+    () => resolveCanonicalContractScenario(duplicate, [canonical]),
+    /references missing canonical scenario CON-MISSING/
+  );
+});
+
+test("duplicate contract fixtures require the referenced scenario to be contract revenue", () => {
+  const nonContract = {
+    id: "PUR-STD-001",
+    kind: "purchase_expense",
+    input: {
+      companyId: "cmp-v4-service",
+      contractNo: "V4-CON-0001"
+    },
+    expected: {
+      amount: 100,
+      documentTypes: ["expense_claim"],
+      accounting: "ok",
+      tax: "ok",
+      exceptions: [],
+      risks: [],
+      requiresFinalAuthorization: false
+    }
+  } satisfies ScenarioFixture;
+
+  const duplicate = {
+    id: "CON-DUP-001",
+    kind: "contract_revenue",
+    input: {
+      companyId: "cmp-v4-service",
+      contractNo: "V4-CON-0001",
+      duplicateOf: "PUR-STD-001"
+    },
+    expected: {
+      amount: 120000,
+      documentTypes: ["service_contract"],
+      accounting: "ok",
+      tax: "ok",
+      exceptions: [],
+      risks: [],
+      requiresFinalAuthorization: true
+    }
+  } satisfies ScenarioFixture;
+
+  assert.throws(
+    () => resolveCanonicalContractScenario(duplicate, [nonContract, duplicate]),
+    /must reference a contract_revenue scenario/
+  );
+});
+
+test("duplicate contract fixtures require matching companyId and contractNo", () => {
+  const canonical = {
+    id: "CON-STD-001",
+    kind: "contract_revenue",
+    input: {
+      companyId: "cmp-v4-service",
+      contractNo: "V4-CON-0001"
+    },
+    expected: {
+      amount: 120000,
+      documentTypes: ["service_contract"],
+      accounting: "ok",
+      tax: "ok",
+      exceptions: [],
+      risks: [],
+      requiresFinalAuthorization: true
+    }
+  } satisfies ScenarioFixture;
+
+  const mismatchedCompanyDuplicate = {
+    id: "CON-DUP-COMPANY",
+    kind: "contract_revenue",
+    input: {
+      companyId: "cmp-v4-tech",
+      contractNo: "V4-CON-0001",
+      duplicateOf: "CON-STD-001"
+    },
+    expected: canonical.expected
+  } satisfies ScenarioFixture;
+
+  const mismatchedContractDuplicate = {
+    id: "CON-DUP-CONTRACT",
+    kind: "contract_revenue",
+    input: {
+      companyId: "cmp-v4-service",
+      contractNo: "V4-CON-9999",
+      duplicateOf: "CON-STD-001"
+    },
+    expected: canonical.expected
+  } satisfies ScenarioFixture;
+
+  assert.throws(
+    () => resolveCanonicalContractScenario(mismatchedCompanyDuplicate, [canonical]),
+    /must match canonical companyId cmp-v4-service/
+  );
+  assert.throws(
+    () => resolveCanonicalContractScenario(mismatchedContractDuplicate, [canonical]),
+    /must match canonical contractNo V4-CON-0001/
+  );
 });
 
 test("distinct V4 persona role codes map to the intended permission differences", async () => {

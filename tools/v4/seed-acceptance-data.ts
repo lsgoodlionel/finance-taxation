@@ -82,23 +82,70 @@ export function buildDepartmentNameById(organization: OrganizationFixture): Map<
   );
 }
 
-export function resolveSeedContractId(fixture: ScenarioFixture): string | null {
+function readFixtureString(
+  fixture: ScenarioFixture,
+  fieldName: "companyId" | "contractNo"
+): string {
+  const value = fixture.input[fieldName];
+  return typeof value === "string" ? value : "";
+}
+
+export function resolveCanonicalContractScenario(
+  fixture: ScenarioFixture,
+  scenarios: readonly ScenarioFixture[]
+): ScenarioFixture | null {
   if (fixture.kind !== "contract_revenue") {
     return null;
   }
 
   const duplicateOf = fixture.input.duplicateOf;
-  if (typeof duplicateOf === "string" && duplicateOf.trim() !== "") {
-    return `${duplicateOf}-contract`;
+  if (typeof duplicateOf !== "string" || duplicateOf.trim() === "") {
+    return fixture;
   }
 
-  return `${fixture.id}-contract`;
+  const canonical = scenarios.find((scenario) => scenario.id === duplicateOf);
+  if (!canonical) {
+    throw new Error(
+      `Duplicate contract fixture ${fixture.id} references missing canonical scenario ${duplicateOf}`
+    );
+  }
+  if (canonical.kind !== "contract_revenue") {
+    throw new Error(
+      `Duplicate contract fixture ${fixture.id} must reference a contract_revenue scenario, received ${canonical.kind}`
+    );
+  }
+
+  const fixtureCompanyId = readFixtureString(fixture, "companyId");
+  const canonicalCompanyId = readFixtureString(canonical, "companyId");
+  if (fixtureCompanyId !== canonicalCompanyId) {
+    throw new Error(
+      `Duplicate contract fixture ${fixture.id} must match canonical companyId ${canonicalCompanyId}`
+    );
+  }
+
+  const fixtureContractNo = readFixtureString(fixture, "contractNo");
+  const canonicalContractNo = readFixtureString(canonical, "contractNo");
+  if (fixtureContractNo !== canonicalContractNo) {
+    throw new Error(
+      `Duplicate contract fixture ${fixture.id} must match canonical contractNo ${canonicalContractNo}`
+    );
+  }
+
+  return canonical;
+}
+
+export function resolveSeedContractId(
+  fixture: ScenarioFixture,
+  scenarios: readonly ScenarioFixture[]
+): string | null {
+  const canonical = resolveCanonicalContractScenario(fixture, scenarios);
+  return canonical ? `${canonical.id}-contract` : null;
 }
 
 export function countSeedContracts(scenarios: readonly ScenarioFixture[]): number {
   return new Set(
     scenarios
-      .map((scenario) => resolveSeedContractId(scenario))
+      .map((scenario) => resolveSeedContractId(scenario, scenarios))
       .filter((contractId): contractId is string => contractId !== null)
   ).size;
 }
@@ -245,11 +292,12 @@ export async function seedAcceptanceData(databaseUrl: string): Promise<SeedCount
       }
       const occurredOn = String(input.occurredOn);
       const title = String(input.title);
-      const contractId = resolveSeedContractId(fixture);
+      const canonicalContractFixture = resolveCanonicalContractScenario(fixture, scenarios);
+      const contractId = canonicalContractFixture ? `${canonicalContractFixture.id}-contract` : null;
 
       if (
         fixture.kind === "contract_revenue" &&
-        !(typeof input.duplicateOf === "string" && input.duplicateOf.trim() !== "")
+        canonicalContractFixture?.id === fixture.id
       ) {
         await client.query(
           `INSERT INTO contracts (
