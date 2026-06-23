@@ -1,9 +1,11 @@
 import pg from "pg";
 import { readFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertSafeTestDatabase } from "./reset-test-db.ts";
 import {
+  type OrganizationFixture,
   validateOrganizationFixture,
   validateScenarioFixture,
   validateUserFixture,
@@ -74,10 +76,38 @@ function eventStatus(fixture: ScenarioFixture): string {
   return fixture.expected.requiresFinalAuthorization ? "pending_authorization" : "ready";
 }
 
+export function buildDepartmentNameById(organization: OrganizationFixture): Map<string, string> {
+  return new Map(
+    organization.departments.map((department) => [department.id, department.name] as const)
+  );
+}
+
+export function resolveSeedContractId(fixture: ScenarioFixture): string | null {
+  if (fixture.kind !== "contract_revenue") {
+    return null;
+  }
+
+  const duplicateOf = fixture.input.duplicateOf;
+  if (typeof duplicateOf === "string" && duplicateOf.trim() !== "") {
+    return `${duplicateOf}-contract`;
+  }
+
+  return `${fixture.id}-contract`;
+}
+
+export function countSeedContracts(scenarios: readonly ScenarioFixture[]): number {
+  return new Set(
+    scenarios
+      .map((scenario) => resolveSeedContractId(scenario))
+      .filter((contractId): contractId is string => contractId !== null)
+  ).size;
+}
+
 export async function seedAcceptanceData(databaseUrl: string): Promise<SeedCounts> {
   assertSafeTestDatabase(databaseUrl);
   const { organization, users, scenarios } = await loadFixtures();
   const companies = [organization.group, ...organization.subsidiaries];
+  const departmentNames = buildDepartmentNameById(organization);
   const uniqueRoles = new Map<string, { id: string; companyId: string; code: string; name: string }>();
 
   for (const user of users) {
@@ -100,7 +130,7 @@ export async function seedAcceptanceData(databaseUrl: string): Promise<SeedCount
     passwords: users.length,
     userRoles: users.length,
     scenarios: scenarios.length,
-    contracts: scenarios.filter((fixture) => fixture.kind === "contract_revenue").length,
+    contracts: countSeedContracts(scenarios),
     documentMappings: scenarios.reduce(
       (total, fixture) => total + fixture.expected.documentTypes.length,
       0
@@ -209,12 +239,18 @@ export async function seedAcceptanceData(databaseUrl: string): Promise<SeedCount
       const companyId = String(input.companyId);
       const ownerId = String(input.employeeId);
       const departmentId = String(input.departmentId);
+      const departmentName = departmentNames.get(departmentId);
+      if (!departmentName) {
+        throw new Error(`Unknown departmentId in fixture ${fixture.id}: ${departmentId}`);
+      }
       const occurredOn = String(input.occurredOn);
       const title = String(input.title);
-      let contractId: string | null = null;
+      const contractId = resolveSeedContractId(fixture);
 
-      if (fixture.kind === "contract_revenue") {
-        contractId = `${fixture.id}-contract`;
+      if (
+        fixture.kind === "contract_revenue" &&
+        !(typeof input.duplicateOf === "string" && input.duplicateOf.trim() !== "")
+      ) {
         await client.query(
           `INSERT INTO contracts (
              id, company_id, contract_no, contract_type, title, counterparty_name,
@@ -272,7 +308,7 @@ export async function seedAcceptanceData(databaseUrl: string): Promise<SeedCount
           fixture.kind,
           title,
           JSON.stringify({ input: fixture.input, expected: fixture.expected }),
-          departmentId,
+          departmentName,
           ownerId,
           occurredOn,
           fixture.expected.amount,
@@ -307,7 +343,7 @@ export async function seedAcceptanceData(databaseUrl: string): Promise<SeedCount
             documentType,
             `${fixture.id} ${documentType}`,
             provided.has(documentType) ? "provided" : "missing",
-            departmentId,
+            departmentName,
             "V4 deterministic acceptance document expectation"
           ]
         );
@@ -365,7 +401,13 @@ async function main() {
   console.log(`seeded V4 acceptance data: ${JSON.stringify(counts)}`);
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+const entryPath = process.argv[1];
+if (
+  entryPath &&
+  realpathSync(resolve(entryPath)) === realpathSync(fileURLToPath(import.meta.url))
+) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}

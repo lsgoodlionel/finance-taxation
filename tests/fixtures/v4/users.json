@@ -15,7 +15,7 @@
     "username": "v4_employee",
     "displayName": "V4 经办员工",
     "role": "employee",
-    "roleCode": "role-viewer"
+    "roleCode": "role-employee"
   },
   {
     "id": "usr-v4-manager",
@@ -42,7 +42,7 @@
     "username": "v4_cashier",
     "displayName": "V4 出纳",
     "role": "cashier",
-    "roleCode": "role-viewer"
+    "roleCode": "role-cashier"
   },
   {
     "id": "usr-v4-tax",
@@ -51,7 +51,7 @@
     "username": "v4_tax",
     "displayName": "V4 税务专员",
     "role": "tax",
-    "roleCode": "role-accountant"
+    "roleCode": "role-tax-specialist"
   },
   {
     "id": "usr-v4-auditor",
@@ -60,6 +60,6 @@
     "username": "v4_auditor",
     "displayName": "V4 审计员",
     "role": "auditor",
-    "roleCode": "role-viewer"
+    "roleCode": "role-auditor"
   }
 ]

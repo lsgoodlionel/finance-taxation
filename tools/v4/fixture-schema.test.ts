@@ -135,6 +135,18 @@ test("users.json contains seven valid stable acceptance users", async () => {
       "usr-v4-auditor"
     ]
   );
+  assert.deepEqual(
+    users.map((user) => [user.role, user.roleCode]),
+    [
+      ["chairman", "role-chairman"],
+      ["employee", "role-employee"],
+      ["manager", "role-finance-director"],
+      ["accountant", "role-accountant"],
+      ["cashier", "role-cashier"],
+      ["tax", "role-tax-specialist"],
+      ["auditor", "role-auditor"]
+    ]
+  );
 });
 
 for (const fixtureFile of fixtureFiles) {

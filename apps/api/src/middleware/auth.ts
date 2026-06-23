@@ -35,6 +35,32 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "audit.view",
     "knowledge.view"
   ],
+  "role-employee": [
+    "dashboard.view", "events.view", "events.create",
+    "tasks.view", "documents.view", "documents.manage",
+    "ledger.view", "tax.view", "contracts.view",
+    "payroll.view", "knowledge.view"
+  ],
+  "role-cashier": [
+    "dashboard.view", "events.view",
+    "tasks.view", "documents.view", "documents.manage",
+    "ledger.view", "tax.view",
+    "payroll.view", "knowledge.view"
+  ],
+  "role-tax-specialist": [
+    "dashboard.view", "events.view", "events.create",
+    "tasks.view", "documents.view", "documents.manage",
+    "ledger.view", "tax.view", "tax.manage",
+    "contracts.view", "payroll.view",
+    "audit.view", "knowledge.view"
+  ],
+  "role-auditor": [
+    "dashboard.view", "events.view",
+    "tasks.view", "documents.view",
+    "ledger.view", "tax.view",
+    "contracts.view", "payroll.view",
+    "audit.view", "knowledge.view"
+  ],
   "role-viewer": [
     "dashboard.view", "events.view", "tasks.view",
     "documents.view", "ledger.view", "tax.view",

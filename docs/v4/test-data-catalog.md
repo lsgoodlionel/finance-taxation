@@ -8,6 +8,7 @@
 
 - 集团：`cmp-v4-group`
 - 子公司：`cmp-v4-tech`、`cmp-v4-service`
+- `companies.json` 中子公司的 `parentId` 仅作为夹具元数据保留，供未来层级覆盖使用；当前种子流程不会把它持久化到现有 `companies` 表结构。
 - 部门：`dept-v4-chairman`、`dept-v4-sales`、`dept-v4-finance`、`dept-v4-hr`
 - 用户：`usr-v4-chairman`、`usr-v4-employee`、`usr-v4-manager`、`usr-v4-accountant`、`usr-v4-cashier`、`usr-v4-tax`、`usr-v4-auditor`
 - 登录名：依次为 `v4_chairman`、`v4_employee`、`v4_manager`、`v4_accountant`、`v4_cashier`、`v4_tax`、`v4_auditor`
@@ -36,9 +37,9 @@
 | --- | --- | --- | --- | --- | --- |
 | `CON-STD-001` | 验证已验收咨询服务收入 | 服务合同、验收单、销项发票 | 合同、收入经营事项、3 个单据映射、销项税映射 | 确认主营业务收入和应收账款；2026-04 确认销项税和所得税收入 | 无；需最终授权 |
 | `CON-MISSING-001` | 验证缺少验收单的收入确认 | 服务合同、销项发票 | 合同、待复核经营事项、缺失验收单映射 | 会计暂不确认收入；已开票增值税义务与所得税时点分别核验 | `missing_acceptance_record`；提前确认收入；需最终授权 |
-| `CON-DUP-001` | 验证合同重复导入 | 与 `CON-STD-001` 相同合同号及资料 | 重复合同场景和经营事项 | 阻止重复确认收入、应收账款及销项税 | `duplicate_contract`；收入高估；需最终授权 |
+| `CON-DUP-001` | 验证合同重复导入 | 与 `CON-STD-001` 相同合同号及资料 | 复用 `CON-STD-001` 的标准合同记录，仅新增重复经营事项 | 阻止重复确认收入、应收账款及销项税 | `duplicate_contract`；收入高估；需最终授权 |
 | `CON-TIME-001` | 验证跨年度订阅收入时点 | 服务合同、开票计划、销项发票 | 合同、待复核经营事项、分期税务映射 | 合同负债按 12 个月结转；增值税与所得税按各自规则核验 | `revenue_timing_conflict`；提前确认和税会差异；需最终授权 |
 
 ## 播种对象
 
-`npm run v4:test:seed` 会读取并验证上述 JSON，在单一事务内幂等写入公司、部门、应用兼容角色、用户、密码、用户角色、合同、`business_events`、`event_document_mappings` 与 `event_tax_mappings`。所有对象使用固定 ID 和 `ON CONFLICT DO UPDATE`；任一写入失败时整批回滚。
+`npm run v4:test:seed` 会读取并验证上述 JSON，在单一事务内幂等写入公司、部门、应用兼容角色、用户、密码、用户角色、合同、`business_events`、`event_document_mappings` 与 `event_tax_mappings`。`business_events.department` 和 `event_document_mappings.owner_department` 会将夹具中的 `departmentId` 解析为部门名称后落库；重复合同场景会复用既有标准合同记录而不会再插入第二条同号合同。所有对象使用固定 ID 和 `ON CONFLICT DO UPDATE`；任一写入失败时整批回滚。

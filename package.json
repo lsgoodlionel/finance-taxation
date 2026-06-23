@@ -16,6 +16,7 @@
     "test:api": "npm run -w @finance-taxation/api test:serial",
     "test:web:runner": "node --test tools/v4/run-web-tests.test.mjs",
     "test:web": "npm run test:web:runner && node tools/v4/run-web-tests.mjs",
+    "test:v4:tools": "node --import tsx --test tools/v4/*.test.ts",
     "test:unit": "npm run test:api && npm run test:web",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
@@ -27,7 +28,8 @@
     "v4:test:db:reset": "tsx tools/v4/reset-test-db.ts",
     "v4:test:seed": "tsx tools/v4/seed-acceptance-data.ts",
     "v4:test:setup": "npm run v4:test:db:start && npm run v4:test:db:reset && npm run v4:test:seed && npm run v4:test:app:start",
-    "verify:v4": "npm run typecheck:v2 && npm run test:unit && npm run check:progress",
+    "typecheck:v4:tools": "node tools/v4/typecheck.mjs",
+    "verify:v4": "npm run typecheck:v2 && npm run typecheck:v4:tools && npm run test:unit && npm run test:v4:tools && npm run check:progress",
     "verify": "npm run check:prototype && npm run check:backend-js && npm run check:data && npm run check:progress"
   }
 }
