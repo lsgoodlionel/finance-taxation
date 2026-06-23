@@ -31,5 +31,8 @@
     "typecheck:v4:tools": "node tools/v4/typecheck.mjs",
     "verify:v4": "npm run typecheck:v2 && npm run typecheck:v4:tools && npm run test:unit && npm run test:v4:tools && npm run check:progress",
     "verify": "npm run check:prototype && npm run check:backend-js && npm run check:data && npm run check:progress"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.0"
   }
 }
