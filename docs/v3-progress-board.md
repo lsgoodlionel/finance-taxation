@@ -4,9 +4,9 @@
 
 ## 1. 当前阶段
 
-- 当前目标：`V3.0 升级全部完成——所有分支已封闭合回 main`
-- 当前里程碑：`所有页面 V3 结构化重构 + 全局 responsive/accessibility 收口 + 合同看板（@dnd-kit 拖拽）+ PayrollRunWizard 工资向导 均已合回 main；后端外部对接 P1–P5 全部落库上线；无未封闭远程分支`
-- 更新时间：`2026-06-02`
+- 当前目标：`V3.0 升级全部完成 + Phase 6–9 全部完成——所有分支已封闭合回 main`
+- 当前里程碑：`所有页面 V3 结构化重构 + 全局 responsive/accessibility 收口 + 合同看板 + 工资向导 + P6 AI Agent + P7 前瞻管理 + P8 生产化 + P9 业务链路升级 均已合回 main；无未封闭远程分支`
+- 更新时间：`2026-06-08`
 
 ## 2. V3 Workstreams
 
@@ -18,7 +18,7 @@
 | V3-WS3 | Payroll 工作台重构 | `codex/v3-payroll-page-rework` | ✅ done | 2026-05-27 | shell/header/tab bar、employees / payroll / policy 三段容器、workflow summary、员工表单、工资明细表、参数表单已完成拆分 | 如需继续，仅做视觉收口和更深的数据编辑体验 |
 | V3-WS4 | Export Center 重构 | `codex/v3-export-center-rework` | ✅ done | 2026-05-27 | shell、scene selector、history、archive、audit、8 个场景面板和 summary-first 布局均已完成，导出 API 与状态流保持不变 | 如需继续，进入异步导出和更深的状态机增强 |
 | V3-WS5 | Tax 工作台重构 | `codex/v3-tax-center-rework` | ✅ done | 2026-05-27 | TaxPage 已拆为 shell/header/summary/profile/items/batches/materials 多个面板，单字符串消息改为 banner，批次与资料视图已收敛到 URL 查询参数，底层税务 API 与流程节点保持不变 | 下一页优先进入 `Ledger / Reports / Risk` 之一，继续结果页结构收口 |
-| V3-WS6 | Layout Visibility Polish | `codex/v3-layout-visibility-polish` | 🟡 in_progress | 2026-06-01 | 已修复侧栏 footer 遮挡；`Assistant / Contracts / Payroll / Export` 已完成 hero/section/summary-first 的可见性收口；当前分支已补齐 `Tax / Ledger / Reports / Risk` 结构并统一结果页壳层 | 下一步回写总进度并准备合回 `main` |
+| V3-WS6 | Layout Visibility Polish | `codex/v3-layout-visibility-polish` | ✅ done | 2026-06-02 | 已修复侧栏 footer 遮挡；所有页面 hero/section/summary-first 的可见性收口已完成；Tax / Ledger / Reports / Risk 结构已统一 | 已合回 main |
 | V3-WS7 | Ledger 结果页重构 | `codex/v3-ledger-page-rework` | ✅ done | 2026-06-01 | 已完成 shell/header/sceneSelector/sceneSummary/context 第一批，以及 summary / balances / journal / entries / periods 的响应式、密度与空态一致性收口 | 后续只保留微调，不再扩业务逻辑 |
 | V3-WS8 | Reports 结果页重构 | `codex/v3-reports-page-rework` | ✅ done | 2026-06-01 | 已完成 shell/sidebar/workbench/panels 结构拆分，并补 `summary-first`、快照上下文和结果 KPI 摘要 | 后续只保留微调和总线集成 |
 | V3-WS9 | Risk / Audit 工作台重构 | `codex/v3-risk-page-rework` | ✅ done | 2026-06-01 | 已完成 KPI、列表、整改工作台、时间线和审计回跳基础结构，并补响应式与工作台层级收口 | 后续只保留微调和总线集成 |
@@ -102,14 +102,14 @@
 
 1. ✅ 全部 V3 结果页分支 + `layout-visibility-polish` 已合回 `main`
 2. ✅ `auth-session-ux`、`knowledge-page-rework`、后端 `p3-reconciliation-engine`（含 P1/P2/P3 + 迁移修复）已合回 `main`
-3. ✅ `main` 总体验证通过：API typecheck + 93 测试、Web typecheck + 45 测试文件全绿
+3. ✅ `main` 总体验证通过：API typecheck + 149 测试、Web typecheck + 47 测试文件全绿
 4. ✅ `DocumentsPage` 已重构为 V3 summary-first 工作台（652→214 行）并合回 main
-5. ✅ 全局 responsive / accessibility 收口（global.css 集中）：
-   - 键盘焦点可见性 `:focus-visible` 统一轮廓
-   - 尊重 `prefers-reduced-motion` 系统偏好
-   - 超小屏（≤640px）结果网格折叠为单列
-   - 工作台卡片内宽表格窄屏横向滚动
-6. ⏳ `main` Docker 重建验证（需本地 PostgreSQL）
+5. ✅ 全局 responsive / accessibility 收口（global.css 集中）
+6. ✅ P6 AI Agent 体系已完成（留痕底座 + 会计/资料/审计/老板问答 Agent）
+7. ✅ P7 前瞻经营管理已完成（现金流预测 / 往来画像 / 申报到期提醒）
+8. ✅ P8 生产化已完成（健康检查 / 性能索引 / 容器探活 / 订阅计费）
+9. ✅ P9 业务链路升级已完成（财税链路条 / 资料包沉淀 / 反馈模块）
+10. ✅ Docker 全栈 healthy 验证通过（31 迁移 + 全量数据）
 
 ## 6. 接续提示
 
