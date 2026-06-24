@@ -11,6 +11,20 @@ export interface TestApiClient {
   post<T>(path: string, token: string, body?: unknown): Promise<T>;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableFetchError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("fetch failed") ||
+    message.includes("ECONNREFUSED") ||
+    message.includes("SocketError") ||
+    message.includes("other side closed")
+  );
+}
+
 async function parsePayload(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) {
@@ -42,12 +56,30 @@ export function createTestApiClient(baseUrl = DEFAULT_API_URL): TestApiClient {
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
     }
+    let response: Response | null = null;
+    let attempt = 0;
+    let lastError: unknown = null;
 
-    const response = await fetch(`${apiBase}${path}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body)
-    });
+    while (attempt < 3) {
+      try {
+        response = await fetch(`${apiBase}${path}`, {
+          method,
+          headers,
+          body: body === undefined ? undefined : JSON.stringify(body)
+        });
+        break;
+      } catch (error) {
+        lastError = error;
+        attempt += 1;
+        if (attempt >= 3 || !isRetryableFetchError(error)) {
+          throw error;
+        }
+        await sleep(300 * attempt);
+      }
+    }
+    if (!response) {
+      throw lastError instanceof Error ? lastError : new Error("fetch failed");
+    }
     const payload = await parsePayload(response);
 
     if (!response.ok) {

@@ -154,10 +154,14 @@ function mapSessionRecord(row: SessionRow): SessionRecord {
   };
 }
 
+export function createSessionId(): string {
+  return `sess-${Date.now()}-${randomBytes(4).toString("hex")}`;
+}
+
 function buildSession(user: UserProfile): SessionRecord {
   const now = Date.now();
   return {
-    id: `sess-${now}`,
+    id: createSessionId(),
     companyId: user.companyId,
     userId: user.id,
     username: user.username,

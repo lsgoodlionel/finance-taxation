@@ -175,7 +175,7 @@ import {
 import { login, logout, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
-import { readJsonBody } from "./utils/body.js";
+import { readJsonBody, shouldReadJsonBody } from "./utils/body.js";
 // P1 外部系统对接模块
 import {
   exportVatXml,
@@ -223,11 +223,8 @@ async function router(req: ApiRequest, res: ServerResponse) {
   }
 
   const url = new URL(req.url || "/", `http://${env.host}:${env.port}`);
-  if (["POST", "PUT", "PATCH"].includes(req.method || "")) {
-    const ct = req.headers["content-type"] || "";
-    if (!ct.startsWith("multipart/form-data")) {
-      req.body = await readJsonBody(req);
-    }
+  if (shouldReadJsonBody(req.method, req.headers["content-type"], url.pathname)) {
+    req.body = await readJsonBody(req);
   }
 
   if (req.method === "GET" && (url.pathname === "/health" || url.pathname === "/api/health")) {

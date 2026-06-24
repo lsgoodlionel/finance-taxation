@@ -132,3 +132,29 @@ test("buildContractWorkspaceSummary includes explicitly linked objects and de-du
   assert.equal(summary.vouchers.length, 1);
   assert.equal(summary.tasks.length, 1);
 });
+
+test("buildContractWorkspaceSummary sorts rows when createdAt is a Date", () => {
+  const summary = buildContractWorkspaceSummary({
+    relatedEventIds: ["evt-1"],
+    documents: [
+      {
+        ...documents[0]!,
+        id: "doc-date-1",
+        createdAt: new Date("2026-05-19T00:00:00.000Z") as unknown as string
+      },
+      {
+        ...documents[0]!,
+        id: "doc-date-2",
+        createdAt: new Date("2026-05-21T00:00:00.000Z") as unknown as string
+      }
+    ],
+    taxItems: [],
+    vouchers: [],
+    tasks: []
+  });
+
+  assert.deepEqual(
+    summary.documents.map((item) => item.id),
+    ["doc-date-2", "doc-date-1"]
+  );
+});

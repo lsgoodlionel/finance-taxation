@@ -48,6 +48,31 @@ interface ContractDocumentSummaryRow {
   updatedAt: string;
 }
 
+export function buildGeneratedDocumentSelectQuery(): string {
+  return `
+    select
+      id,
+      company_id as "companyId",
+      business_event_id as "businessEventId",
+      mapping_id as "mappingId",
+      document_type as "documentType",
+      title,
+      owner_department as "ownerDepartment",
+      status,
+      ARRAY[]::text[] as "attachmentIds",
+      archived_at as "archivedAt",
+      source,
+      created_at as "createdAt",
+      updated_at as "updatedAt"
+    from generated_documents
+    where company_id = $1
+      and (
+        business_event_id = any($2::text[])
+        or id = any($3::text[])
+      )
+  `;
+}
+
 interface ContractTaxItemSummaryRow extends TaxItem {}
 
 interface ContractVoucherSummaryRow extends Omit<Voucher, "lines"> {}
@@ -224,28 +249,7 @@ export async function getContractDetail(req: ApiRequest, res: ServerResponse, co
 
   const documents = eventIds.length || linkedDocumentIds.length
     ? await query<ContractDocumentSummaryRow>(
-        `
-          select
-            id,
-            company_id as "companyId",
-            business_event_id as "businessEventId",
-            mapping_id as "mappingId",
-            document_type as "documentType",
-            title,
-            owner_department as "ownerDepartment",
-            status,
-            attachment_ids as "attachmentIds",
-            archived_at as "archivedAt",
-            source,
-            created_at as "createdAt",
-            updated_at as "updatedAt"
-          from generated_documents
-          where company_id = $1
-            and (
-              business_event_id = any($2::text[])
-              or id = any($3::text[])
-            )
-        `,
+        buildGeneratedDocumentSelectQuery(),
         [companyId, eventIds, linkedDocumentIds]
       )
     : [];

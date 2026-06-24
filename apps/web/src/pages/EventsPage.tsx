@@ -494,7 +494,10 @@ export function EventsPage() {
                         ))}
                       </tbody>
                     </table>
-                    <button className="btn btn-outline btn-xs mt-8" onClick={() => navigate("/documents")}>
+                    <button
+                      className="btn btn-outline btn-xs mt-8"
+                      onClick={() => navigate("/documents", { state: { businessEventId: detail.id } })}
+                    >
                       前往单据中心 →
                     </button>
                   </div>
@@ -571,7 +574,10 @@ export function EventsPage() {
                     </div>
                   ) : <p className="text-muted text-sm">暂无凭证草稿</p>}
                   {detail.vouchers.length > 0 && (
-                    <button className="btn btn-outline btn-xs mt-8" onClick={() => navigate("/vouchers")}>
+                    <button
+                      className="btn btn-outline btn-xs mt-8"
+                      onClick={() => navigate("/vouchers", { state: { businessEventId: detail.id } })}
+                    >
                       前往凭证中心 →
                     </button>
                   )}
