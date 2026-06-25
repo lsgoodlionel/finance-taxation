@@ -137,6 +137,14 @@ export interface WorkflowCommandDetail {
   compensations: WorkflowCompensationRecord[];
 }
 
+export interface WorkflowCompensationCreateInput {
+  actionType?: string;
+  reason: string;
+  handoffToUserId?: string | null;
+  handoffToName?: string | null;
+  notes?: string;
+}
+
 export function getStoredToken() {
   return window.localStorage.getItem(TOKEN_KEY);
 }
@@ -388,6 +396,30 @@ export async function listWorkflowCommands(filters?: {
 
 export async function getWorkflowCommandDetail(commandId: string) {
   return request<WorkflowCommandDetail>(`/api/workflows/commands/${commandId}`);
+}
+
+export async function retryWorkflowCommand(commandId: string) {
+  return request<WorkflowCommandExecution>(`/api/workflows/commands/${commandId}/retry`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+}
+
+export async function cancelWorkflowCommand(commandId: string) {
+  return request<WorkflowCommandExecution>(`/api/workflows/commands/${commandId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+}
+
+export async function createWorkflowCompensation(
+  commandId: string,
+  input: WorkflowCompensationCreateInput
+) {
+  return request<WorkflowCompensationRecord>(`/api/workflows/commands/${commandId}/compensations`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
 }
 
 export async function remindTask(taskId: string) {

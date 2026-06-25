@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Card, Descriptions, Skeleton, Space, Tag, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Input, Modal, Popconfirm, Skeleton, Space, Tag, Typography, message } from "antd";
 import type { WorkflowCommandStatus, WorkflowResourceType, WorkflowState } from "@finance-taxation/domain-model";
-import { getWorkflowRunDetail, listWorkflowRuns, type WorkflowRunDetail } from "../../lib/api";
+import {
+  cancelWorkflowCommand,
+  createWorkflowCompensation,
+  getWorkflowRunDetail,
+  listWorkflowRuns,
+  retryWorkflowCommand,
+  type WorkflowRunDetail
+} from "../../lib/api";
 
 const { Text } = Typography;
 
@@ -40,24 +47,62 @@ export function WorkflowRuntimeCard({
   emptyHint
 }: WorkflowRuntimeCardProps) {
   const [loading, setLoading] = useState(false);
+  const [acting, setActing] = useState(false);
   const [authState, setAuthState] = useState<"unknown" | "granted" | "forbidden">("unknown");
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<WorkflowRunDetail | null>(null);
+  const [compensationOpen, setCompensationOpen] = useState(false);
+  const [compensationReason, setCompensationReason] = useState("");
+  const [compensationNotes, setCompensationNotes] = useState("");
+
+  async function loadRuntime() {
+    if (!resourceId) {
+      setDetail(null);
+      setError(null);
+      setAuthState("unknown");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const runsPayload = await listWorkflowRuns({ resourceType, resourceId });
+      setAuthState("granted");
+      const targetRun = runsPayload.items[0] ?? null;
+      if (!targetRun) {
+        setDetail(null);
+        return;
+      }
+      const runDetail = await getWorkflowRunDetail(targetRun.id);
+      setDetail(runDetail);
+    } catch (err) {
+      const messageText = (err as Error).message;
+      if (messageText === "Forbidden") {
+        setAuthState("forbidden");
+        setDetail(null);
+        setError(null);
+        return;
+      }
+      setError(messageText);
+      setDetail(null);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      if (!resourceId) {
-        setDetail(null);
-        setError(null);
-        setAuthState("unknown");
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
       try {
+        if (!resourceId) {
+          setDetail(null);
+          setError(null);
+          setAuthState("unknown");
+          return;
+        }
+        setLoading(true);
+        setError(null);
         const runsPayload = await listWorkflowRuns({ resourceType, resourceId });
         if (cancelled) return;
         setAuthState("granted");
@@ -103,20 +148,82 @@ export function WorkflowRuntimeCard({
     if (detail.run.currentState === "awaiting_authorization") return "当前等待授权";
     return "当前无需额外授权";
   }, [detail]);
+  const canRetry = Boolean(
+    latestCommand &&
+      latestCommand.status === "failed" &&
+      latestCommand.attemptCount < latestCommand.retryPolicy.maxAttempts
+  );
+  const canCancel = Boolean(
+    latestCommand && (latestCommand.status === "waiting" || latestCommand.status === "running")
+  );
+
+  async function handleRetry() {
+    if (!latestCommand) return;
+    setActing(true);
+    try {
+      await retryWorkflowCommand(latestCommand.id);
+      message.success("已加入重试队列");
+      await loadRuntime();
+    } catch (err) {
+      message.error((err as Error).message);
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function handleCancel() {
+    if (!latestCommand) return;
+    setActing(true);
+    try {
+      await cancelWorkflowCommand(latestCommand.id);
+      message.success("已取消当前命令");
+      await loadRuntime();
+    } catch (err) {
+      message.error((err as Error).message);
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function handleCompensationSubmit() {
+    if (!latestCommand) return;
+    if (!compensationReason.trim()) {
+      message.error("请填写补偿原因");
+      return;
+    }
+    setActing(true);
+    try {
+      await createWorkflowCompensation(latestCommand.id, {
+        actionType: "manual_takeover",
+        reason: compensationReason.trim(),
+        notes: compensationNotes.trim()
+      });
+      message.success("已发起人工补偿");
+      setCompensationOpen(false);
+      setCompensationReason("");
+      setCompensationNotes("");
+      await loadRuntime();
+    } catch (err) {
+      message.error((err as Error).message);
+    } finally {
+      setActing(false);
+    }
+  }
 
   return (
-    <Card
-      title={title}
-      size="small"
-      style={{ borderRadius: 12 }}
-      extra={
-        detail && stateMeta ? (
-          <Tag color={stateMeta.color}>{stateMeta.label}</Tag>
-        ) : authState === "forbidden" ? (
-          <Tag color="warning">无 workflow.view 权限</Tag>
-        ) : null
-      }
-    >
+    <>
+      <Card
+        title={title}
+        size="small"
+        style={{ borderRadius: 12 }}
+        extra={
+          detail && stateMeta ? (
+            <Tag color={stateMeta.color}>{stateMeta.label}</Tag>
+          ) : authState === "forbidden" ? (
+            <Tag color="warning">无 workflow.view 权限</Tag>
+          ) : null
+        }
+      >
       {!resourceId ? (
         <Alert type="info" showIcon message={emptyHint} />
       ) : loading ? (
@@ -134,6 +241,36 @@ export function WorkflowRuntimeCard({
         <Alert type="info" showIcon message="尚未生成运行时记录" description={emptyHint} />
       ) : (
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          {latestCommand ? (
+            <Space wrap>
+              <Button size="small" onClick={() => void loadRuntime()} loading={loading || acting}>
+                刷新运行态
+              </Button>
+              {canRetry ? (
+                <Button size="small" type="primary" ghost onClick={() => void handleRetry()} loading={acting}>
+                  重试命令
+                </Button>
+              ) : null}
+              {canCancel ? (
+                <Popconfirm
+                  title="确认取消当前命令？"
+                  description="取消后需要重新发起业务动作或手动重试。"
+                  onConfirm={() => void handleCancel()}
+                >
+                  <Button size="small" danger ghost loading={acting}>
+                    取消命令
+                  </Button>
+                </Popconfirm>
+              ) : null}
+              <Button size="small" onClick={() => setCompensationOpen(true)} loading={acting}>
+                发起补偿
+              </Button>
+            </Space>
+          ) : (
+            <Button size="small" onClick={() => void loadRuntime()} loading={loading}>
+              刷新运行态
+            </Button>
+          )}
           <Descriptions size="small" column={2}>
             <Descriptions.Item label="运行状态">
               <Tag color={stateMeta?.color}>{stateMeta?.label}</Tag>
@@ -178,6 +315,36 @@ export function WorkflowRuntimeCard({
           ) : null}
         </Space>
       )}
-    </Card>
+      </Card>
+      <Modal
+        title="发起人工补偿"
+        open={compensationOpen}
+        onOk={() => void handleCompensationSubmit()}
+        onCancel={() => {
+          if (acting) return;
+          setCompensationOpen(false);
+        }}
+        confirmLoading={acting}
+        okText="提交补偿"
+        cancelText="取消"
+      >
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Input.TextArea
+            value={compensationReason}
+            onChange={(event) => setCompensationReason(event.target.value)}
+            placeholder="填写人工接管或补偿原因"
+            rows={3}
+            maxLength={200}
+          />
+          <Input.TextArea
+            value={compensationNotes}
+            onChange={(event) => setCompensationNotes(event.target.value)}
+            placeholder="可补充交接说明、处理建议或责任分工"
+            rows={4}
+            maxLength={500}
+          />
+        </Space>
+      </Modal>
+    </>
   );
 }

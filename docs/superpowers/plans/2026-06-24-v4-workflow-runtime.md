@@ -85,4 +85,4 @@
 - [x] Add frontend API models and requests for workflow runs / command details.
 - [x] Add a reusable runtime card that can show loading, forbidden, empty, blocked, retry, compensation, and authorization states.
 - [x] Connect runtime display to Tasks, Tax, Vouchers, and Payroll Transfer pages without changing existing business actions.
-- [ ] Extend runtime operation entrypoints to frontend if operators need in-page retry/cancel/compensation actions.
+- [x] Extend runtime operation entrypoints to frontend if operators need in-page retry/cancel/compensation actions.
