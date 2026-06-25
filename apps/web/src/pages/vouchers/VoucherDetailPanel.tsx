@@ -28,6 +28,10 @@ interface VoucherDetailPanelProps {
   onApprove: () => Promise<void>;
   onPost: () => Promise<void>;
   onSummaryUpdate: (summary: string) => Promise<void>;
+  onOpenEvent?: (businessEventId: string) => void;
+  onOpenDocuments?: (businessEventId: string) => void;
+  onOpenTax?: (businessEventId: string) => void;
+  onOpenLedger?: (voucherId: string, businessEventId: string) => void;
 }
 
 const LINE_COLUMNS: ColumnsType<VoucherLine> = [
@@ -54,7 +58,18 @@ const LINE_COLUMNS: ColumnsType<VoucherLine> = [
 ];
 
 export function VoucherDetailPanel({
-  detail, runtimeDetail, validation, updating, onValidate, onApprove, onPost, onSummaryUpdate,
+  detail,
+  runtimeDetail,
+  validation,
+  updating,
+  onValidate,
+  onApprove,
+  onPost,
+  onSummaryUpdate,
+  onOpenEvent,
+  onOpenDocuments,
+  onOpenTax,
+  onOpenLedger
 }: VoucherDetailPanelProps) {
   const { t } = useI18n();
 
@@ -132,6 +147,20 @@ export function VoucherDetailPanel({
           </div>
         </div>
       ) : null}
+      <Space wrap size={8}>
+        <Button size="small" onClick={() => onOpenEvent?.(detail.businessEventId)}>
+          查看事项
+        </Button>
+        <Button size="small" onClick={() => onOpenDocuments?.(detail.businessEventId)}>
+          查看单据
+        </Button>
+        <Button size="small" onClick={() => onOpenTax?.(detail.businessEventId)}>
+          查看税务
+        </Button>
+        <Button size="small" onClick={() => onOpenLedger?.(detail.id, detail.businessEventId)}>
+          查看总账
+        </Button>
+      </Space>
 
       {/* Validation result */}
       {validation && <BalanceIndicator result={validation} />}

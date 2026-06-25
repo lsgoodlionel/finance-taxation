@@ -32,6 +32,7 @@ const NEXT_STATUS: Partial<Record<TaskStatus, { status: TaskStatus; label: strin
 
 export interface TaskDrawerItem {
   id: string;
+  businessEventId?: string | null;
   title: string;
   status: string;
   priority: string;
@@ -49,9 +50,25 @@ interface TaskDrawerProps {
   onClose: () => void;
   onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>;
   onRemind: (taskId: string) => Promise<void>;
+  onOpenEvent?: (businessEventId: string) => void;
+  onOpenDocuments?: (businessEventId: string) => void;
+  onOpenTax?: (businessEventId: string) => void;
+  onOpenVouchers?: (businessEventId: string) => void;
 }
 
-export function TaskDrawer({ task, runtimeDetail, updatingId, remindingId, onClose, onStatusChange, onRemind }: TaskDrawerProps) {
+export function TaskDrawer({
+  task,
+  runtimeDetail,
+  updatingId,
+  remindingId,
+  onClose,
+  onStatusChange,
+  onRemind,
+  onOpenEvent,
+  onOpenDocuments,
+  onOpenTax,
+  onOpenVouchers
+}: TaskDrawerProps) {
   const activeNext = task ? NEXT_STATUS[task.status as TaskStatus] : undefined;
   const latestCommand = runtimeDetail?.commands[0] ?? null;
 
@@ -111,6 +128,22 @@ export function TaskDrawer({ task, runtimeDetail, updatingId, remindingId, onClo
               message={latestCommand?.lastErrorCode || "运行提示"}
               description={`${latestCommand?.lastErrorDetail || "已存在人工补偿记录"}${runtimeDetail?.compensations.length ? `；补偿 ${runtimeDetail.compensations.length} 条` : ""}`}
             />
+          ) : null}
+          {task.businessEventId ? (
+            <Space wrap size={8}>
+              <Button size="small" onClick={() => onOpenEvent?.(task.businessEventId!)}>
+                查看事项
+              </Button>
+              <Button size="small" onClick={() => onOpenDocuments?.(task.businessEventId!)}>
+                查看单据
+              </Button>
+              <Button size="small" onClick={() => onOpenTax?.(task.businessEventId!)}>
+                查看税务
+              </Button>
+              <Button size="small" onClick={() => onOpenVouchers?.(task.businessEventId!)}>
+                查看凭证
+              </Button>
+            </Space>
           ) : null}
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px" }}>

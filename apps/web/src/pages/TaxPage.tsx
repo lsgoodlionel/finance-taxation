@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type {
   CorporateIncomeTaxPreparation,
   IndividualIncomeTaxMaterial,
@@ -69,6 +69,7 @@ function openPrintableHtml(html: string) {
 
 export function TaxPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const navState = normalizeDrilldownState(location.state);
   const navEventId = navState.businessEventId ?? null;
   const navTaxItemId = navState.taxItemId ?? null;
@@ -367,12 +368,16 @@ export function TaxPage() {
             onSelectBatch={(batchId) => void handleSelectBatch(batchId)}
             onReviewFormChange={setReviewForm}
             onArchiveFormChange={setArchiveForm}
-            onValidateBatch={() => void handleValidateBatch()}
-            onSubmitBatch={() => void handleSubmitBatch()}
-            onReviewBatch={() => void handleReviewBatch()}
-            onArchiveBatch={() => void handleArchiveBatch()}
-          />
-        )}
+                onValidateBatch={() => void handleValidateBatch()}
+                onSubmitBatch={() => void handleSubmitBatch()}
+                onReviewBatch={() => void handleReviewBatch()}
+                onArchiveBatch={() => void handleArchiveBatch()}
+                onOpenEvent={(businessEventId) => navigate("/events", { state: { businessEventId } })}
+                onOpenDocuments={(businessEventId) => navigate("/documents", { state: { businessEventId } })}
+                onOpenVoucherHub={(businessEventId) => navigate("/vouchers", { state: { businessEventId } })}
+                onOpenTaxItem={(taxItemId) => navigate("/tax", { state: { taxItemId } })}
+              />
+            )}
         materials={(
           <TaxMaterialsPanel
             activeMaterial={activeMaterial}

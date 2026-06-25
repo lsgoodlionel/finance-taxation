@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Row, Col, Card, Button, Space, Typography, Alert, Skeleton } from "antd";
 import { PlusOutlined, QuestionCircleOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ const { Text } = Typography;
 
 export function VouchersPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const navState   = normalizeDrilldownState(location.state);
   const navEventId   = navState.businessEventId ?? null;
   const navVoucherId = navState.voucherId       ?? null;
@@ -275,6 +276,10 @@ export function VouchersPage() {
                   onApprove={handleApprove}
                   onPost={handlePost}
                   onSummaryUpdate={handleSummaryUpdate}
+                  onOpenEvent={(businessEventId) => navigate("/events", { state: { businessEventId } })}
+                  onOpenDocuments={(businessEventId) => navigate("/documents", { state: { businessEventId } })}
+                  onOpenTax={(businessEventId) => navigate("/tax", { state: { businessEventId } })}
+                  onOpenLedger={(voucherId, businessEventId) => navigate("/ledger", { state: { voucherId, businessEventId } })}
                 />
               </Card>
             </Col>

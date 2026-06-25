@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { PageHeader } from "../components/ui/PageHeader";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Card, Space, Tag, Alert, Tooltip, Button, Segmented, Skeleton, Typography } from "antd";
 import {
   ClockCircleOutlined, ExclamationCircleOutlined, QuestionCircleOutlined,
@@ -25,6 +25,7 @@ type ViewMode = "list" | "kanban";
 
 export function TasksPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const navEventId = normalizeDrilldownState(location.state).businessEventId ?? null;
 
   const [tasks, setTasks] = useState<TaskWithOverdue[]>([]);
@@ -241,6 +242,10 @@ export function TasksPage() {
         onClose={() => setDetailTask(null)}
         onStatusChange={handleStatusChange}
         onRemind={handleRemind}
+        onOpenEvent={(businessEventId) => navigate("/events", { state: { businessEventId } })}
+        onOpenDocuments={(businessEventId) => navigate("/documents", { state: { businessEventId } })}
+        onOpenTax={(businessEventId) => navigate("/tax", { state: { businessEventId } })}
+        onOpenVouchers={(businessEventId) => navigate("/vouchers", { state: { businessEventId } })}
       />
 
       {/* Help drawer */}

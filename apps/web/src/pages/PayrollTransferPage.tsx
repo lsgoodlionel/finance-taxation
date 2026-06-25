@@ -4,6 +4,7 @@
  * 采用 V3 hero/section 壳层风格（对齐总账中心）。
  */
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card, Button, Table, Input, Tag, Space, Typography, Statistic, Row, Col,
   Alert, Spin, Divider, Popconfirm, message as antdMessage,
@@ -34,6 +35,7 @@ const STATUS_TAG: Record<string, { color: string; label: string }> = {
 };
 
 export function PayrollTransferPage() {
+  const navigate = useNavigate();
   const { period: globalPeriod } = usePeriod();
   const [batches, setBatches] = useState<PayrollTransferBatch[]>([]);
   const [selected, setSelected] = useState<{ batch: PayrollTransferBatch; lines: PayrollTransferLine[] } | null>(null);
@@ -220,6 +222,14 @@ export function PayrollTransferPage() {
                       description={`${runtimeDetail?.commands[0]?.lastErrorDetail || "已存在人工补偿记录"}${runtimeDetail?.compensations.length ? `；补偿 ${runtimeDetail.compensations.length} 条` : ""}`}
                     />
                   ) : null}
+                  <Space wrap style={{ marginBottom: 12 }}>
+                    <Button size="small" onClick={() => navigate("/payroll", { state: { payrollPeriod: selected.batch.payroll_period, tab: "payroll" } })}>
+                      查看工资页
+                    </Button>
+                    <Button size="small" onClick={() => navigate("/audit", { state: { resourceType: "payroll", resourceId: selected.batch.id, payrollPeriod: selected.batch.payroll_period } })}>
+                      查看审计
+                    </Button>
+                  </Space>
                   <Table<PayrollTransferLine>
                     size="small" rowKey="id" dataSource={selected.lines} pagination={false} style={{ marginBottom: 12 }}
                     columns={[

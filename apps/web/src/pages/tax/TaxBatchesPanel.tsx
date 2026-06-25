@@ -29,6 +29,10 @@ type TaxBatchesPanelProps = {
   onSubmitBatch: () => void;
   onReviewBatch: () => void;
   onArchiveBatch: () => void;
+  onOpenEvent?: (businessEventId: string) => void;
+  onOpenVoucherHub?: (businessEventId: string) => void;
+  onOpenDocuments?: (businessEventId: string) => void;
+  onOpenTaxItem?: (taxItemId: string) => void;
 };
 
 export function TaxBatchesPanel({
@@ -45,7 +49,11 @@ export function TaxBatchesPanel({
   onValidateBatch,
   onSubmitBatch,
   onReviewBatch,
-  onArchiveBatch
+  onArchiveBatch,
+  onOpenEvent,
+  onOpenVoucherHub,
+  onOpenDocuments,
+  onOpenTaxItem
 }: TaxBatchesPanelProps) {
   const { t } = useI18n();
   const readyCount = batches.filter((item) => item.status === "ready" || item.status === "review_required").length;
@@ -113,6 +121,22 @@ export function TaxBatchesPanel({
               <div style={{ borderRadius: "12px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.16)", padding: "12px 14px", color: "#92400e" }}>
                 <div>最近运行：{latestCommand?.lastErrorDetail || "已进入人工补偿处理"}</div>
                 <div style={{ marginTop: 4 }}>补偿记录：{runtimeDetail?.compensations.length ?? 0} 条</div>
+              </div>
+            ) : null}
+            {selectedBatchDetail.items[0]?.businessEventId ? (
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button onClick={() => onOpenEvent?.(selectedBatchDetail.items[0]!.businessEventId)} style={actionButtonStyle()}>
+                  查看事项
+                </button>
+                <button onClick={() => onOpenDocuments?.(selectedBatchDetail.items[0]!.businessEventId)} style={actionButtonStyle()}>
+                  查看单据
+                </button>
+                <button onClick={() => onOpenVoucherHub?.(selectedBatchDetail.items[0]!.businessEventId)} style={actionButtonStyle()}>
+                  查看凭证
+                </button>
+                <button onClick={() => onOpenTaxItem?.(selectedBatchDetail.items[0]!.id)} style={actionButtonStyle()}>
+                  定位税项
+                </button>
               </div>
             ) : null}
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
