@@ -67,7 +67,13 @@ import {
   getWorkflowRunDetailRoute,
   listWorkflowCommandsRoute,
   listWorkflowRunsRoute,
+  WORKFLOW_COMMAND_CANCEL_PATH,
+  WORKFLOW_COMMAND_COMPENSATIONS_PATH,
+  WORKFLOW_COMMAND_DETAIL_PATH,
+  WORKFLOW_COMMAND_RETRY_PATH,
   retryWorkflowCommandRoute
+  ,
+  WORKFLOW_RUN_DETAIL_PATH
 } from "./modules/workflows/routes.js";
 import {
   createTaxFilingBatch,
@@ -383,7 +389,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "GET") return listWorkflowRunsRoute(req, res);
   }
 
-  const workflowRunMatch = url.pathname.match(/^\/api\/workflows\/runs\/([^/]+)$/);
+  const workflowRunMatch = url.pathname.match(WORKFLOW_RUN_DETAIL_PATH);
   const workflowRunId = workflowRunMatch?.[1];
   if (workflowRunId) {
     if (!(await requireAuth(req, res))) return;
@@ -397,7 +403,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "GET") return listWorkflowCommandsRoute(req, res);
   }
 
-  const workflowCommandMatch = url.pathname.match(/^\/api\/workflows\/commands\/([^/]+)$/);
+  const workflowCommandMatch = url.pathname.match(WORKFLOW_COMMAND_DETAIL_PATH);
   const workflowCommandId = workflowCommandMatch?.[1];
   if (workflowCommandId) {
     if (!(await requireAuth(req, res))) return;
@@ -405,7 +411,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "GET") return getWorkflowCommandDetailRoute(req, res, workflowCommandId);
   }
 
-  const workflowRetryMatch = url.pathname.match(/^\/api\/workflows\/commands\/([^/]+)\/retry$/);
+  const workflowRetryMatch = url.pathname.match(WORKFLOW_COMMAND_RETRY_PATH);
   const workflowRetryId = workflowRetryMatch?.[1];
   if (workflowRetryId) {
     if (!(await requireAuth(req, res))) return;
@@ -413,7 +419,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "POST") return retryWorkflowCommandRoute(req, res, workflowRetryId);
   }
 
-  const workflowCancelMatch = url.pathname.match(/^\/api\/workflows\/commands\/([^/]+)\/cancel$/);
+  const workflowCancelMatch = url.pathname.match(WORKFLOW_COMMAND_CANCEL_PATH);
   const workflowCancelId = workflowCancelMatch?.[1];
   if (workflowCancelId) {
     if (!(await requireAuth(req, res))) return;
@@ -421,7 +427,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "POST") return cancelWorkflowCommandRoute(req, res, workflowCancelId);
   }
 
-  const workflowCompensationMatch = url.pathname.match(/^\/api\/workflows\/commands\/([^/]+)\/compensations$/);
+  const workflowCompensationMatch = url.pathname.match(WORKFLOW_COMMAND_COMPENSATIONS_PATH);
   const workflowCompensationId = workflowCompensationMatch?.[1];
   if (workflowCompensationId) {
     if (!(await requireAuth(req, res))) return;

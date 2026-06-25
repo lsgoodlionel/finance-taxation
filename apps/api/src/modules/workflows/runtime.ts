@@ -4,6 +4,7 @@ import type {
   ContractStatus,
   TaskStatus,
   TaxFilingBatchStatus,
+  VoucherStatus,
   WorkflowMaterialReference,
   WorkflowResourceType,
   WorkflowState,
@@ -171,5 +172,32 @@ export function mapTaxFilingBatchStatusToWorkflowState(status: TaxFilingBatchSta
       return "executing";
     case "archived":
       return "completed";
+  }
+}
+
+export function mapVoucherStatusToWorkflowState(status: VoucherStatus): WorkflowState {
+  switch (status) {
+    case "draft":
+      return "draft";
+    case "review_required":
+      return "under_review";
+    case "posted":
+      return "completed";
+  }
+}
+
+export function mapPayrollTransferBatchStatusToWorkflowState(status: string): WorkflowState {
+  switch (status) {
+    case "draft":
+      return "draft";
+    case "approved":
+      return "awaiting_authorization";
+    case "exported":
+      return "ready_for_review";
+    case "disbursed":
+    case "confirmed":
+      return "completed";
+    default:
+      return "executing";
   }
 }

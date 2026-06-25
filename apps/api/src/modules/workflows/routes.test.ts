@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  WORKFLOW_COMMAND_CANCEL_PATH,
+  WORKFLOW_COMMAND_COMPENSATIONS_PATH,
+  WORKFLOW_COMMAND_DETAIL_PATH,
+  WORKFLOW_COMMAND_RETRY_PATH,
+  WORKFLOW_RUN_DETAIL_PATH,
   normalizeWorkflowFilters
 } from "./routes.js";
 
@@ -21,4 +26,12 @@ test("normalizeWorkflowFilters leaves unrelated params empty", () => {
   assert.equal(filters.state, null);
   assert.equal(filters.workflowRunId, null);
   assert.equal(filters.status, null);
+});
+
+test("workflow route patterns match stable path contracts", () => {
+  assert.equal("/api/workflows/runs/run-1".match(WORKFLOW_RUN_DETAIL_PATH)?.[1], "run-1");
+  assert.equal("/api/workflows/commands/cmd-1".match(WORKFLOW_COMMAND_DETAIL_PATH)?.[1], "cmd-1");
+  assert.equal("/api/workflows/commands/cmd-1/retry".match(WORKFLOW_COMMAND_RETRY_PATH)?.[1], "cmd-1");
+  assert.equal("/api/workflows/commands/cmd-1/cancel".match(WORKFLOW_COMMAND_CANCEL_PATH)?.[1], "cmd-1");
+  assert.equal("/api/workflows/commands/cmd-1/compensations".match(WORKFLOW_COMMAND_COMPENSATIONS_PATH)?.[1], "cmd-1");
 });

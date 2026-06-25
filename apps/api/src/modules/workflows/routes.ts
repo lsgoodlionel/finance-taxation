@@ -18,6 +18,12 @@ import {
   updateWorkflowCommandExecution
 } from "./persistence.js";
 
+export const WORKFLOW_RUN_DETAIL_PATH = /^\/api\/workflows\/runs\/([^/]+)$/;
+export const WORKFLOW_COMMAND_DETAIL_PATH = /^\/api\/workflows\/commands\/([^/]+)$/;
+export const WORKFLOW_COMMAND_RETRY_PATH = /^\/api\/workflows\/commands\/([^/]+)\/retry$/;
+export const WORKFLOW_COMMAND_CANCEL_PATH = /^\/api\/workflows\/commands\/([^/]+)\/cancel$/;
+export const WORKFLOW_COMMAND_COMPENSATIONS_PATH = /^\/api\/workflows\/commands\/([^/]+)\/compensations$/;
+
 export function normalizeWorkflowFilters(url: URL) {
   return {
     resourceType: url.searchParams.get("resourceType"),

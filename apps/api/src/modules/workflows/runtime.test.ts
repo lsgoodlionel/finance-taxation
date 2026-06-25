@@ -5,6 +5,8 @@ import {
   canTransitionWorkflowState,
   mapBusinessEventStatusToWorkflowState,
   mapContractStatusToWorkflowState,
+  mapPayrollTransferBatchStatusToWorkflowState,
+  mapVoucherStatusToWorkflowState,
   validateWorkflowTransition
 } from "./runtime.js";
 
@@ -49,4 +51,6 @@ test("legacy object status adapters map to workflow states", () => {
   assert.equal(mapBusinessEventStatusToWorkflowState("awaiting_approval"), "awaiting_authorization");
   assert.equal(mapContractStatusToWorkflowState("active"), "executing");
   assert.equal(mapContractStatusToWorkflowState("fulfilled"), "completed");
+  assert.equal(mapVoucherStatusToWorkflowState("review_required"), "under_review");
+  assert.equal(mapPayrollTransferBatchStatusToWorkflowState("approved"), "awaiting_authorization");
 });
