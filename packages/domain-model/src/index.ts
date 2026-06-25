@@ -899,6 +899,130 @@ export interface AuditLog {
   createdAt: string;
 }
 
+export type WorkflowResourceType =
+  | "business_event"
+  | "task"
+  | "tax_filing_batch"
+  | "contract"
+  | "voucher"
+  | "payroll"
+  | "export_job"
+  | "generic";
+
+export type WorkflowState =
+  | "draft"
+  | "collecting_documents"
+  | "ready_for_review"
+  | "under_review"
+  | "awaiting_authorization"
+  | "executing"
+  | "completed"
+  | "blocked"
+  | "cancelled"
+  | "correcting";
+
+export interface WorkflowMaterialReference {
+  type: string;
+  id: string;
+  label: string;
+}
+
+export interface WorkflowRun {
+  id: string;
+  companyId: string;
+  workflowKey: string;
+  resourceType: WorkflowResourceType;
+  resourceId: string;
+  resourceLabel: string;
+  currentState: WorkflowState;
+  initiatorUserId: string | null;
+  initiatorName: string;
+  authorizerUserId: string | null;
+  authorizerName: string | null;
+  blockedReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowTransitionRecord {
+  id: string;
+  companyId: string;
+  workflowRunId: string;
+  resourceType: WorkflowResourceType;
+  resourceId: string;
+  previousState: WorkflowState;
+  nextState: WorkflowState;
+  actorUserId: string | null;
+  actorName: string;
+  basis: string;
+  ruleVersion: string;
+  relatedMaterials: WorkflowMaterialReference[];
+  occurredAt: string;
+}
+
+export type WorkflowCommandStatus =
+  | "waiting"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
+export interface WorkflowRetryPolicy {
+  maxAttempts: number;
+  backoffMinutes: number;
+}
+
+export interface WorkflowTimeoutPolicy {
+  timeoutSeconds: number;
+}
+
+export interface WorkflowCommandExecution {
+  id: string;
+  companyId: string;
+  workflowRunId: string;
+  commandType: string;
+  resourceType: WorkflowResourceType;
+  resourceId: string;
+  idempotencyKey: string;
+  objectVersion: string;
+  status: WorkflowCommandStatus;
+  progress: string;
+  inputSnapshot: Record<string, unknown>;
+  resultSnapshot: Record<string, unknown> | null;
+  retryPolicy: WorkflowRetryPolicy;
+  timeoutPolicy: WorkflowTimeoutPolicy;
+  attemptCount: number;
+  nextRetryAt: string | null;
+  lastErrorCode: string | null;
+  lastErrorDetail: string | null;
+  executorUserId: string | null;
+  executorName: string;
+  initiatorUserId: string | null;
+  initiatorName: string;
+  authorizerUserId: string | null;
+  authorizerName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+}
+
+export type WorkflowCompensationStatus = "open" | "in_progress" | "resolved" | "cancelled";
+
+export interface WorkflowCompensationRecord {
+  id: string;
+  companyId: string;
+  workflowRunId: string;
+  commandExecutionId: string;
+  actionType: string;
+  status: WorkflowCompensationStatus;
+  reason: string;
+  handoffToUserId: string | null;
+  handoffToName: string | null;
+  notes: string;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export const permissionCatalog = [
   "dashboard.view",
   "events.view",
@@ -921,6 +1045,8 @@ export const permissionCatalog = [
   "payroll.view",
   "payroll.manage",
   "audit.view",
+  "workflow.view",
+  "workflow.manage",
   "knowledge.view",
   "knowledge.manage",
   "settings.manage"

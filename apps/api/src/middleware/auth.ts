@@ -14,7 +14,7 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "rnd.view", "rnd.manage", "risk.view", "risk.manage", "settings.manage",
     "contracts.view", "contracts.manage",
     "payroll.view", "payroll.manage",
-    "audit.view",
+    "audit.view", "workflow.view", "workflow.manage",
     "knowledge.view", "knowledge.manage"
   ],
   "role-finance-director": [
@@ -24,7 +24,7 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "rnd.view", "rnd.manage", "risk.view", "risk.manage",
     "contracts.view", "contracts.manage",
     "payroll.view", "payroll.manage",
-    "audit.view",
+    "audit.view", "workflow.view", "workflow.manage",
     "knowledge.view"
   ],
   "role-accountant": [
@@ -32,7 +32,7 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "tasks.view", "documents.view", "documents.manage",
     "ledger.view", "ledger.post", "tax.view", "tax.manage",
     "payroll.view",
-    "audit.view",
+    "audit.view", "workflow.view", "workflow.manage",
     "knowledge.view"
   ],
   "role-employee": [
@@ -52,14 +52,14 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "tasks.view", "documents.view", "documents.manage",
     "ledger.view", "tax.view", "tax.manage",
     "contracts.view", "payroll.view",
-    "audit.view", "knowledge.view"
+    "audit.view", "workflow.view", "workflow.manage", "knowledge.view"
   ],
   "role-auditor": [
     "dashboard.view", "events.view",
     "tasks.view", "documents.view",
     "ledger.view", "tax.view",
     "contracts.view", "payroll.view",
-    "audit.view", "knowledge.view"
+    "audit.view", "workflow.view", "knowledge.view"
   ],
   "role-viewer": [
     "dashboard.view", "events.view", "tasks.view",

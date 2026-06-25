@@ -61,6 +61,15 @@ import {
 } from "./modules/risk/routes.js";
 import { handleTasksMeta, listTasks, remindTask, updateTask } from "./modules/tasks/routes.js";
 import {
+  cancelWorkflowCommandRoute,
+  createWorkflowCompensationRoute,
+  getWorkflowCommandDetailRoute,
+  getWorkflowRunDetailRoute,
+  listWorkflowCommandsRoute,
+  listWorkflowRunsRoute,
+  retryWorkflowCommandRoute
+} from "./modules/workflows/routes.js";
+import {
   createTaxFilingBatch,
   getCorporateIncomeTaxPreparation,
   getIndividualIncomeTaxMaterials,
@@ -366,6 +375,58 @@ async function router(req: ApiRequest, res: ServerResponse) {
       if (!(await requirePermission("tasks.view", req, res))) return;
       return updateTask(req, res, taskId);
     }
+  }
+
+  if (url.pathname === "/api/workflows/runs") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("workflow.view", req, res))) return;
+    if (req.method === "GET") return listWorkflowRunsRoute(req, res);
+  }
+
+  const workflowRunMatch = url.pathname.match(/^\/api\/workflows\/runs\/([^/]+)$/);
+  const workflowRunId = workflowRunMatch?.[1];
+  if (workflowRunId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("workflow.view", req, res))) return;
+    if (req.method === "GET") return getWorkflowRunDetailRoute(req, res, workflowRunId);
+  }
+
+  if (url.pathname === "/api/workflows/commands") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("workflow.view", req, res))) return;
+    if (req.method === "GET") return listWorkflowCommandsRoute(req, res);
+  }
+
+  const workflowCommandMatch = url.pathname.match(/^\/api\/workflows\/commands\/([^/]+)$/);
+  const workflowCommandId = workflowCommandMatch?.[1];
+  if (workflowCommandId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("workflow.view", req, res))) return;
+    if (req.method === "GET") return getWorkflowCommandDetailRoute(req, res, workflowCommandId);
+  }
+
+  const workflowRetryMatch = url.pathname.match(/^\/api\/workflows\/commands\/([^/]+)\/retry$/);
+  const workflowRetryId = workflowRetryMatch?.[1];
+  if (workflowRetryId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("workflow.manage", req, res))) return;
+    if (req.method === "POST") return retryWorkflowCommandRoute(req, res, workflowRetryId);
+  }
+
+  const workflowCancelMatch = url.pathname.match(/^\/api\/workflows\/commands\/([^/]+)\/cancel$/);
+  const workflowCancelId = workflowCancelMatch?.[1];
+  if (workflowCancelId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("workflow.manage", req, res))) return;
+    if (req.method === "POST") return cancelWorkflowCommandRoute(req, res, workflowCancelId);
+  }
+
+  const workflowCompensationMatch = url.pathname.match(/^\/api\/workflows\/commands\/([^/]+)\/compensations$/);
+  const workflowCompensationId = workflowCompensationMatch?.[1];
+  if (workflowCompensationId) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("workflow.manage", req, res))) return;
+    if (req.method === "POST") return createWorkflowCompensationRoute(req, res, workflowCompensationId);
   }
 
   if (url.pathname === "/api/ledger/entries") {
