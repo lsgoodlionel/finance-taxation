@@ -39,6 +39,7 @@ interface WorkflowRuntimeCardProps {
   resourceId?: string | null;
   emptyHint: string;
   onChanged?: () => Promise<void> | void;
+  onDetailChange?: (detail: WorkflowRunDetail | null) => void;
 }
 
 export function WorkflowRuntimeCard({
@@ -46,7 +47,8 @@ export function WorkflowRuntimeCard({
   resourceType,
   resourceId,
   emptyHint,
-  onChanged
+  onChanged,
+  onDetailChange
 }: WorkflowRuntimeCardProps) {
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState(false);
@@ -58,12 +60,13 @@ export function WorkflowRuntimeCard({
   const [compensationNotes, setCompensationNotes] = useState("");
 
   async function loadRuntime() {
-    if (!resourceId) {
-      setDetail(null);
-      setError(null);
-      setAuthState("unknown");
-      return;
-    }
+      if (!resourceId) {
+        setDetail(null);
+        setError(null);
+        setAuthState("unknown");
+        onDetailChange?.(null);
+        return;
+      }
 
     setLoading(true);
     setError(null);
@@ -73,20 +76,24 @@ export function WorkflowRuntimeCard({
       const targetRun = runsPayload.items[0] ?? null;
       if (!targetRun) {
         setDetail(null);
+        onDetailChange?.(null);
         return;
       }
       const runDetail = await getWorkflowRunDetail(targetRun.id);
       setDetail(runDetail);
+      onDetailChange?.(runDetail);
     } catch (err) {
       const messageText = (err as Error).message;
       if (messageText === "Forbidden") {
         setAuthState("forbidden");
         setDetail(null);
         setError(null);
+        onDetailChange?.(null);
         return;
       }
       setError(messageText);
       setDetail(null);
+      onDetailChange?.(null);
     } finally {
       setLoading(false);
     }

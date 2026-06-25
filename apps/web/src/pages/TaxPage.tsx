@@ -29,7 +29,8 @@ import {
   listTaxpayerProfiles,
   reviewTaxFilingBatch,
   submitTaxFilingBatch,
-  validateTaxFilingBatch
+  validateTaxFilingBatch,
+  type WorkflowRunDetail
 } from "../lib/api";
 import { TaxBatchesPanel } from "./tax/TaxBatchesPanel";
 import { TaxHeader } from "./tax/TaxHeader";
@@ -79,6 +80,7 @@ export function TaxPage() {
   const [batches, setBatches] = useState<TaxFilingBatch[]>([]);
   const [profiles, setProfiles] = useState<TaxpayerProfile[]>([]);
   const [selectedBatchDetail, setSelectedBatchDetail] = useState<TaxBatchDetail | null>(null);
+  const [runtimeDetail, setRuntimeDetail] = useState<WorkflowRunDetail | null>(null);
   const [validation, setValidation] = useState<{ valid: boolean; issues: string[]; itemCount: number } | null>(null);
   const [ruleProfile, setRuleProfile] = useState<(TaxRuleProfile & { filingPeriod: string }) | null>(null);
   const [vatPaper, setVatPaper] = useState<VatWorkingPaper | null>(null);
@@ -340,6 +342,7 @@ export function TaxPage() {
               resourceId={selectedBatchDetail?.id ?? selectedBatchState ?? null}
               emptyHint="选择或生成申报批次后，可查看该批次的运行状态、授权状态、重试与补偿信息。"
               onChanged={() => refreshBatches(selectedBatchDetail?.id ?? selectedBatchState ?? undefined)}
+              onDetailChange={setRuntimeDetail}
             />
             <TaxProfilePanel
               profiles={profiles}
@@ -352,12 +355,13 @@ export function TaxPage() {
           </>
         )}
         taxItems={<TaxItemsPanel items={items} navEventId={navEventId} navTaxItemId={navTaxItemId} />}
-        batches={(
-          <TaxBatchesPanel
-            batches={batches}
-            selectedBatchId={selectedBatchState || null}
-            selectedBatchDetail={selectedBatchDetail}
-            validation={validation}
+            batches={(
+              <TaxBatchesPanel
+                batches={batches}
+                selectedBatchId={selectedBatchState || null}
+                selectedBatchDetail={selectedBatchDetail}
+                runtimeDetail={runtimeDetail}
+                validation={validation}
             reviewForm={reviewForm}
             archiveForm={archiveForm}
             onSelectBatch={(batchId) => void handleSelectBatch(batchId)}

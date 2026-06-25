@@ -7,7 +7,7 @@ import type { Voucher } from "@finance-taxation/domain-model";
 import {
   approveVoucher, createVoucherFromTemplate, getVoucherDetail,
   listVouchers, listVoucherTemplates, postVoucher, updateVoucher,
-  validateVoucher, type VoucherDetail, type VoucherTemplate,
+  validateVoucher, type VoucherDetail, type VoucherTemplate, type WorkflowRunDetail,
 } from "../lib/api";
 import { normalizeDrilldownState } from "./drilldown";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
@@ -30,6 +30,7 @@ export function VouchersPage() {
   const [templates, setTemplates] = useState<VoucherTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail,     setDetail]     = useState<VoucherDetail | null>(null);
+  const [runtimeDetail, setRuntimeDetail] = useState<WorkflowRunDetail | null>(null);
   const [validation, setValidation] = useState<{
     valid: boolean; totals: { debit: string; credit: string }; issues: string[]
   } | null>(null);
@@ -225,6 +226,7 @@ export function VouchersPage() {
         resourceId={detail?.id ?? selectedId}
         emptyHint="选择凭证后，可查看该凭证的运行状态、授权状态、重试与补偿信息。"
         onChanged={() => refresh(detail?.id ?? selectedId ?? undefined)}
+        onDetailChange={setRuntimeDetail}
       />
 
       {/* Process flow */}
@@ -266,6 +268,7 @@ export function VouchersPage() {
               <Card style={{ borderRadius: 12 }}>
                 <VoucherDetailPanel
                   detail={detail}
+                  runtimeDetail={runtimeDetail}
                   validation={validation}
                   updating={updating}
                   onValidate={handleValidate}

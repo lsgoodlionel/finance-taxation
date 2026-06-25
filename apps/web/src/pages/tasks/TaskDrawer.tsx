@@ -4,6 +4,7 @@ import {
   StopOutlined, MinusCircleOutlined, BellOutlined,
 } from "@ant-design/icons";
 import type { TaskStatus } from "@finance-taxation/domain-model";
+import type { WorkflowRunDetail } from "../../lib/api";
 
 const { Text } = Typography;
 
@@ -42,6 +43,7 @@ export interface TaskDrawerItem {
 
 interface TaskDrawerProps {
   task: TaskDrawerItem | null;
+  runtimeDetail?: WorkflowRunDetail | null;
   updatingId: string | null;
   remindingId: string | null;
   onClose: () => void;
@@ -49,8 +51,9 @@ interface TaskDrawerProps {
   onRemind: (taskId: string) => Promise<void>;
 }
 
-export function TaskDrawer({ task, updatingId, remindingId, onClose, onStatusChange, onRemind }: TaskDrawerProps) {
+export function TaskDrawer({ task, runtimeDetail, updatingId, remindingId, onClose, onStatusChange, onRemind }: TaskDrawerProps) {
   const activeNext = task ? NEXT_STATUS[task.status as TaskStatus] : undefined;
+  const latestCommand = runtimeDetail?.commands[0] ?? null;
 
   return (
     <Drawer
@@ -98,6 +101,17 @@ export function TaskDrawer({ task, updatingId, remindingId, onClose, onStatusCha
           {task.isOverdue && (
             <Alert type="error" showIcon message="该任务已逾期，请尽快处理" />
           )}
+          {runtimeDetail?.run.blockedReason ? (
+            <Alert type="error" showIcon message="运行阻塞" description={runtimeDetail.run.blockedReason} />
+          ) : null}
+          {latestCommand?.lastErrorDetail || runtimeDetail?.compensations.length ? (
+            <Alert
+              type="warning"
+              showIcon
+              message={latestCommand?.lastErrorCode || "运行提示"}
+              description={`${latestCommand?.lastErrorDetail || "已存在人工补偿记录"}${runtimeDetail?.compensations.length ? `；补偿 ${runtimeDetail.compensations.length} 条` : ""}`}
+            />
+          ) : null}
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px" }}>
             {[

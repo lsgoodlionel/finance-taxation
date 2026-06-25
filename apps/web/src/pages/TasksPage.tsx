@@ -8,7 +8,7 @@ import {
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import type { Task, TaskStatus } from "@finance-taxation/domain-model";
-import { listTasks, remindTask, updateTaskStatus } from "../lib/api";
+import { listTasks, remindTask, type WorkflowRunDetail, updateTaskStatus } from "../lib/api";
 import { TASK_STATUS_LABELS } from "../lib/i18n";
 import { buildResultPageSubtitle } from "../lib/entry-guidance";
 import { normalizeDrilldownState } from "./drilldown";
@@ -34,6 +34,7 @@ export function TasksPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [detailTask, setDetailTask] = useState<TaskWithOverdue | null>(null);
+  const [runtimeDetail, setRuntimeDetail] = useState<WorkflowRunDetail | null>(null);
   const [viewStr, setViewStr] = useQueryState("view", "kanban");
   const viewMode = (viewStr === "list" ? "list" : "kanban") as ViewMode;
 
@@ -195,6 +196,7 @@ export function TasksPage() {
         resourceId={runtimeTaskId}
         emptyHint="选择一个任务后，可查看其执行状态、授权状态、重试与补偿信息。"
         onChanged={() => handleRuntimeChanged()}
+        onDetailChange={setRuntimeDetail}
       />
 
       {/* Main content */}
@@ -233,6 +235,7 @@ export function TasksPage() {
       {/* Detail drawer */}
       <TaskDrawer
         task={detailTask}
+        runtimeDetail={runtimeDetail}
         updatingId={updatingId}
         remindingId={remindingId}
         onClose={() => setDetailTask(null)}
@@ -243,6 +246,7 @@ export function TasksPage() {
       {/* Help drawer */}
       <TaskDrawer
         task={null}
+        runtimeDetail={null}
         updatingId={null}
         remindingId={null}
         onClose={() => setHelpOpen(false)}

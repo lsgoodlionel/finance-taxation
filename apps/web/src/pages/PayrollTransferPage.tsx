@@ -20,7 +20,7 @@ import { usePeriod } from "../lib/period-context";
 import {
   listTransferBatches, getTransferBatch, buildTransferBatch, approveTransferBatch,
   disburseTransferBatch, downloadTransferFile, closeSocialSecurity,
-  type PayrollTransferBatch, type PayrollTransferLine,
+  type PayrollTransferBatch, type PayrollTransferLine, type WorkflowRunDetail,
 } from "../lib/api";
 
 const { Text } = Typography;
@@ -37,6 +37,7 @@ export function PayrollTransferPage() {
   const { period: globalPeriod } = usePeriod();
   const [batches, setBatches] = useState<PayrollTransferBatch[]>([]);
   const [selected, setSelected] = useState<{ batch: PayrollTransferBatch; lines: PayrollTransferLine[] } | null>(null);
+  const [runtimeDetail, setRuntimeDetail] = useState<WorkflowRunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [genPeriod, setGenPeriod] = useState(globalPeriod);
@@ -167,6 +168,7 @@ export function PayrollTransferPage() {
         resourceId={selected?.batch.id ?? batches[0]?.id ?? null}
         emptyHint="选择代发批次后，可查看该批次的运行状态、授权状态、重试与补偿信息。"
         onChanged={() => handleRuntimeChanged()}
+        onDetailChange={setRuntimeDetail}
       />
 
       <div className="v3-result-grid v3-result-grid--wide">
@@ -200,6 +202,24 @@ export function PayrollTransferPage() {
               {selected ? (
                 <Card size="small" title={<Space><FileDoneOutlined />{selected.batch.payroll_period} 代发批次 <Tag color={STATUS_TAG[st!]?.color}>{STATUS_TAG[st!]?.label}</Tag></Space>}
                   extra={selected.batch.bank_transfer_ref && <Text type="secondary" style={{ fontSize: 12 }}>批次号 {selected.batch.bank_transfer_ref}</Text>}>
+                  {runtimeDetail?.run.blockedReason ? (
+                    <Alert
+                      style={{ marginBottom: 12 }}
+                      type="error"
+                      showIcon
+                      message="运行阻塞"
+                      description={runtimeDetail.run.blockedReason}
+                    />
+                  ) : null}
+                  {runtimeDetail?.commands[0]?.lastErrorDetail || runtimeDetail?.compensations.length ? (
+                    <Alert
+                      style={{ marginBottom: 12 }}
+                      type="warning"
+                      showIcon
+                      message={runtimeDetail?.commands[0]?.lastErrorCode || "运行提示"}
+                      description={`${runtimeDetail?.commands[0]?.lastErrorDetail || "已存在人工补偿记录"}${runtimeDetail?.compensations.length ? `；补偿 ${runtimeDetail.compensations.length} 条` : ""}`}
+                    />
+                  ) : null}
                   <Table<PayrollTransferLine>
                     size="small" rowKey="id" dataSource={selected.lines} pagination={false} style={{ marginBottom: 12 }}
                     columns={[
