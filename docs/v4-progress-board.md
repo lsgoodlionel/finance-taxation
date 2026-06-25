@@ -13,3 +13,15 @@
 | V4-3 合同收入 | `codex/v4-contract-revenue-slice` | `pending` | 合同至申报闭环 |
 | V4-4 任务与连接器 | `codex/v4-job-and-connectors` | `pending` | 重试、沙箱、文件交换 |
 | V4-5 安全与运维 | `codex/v4-security-operations` | `pending` | 私有云生产认证 |
+
+## V4-1A 当前完成
+
+- API runtime 状态机、授权校验、命令幂等、补偿记录与 inspection/control routes 已落地。
+- `workflow_runs / workflow_transition_records / workflow_command_executions / workflow_compensation_records` 已补真实 PostgreSQL 集成测试，覆盖写入、读取、失败重试、成功复用与人工补偿。
+- 任务中心、税务中心、凭证中心、工资代发页已接入 workflow runtime 消费，页面可展示运行态、授权态、最近命令、重试次数、补偿记录与阻塞原因。
+
+## V4-1A 剩余
+
+- 将 runtime 展示继续下沉到更多业务页，补 drilldown 场景下的上下文联动。
+- 继续补 route/db contract tests，覆盖更多业务对象接入后的稳定性。
+- 评估是否把 retry / cancel / compensation 操作入口直接开放到前端工作台。

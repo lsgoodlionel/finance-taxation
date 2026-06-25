@@ -14,6 +14,7 @@ import {
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "../components/ui/PageHeader";
+import { WorkflowRuntimeCard } from "../components/workflow/WorkflowRuntimeCard";
 import { SalaryAccountDrawer } from "./payroll-transfer/SalaryAccountDrawer";
 import { usePeriod } from "../lib/period-context";
 import {
@@ -152,6 +153,13 @@ export function PayrollTransferPage() {
           <Col span={8}><Statistic title="已代发批次" value={disbursedCount} valueStyle={{ color: "#16a34a" }} /></Col>
         </Row>
       </section>
+
+      <WorkflowRuntimeCard
+        title="工资代发运行态 / 授权态"
+        resourceType="payroll"
+        resourceId={selected?.batch.id ?? batches[0]?.id ?? null}
+        emptyHint="选择代发批次后，可查看该批次的运行状态、授权状态、重试与补偿信息。"
+      />
 
       <div className="v3-result-grid v3-result-grid--wide">
         {/* 左：批次列表 + 生成 */}

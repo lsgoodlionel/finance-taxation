@@ -13,6 +13,7 @@ import { TASK_STATUS_LABELS } from "../lib/i18n";
 import { buildResultPageSubtitle } from "../lib/entry-guidance";
 import { normalizeDrilldownState } from "./drilldown";
 import { useQueryState } from "../hooks/useQueryState";
+import { WorkflowRuntimeCard } from "../components/workflow/WorkflowRuntimeCard";
 import { TaskKanbanView } from "./tasks/TaskKanbanView";
 import { TaskListView } from "./tasks/TaskListView";
 import { TaskDrawer } from "./tasks/TaskDrawer";
@@ -83,6 +84,7 @@ export function TasksPage() {
 
   const overdueCount = useMemo(() => tasks.filter(t => t.isOverdue).length, [tasks]);
   const notStartedCount = useMemo(() => tasks.filter(t => t.status === "not_started").length, [tasks]);
+  const runtimeTaskId = detailTask?.id ?? tasks[0]?.id ?? null;
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -177,6 +179,13 @@ export function TasksPage() {
           message={<>当前仅显示事项 <Text code>{navEventId}</Text> 的关联任务。</>}
         />
       )}
+
+      <WorkflowRuntimeCard
+        title="任务运行态 / 授权态"
+        resourceType="task"
+        resourceId={runtimeTaskId}
+        emptyHint="选择一个任务后，可查看其执行状态、授权状态、重试与补偿信息。"
+      />
 
       {/* Main content */}
       <Card

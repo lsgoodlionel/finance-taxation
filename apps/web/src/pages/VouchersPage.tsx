@@ -13,6 +13,7 @@ import { normalizeDrilldownState } from "./drilldown";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { PageHeader } from "../components/ui/PageHeader";
+import { WorkflowRuntimeCard } from "../components/workflow/WorkflowRuntimeCard";
 import { VouchersList } from "./vouchers/VouchersList";
 import { VoucherDetailPanel } from "./vouchers/VoucherDetailPanel";
 import { VoucherCreateModal } from "./vouchers/VoucherCreateModal";
@@ -217,6 +218,13 @@ export function VouchersPage() {
           message={<>当前筛选事项 <Text code>{navEventId}</Text> 的关联凭证。</>}
         />
       )}
+
+      <WorkflowRuntimeCard
+        title="凭证运行态 / 授权态"
+        resourceType="voucher"
+        resourceId={detail?.id ?? selectedId}
+        emptyHint="选择凭证后，可查看该凭证的运行状态、授权状态、重试与补偿信息。"
+      />
 
       {/* Process flow */}
       {detail && (

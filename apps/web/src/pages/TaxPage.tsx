@@ -43,6 +43,7 @@ import { TaxCalendar } from "./tax/TaxCalendar";
 import { VatDeclarationWizard } from "./tax/VatDeclarationWizard";
 import { DeclarationExportPanel } from "./tax/DeclarationExportPanel";
 import { TaxWorkspaceSummary } from "./tax/TaxWorkspaceSummary";
+import { WorkflowRuntimeCard } from "../components/workflow/WorkflowRuntimeCard";
 
 const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
   vat: "增值税底稿",
@@ -332,6 +333,12 @@ export function TaxPage() {
               subtitle="当前页定位到税务复核与申报留档节点；如果当前批次已完成留档，则定位到归档查询节点。"
               currentNodeId={selectedBatchDetail?.archives.length ? "archive_trace_query" : "tax_filing_archive"}
               branch={null}
+            />
+            <WorkflowRuntimeCard
+              title="税务批次运行态 / 授权态"
+              resourceType="tax_filing_batch"
+              resourceId={selectedBatchDetail?.id ?? selectedBatchState ?? null}
+              emptyHint="选择或生成申报批次后，可查看该批次的运行状态、授权状态、重试与补偿信息。"
             />
             <TaxProfilePanel
               profiles={profiles}

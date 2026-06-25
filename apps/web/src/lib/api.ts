@@ -48,7 +48,11 @@ import type {
   TaxRuleProfile,
   TaskTreeNode,
   VatWorkingPaper,
-  Voucher
+  Voucher,
+  WorkflowCommandExecution,
+  WorkflowCompensationRecord,
+  WorkflowRun,
+  WorkflowTransitionRecord
 } from "@finance-taxation/domain-model";
 import { describePageLoadError, isAuthRequiredError } from "./request-errors";
 
@@ -118,6 +122,19 @@ export interface RndProjectDetail extends RndProject {
   summary: RndProjectSummary;
   policyReview: RndAccountingPolicyReview;
   guidance: RndPolicyGuidance;
+}
+
+export interface WorkflowRunDetail {
+  run: WorkflowRun;
+  transitions: WorkflowTransitionRecord[];
+  commands: WorkflowCommandExecution[];
+  compensations: WorkflowCompensationRecord[];
+}
+
+export interface WorkflowCommandDetail {
+  command: WorkflowCommandExecution;
+  run: WorkflowRun | null;
+  compensations: WorkflowCompensationRecord[];
 }
 
 export function getStoredToken() {
@@ -333,6 +350,44 @@ export async function listTasks(businessEventId?: string, overdueOnly?: boolean)
   return request<{ items: (Task & { isOverdue?: boolean })[]; tree: TaskTreeNode[]; total: number }>(
     `/api/tasks${qs ? "?" + qs : ""}`
   );
+}
+
+export async function listWorkflowRuns(filters?: {
+  resourceType?: string;
+  resourceId?: string;
+  state?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.resourceType) params.set("resourceType", filters.resourceType);
+  if (filters?.resourceId) params.set("resourceId", filters.resourceId);
+  if (filters?.state) params.set("state", filters.state);
+  const qs = params.toString();
+  return request<{ items: WorkflowRun[]; total: number }>(`/api/workflows/runs${qs ? `?${qs}` : ""}`);
+}
+
+export async function getWorkflowRunDetail(runId: string) {
+  return request<WorkflowRunDetail>(`/api/workflows/runs/${runId}`);
+}
+
+export async function listWorkflowCommands(filters?: {
+  workflowRunId?: string;
+  resourceType?: string;
+  resourceId?: string;
+  status?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.workflowRunId) params.set("workflowRunId", filters.workflowRunId);
+  if (filters?.resourceType) params.set("resourceType", filters.resourceType);
+  if (filters?.resourceId) params.set("resourceId", filters.resourceId);
+  if (filters?.status) params.set("status", filters.status);
+  const qs = params.toString();
+  return request<{ items: WorkflowCommandExecution[]; total: number }>(
+    `/api/workflows/commands${qs ? `?${qs}` : ""}`
+  );
+}
+
+export async function getWorkflowCommandDetail(commandId: string) {
+  return request<WorkflowCommandDetail>(`/api/workflows/commands/${commandId}`);
 }
 
 export async function remindTask(taskId: string) {

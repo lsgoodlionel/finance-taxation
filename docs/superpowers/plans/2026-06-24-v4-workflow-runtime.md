@@ -39,42 +39,50 @@
 
 ## Task 1: Define the shared runtime contract
 
-- [ ] Add shared workflow state types covering `draft`, `collecting_documents`, `ready_for_review`, `under_review`, `awaiting_authorization`, `executing`, `completed`, `blocked`, `cancelled`, and `correcting`.
-- [ ] Model transition metadata with previous state, next state, actor, basis, rule version, related materials, and occurred-at time.
-- [ ] Implement a runtime helper that validates allowed transitions and returns stable error codes for invalid jumps.
-- [ ] Add tests covering happy-path progression, terminal states, correction loops, and invalid transitions.
+- [x] Add shared workflow state types covering `draft`, `collecting_documents`, `ready_for_review`, `under_review`, `awaiting_authorization`, `executing`, `completed`, `blocked`, `cancelled`, and `correcting`.
+- [x] Model transition metadata with previous state, next state, actor, basis, rule version, related materials, and occurred-at time.
+- [x] Implement a runtime helper that validates allowed transitions and returns stable error codes for invalid jumps.
+- [x] Add tests covering happy-path progression, terminal states, correction loops, and invalid transitions.
 
 ## Task 2: Add authorization and separation-of-duties checks
 
-- [ ] Encode SoD checks for requester vs approver, accountant vs cashier, preparer vs reviewer, reviewer vs posting, and command preparation vs final authorization.
-- [ ] Distinguish low-risk transitions from high-risk actions that require explicit authorizer identity.
-- [ ] Return deterministic denial codes and user-readable reasons that routes can surface directly.
-- [ ] Add tests proving that forbidden role combinations are blocked rather than only warned.
+- [x] Encode SoD checks for requester vs approver, accountant vs cashier, preparer vs reviewer, reviewer vs posting, and command preparation vs final authorization.
+- [x] Distinguish low-risk transitions from high-risk actions that require explicit authorizer identity.
+- [x] Return deterministic denial codes and user-readable reasons that routes can surface directly.
+- [x] Add tests proving that forbidden role combinations are blocked rather than only warned.
 
 ## Task 3: Add idempotent command runtime and persistence
 
-- [ ] Create tables for workflow runs, transition history, command executions, retry attempts, and compensation/manual-takeover records.
-- [ ] Require each command to carry an idempotency key, business object version, executor, input snapshot, timeout policy, retry policy, and optional authorizer.
-- [ ] Implement command status flow `waiting -> running -> succeeded|failed|cancelled`.
-- [ ] Prevent duplicate execution when the same idempotency key and object version have already succeeded.
-- [ ] Add tests for first-run success, duplicate replay, retry scheduling metadata, and compensation handoff creation.
+- [x] Create tables for workflow runs, transition history, command executions, retry attempts, and compensation/manual-takeover records.
+- [x] Require each command to carry an idempotency key, business object version, executor, input snapshot, timeout policy, retry policy, and optional authorizer.
+- [x] Implement command status flow `waiting -> running -> succeeded|failed|cancelled`.
+- [x] Prevent duplicate execution when the same idempotency key and object version have already succeeded.
+- [x] Add tests for first-run success, duplicate replay, retry scheduling metadata, and compensation handoff creation.
 
 ## Task 4: Expose runtime inspection and control endpoints
 
-- [ ] Add list/detail endpoints for workflow runs and command executions.
-- [ ] Add retry, cancel, and manual-takeover/compensation endpoints with permission guards.
-- [ ] Ensure endpoint payloads include progress, attempt count, next retry time, last error code, initiator, and authorizer.
-- [ ] Add tests for auth failures, missing records, retryability rules, and successful state changes.
+- [x] Add list/detail endpoints for workflow runs and command executions.
+- [x] Add retry, cancel, and manual-takeover/compensation endpoints with permission guards.
+- [x] Ensure endpoint payloads include progress, attempt count, next retry time, last error code, initiator, and authorizer.
+- [x] Add tests for auth failures, missing records, retryability rules, and successful state changes.
 
 ## Task 5: Integrate runtime into the first business routes
 
-- [ ] Route business-event status updates through the shared runtime transition validator.
-- [ ] Record task progression, tax batch review/submit/archive, and contract closure actions through runtime records.
-- [ ] Align contract approval/closure actions with runtime state names or mapped adapters without breaking existing API responses.
-- [ ] Keep current route contracts stable unless a spec gap requires an explicit compatibility adapter.
+- [x] Route business-event status updates through the shared runtime transition validator.
+- [x] Record task progression, tax batch review/submit/archive, and contract closure actions through runtime records.
+- [x] Align contract approval/closure actions with runtime state names or mapped adapters without breaking existing API responses.
+- [x] Keep current route contracts stable unless a spec gap requires an explicit compatibility adapter.
+- [x] Extend first-wave business route接入到凭证审核/过账与工资代发 build/approve/export/disburse。
 
 ## Task 6: Verification, docs, and progress update
 
-- [ ] Run focused workflow runtime tests and affected module tests.
-- [ ] Document how operators inspect failed commands, authorize high-risk actions, and take over blocked jobs.
-- [ ] Update the progress board with the latest branch status and remaining follow-up items if any work is deferred.
+- [x] Run focused workflow runtime tests and affected module tests.
+- [x] Document how operators inspect failed commands, authorize high-risk actions, and take over blocked jobs.
+- [x] Update the progress board with the latest branch status and remaining follow-up items if any work is deferred.
+
+## Task 7: Frontend runtime consumption
+
+- [x] Add frontend API models and requests for workflow runs / command details.
+- [x] Add a reusable runtime card that can show loading, forbidden, empty, blocked, retry, compensation, and authorization states.
+- [x] Connect runtime display to Tasks, Tax, Vouchers, and Payroll Transfer pages without changing existing business actions.
+- [ ] Extend runtime operation entrypoints to frontend if operators need in-page retry/cancel/compensation actions.
