@@ -339,6 +339,7 @@ export function TaxPage() {
               resourceType="tax_filing_batch"
               resourceId={selectedBatchDetail?.id ?? selectedBatchState ?? null}
               emptyHint="选择或生成申报批次后，可查看该批次的运行状态、授权状态、重试与补偿信息。"
+              onChanged={() => refreshBatches(selectedBatchDetail?.id ?? selectedBatchState ?? undefined)}
             />
             <TaxProfilePanel
               profiles={profiles}

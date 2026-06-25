@@ -224,6 +224,7 @@ export function VouchersPage() {
         resourceType="voucher"
         resourceId={detail?.id ?? selectedId}
         emptyHint="选择凭证后，可查看该凭证的运行状态、授权状态、重试与补偿信息。"
+        onChanged={() => refresh(detail?.id ?? selectedId ?? undefined)}
       />
 
       {/* Process flow */}

@@ -38,13 +38,15 @@ interface WorkflowRuntimeCardProps {
   resourceType: WorkflowResourceType;
   resourceId?: string | null;
   emptyHint: string;
+  onChanged?: () => Promise<void> | void;
 }
 
 export function WorkflowRuntimeCard({
   title,
   resourceType,
   resourceId,
-  emptyHint
+  emptyHint,
+  onChanged
 }: WorkflowRuntimeCardProps) {
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState(false);
@@ -162,6 +164,7 @@ export function WorkflowRuntimeCard({
     setActing(true);
     try {
       await retryWorkflowCommand(latestCommand.id);
+      await onChanged?.();
       message.success("已加入重试队列");
       await loadRuntime();
     } catch (err) {
@@ -176,6 +179,7 @@ export function WorkflowRuntimeCard({
     setActing(true);
     try {
       await cancelWorkflowCommand(latestCommand.id);
+      await onChanged?.();
       message.success("已取消当前命令");
       await loadRuntime();
     } catch (err) {
@@ -198,6 +202,7 @@ export function WorkflowRuntimeCard({
         reason: compensationReason.trim(),
         notes: compensationNotes.trim()
       });
+      await onChanged?.();
       message.success("已发起人工补偿");
       setCompensationOpen(false);
       setCompensationReason("");

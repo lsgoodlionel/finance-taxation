@@ -42,8 +42,10 @@ export function TasksPage() {
     try {
       const payload = await listTasks(navEventId || undefined, onlyOverdue);
       setTasks(payload.items);
+      return payload.items;
     } catch (err) {
       toast.error((err as Error).message);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -79,6 +81,13 @@ export function TasksPage() {
       toast.error((err as Error).message);
     } finally {
       setRemindingId(null);
+    }
+  }
+
+  async function handleRuntimeChanged() {
+    const items = await loadTasks(overdueOnly);
+    if (detailTask?.id && items) {
+      setDetailTask(items.find((task) => task.id === detailTask.id) ?? null);
     }
   }
 
@@ -185,6 +194,7 @@ export function TasksPage() {
         resourceType="task"
         resourceId={runtimeTaskId}
         emptyHint="选择一个任务后，可查看其执行状态、授权状态、重试与补偿信息。"
+        onChanged={() => handleRuntimeChanged()}
       />
 
       {/* Main content */}

@@ -133,6 +133,13 @@ export function PayrollTransferPage() {
     } finally { setBusy(false); }
   }
 
+  async function handleRuntimeChanged() {
+    await loadBatches();
+    if (selected?.batch.id) {
+      await selectBatch(selected.batch.id);
+    }
+  }
+
   const totalAmount = batches.reduce((s, b) => s + Number(b.total_amount), 0);
   const disbursedCount = batches.filter(b => b.status === "disbursed" || b.status === "confirmed").length;
   const st = selected?.batch.status;
@@ -159,6 +166,7 @@ export function PayrollTransferPage() {
         resourceType="payroll"
         resourceId={selected?.batch.id ?? batches[0]?.id ?? null}
         emptyHint="选择代发批次后，可查看该批次的运行状态、授权状态、重试与补偿信息。"
+        onChanged={() => handleRuntimeChanged()}
       />
 
       <div className="v3-result-grid v3-result-grid--wide">
