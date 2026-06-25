@@ -46,6 +46,21 @@ export async function buildBatchRoute(req: ApiRequest, res: ServerResponse): Pro
     const result = await buildBatchFromPayroll(req.auth!.companyId, body.period, {
       bankAccountId: body.bankAccountId,
     });
+    await withTransaction(async (client) => {
+      await ensureWorkflowRun(
+        client,
+        buildWorkflowRun({
+          companyId: req.auth!.companyId,
+          workflowKey: "payroll.transfer.lifecycle",
+          resourceType: "payroll",
+          resourceId: result.batchId,
+          resourceLabel: body.period!,
+          currentState: "draft",
+          initiatorUserId: req.auth!.userId,
+          initiatorName: req.auth!.username
+        })
+      );
+    });
     json(res, 201, { ok: true, ...result });
   } catch (err) {
     json(res, 400, { error: err instanceof Error ? err.message : "生成代发批次失败" });
@@ -65,7 +80,49 @@ export async function getBatchRoute(req: ApiRequest, res: ServerResponse, batchI
 
 export async function approveBatchRoute(req: ApiRequest, res: ServerResponse, batchId: string): Promise<void> {
   try {
+    const existing = await queryOne<{ id: string; payroll_period: string; status: string }>(
+      "SELECT id, payroll_period, status FROM payroll_transfer_batches WHERE id=$1 AND company_id=$2",
+      [batchId, req.auth!.companyId],
+    );
+    if (!existing) {
+      json(res, 404, { error: "代发批次不存在" }); return;
+    }
+    const previousState = mapPayrollTransferBatchStatusToWorkflowState(existing.status);
+    const nextState = mapPayrollTransferBatchStatusToWorkflowState("approved");
+    const transitionValidation = validateWorkflowTransition(previousState, nextState);
+    if (!transitionValidation.ok) {
+      json(res, 400, { error: transitionValidation.message, code: transitionValidation.errorCode }); return;
+    }
     await approveBatch(req.auth!.companyId, batchId, req.auth!.userId);
+    await withTransaction(async (client) => {
+      const run = await ensureWorkflowRun(
+        client,
+        buildWorkflowRun({
+          companyId: req.auth!.companyId,
+          workflowKey: "payroll.transfer.lifecycle",
+          resourceType: "payroll",
+          resourceId: batchId,
+          resourceLabel: existing.payroll_period,
+          currentState: previousState,
+          initiatorUserId: req.auth!.userId,
+          initiatorName: req.auth!.username
+        })
+      );
+      const transition = buildWorkflowTransitionRecord({
+        companyId: req.auth!.companyId,
+        workflowRunId: run.id,
+        resourceType: "payroll",
+        resourceId: batchId,
+        previousState,
+        nextState,
+        actorUserId: req.auth!.userId,
+        actorName: req.auth!.username,
+        basis: "payroll.approve",
+        ruleVersion: "v4-1a"
+      });
+      await insertWorkflowTransition(client, transition);
+      await updateWorkflowRunState(client, run.id, nextState, null, transition.occurredAt);
+    });
     json(res, 200, { ok: true });
   } catch (err) {
     json(res, 400, { error: err instanceof Error ? err.message : "审批失败" });
@@ -77,7 +134,51 @@ export async function downloadBatchFileRoute(req: ApiRequest, res: ServerRespons
   const formatParam = url.searchParams.get("format") ?? "generic";
   const format: TransferFileFormat = formatParam === "cmb" ? "cmb" : "generic";
   try {
+    const existing = await queryOne<{ id: string; payroll_period: string; status: string; updated_at: string | Date }>(
+      "SELECT id, payroll_period, status, updated_at FROM payroll_transfer_batches WHERE id=$1 AND company_id=$2",
+      [batchId, req.auth!.companyId],
+    );
+    if (!existing) {
+      json(res, 404, { error: "代发批次不存在" }); return;
+    }
     const file = await generateBatchFile(req.auth!.companyId, batchId, format);
+    if (existing.status === "approved") {
+      const previousState = mapPayrollTransferBatchStatusToWorkflowState(existing.status);
+      const nextState = mapPayrollTransferBatchStatusToWorkflowState("exported");
+      const transitionValidation = validateWorkflowTransition(previousState, nextState);
+      if (!transitionValidation.ok) {
+        json(res, 400, { error: transitionValidation.message, code: transitionValidation.errorCode }); return;
+      }
+      await withTransaction(async (client) => {
+        const run = await ensureWorkflowRun(
+          client,
+          buildWorkflowRun({
+            companyId: req.auth!.companyId,
+            workflowKey: "payroll.transfer.lifecycle",
+            resourceType: "payroll",
+            resourceId: batchId,
+            resourceLabel: existing.payroll_period,
+            currentState: previousState,
+            initiatorUserId: req.auth!.userId,
+            initiatorName: req.auth!.username
+          })
+        );
+        const transition = buildWorkflowTransitionRecord({
+          companyId: req.auth!.companyId,
+          workflowRunId: run.id,
+          resourceType: "payroll",
+          resourceId: batchId,
+          previousState,
+          nextState,
+          actorUserId: req.auth!.userId,
+          actorName: req.auth!.username,
+          basis: `payroll.export:${format}`,
+          ruleVersion: "v4-1a"
+        });
+        await insertWorkflowTransition(client, transition);
+        await updateWorkflowRunState(client, run.id, nextState, null, new Date().toISOString());
+      });
+    }
     res.writeHead(200, {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${encodeURIComponent(file.fileName)}"`,
