@@ -88,8 +88,21 @@ npm run verify:v4
 生产认证阶段额外执行：
 
 ```bash
+npm run v4:ops:init-sources
+npm run v4:ops
 npm run test:load
 npm run test:backup-restore
 npm run test:connectors
 npm run test:ai-evals
 ```
+
+说明：
+
+- `test:db` 当前对应 `tools/v4/workflow-runtime-db.test.ts`，覆盖 workflow tables 与 runtime route/db 合同。
+- `verify:v4` 会串联类型检查、单元、DB、V4 工具测试、验收报告生成、产物校验和进度板校验。
+- `v4:ops:init-sources` 会先生成 `artifacts/v4/baseline/ops-sources/*.json` 模板；`v4:ops` 再生成 `artifacts/v4/baseline/ops/*.json`；随后 `test:load / test:backup-restore / test:connectors / test:ai-evals` 直接按这些证据做机器判定。
+- `v4:ops:record` 可将外部 JSON 直接回填到标准来源文件，例如：
+  - `npm run v4:ops:record -- connectors --input docs/v4/examples/ops-source-samples/connector-certification.json`
+  - `npm run v4:ops:record -- backup-restore --input docs/v4/examples/ops-source-samples/backup-drill.json`
+  - `npm run v4:ops:record -- ai-evals --input docs/v4/examples/ops-source-samples/ai-evals.json`
+- `v4:ops` 当前通过 `bash tools/v4/run-production-gates-generation.sh` 采集本地健康探针样本，再交给 `tools/v4/run-production-gates-generation.mjs` 归并证据；如运行环境禁止回环探针，可显式传入 `--health-probe-latencies <csv>` 完成 `load` 证据归档。
