@@ -16,6 +16,10 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { VouchersList } from "./vouchers/VouchersList";
 import { VoucherDetailPanel } from "./vouchers/VoucherDetailPanel";
 import { VoucherCreateModal } from "./vouchers/VoucherCreateModal";
+import { useAccessUser } from "../features/runtime/useAccessUser";
+import { deriveVoucherRuntimeSummary } from "../features/runtime/workflow-runtime";
+import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
+import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
 
 const { Text } = Typography;
 
@@ -37,6 +41,8 @@ export function VouchersPage() {
   const [updating,  setUpdating]  = useState(false);
   const [creating,  setCreating]  = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [runtimeActionKey, setRuntimeActionKey] = useState<string | null>(null);
+  const accessUser = useAccessUser();
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
 
@@ -192,6 +198,38 @@ export function VouchersPage() {
       },
     });
   }, [detail]);
+  const localRuntimeSummary = useMemo(
+    () => deriveVoucherRuntimeSummary(vouchers, detail, accessUser?.roleIds ?? []),
+    [accessUser?.roleIds, detail, vouchers]
+  );
+  const runtimeSummary = useWorkflowRuntimeSummary(
+    "vouchers",
+    {
+      businessEventId: navEventId ?? undefined,
+      voucherId: detail?.id ?? selectedId ?? undefined
+    },
+    localRuntimeSummary
+  );
+
+  async function handleRuntimeAction(action: NonNullable<typeof runtimeSummary.actions>[number]) {
+    if (action.key !== "retry-voucher-validate" || !action.params?.voucherId) {
+      return;
+    }
+    setRuntimeActionKey(action.key);
+    try {
+      const result = await validateVoucher(action.params.voucherId);
+      setValidation(result);
+      if (result.valid) {
+        toast.success("凭证重新校验通过");
+      } else {
+        toast.error(result.issues[0] || "凭证仍未通过校验");
+      }
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setRuntimeActionKey(null);
+    }
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -217,6 +255,12 @@ export function VouchersPage() {
           message={<>当前筛选事项 <Text code>{navEventId}</Text> 的关联凭证。</>}
         />
       )}
+      <WorkflowRuntimePanel
+        title="凭证运行态与授权态"
+        summary={runtimeSummary}
+        onAction={(action) => void handleRuntimeAction(action)}
+        busyActionKey={runtimeActionKey}
+      />
 
       {/* Process flow */}
       {detail && (

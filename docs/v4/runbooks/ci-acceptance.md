@@ -97,3 +97,13 @@ Per the V4-0 plan, a product-flow gap may remain temporarily only when:
 - If the CI runner blocks loopback health probes, call `node --import tsx tools/v4/run-production-gates-generation.mjs --repo-root <repo> --health-probe-latencies <csv>` after collecting latency samples through the runner's approved network path.
 - Local reference: when the V4 docker test stack exposes `127.0.0.1:33100`, `npm run v4:ops` has been verified to produce `load.json` with `source: playwright-and-health-probe`.
 - Evidence field requirements and thresholds are defined in `docs/v4/acceptance-evidence-schema.md`.
+- Private-cloud release review also requires the supplemental documentation
+  packet in:
+  - `docs/v4/runbooks/private-cloud-release-evidence.md`
+  - `docs/v4/runbooks/security-evidence.md`
+  - `docs/v4/runbooks/monitoring-evidence.md`
+  - `docs/v4/runbooks/object-storage-evidence.md`
+  - `docs/v4/runbooks/key-management-evidence.md`
+- CI may retain `artifacts/v4/baseline/ops/*.sample.json` for structure
+  validation, but production approval must use non-sample copies with
+  `requiresBackfill` cleared and reviewer fields populated.

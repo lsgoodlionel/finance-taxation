@@ -273,12 +273,58 @@
     - `backup-restore`
     - `connectors`
     - `ai-evals`
+- `2026-07-07` 已继续收口 `V4-4` runtime repair 回归入口：
+  - 已将 `tests/e2e/smoke/runtime-summary-pages.spec.ts` 升级为共享 runtime repair smoke，覆盖：
+    - `tasks`：阻塞任务重开；
+    - `vouchers`：凭证重新校验；
+    - `payroll-transfer`：工资代发补偿修复。
+  - `tax` 页面保留独立 repair smoke `tests/e2e/smoke/tax-runtime-repair.spec.ts`，但已与共享面板 smoke 合并到同一条 Playwright 回归命令执行，避免税务页因特殊初始化链影响其他页面夹具稳定性。
+  - 当前统一回归命令已通过：
+    - `npx playwright test tests/e2e/smoke/runtime-summary-pages.spec.ts tests/e2e/smoke/tax-runtime-repair.spec.ts tests/e2e/smoke/payroll-transfer-runtime-repair.spec.ts --project=desktop-chromium --workers=1`
+- `2026-07-08` 已继续收口 `V4-4 / V4-5` 最后集成门禁：
+  - 已补 runtime contract 第二轮断言：
+    - `tasks` 阻塞任务重开后，`runtime/tasks` summary 会收敛为 `waiting`；
+    - `tax` 选中批次复核通过后，`runtime/tax` 不再被历史 `review_required` 项卡在失败态；
+    - `vouchers` 重新校验通过后，不再继续暴露 `retry-voucher-validate`；
+    - `payroll-transfer` 补偿成功后收敛为成功态，再次补偿走 `reused=true` 幂等复用。
+  - 已将 `V4-5 production gates` 正式接入总门禁：
+    - `package.json` 新增 `verify:v4:ops`；
+    - `verify:v4` 现会在主验收链尾部串联 `v4:ops:init-sources -> v4:ops -> test:load / test:backup-restore / test:connectors / test:ai-evals`；
+    - `.github/workflows/ci.yml` 的 `v4-acceptance` job 也已补入同一条 V4-5 gate 链。
+  - 已补私有云发布证据补充层：
+    - `docs/v4/runbooks/private-cloud-release-evidence.md`
+    - `security / monitoring / object-storage / key-management` 四份专题 runbook
+    - `artifacts/v4/baseline/ops/*.sample.json` 轻量样例证据
+    - `docs/v4/audits/v4-5-private-cloud-evidence-gap-2026-07-08.md` 缺口审计记录
+  - 已补来源文件 envelope 与导入校验：
+    - `backup-restore / connectors / ai-evals` 现统一支持 `metadata` 外层字段；
+    - `record -> ops-sources -> v4:ops -> production gates` 链路会保留 `sourceContext` 与更清晰的失败语义。
+  - 已补导出任务 / 工资代发补偿的审计可见性收口：
+    - 审计页资源类型新增 `export_job`、`payroll_transfer_batch`；
+    - `resolveAuditLogTarget` 已支持回跳到 `/pdf-export` 与 `/payroll/transfer`；
+    - 审计列表动作标签新增 `reuse / retry / payroll.transfer.disbursed / payroll.transfer.compensated`；
+    - 导出审计面板现在可显示动作中文标签与重试/失败原因摘要。
+  - 当前已通过的本地验证：
+    - `node --import tsx --test apps/api/src/modules/runtime/summary.test.ts`
+    - `node --import tsx --test tools/v4/ops-source-recorders.test.ts tools/v4/init-ops-sources.test.ts tools/v4/record-ops-source.test.ts tools/v4/generate-production-gates.test.ts`
+    - `node --import tsx --test apps/web/src/pages/drilldown.test.ts`
+    - `node --import tsx --test apps/web/src/pages/export/export-panels.test.tsx`
+  - 已补审计回跳上下文恢复与页面级 smoke：
+    - `DrilldownState` 新增 `scene`，`/pdf-export` 现可按审计来源恢复导出场景并高亮目标导出任务；
+    - `/payroll/transfer` 现可按审计来源恢复代发批次与工资期间上下文；
+    - 审计日志表已增加横向滚动容器，避免右侧“跳转”列被详情区挤压导致不可点击；
+    - 新增 `tests/e2e/smoke/audit-drilldown-context.spec.ts`，覆盖：
+      - `export_job -> /pdf-export`
+      - `payroll_transfer_batch -> /payroll/transfer`
+  - 当前已通过的追加验证：
+    - `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit`
+    - `node --import tsx --test apps/web/src/pages/drilldown.test.ts apps/web/src/pages/export/export-panels.test.tsx`
+    - `V4_BASE_URL=http://127.0.0.1:55179 npx playwright test tests/e2e/smoke/audit-drilldown-context.spec.ts --project=desktop-chromium`
 
 ## 下一批未完成重点
 
 - V4-4：
-  - 将 `tasks / tax / vouchers / payroll-transfer` 的 runtime repair 动作继续补齐真实后端与浏览器证据，统一到同一套回归入口。
-  - 将导出任务、工资代发补偿与审计日志的跨对象联动再补一轮 UI/DB 验证，确认失败重试、重复点击与补偿复用都可追溯。
+  - 在具备非沙箱本地数据库回环的环境下，复跑 `tools/v4/workflow-runtime-db.test.ts` 与 `exports/payroll transfer` 相关 DB/API 合同测试，补最终证据。
 - V4-5：
-  - 补备份恢复、连接器认证、AI 评测三类真实来源文件，而不只保留模板与失败占位。
-  - 继续补私有云发布门禁所需的安全、监控、对象存储和密钥管理落地证据。
+  - 用真实环境回填 `private-cloud-evidence-manifest.json` 与四类专题证据，替换当前 `.sample.json` 样例。
+  - 在 CI 或本机真实网络环境再跑一次 `verify:v4` 全链与四条 production gates，形成最终发布证据。

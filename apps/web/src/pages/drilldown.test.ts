@@ -88,15 +88,47 @@ assert(employeeTarget?.state?.employeeId === "emp-1", "expected employee drilldo
 assert(employeeTarget?.state?.tab === "employees", "expected employee drilldown to open employee tab");
 assert(employeeTarget?.state?.resourceType === "employee", "expected employee drilldown to preserve resource type");
 
+const exportJobLog: AuditLog = {
+  ...voucherLog,
+  id: "audit-4",
+  action: "retry",
+  resourceType: "export_job",
+  resourceId: "job-1",
+  resourceLabel: "利润表 2026-05",
+  changes: { kind: "report", retryCount: 1 }
+};
+
+const exportJobTarget = resolveAuditLogTarget(exportJobLog);
+assert(exportJobTarget?.path === "/pdf-export", "expected export job log to resolve to export page");
+assert(exportJobTarget?.state?.resourceType === "export_job", "expected export job drilldown to preserve resource type");
+assert(exportJobTarget?.state?.scene === "reports", "expected export job drilldown to infer report scene");
+
+const payrollTransferLog: AuditLog = {
+  ...voucherLog,
+  id: "audit-5",
+  action: "payroll.transfer.compensated",
+  resourceType: "payroll_transfer_batch",
+  resourceId: "ptb-1",
+  resourceLabel: "2026-05 工资代发批次",
+  changes: { payrollPeriod: "2026-05", eventId: "evt-1" }
+};
+
+const payrollTransferTarget = resolveAuditLogTarget(payrollTransferLog);
+assert(payrollTransferTarget?.path === "/payroll/transfer", "expected payroll transfer log to resolve to payroll transfer page");
+assert(payrollTransferTarget?.state?.resourceType === "payroll_transfer_batch", "expected payroll transfer drilldown to preserve resource type");
+assert(payrollTransferTarget?.state?.payrollPeriod === "2026-05", "expected payroll transfer drilldown to keep payroll period");
+
 const normalized = normalizeDrilldownState({
   voucherId: "voucher-2",
   payrollPeriod: "2026-05",
   tab: "payroll",
+  scene: "reports",
   focus: "payroll-risk",
   riskScope: "payroll"
 });
 assert(normalized.voucherId === "voucher-2", "expected voucher id to be normalized");
 assert(normalized.payrollPeriod === "2026-05", "expected payroll period to be normalized");
+assert(normalized.scene === "reports", "expected scene to be normalized");
 assert(normalized.focus === "payroll-risk", "expected focus to be normalized");
 assert(normalized.riskScope === "payroll", "expected risk scope to be normalized");
 

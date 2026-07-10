@@ -36,10 +36,13 @@ import { EventListPanel } from "./events/EventListPanel";
 import { EventCreatePanel } from "./events/EventCreatePanel";
 import { EventDetailPanel } from "./events/EventDetailPanel";
 import { AiEventInsights } from "./events/AiEventInsights";
+import { deriveContractRevenueSummary } from "./events/contract-revenue-summary";
+import { derivePurchaseExceptionSummary } from "./events/purchase-exception-summary";
+import { deriveTravelExceptionSummary } from "./events/travel-exception-summary";
 
 const EVENT_TYPE_KEYS = [
   "sales", "procurement", "expense", "payroll",
-  "tax", "asset", "financing", "rnd", "general"
+  "tax", "asset", "financing", "rnd", "general", "purchase_expense", "travel_expense", "contract_revenue"
 ] as const;
 
 const STATUS_OPTION_KEYS: BusinessEventStatus[] = [
@@ -274,6 +277,19 @@ export function EventsPage() {
     () => nextFlowNode?.documents ?? currentFlowNode?.documents ?? [],
     [currentFlowNode, nextFlowNode]
   );
+  const purchaseExceptionSummary = useMemo(
+    () => (detail ? derivePurchaseExceptionSummary(detail.type, detail.description) : null),
+    [detail]
+  );
+  const travelExceptionSummary = useMemo(
+    () => (detail ? deriveTravelExceptionSummary(detail.type, detail.description) : null),
+    [detail]
+  );
+  const contractRevenueSummary = useMemo(
+    () => (detail ? deriveContractRevenueSummary(detail.type, detail.description) : null),
+    [detail]
+  );
+  const exceptionSummary = purchaseExceptionSummary ?? travelExceptionSummary ?? contractRevenueSummary;
 
   const isBusy = loading !== "done" && loading !== "idle";
   const eventTypeOptions = useMemo(
@@ -404,6 +420,32 @@ export function EventsPage() {
               tone="info"
               message={`下游对象：任务 ${detail.tasks.length} 项、单据 ${detail.generatedDocuments.length} 份、凭证 ${detail.vouchers.length} 张、税务事项 ${detail.taxItems.length} 条。建议先完成当前步骤，再进入对应结果页。`}
             />
+            {exceptionSummary && (
+              <div
+                style={{
+                  marginTop: 12,
+                  marginBottom: 16,
+                  borderRadius: 16,
+                  border: exceptionSummary.tone === "error"
+                    ? "1px solid rgba(185,28,28,0.18)"
+                    : "1px solid rgba(217,119,6,0.18)",
+                  background: exceptionSummary.tone === "error"
+                    ? "rgba(254,242,242,0.92)"
+                    : "rgba(255,251,235,0.96)",
+                  padding: "14px 16px",
+                  display: "grid",
+                  gap: 8
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{exceptionSummary.title}</div>
+                <div style={{ fontSize: 13.5, lineHeight: 1.7 }}>{exceptionSummary.summary}</div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.8 }}>
+                  {exceptionSummary.bullets.map((bullet) => (
+                    <li key={bullet}>{bullet}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {processFlowContext && (
               <div style={{ marginTop: 16, marginBottom: 24 }}>
                 <ProcessFlowCard

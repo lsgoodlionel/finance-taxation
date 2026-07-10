@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
+  API_BASE_URL,
   createExportJob,
   describePageLoadError,
   getDocumentDetail,
@@ -20,7 +22,7 @@ import {
   listReportSnapshots,
   listTaxItems,
   listVouchers,
-  updateExportJobStatus
+  updateExportJobRuntime
 } from "../lib/api";
 import type {
   AuditLog,
@@ -42,6 +44,7 @@ import { buildPrintableDocumentHtml } from "./document-relations";
 import { buildExportFileName } from "./pdf-export-utils";
 import { ResultBanner } from "../components/ui/ResultBanner";
 import { useQueryState } from "../hooks/useQueryState";
+import { normalizeDrilldownState } from "./drilldown";
 import { ExportArchivePanel } from "./export/ExportArchivePanel";
 import { ExportAuditPanel } from "./export/ExportAuditPanel";
 import { ExportDocumentsPanel } from "./export/ExportDocumentsPanel";
@@ -57,8 +60,6 @@ import { ExportSceneSummary } from "./export/ExportSceneSummary";
 import { ExportShell } from "./export/ExportShell";
 import { ExportTaxPanel } from "./export/ExportTaxPanel";
 import { ExportVouchersPanel } from "./export/ExportVouchersPanel";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 
 function openPdf(path: string) {
   const token = getStoredToken();
@@ -210,6 +211,10 @@ function escHtml(value: string) {
 }
 
 export function PdfExportPage() {
+  const location = useLocation();
+  const navState = normalizeDrilldownState(location.state);
+  const navExportJobId = navState.resourceType === "export_job" ? navState.resourceId ?? null : null;
+  const navScene = navState.scene ?? null;
   const [periods, setPeriods] = useState<PayrollPeriodSummary[]>([]);
   const [snapshots, setSnapshots] = useState<ReportSnapshot[]>([]);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
@@ -277,6 +282,29 @@ export function PdfExportPage() {
     bootstrap();
   }, []);
 
+  useEffect(() => {
+    if (!navScene) {
+      return;
+    }
+    const matchedScene = EXPORT_SCENES.find((item) => item.key === navScene);
+    if (!matchedScene || matchedScene.key === activeTab) {
+      return;
+    }
+    setActiveTabState(matchedScene.key);
+  }, [activeTab, navScene, setActiveTabState]);
+
+  useEffect(() => {
+    if (!navExportJobId) {
+      return;
+    }
+    const matchedJob = exportHistory.find((item) => item.id === navExportJobId);
+    if (matchedJob) {
+      setMessage(`已从审计日志恢复到导出任务 ${matchedJob.label}。`);
+      return;
+    }
+    setMessage(`已从审计日志恢复导出上下文，目标任务 ${navExportJobId}。`);
+  }, [exportHistory, navExportJobId]);
+
   function toggleSelection(id: string, setter: (updater: (current: string[]) => string[]) => void) {
     setter((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
@@ -306,7 +334,10 @@ export function PdfExportPage() {
 
   async function handleUpdateExportStatus(jobId: string, status: ExportJob["status"]) {
     try {
-      const { job } = await updateExportJobStatus(jobId, status);
+      const { job } = await updateExportJobRuntime(jobId, {
+        status,
+        errorMessage: status === "failed" ? "导出已打开但文件整理或外部连接器处理失败，请人工复核后重试。" : undefined
+      });
       setExportHistory((current) => current.map((item) => item.id === job.id ? job : item));
       const auditRes = await listAuditLogs({ resourceType: "export_job", limit: 20 });
       setExportAuditLogs(auditRes.items);
@@ -636,6 +667,7 @@ export function PdfExportPage() {
       history={(
         <ExportHistoryPanel
           jobs={exportHistory}
+          highlightedJobId={navExportJobId}
           onUpdateStatus={(jobId, status) => void handleUpdateExportStatus(jobId, status)}
           renderActionButton={btnExport}
           cellStyle={cellStyle}

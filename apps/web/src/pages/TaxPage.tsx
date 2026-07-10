@@ -43,6 +43,10 @@ import { TaxCalendar } from "./tax/TaxCalendar";
 import { VatDeclarationWizard } from "./tax/VatDeclarationWizard";
 import { DeclarationExportPanel } from "./tax/DeclarationExportPanel";
 import { TaxWorkspaceSummary } from "./tax/TaxWorkspaceSummary";
+import { useAccessUser } from "../features/runtime/useAccessUser";
+import { deriveTaxRuntimeSummary } from "../features/runtime/workflow-runtime";
+import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
+import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
 
 const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
   vat: "增值税底稿",
@@ -107,6 +111,8 @@ export function TaxPage() {
   });
   const [showHelp, setShowHelp] = useState(false);
   const [vatWizardOpen, setVatWizardOpen] = useState(false);
+  const [runtimeActionKey, setRuntimeActionKey] = useState<string | null>(null);
+  const accessUser = useAccessUser();
 
   useEffect(() => {
     async function bootstrap() {
@@ -309,6 +315,41 @@ export function TaxPage() {
   const selectedBatchLabel = selectedBatchDetail
     ? `${selectedBatchDetail.taxType} · ${selectedBatchDetail.filingPeriod}`
     : batches.find((item) => item.id === selectedBatchState)?.id || "";
+  const localRuntimeSummary = deriveTaxRuntimeSummary(
+    items,
+    batches,
+    selectedBatchDetail,
+    profiles,
+    accessUser?.roleIds ?? []
+  );
+  const runtimeSummary = useWorkflowRuntimeSummary(
+    "tax",
+    {
+      batchId: (selectedBatchDetail?.id ?? selectedBatchState) || undefined,
+      businessEventId: navEventId ?? undefined
+    },
+    localRuntimeSummary
+  );
+
+  async function handleRuntimeAction(action: NonNullable<typeof runtimeSummary.actions>[number]) {
+    if (action.key !== "retry-tax-review" || !action.params?.batchId) {
+      return;
+    }
+    setRuntimeActionKey(action.key);
+    try {
+      const detail = await reviewTaxFilingBatch(action.params.batchId, {
+        reviewResult: "approved",
+        reviewNotes: "runtime quick retry"
+      });
+      setSelectedBatchDetail(detail);
+      await refreshBatches(action.params.batchId);
+      setNotice({ tone: "success", message: `批次 ${action.params.batchId} 已重新复核。` });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    } finally {
+      setRuntimeActionKey(null);
+    }
+  }
 
   return (
     <section style={{ display: "grid", gap: "20px" }}>
@@ -319,6 +360,12 @@ export function TaxPage() {
         summary={(
           <>
             <TaxCalendar batches={batches} onStartVatDeclaration={() => setVatWizardOpen(true)} />
+            <WorkflowRuntimePanel
+              title="税务运行态与授权态"
+              summary={runtimeSummary}
+              onAction={(action) => void handleRuntimeAction(action)}
+              busyActionKey={runtimeActionKey}
+            />
             <TaxWorkspaceSummary
               itemCount={items.length}
               batchCount={batches.length}

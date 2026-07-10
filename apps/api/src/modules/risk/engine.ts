@@ -9,6 +9,9 @@ import type {
   Task,
   Voucher
 } from "@finance-taxation/domain-model";
+import { resolveContractRevenueScenario } from "../events/contract-revenue-rules.js";
+import { resolvePurchaseExpenseScenario } from "../events/purchase-expense-rules.js";
+import { resolveTravelExpenseScenario } from "../events/travel-expense-rules.js";
 
 interface RiskEvaluationInput {
   now: string;
@@ -56,6 +59,7 @@ function isPayrollRelevantTaxItem(item: TaxItem, keyword: string): boolean {
 
 export function evaluateRiskFindings(input: RiskEvaluationInput): RiskFinding[] {
   const { event, now } = input;
+  const eventType = String(event.type);
   const findings: RiskFinding[] = [];
   const eventLedgerEntries = input.ledgerEntries.filter((entry) => entry.businessEventId === event.id);
   const eventVouchers = input.vouchers.filter((voucher) => voucher.businessEventId === event.id);
@@ -157,6 +161,126 @@ export function evaluateRiskFindings(input: RiskEvaluationInput): RiskFinding[] 
           "medium",
           "采购事项缺少发票或付款依据",
           "采购事项已经过账，但未找到发票、付款单或回单等支持资料。"
+        )
+      );
+    }
+  }
+
+  if (eventType === "purchase_expense" || eventType === "expense") {
+    const scenario = resolvePurchaseExpenseScenario(event);
+    if (scenario.missingInvoiceBundle || scenario.risks.includes("unsupported_tax_deduction")) {
+      findings.push(
+        buildFinding(
+          event,
+          now,
+          "UNSUPPORTED_TAX_DEDUCTION",
+          "high",
+          "报销事项缺少可税前扣除或抵扣依据",
+          "当前事项缺少完整票据包或发票依据，不应直接确认进项抵扣或最终税前扣除。"
+        )
+      );
+    }
+    if (scenario.duplicateInvoice || scenario.risks.includes("duplicate_reimbursement")) {
+      findings.push(
+        buildFinding(
+          event,
+          now,
+          "DUPLICATE_REIMBURSEMENT",
+          "high",
+          "疑似重复报销或重复抵扣",
+          "当前事项存在重复提交或重复发票线索，需先复核后再进入凭证和税务处理。"
+        )
+      );
+    }
+    if (scenario.classificationConflict || scenario.risks.includes("expense_overstatement")) {
+      findings.push(
+        buildFinding(
+          event,
+          now,
+          "EXPENSE_OVERSTATEMENT",
+          "high",
+          "高价值采购疑似误计费用",
+          "当前事项更接近固定资产或采购口径，若直接计入费用可能造成当期费用高估。"
+        )
+      );
+    }
+  }
+
+  if (eventType === "travel_expense") {
+    const scenario = resolveTravelExpenseScenario(event);
+    if (scenario.missingHotelInvoice || scenario.risks.includes("unsupported_travel_cost")) {
+      findings.push(
+        buildFinding(
+          event,
+          now,
+          "UNSUPPORTED_TRAVEL_COST",
+          "high",
+          "差旅事项缺少完整住宿或行程依据",
+          "当前差旅事项缺少完整住宿发票或行程凭证，不应直接形成完整抵扣或税前扣除结论。"
+        )
+      );
+    }
+    if (scenario.duplicateClaim || scenario.risks.includes("duplicate_reimbursement")) {
+      findings.push(
+        buildFinding(
+          event,
+          now,
+          "DUPLICATE_REIMBURSEMENT",
+          "high",
+          "疑似重复提交差旅报销",
+          "当前事项存在重复差旅报销线索，需先核对历史行程、票据和入账记录。"
+        )
+      );
+    }
+    if (scenario.accountingPeriodConflict || scenario.risks.includes("cutoff_misstatement")) {
+      findings.push(
+        buildFinding(
+          event,
+          now,
+          "CUTOFF_MISSTATEMENT",
+          "high",
+          "差旅费用归属期疑似错配",
+          "当前差旅报销存在跨期归属风险，需按出差实际期间拆分费用并复核税务月份。"
+        )
+      );
+    }
+  }
+
+  if (eventType === "contract_revenue") {
+    const scenario = resolveContractRevenueScenario(event);
+    if (scenario.missingAcceptanceRecord || scenario.risks.includes("premature_revenue_recognition")) {
+      findings.push(
+        buildFinding(
+          event,
+          now,
+          "PREMATURE_REVENUE_RECOGNITION",
+          "high",
+          "合同收入缺少充分履约依据",
+          "当前合同收入事项缺少验收或履约完成证据，不应直接确认主营业务收入。"
+        )
+      );
+    }
+    if (scenario.duplicateContract || scenario.risks.includes("revenue_overstatement")) {
+      findings.push(
+        buildFinding(
+          event,
+          now,
+          "REVENUE_OVERSTATEMENT",
+          "high",
+          "疑似重复确认合同收入",
+          "当前事项存在重复合同或重复收入确认线索，需先核对合同主链与历史入账记录。"
+        )
+      );
+    }
+    if (scenario.revenueTimingConflict || scenario.risks.includes("tax_accounting_timing_difference")) {
+      findings.push(
+        buildFinding(
+          event,
+          now,
+          "TAX_ACCOUNTING_TIMING_DIFFERENCE",
+          "high",
+          "合同收入税会确认时点存在差异",
+          "当前合同收入涉及分期履约或跨期确认，需分别复核销项税和所得税收入归属时点。"
         )
       );
     }

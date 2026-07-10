@@ -77,6 +77,20 @@ npm run test:ai-evals
 
 Field requirements and thresholds follow `docs/v4/acceptance-evidence-schema.md`.
 
+For V4-5 private-cloud release review, also prepare the supplemental evidence
+layer described in:
+
+- `docs/v4/runbooks/private-cloud-release-evidence.md`
+- `docs/v4/runbooks/security-evidence.md`
+- `docs/v4/runbooks/monitoring-evidence.md`
+- `docs/v4/runbooks/object-storage-evidence.md`
+- `docs/v4/runbooks/key-management-evidence.md`
+
+Use the sample files under `artifacts/v4/baseline/ops/*.sample.json` only as
+fillable templates. Before production sign-off, copy them to non-sample
+filenames, replace every field listed in `requiresBackfill`, and set
+`sample: false`.
+
 ## How To Read The Report
 
 - Check `summary` first for total/pass/fail/blocked counts.

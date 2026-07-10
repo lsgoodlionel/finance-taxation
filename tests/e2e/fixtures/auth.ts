@@ -23,6 +23,7 @@ const USERS: Record<V4Role, { username: string; password: string }> = {
 export async function loginAs(page: Page, role: V4Role): Promise<void> {
   const user = USERS[role];
   const navTrigger = page.getByRole("button", { name: "打开导航菜单" }).or(page.getByLabel("主导航菜单"));
+  const commonLanding = page.getByRole("heading", { name: /AI 财税秘书|任务中心|税务中心|凭证中心|工资管理|工资代发与社保/i });
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await page.goto("/");
@@ -36,10 +37,15 @@ export async function loginAs(page: Page, role: V4Role): Promise<void> {
     await page.getByRole("button", { name: "登 录" }).click();
 
     try {
-      await expect(navTrigger).toBeVisible({ timeout: 10_000 });
+      await Promise.race([
+        expect(navTrigger).toBeVisible({ timeout: 10_000 }),
+        expect(commonLanding).toBeVisible({ timeout: 10_000 })
+      ]);
       await expect.poll(async () => {
         const url = page.url();
-        return url.endsWith("/") || /\/assistant$/.test(url);
+        const hasToken = await page.evaluate(() => Boolean(window.localStorage.getItem("finance-taxation-v2-token")));
+        return hasToken &&
+          (url.endsWith("/") || /\/assistant(?:[?#]|$)/.test(url));
       }).toBeTruthy();
       return;
     } catch (error) {

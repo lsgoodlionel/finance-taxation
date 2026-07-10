@@ -42,6 +42,11 @@ import { PayrollRunSection } from "./payroll/PayrollRunSection";
 import { PayrollShell } from "./payroll/PayrollShell";
 import { PayrollTabBar, type PayrollTab } from "./payroll/PayrollTabBar";
 import { PayrollWorkflowSummary } from "./payroll/PayrollWorkflowSummary";
+import { useAccessUser } from "../features/runtime/useAccessUser";
+import { derivePayrollRuntimeSummary } from "../features/runtime/workflow-runtime";
+import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
+import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
+import { EmptyState } from "../components/ui/EmptyState";
 
 const EMPLOYEE_STATUS_LABELS: Record<string, string> = {
   active: "在职",
@@ -131,6 +136,10 @@ function buildPayrollNavigationState(
   };
 }
 
+function isPayrollPolicyMissingError(error: unknown) {
+  return error instanceof Error && error.message === "Payroll policy not configured";
+}
+
 export function PayrollPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -168,11 +177,14 @@ export function PayrollPage() {
   const [reviewLedgers, setReviewLedgers] = useState<PayrollTaxReviewLedger[]>([]);
   const [iitChecklist, setIitChecklist] = useState<string[]>([]);
   const [iitMaterialPeriod, setIitMaterialPeriod] = useState<string | null>(null);
+  const [runtimeActionKey, setRuntimeActionKey] = useState<string | null>(null);
 
   // policy tab
   const [policy, setPolicy] = useState<PayrollPolicy | null>(null);
   const [policyForm, setPolicyForm] = useState<Record<string, string>>({});
   const [editingPolicy, setEditingPolicy] = useState(false);
+  const [policyMissing, setPolicyMissing] = useState(false);
+  const accessUser = useAccessUser();
 
   useEffect(() => {
     async function bootstrap() {
@@ -222,16 +234,30 @@ export function PayrollPage() {
   }, [navPayrollPeriod]);
 
   async function loadAll() {
-    const [empRes, perRes, polRes] = await Promise.all([
+    const [empRes, perRes, policyResult] = await Promise.all([
       listEmployees(),
       getPayrollPeriods(),
       getPayrollPolicy()
+        .then((result) => ({ ok: true as const, result }))
+        .catch((error) => ({ ok: false as const, error }))
     ]);
     setEmployees(empRes.items);
     setPeriods(perRes.items);
-    setPolicy(polRes.policy);
-    setPolicyForm(policyToForm(polRes.policy));
-    setMessage(`已加载 ${empRes.total} 名员工，${perRes.total} 个工资期。`);
+    if (policyResult.ok) {
+      setPolicy(policyResult.result.policy);
+      setPolicyForm(policyToForm(policyResult.result.policy));
+      setPolicyMissing(false);
+      setMessage(`已加载 ${empRes.total} 名员工，${perRes.total} 个工资期。`);
+      return;
+    }
+    if (isPayrollPolicyMissingError(policyResult.error)) {
+      setPolicy(null);
+      setPolicyForm({});
+      setPolicyMissing(true);
+      setMessage("工资参数尚未配置。当前可先维护员工和期间，参数设置页会提示后续配置要求。");
+      return;
+    }
+    throw policyResult.error;
   }
 
   function policyToForm(p: PayrollPolicy): Record<string, string> {
@@ -437,6 +463,20 @@ export function PayrollPage() {
   });
   const payrollVoucherSuggestions = buildPayrollVoucherSuggestions(payrollRecords, linkedVouchers);
   const payrollRiskBuckets = buildPayrollRiskBuckets(linkedRisks);
+  const runtimePeriod = selectedPeriod || periods[0]?.period || customPeriod || "";
+  const localRuntimeSummary = derivePayrollRuntimeSummary(
+    runtimePeriod,
+    payrollRecords,
+    linkedEventId,
+    reviewLedgers,
+    linkedRisks.length,
+    accessUser?.roleIds ?? []
+  );
+  const runtimeSummary = useWorkflowRuntimeSummary(
+    "payroll",
+    { period: runtimePeriod || undefined },
+    localRuntimeSummary
+  );
 
   useEffect(() => {
     let active = true;
@@ -551,6 +591,23 @@ export function PayrollPage() {
     setMessage("参数设置已保存。");
   }
 
+  async function handleRuntimeAction(action: NonNullable<typeof runtimeSummary.actions>[number]) {
+    setRuntimeActionKey(action.key);
+    try {
+      if (action.key === "sync-payroll-review-ledgers") {
+        await handleSyncReviewLedgers();
+        return;
+      }
+      if (action.key === "create-payroll-event") {
+        await handleCreatePayrollEvent();
+        return;
+      }
+      setMessage(`已触发“${action.label}”，请按工资流程继续处理。`);
+    } finally {
+      setRuntimeActionKey(null);
+    }
+  }
+
   const header = (
     <PayrollHeader
       message={message}
@@ -560,6 +617,12 @@ export function PayrollPage() {
 
   const content = (
     <>
+      <WorkflowRuntimePanel
+        title="工资运行态与授权态"
+        summary={runtimeSummary}
+        onAction={(action) => void handleRuntimeAction(action)}
+        busyActionKey={runtimeActionKey}
+      />
 
       {/* ── Tab: 员工管理 ── */}
       {tab === "employees" && (
@@ -599,19 +662,32 @@ export function PayrollPage() {
         <PayrollRunWizard employees={employees} periods={periods} policy={policy} />
       )}
       {/* ── Tab: 参数设置 ── */}
-      {tab === "policy" && policy && (
+      {tab === "policy" && (
         <PayrollPolicySection
           content={(
-            <PayrollPolicyForm
-              editing={editingPolicy}
-              form={policyForm}
-              onChange={setPolicyForm}
-              onStartEdit={() => setEditingPolicy(true)}
-              onSave={handleSavePolicy}
-              onCancel={() => { setEditingPolicy(false); setPolicyForm(policyToForm(policy)); }}
-              formatAmount={fmt}
-              formatPercent={pct}
-            />
+            policy ? (
+              <PayrollPolicyForm
+                editing={editingPolicy}
+                form={policyForm}
+                onChange={setPolicyForm}
+                onStartEdit={() => setEditingPolicy(true)}
+                onSave={handleSavePolicy}
+                onCancel={() => { setEditingPolicy(false); setPolicyForm(policyToForm(policy)); }}
+                formatAmount={fmt}
+                formatPercent={pct}
+              />
+            ) : (
+              <div style={panelStyle()}>
+                <EmptyState
+                  title="尚未配置工资参数口径"
+                  description={
+                    policyMissing
+                      ? "当前账套还没有社保、公积金和个税参数。请由具备工资管理权限的人员先完成参数配置，再进入工资计算。"
+                      : "当前未加载到工资参数，请稍后重试。"
+                  }
+                />
+              </div>
+            )
           )}
         />
       )}

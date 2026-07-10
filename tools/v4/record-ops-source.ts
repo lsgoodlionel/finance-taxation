@@ -2,15 +2,17 @@ import { readFile } from "node:fs/promises";
 import type {
   AiEvalSourceInput,
   BackupRestoreSourceInput,
-  ConnectorSourceInput
+  ConnectorSourceInput,
+  OpsSourceType
 } from "./ops-source-recorders.ts";
 import {
+  validateImportedAiEvalSource,
+  validateImportedBackupRestoreSource,
+  validateImportedConnectorSource,
   writeAiEvalSource,
   writeBackupRestoreSource,
   writeConnectorSource
 } from "./ops-source-recorders.ts";
-
-export type OpsSourceType = "backup-restore" | "connectors" | "ai-evals";
 
 export interface RecordOpsSourceInput {
   repoRoot: string;
@@ -26,19 +28,25 @@ export async function recordOpsSource(input: RecordOpsSourceInput) {
   let outputPath = "";
 
   if (input.sourceType === "backup-restore") {
+    const payload = await readJsonFile<BackupRestoreSourceInput>(input.inputPath);
+    validateImportedBackupRestoreSource(payload);
     outputPath = await writeBackupRestoreSource(
       input.repoRoot,
-      await readJsonFile<BackupRestoreSourceInput>(input.inputPath)
+      payload
     );
   } else if (input.sourceType === "connectors") {
+    const payload = await readJsonFile<ConnectorSourceInput>(input.inputPath);
+    validateImportedConnectorSource(payload);
     outputPath = await writeConnectorSource(
       input.repoRoot,
-      await readJsonFile<ConnectorSourceInput>(input.inputPath)
+      payload
     );
   } else {
+    const payload = await readJsonFile<AiEvalSourceInput>(input.inputPath);
+    validateImportedAiEvalSource(payload);
     outputPath = await writeAiEvalSource(
       input.repoRoot,
-      await readJsonFile<AiEvalSourceInput>(input.inputPath)
+      payload
     );
   }
 

@@ -1,4 +1,17 @@
 {
+  "metadata": {
+    "schemaVersion": "2026-07-ops-source-v1",
+    "sourceType": "connectors",
+    "sourceId": "connector-certification-sample-2026-07",
+    "capturedAt": "2026-07-04T09:00:00.000Z",
+    "summary": "Connector certification sample covering invoice, bank, tax export, and OCR workflows in sandbox.",
+    "artifacts": [
+      {
+        "kind": "certification-report",
+        "path": "docs/v4/examples/ops-source-samples/evidence/connector-certification-sample-2026-07.md"
+      }
+    ]
+  },
   "generatedAt": "2026-07-04T09:00:00.000Z",
   "connectors": [
     {

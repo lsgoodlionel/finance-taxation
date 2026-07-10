@@ -10,7 +10,7 @@ const TRAVEL_FIXTURE = {
   expectedBreakdownLabels: ["交通", "住宿", "餐饮"]
 } as const;
 
-test("travel expense baseline records current coverage and missing detail breakdowns", async ({
+test("travel expense baseline generates structured travel chains and detail guidance", async ({
   page,
   apiClient,
   loginAsRole
@@ -37,7 +37,7 @@ test("travel expense baseline records current coverage and missing detail breakd
   await page.getByRole("button", { name: TRAVEL_FIXTURE.title }).click();
   await expect(page.getByRole("heading", { name: TRAVEL_FIXTURE.title })).toBeVisible();
 
-  const gaps = {
+  const coverage = {
     eventRemainsSingleTravelEvent: true,
     missingExpectedDocumentTypes: TRAVEL_FIXTURE.expectedDocumentTypes.filter(
       (documentType) => !standardChain.documents.some((item) => item.documentType === documentType)
@@ -46,12 +46,13 @@ test("travel expense baseline records current coverage and missing detail breakd
       JSON.stringify(standardDetail).includes(label)
     ),
     missingHotelInvoiceWarningVisible: JSON.stringify(missingDetail).includes("住宿"),
-    entertainmentAmbiguityWarningVisible: JSON.stringify(standardDetail).includes("招待"),
-    notes: [
-      "当前基线仅形成通用单据/税务/凭证对象，未把交通、住宿、餐饮拆成可独立核对的金额块。",
-      "差旅与业务招待歧义的专门复核警示当前未在事项详情中稳定暴露。"
-    ]
+    entertainmentAmbiguityWarningVisible: JSON.stringify(standardDetail).includes("招待")
   };
+
+  expect(coverage.missingExpectedDocumentTypes).toEqual([]);
+  expect(coverage.amountBreakdownVisible).toBe(true);
+  expect(coverage.missingHotelInvoiceWarningVisible).toBe(true);
+  expect(coverage.entertainmentAmbiguityWarningVisible).toBe(true);
 
   await attachBusinessObject(testInfo, "travel-standard-event", {
     id: standardDetail.id,
@@ -67,5 +68,5 @@ test("travel expense baseline records current coverage and missing detail breakd
     documents: missingDetail.generatedDocuments.map((item) => item.documentType),
     taxItems: missingDetail.taxItems.map((item) => item.taxType)
   });
-  await attachBusinessObject(testInfo, "travel-baseline-gaps", gaps);
+  await attachBusinessObject(testInfo, "travel-baseline-coverage", coverage);
 });

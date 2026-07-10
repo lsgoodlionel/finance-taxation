@@ -1,10 +1,12 @@
 import { readdir, readFile } from "node:fs/promises";
+import { env } from "../config/env.js";
 import { getPool, closePool } from "./client.js";
+import { retryDbStartup } from "./startup.js";
 
 // 迁移文件目录：monorepo 根的 migrations/
 const MIGRATIONS_DIR = new URL("../../../../migrations/", import.meta.url);
 
-async function run() {
+async function applyMigrations() {
   const pool = getPool();
 
   await pool.query(`
@@ -51,7 +53,23 @@ async function run() {
     console.log(`\nApplied ${count} migration(s) successfully.`);
   }
 
-  await closePool();
+}
+
+async function run() {
+  try {
+    await retryDbStartup(() => applyMigrations(), {
+      maxAttempts: env.dbStartupMaxAttempts,
+      delayMs: env.dbStartupDelayMs,
+      beforeRetry: async ({ attempt, maxAttempts, delayMs, error }) => {
+        console.warn(
+          `[migrate] transient database startup error on attempt ${attempt}/${maxAttempts}: ${error.message}; retrying in ${delayMs}ms`
+        );
+        await closePool();
+      }
+    });
+  } finally {
+    await closePool();
+  }
 }
 
 run().catch((err: unknown) => {

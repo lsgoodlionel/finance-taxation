@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { GeneratedDocument, Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import {
+  API_BASE_URL,
   archiveDocument,
   getDocumentDetail,
   listDocuments,
@@ -21,7 +22,6 @@ import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentDetailPanel } from "./documents/DocumentDetailPanel";
 import { DocumentsHelpModal } from "./documents/DocumentsHelpModal";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 

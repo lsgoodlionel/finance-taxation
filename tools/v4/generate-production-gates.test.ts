@@ -50,6 +50,14 @@ test("generateLoadEvidence derives page P95 from Playwright results and API P95 
 
 test("template-like backup-restore source is treated as missing evidence", () => {
   const source = createRenderableBackupRestoreSource({
+    metadata: {
+      schemaVersion: "2026-07-ops-source-v1",
+      sourceType: "backup-restore",
+      sourceId: "backup-restore-template-2026-07-02",
+      capturedAt: "2026-07-02T10:00:00.000Z",
+      summary: "fill with completed backup drill context",
+      artifacts: []
+    },
     generatedAt: "2026-07-02T10:00:00.000Z",
     backupCompletedAt: "",
     restoreVerifiedAt: "",
@@ -63,6 +71,14 @@ test("template-like backup-restore source is treated as missing evidence", () =>
 
 test("template-like connector source is treated as missing evidence", () => {
   const source = createRenderableConnectorSource({
+    metadata: {
+      schemaVersion: "2026-07-ops-source-v1",
+      sourceType: "connectors",
+      sourceId: "connector-certification-template-2026-07-02",
+      capturedAt: "2026-07-02T10:00:00.000Z",
+      summary: "fill with certification batch context",
+      artifacts: []
+    },
     generatedAt: "2026-07-02T10:00:00.000Z",
     connectors: [
       {
@@ -81,6 +97,14 @@ test("template-like connector source is treated as missing evidence", () => {
 
 test("template-like ai-eval source is treated as missing evidence", () => {
   const source = createRenderableAiEvalSource({
+    metadata: {
+      schemaVersion: "2026-07-ops-source-v1",
+      sourceType: "ai-evals",
+      sourceId: "ai-evals-template-2026-07-02",
+      capturedAt: "2026-07-02T10:00:00.000Z",
+      summary: "fill with ai evaluation summary",
+      artifacts: []
+    },
     generatedAt: "2026-07-02T10:00:00.000Z",
     sampleSize: 0,
     suggestionAcceptanceRate: 0,
@@ -127,6 +151,7 @@ test("generateBackupRestoreEvidence emits failing placeholder evidence when no s
   assert.equal(evidence.rpoHours, 999);
   assert.equal(evidence.rtoHours, 999);
   assert.match(evidence.verifiedBy, /missing evidence/i);
+  assert.equal(evidence.sourceContext.sourceId, "missing-backup-restore-source");
 });
 
 test("generateConnectorEvidence keeps failed status and notes when certification source is missing", () => {
@@ -138,6 +163,7 @@ test("generateConnectorEvidence keeps failed status and notes when certification
   assert.equal(evidence.connectors.length > 0, true);
   assert.ok(evidence.connectors.every((item) => item.status === "failed"));
   assert.ok(evidence.connectors.every((item) => item.notes?.includes("missing certification evidence")));
+  assert.equal(evidence.sourceContext.sourceId, "missing-connectors-source");
 });
 
 test("generateAiEvalEvidence uses acceptance report warnings as fallback and marks the gate below threshold", () => {
@@ -154,6 +180,7 @@ test("generateAiEvalEvidence uses acceptance report warnings as fallback and mar
   assert.equal(evidence.suggestionAcceptanceRate < 0.85, true);
   assert.equal(evidence.documentRecallRate < 0.95, true);
   assert.equal(evidence.highRiskAutoExecutionCount, 1);
+  assert.equal(evidence.sourceContext.sourceId, "acceptance-report-fallback");
 });
 
 test("runProductionEvidenceGeneration writes all four ops evidence files", async () => {
@@ -190,6 +217,31 @@ test("runProductionEvidenceGeneration writes all four ops evidence files", async
         summary: { total: 1, passed: 1, failed: 0, blocked: 0, byStatus: { passed: 1, failed: 0, blocked: 0 } }
       }, null, 2)
     );
+    await mkdir(path.join(root, "artifacts", "v4", "baseline", "ops-sources"), { recursive: true });
+    await writeFile(
+      path.join(root, "artifacts", "v4", "baseline", "ops-sources", "backup-restore.json"),
+      JSON.stringify({
+        metadata: {
+          schemaVersion: "2026-07-ops-source-v1",
+          sourceType: "backup-restore",
+          sourceId: "backup-drill-2026-07-02",
+          capturedAt: "2026-07-02T08:00:00.000Z",
+          summary: "Restore drill from the purchase expense staging backup.",
+          artifacts: [
+            {
+              kind: "runbook-log",
+              path: "artifacts/v4/baseline/ops-sources/evidence/backup-drill-2026-07-02.log"
+            }
+          ]
+        },
+        generatedAt: "2026-07-02T08:00:00.000Z",
+        backupCompletedAt: "2026-07-02T05:00:00.000Z",
+        restoreVerifiedAt: "2026-07-02T07:00:00.000Z",
+        rpoHours: 2,
+        rtoHours: 2,
+        verifiedBy: "ops-drill-2026-07"
+      }, null, 2)
+    );
 
     await runProductionEvidenceGeneration({
       repoRoot: root,
@@ -204,6 +256,7 @@ test("runProductionEvidenceGeneration writes all four ops evidence files", async
     assert.equal(outputs.length, 4);
     assert.match(outputs[0] ?? "", /pageP95Ms/);
     assert.match(outputs[1] ?? "", /rpoHours/);
+    assert.match(outputs[1] ?? "", /sourceContext/);
     assert.match(outputs[2] ?? "", /connectors/);
     assert.match(outputs[3] ?? "", /suggestionAcceptanceRate/);
   } finally {

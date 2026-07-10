@@ -721,6 +721,11 @@ export interface ExportJob {
   resourceId: string | null;
   periodLabel: string | null;
   status: ExportJobStatus;
+  retryCount: number;
+  lastError: string | null;
+  lastAttemptAt: string | null;
+  nextRetryAt: string | null;
+  completedAt: string | null;
   createdByUserId: string | null;
   createdByName: string;
   createdAt: string;

@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import type { OpsSourceArtifact, OpsSourceMetadata } from "./ops-source-recorders.ts";
 
 type PlaywrightResult = {
   status?: string;
@@ -39,6 +40,7 @@ type AcceptanceReportLike = {
 };
 
 type BackupRestoreSource = {
+  metadata: OpsSourceMetadata;
   backupCompletedAt: string;
   restoreVerifiedAt: string;
   rpoHours: number;
@@ -47,6 +49,7 @@ type BackupRestoreSource = {
 } | null;
 
 type ConnectorSource = {
+  metadata: OpsSourceMetadata;
   connectors: Array<{
     key: string;
     label: string;
@@ -58,6 +61,7 @@ type ConnectorSource = {
 } | null;
 
 type AiEvalSource = {
+  metadata: OpsSourceMetadata;
   sampleSize: number;
   suggestionAcceptanceRate: number;
   documentRecallRate: number;
@@ -71,6 +75,7 @@ function hasMeaningfulString(value: string | undefined) {
 
 export function createRenderableBackupRestoreSource(
   value: Exclude<BackupRestoreSource, null> | {
+    metadata: OpsSourceMetadata;
     backupCompletedAt: string;
     restoreVerifiedAt: string;
     rpoHours: number;
@@ -89,6 +94,7 @@ export function createRenderableBackupRestoreSource(
     return null;
   }
   return {
+    metadata: value.metadata,
     backupCompletedAt: value.backupCompletedAt,
     restoreVerifiedAt: value.restoreVerifiedAt,
     rpoHours: value.rpoHours,
@@ -99,6 +105,7 @@ export function createRenderableBackupRestoreSource(
 
 export function createRenderableConnectorSource(
   value: Exclude<ConnectorSource, null> | {
+    metadata: OpsSourceMetadata;
     connectors: Array<{
       key: string;
       label: string;
@@ -114,11 +121,12 @@ export function createRenderableConnectorSource(
     item.roundtripMs > 0 ||
     (item.notes ? !item.notes.includes("fill with certification result") : false)
   );
-  return connectors.length > 0 ? { connectors: value.connectors } : null;
+  return connectors.length > 0 ? { metadata: value.metadata, connectors: value.connectors } : null;
 }
 
 export function createRenderableAiEvalSource(
   value: Exclude<AiEvalSource, null> | {
+    metadata: OpsSourceMetadata;
     sampleSize: number;
     suggestionAcceptanceRate: number;
     documentRecallRate: number;
@@ -136,11 +144,36 @@ export function createRenderableAiEvalSource(
     return null;
   }
   return {
+    metadata: value.metadata,
     sampleSize: value.sampleSize,
     suggestionAcceptanceRate: value.suggestionAcceptanceRate,
     documentRecallRate: value.documentRecallRate,
     highRiskAutoExecutionCount: value.highRiskAutoExecutionCount,
     falsePositiveRate: value.falsePositiveRate
+  };
+}
+
+export interface OpsEvidenceSourceContext {
+  sourceType: "backup-restore" | "connectors" | "ai-evals";
+  sourceId: string;
+  capturedAt: string;
+  summary: string;
+  artifacts: OpsSourceArtifact[];
+}
+
+function buildSourceContext(
+  metadata: OpsSourceMetadata | undefined,
+  fallback: OpsEvidenceSourceContext
+): OpsEvidenceSourceContext {
+  if (!metadata) {
+    return fallback;
+  }
+  return {
+    sourceType: metadata.sourceType,
+    sourceId: metadata.sourceId,
+    capturedAt: metadata.capturedAt,
+    summary: metadata.summary,
+    artifacts: metadata.artifacts
   };
 }
 
@@ -162,6 +195,7 @@ export interface BackupRestoreEvidence {
   rtoHours: number;
   verifiedBy: string;
   source: "drill" | "placeholder";
+  sourceContext: OpsEvidenceSourceContext;
 }
 
 export interface ConnectorEvidenceSet {
@@ -175,6 +209,7 @@ export interface ConnectorEvidenceSet {
     notes?: string;
   }>;
   source: "certification" | "placeholder";
+  sourceContext: OpsEvidenceSourceContext;
 }
 
 export interface AiEvalEvidence {
@@ -185,6 +220,7 @@ export interface AiEvalEvidence {
   highRiskAutoExecutionCount: number;
   falsePositiveRate: number;
   source: "evaluation" | "fallback-from-acceptance-report";
+  sourceContext: OpsEvidenceSourceContext;
 }
 
 export async function collectHealthProbeLatencies(input?: {
@@ -316,7 +352,14 @@ export function generateBackupRestoreEvidence(input: {
       rpoHours: input.source.rpoHours,
       rtoHours: input.source.rtoHours,
       verifiedBy: input.source.verifiedBy,
-      source: "drill"
+      source: "drill",
+      sourceContext: buildSourceContext(input.source.metadata, {
+        sourceType: "backup-restore",
+        sourceId: "missing-backup-restore-source",
+        capturedAt: input.generatedAt,
+        summary: "Missing backup restore source context.",
+        artifacts: []
+      })
     };
   }
 
@@ -327,7 +370,14 @@ export function generateBackupRestoreEvidence(input: {
     rpoHours: 999,
     rtoHours: 999,
     verifiedBy: "missing evidence: backup/restore drill source file not found",
-    source: "placeholder"
+    source: "placeholder",
+    sourceContext: {
+      sourceType: "backup-restore",
+      sourceId: "missing-backup-restore-source",
+      capturedAt: input.generatedAt,
+      summary: "Missing backup/restore drill source file; placeholder evidence emitted to preserve failure semantics.",
+      artifacts: []
+    }
   };
 }
 
@@ -339,7 +389,14 @@ export function generateConnectorEvidence(input: {
     return {
       generatedAt: input.generatedAt,
       connectors: input.source.connectors,
-      source: "certification"
+      source: "certification",
+      sourceContext: buildSourceContext(input.source.metadata, {
+        sourceType: "connectors",
+        sourceId: "missing-connectors-source",
+        capturedAt: input.generatedAt,
+        summary: "Missing connectors source context.",
+        artifacts: []
+      })
     };
   }
 
@@ -351,7 +408,14 @@ export function generateConnectorEvidence(input: {
       { key: "tax_export", label: "税务导出", status: "failed", lastVerifiedAt: input.generatedAt, roundtripMs: 0, notes: "missing certification evidence" },
       { key: "ocr", label: "OCR 识别", status: "failed", lastVerifiedAt: input.generatedAt, roundtripMs: 0, notes: "missing certification evidence" }
     ],
-    source: "placeholder"
+    source: "placeholder",
+    sourceContext: {
+      sourceType: "connectors",
+      sourceId: "missing-connectors-source",
+      capturedAt: input.generatedAt,
+      summary: "Missing connector certification source file; placeholder connector failures emitted.",
+      artifacts: []
+    }
   };
 }
 
@@ -368,7 +432,14 @@ export function generateAiEvalEvidence(input: {
       documentRecallRate: input.source.documentRecallRate,
       highRiskAutoExecutionCount: input.source.highRiskAutoExecutionCount,
       falsePositiveRate: input.source.falsePositiveRate,
-      source: "evaluation"
+      source: "evaluation",
+      sourceContext: buildSourceContext(input.source.metadata, {
+        sourceType: "ai-evals",
+        sourceId: "acceptance-report-fallback",
+        capturedAt: input.generatedAt,
+        summary: "Missing ai-evals source context.",
+        artifacts: []
+      })
     };
   }
 
@@ -386,7 +457,19 @@ export function generateAiEvalEvidence(input: {
     documentRecallRate: Math.max(0, 0.94 - recallPenalty),
     highRiskAutoExecutionCount: Math.max(1, failed),
     falsePositiveRate: total > 0 ? (failed + warnings) / total : 1,
-    source: "fallback-from-acceptance-report"
+    source: "fallback-from-acceptance-report",
+    sourceContext: {
+      sourceType: "ai-evals",
+      sourceId: "acceptance-report-fallback",
+      capturedAt: input.generatedAt,
+      summary: "Missing ai-evals source file; fallback metrics derived from acceptance report warnings and failures.",
+      artifacts: [
+        {
+          kind: "acceptance-report",
+          path: "artifacts/v4/baseline/reports/acceptance-report.json"
+        }
+      ]
+    }
   };
 }
 

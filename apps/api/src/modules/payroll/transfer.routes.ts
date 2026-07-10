@@ -6,6 +6,7 @@
  * POST /api/payroll/transfer/batches/:id/approve   审批
  * GET  /api/payroll/transfer/batches/:id/file?format=generic|cmb  下载代发文件
  * POST /api/payroll/transfer/batches/:id/disburse  标记已代发（body: bankTransferRef?）
+ * POST /api/payroll/transfer/batches/:id/compensate  补偿工资代发下游经营事项
  */
 
 import type { ServerResponse } from "node:http";
@@ -16,6 +17,7 @@ import {
   listBatches,
   getBatchWithLines,
   approveBatch,
+  compensateDisbursedBatch,
   generateBatchFile,
   markDisbursed,
 } from "./transfer.js";
@@ -80,5 +82,14 @@ export async function disburseBatchRoute(req: ApiRequest, res: ServerResponse, b
     json(res, 200, { ok: true, ...result });
   } catch (err) {
     json(res, 400, { error: err instanceof Error ? err.message : "标记代发失败" });
+  }
+}
+
+export async function compensateBatchRoute(req: ApiRequest, res: ServerResponse, batchId: string): Promise<void> {
+  try {
+    const result = await compensateDisbursedBatch(req.auth!.companyId, batchId, req.auth!.userId);
+    json(res, 200, { ok: true, ...result });
+  } catch (err) {
+    json(res, 400, { error: err instanceof Error ? err.message : "执行补偿失败" });
   }
 }

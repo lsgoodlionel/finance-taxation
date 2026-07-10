@@ -14,6 +14,19 @@ test("recordOpsSource imports connector certification JSON into ops-sources", as
     await writeFile(
       inputPath,
       JSON.stringify({
+        metadata: {
+          schemaVersion: "2026-07-ops-source-v1",
+          sourceType: "connectors",
+          sourceId: "connector-certification-2026-07-03",
+          capturedAt: "2026-07-03T08:00:00.000Z",
+          summary: "Connector certification batch for bank connectivity.",
+          artifacts: [
+            {
+              kind: "certification-report",
+              path: "docs/v4/examples/ops-source-samples/evidence/connector-certification-2026-07-03.md"
+            }
+          ]
+        },
         generatedAt: "2026-07-03T08:00:00.000Z",
         connectors: [
           {
@@ -38,8 +51,10 @@ test("recordOpsSource imports connector certification JSON into ops-sources", as
     assert.match(result.outputPath, /artifacts\/v4\/baseline\/ops-sources\/connectors\.json$/);
 
     const written = JSON.parse(await readFile(result.outputPath, "utf8")) as {
+      metadata: { sourceId: string };
       connectors: Array<{ key: string; status: string; roundtripMs: number }>;
     };
+    assert.equal(written.metadata.sourceId, "connector-certification-2026-07-03");
     assert.equal(written.connectors[0]?.key, "bank_api");
     assert.equal(written.connectors[0]?.status, "passed");
     assert.equal(written.connectors[0]?.roundtripMs, 280);
@@ -56,6 +71,19 @@ test("recordOpsSource imports backup-restore drill evidence into ops-sources", a
     await writeFile(
       inputPath,
       JSON.stringify({
+        metadata: {
+          schemaVersion: "2026-07-ops-source-v1",
+          sourceType: "backup-restore",
+          sourceId: "backup-drill-2026-07-03",
+          capturedAt: "2026-07-03T08:00:00.000Z",
+          summary: "Quarterly restore drill for baseline recovery.",
+          artifacts: [
+            {
+              kind: "runbook-log",
+              path: "docs/v4/examples/ops-source-samples/evidence/backup-drill-2026-07-03.log"
+            }
+          ]
+        },
         generatedAt: "2026-07-03T08:00:00.000Z",
         backupCompletedAt: "2026-07-03T01:00:00.000Z",
         restoreVerifiedAt: "2026-07-03T03:00:00.000Z",
@@ -72,11 +100,51 @@ test("recordOpsSource imports backup-restore drill evidence into ops-sources", a
     });
 
     const written = JSON.parse(await readFile(result.outputPath, "utf8")) as {
+      metadata: { sourceId: string };
       verifiedBy: string;
       rtoHours: number;
     };
+    assert.equal(written.metadata.sourceId, "backup-drill-2026-07-03");
     assert.equal(written.verifiedBy, "ops-drill-2026-07");
     assert.equal(written.rtoHours, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("recordOpsSource fails with a clear error when source metadata is incomplete", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v4-record-ops-invalid-"));
+
+  try {
+    const inputPath = path.join(root, "ai-evals.json");
+    await writeFile(
+      inputPath,
+      JSON.stringify({
+        metadata: {
+          schemaVersion: "2026-07-ops-source-v1",
+          sourceType: "ai-evals",
+          sourceId: "",
+          capturedAt: "2026-07-03T08:00:00.000Z",
+          summary: "Weekly eval batch",
+          artifacts: []
+        },
+        generatedAt: "2026-07-03T08:00:00.000Z",
+        sampleSize: 24,
+        suggestionAcceptanceRate: 0.88,
+        documentRecallRate: 0.97,
+        highRiskAutoExecutionCount: 0,
+        falsePositiveRate: 0.02
+      }, null, 2)
+    );
+
+    await assert.rejects(
+      () => recordOpsSource({
+        repoRoot: root,
+        sourceType: "ai-evals",
+        inputPath
+      }),
+      /ai-evals source metadata\.sourceId must be a non-empty string/
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -119,15 +187,19 @@ test("repository ships importable sample ops source payloads", async () => {
       inputPath: aiEvalSamplePath
     });
 
-    const backupWritten = JSON.parse(await readFile(backupResult.outputPath, "utf8")) as { verifiedBy: string };
+    const backupWritten = JSON.parse(await readFile(backupResult.outputPath, "utf8")) as { metadata: { sourceType: string }; verifiedBy: string };
     const connectorWritten = JSON.parse(await readFile(connectorResult.outputPath, "utf8")) as {
+      metadata: { sourceType: string };
       connectors: Array<{ key: string; status: string }>;
     };
-    const aiEvalWritten = JSON.parse(await readFile(aiEvalResult.outputPath, "utf8")) as { sampleSize: number };
+    const aiEvalWritten = JSON.parse(await readFile(aiEvalResult.outputPath, "utf8")) as { metadata: { sourceType: string }; sampleSize: number };
 
+    assert.equal(backupWritten.metadata.sourceType, "backup-restore");
     assert.equal(backupWritten.verifiedBy, "ops-drill-sample-2026-07");
+    assert.equal(connectorWritten.metadata.sourceType, "connectors");
     assert.equal(connectorWritten.connectors[0]?.key, "invoice_verify");
     assert.equal(connectorWritten.connectors[0]?.status, "passed");
+    assert.equal(aiEvalWritten.metadata.sourceType, "ai-evals");
     assert.equal(aiEvalWritten.sampleSize, 180);
   } finally {
     await rm(sandboxRoot, { recursive: true, force: true });
