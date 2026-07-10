@@ -27,6 +27,21 @@ import { resolveActiveTaxpayerProfile } from "./profile.js";
 import { resolveFilingPeriod, resolveTaxRuleProfile } from "./rules.js";
 import { buildStampAndSurtaxSummary } from "./stamp-surtax.js";
 import { buildVatWorkingPaper } from "./vat-working-paper.js";
+import { validateWorkflowAuthorization } from "../workflows/authorization.js";
+import { buildWorkflowCommandExecution, buildWorkflowRun, markWorkflowCommandStatus } from "../workflows/commands.js";
+import {
+  ensureWorkflowRun,
+  findSuccessfulWorkflowCommandExecution,
+  insertWorkflowCommandExecution,
+  insertWorkflowTransition,
+  updateWorkflowCommandExecution,
+  updateWorkflowRunState
+} from "../workflows/persistence.js";
+import {
+  buildWorkflowTransitionRecord,
+  mapTaxFilingBatchStatusToWorkflowState,
+  validateWorkflowTransition
+} from "../workflows/runtime.js";
 
 interface TaxItemRow {
   id: string;
@@ -489,18 +504,101 @@ export async function submitTaxFilingBatch(req: ApiRequest, res: ServerResponse,
   ) {
     return json(res, 400, { error: "Tax filing batch is not ready for submit" });
   }
+  const body = (req.body || {}) as {
+    authorizerUserId?: string;
+    authorizerName?: string;
+  };
+  const authorizerUserId = body.authorizerUserId ?? req.auth!.userId;
+  const authorizerName = body.authorizerName ?? req.auth!.username;
+  const authCheck = validateWorkflowAuthorization({
+    action: "tax.submit",
+    requesterUserId: req.auth!.userId,
+    executorUserId: req.auth!.userId,
+    authorizerUserId
+  });
+  if (!authCheck.ok) {
+    return json(res, 400, { error: authCheck.message, code: authCheck.errorCode });
+  }
   const updatedAt = new Date().toISOString();
-  await queryOne(
-    `
-      update tax_filing_batches
-      set
-        status = 'submitted',
-        updated_at = $1::timestamptz
-      where id = $2 and company_id = $3
-      returning id
-    `,
-    [updatedAt, batchId, req.auth!.companyId]
-  );
+  const previousState = mapTaxFilingBatchStatusToWorkflowState(target.status);
+  const nextState = "executing" as const;
+  const submitTransitionValidation = validateWorkflowTransition(previousState, nextState);
+  if (!submitTransitionValidation.ok) {
+    return json(res, 400, { error: submitTransitionValidation.message, code: submitTransitionValidation.errorCode });
+  }
+  await withTransaction(async (client) => {
+    await client.query(
+      `
+        update tax_filing_batches
+        set
+          status = 'submitted',
+          updated_at = $1::timestamptz
+        where id = $2 and company_id = $3
+      `,
+      [updatedAt, batchId, req.auth!.companyId]
+    );
+    const reusable = await findSuccessfulWorkflowCommandExecution(req.auth!.companyId, {
+      commandType: "tax.submit",
+      resourceType: "tax_filing_batch",
+      resourceId: batchId,
+      idempotencyKey: `tax-submit:${batchId}:${target.updatedAt}`,
+      objectVersion: target.updatedAt
+    });
+    if (!reusable) {
+      const run = await ensureWorkflowRun(
+        client,
+        buildWorkflowRun({
+          companyId: req.auth!.companyId,
+          workflowKey: "tax_filing.lifecycle",
+          resourceType: "tax_filing_batch",
+          resourceId: batchId,
+          resourceLabel: `${target.taxType} ${target.filingPeriod}`,
+          currentState: mapTaxFilingBatchStatusToWorkflowState(target.status),
+          initiatorUserId: req.auth!.userId,
+          initiatorName: req.auth!.username,
+          authorizerUserId,
+          authorizerName
+        })
+      );
+      const transition = buildWorkflowTransitionRecord({
+        companyId: req.auth!.companyId,
+        workflowRunId: run.id,
+        resourceType: "tax_filing_batch",
+        resourceId: batchId,
+        previousState,
+        nextState,
+        actorUserId: req.auth!.userId,
+        actorName: req.auth!.username,
+        basis: "tax.submit",
+        ruleVersion: "v4-1a"
+      });
+      const command = buildWorkflowCommandExecution({
+        companyId: req.auth!.companyId,
+        workflowRunId: run.id,
+        commandType: "tax.submit",
+        resourceType: "tax_filing_batch",
+        resourceId: batchId,
+        idempotencyKey: `tax-submit:${batchId}:${target.updatedAt}`,
+        objectVersion: target.updatedAt,
+        inputSnapshot: { taxType: target.taxType, filingPeriod: target.filingPeriod, itemIds: target.itemIds },
+        initiatorUserId: req.auth!.userId,
+        initiatorName: req.auth!.username,
+        authorizerUserId,
+        authorizerName
+      });
+      const running = markWorkflowCommandStatus(command, "running", { progress: "submitting" });
+      await insertWorkflowTransition(client, transition);
+      await insertWorkflowCommandExecution(client, running);
+      await updateWorkflowCommandExecution(
+        client,
+        markWorkflowCommandStatus(running, "succeeded", {
+          progress: "submitted",
+          resultSnapshot: { status: "submitted", updatedAt }
+        })
+      );
+      await updateWorkflowRunState(client, run.id, nextState, null, updatedAt);
+    }
+  });
   const updated = (await listCompanyTaxFilingBatches(req.auth!.companyId, batchId))[0];
   return json(res, 200, updated);
 }
@@ -524,6 +622,12 @@ export async function reviewTaxFilingBatch(req: ApiRequest, res: ServerResponse,
     new Date().toISOString()
   );
   const nextStatus = result === "approved" ? "ready" : "review_required";
+  const previousState = mapTaxFilingBatchStatusToWorkflowState(target.status);
+  const nextState = result === "approved" ? "ready_for_review" : "correcting";
+  const transitionValidation = validateWorkflowTransition(previousState, nextState);
+  if (!transitionValidation.ok) {
+    return json(res, 400, { error: transitionValidation.message, code: transitionValidation.errorCode });
+  }
   await withTransaction(async (client) => {
     await client.query(
       `
@@ -551,6 +655,33 @@ export async function reviewTaxFilingBatch(req: ApiRequest, res: ServerResponse,
       `,
       [nextStatus, review.reviewedAt, batchId, req.auth!.companyId]
     );
+    const run = await ensureWorkflowRun(
+      client,
+      buildWorkflowRun({
+        companyId: req.auth!.companyId,
+        workflowKey: "tax_filing.lifecycle",
+        resourceType: "tax_filing_batch",
+        resourceId: batchId,
+        resourceLabel: `${target.taxType} ${target.filingPeriod}`,
+        currentState: previousState,
+        initiatorUserId: req.auth!.userId,
+        initiatorName: req.auth!.username
+      })
+    );
+    const transition = buildWorkflowTransitionRecord({
+      companyId: req.auth!.companyId,
+      workflowRunId: run.id,
+      resourceType: "tax_filing_batch",
+      resourceId: batchId,
+      previousState,
+      nextState,
+      actorUserId: req.auth!.userId,
+      actorName: req.auth!.username,
+      basis: `tax.review:${result}`,
+      ruleVersion: "v4-1a"
+    });
+    await insertWorkflowTransition(client, transition);
+    await updateWorkflowRunState(client, run.id, nextState, null, transition.occurredAt);
   });
   return getTaxFilingBatchDetail(req, res, batchId);
 }
@@ -564,7 +695,29 @@ export async function archiveTaxFilingBatch(req: ApiRequest, res: ServerResponse
   if (!canArchiveBatch(target.status)) {
     return json(res, 400, { error: "Only submitted batches can be archived" });
   }
-  const body = (req.body || {}) as { archiveLabel?: string; archiveNotes?: string };
+  const body = (req.body || {}) as {
+    archiveLabel?: string;
+    archiveNotes?: string;
+    authorizerUserId?: string;
+    authorizerName?: string;
+  };
+  const authorizerUserId = body.authorizerUserId ?? req.auth!.userId;
+  const authorizerName = body.authorizerName ?? req.auth!.username;
+  const authCheck = validateWorkflowAuthorization({
+    action: "tax.archive",
+    requesterUserId: req.auth!.userId,
+    executorUserId: req.auth!.userId,
+    authorizerUserId
+  });
+  if (!authCheck.ok) {
+    return json(res, 400, { error: authCheck.message, code: authCheck.errorCode });
+  }
+  const previousState = mapTaxFilingBatchStatusToWorkflowState(target.status);
+  const nextState = "completed" as const;
+  const archiveTransitionValidation = validateWorkflowTransition(previousState, nextState);
+  if (!archiveTransitionValidation.ok) {
+    return json(res, 400, { error: archiveTransitionValidation.message, code: archiveTransitionValidation.errorCode });
+  }
   const archive = buildArchiveRecord(
     target,
     {
@@ -602,6 +755,67 @@ export async function archiveTaxFilingBatch(req: ApiRequest, res: ServerResponse
       `,
       [archive.archivedAt, batchId, req.auth!.companyId]
     );
+    const reusable = await findSuccessfulWorkflowCommandExecution(req.auth!.companyId, {
+      commandType: "tax.archive",
+      resourceType: "tax_filing_batch",
+      resourceId: batchId,
+      idempotencyKey: `tax-archive:${batchId}:${target.updatedAt}`,
+      objectVersion: target.updatedAt
+    });
+    if (!reusable) {
+      const run = await ensureWorkflowRun(
+        client,
+        buildWorkflowRun({
+          companyId: req.auth!.companyId,
+          workflowKey: "tax_filing.lifecycle",
+          resourceType: "tax_filing_batch",
+          resourceId: batchId,
+          resourceLabel: `${target.taxType} ${target.filingPeriod}`,
+          currentState: mapTaxFilingBatchStatusToWorkflowState(target.status),
+          initiatorUserId: req.auth!.userId,
+          initiatorName: req.auth!.username,
+          authorizerUserId,
+          authorizerName
+        })
+      );
+      const transition = buildWorkflowTransitionRecord({
+        companyId: req.auth!.companyId,
+        workflowRunId: run.id,
+        resourceType: "tax_filing_batch",
+        resourceId: batchId,
+        previousState,
+        nextState,
+        actorUserId: req.auth!.userId,
+        actorName: req.auth!.username,
+        basis: "tax.archive",
+        ruleVersion: "v4-1a"
+      });
+      const command = buildWorkflowCommandExecution({
+        companyId: req.auth!.companyId,
+        workflowRunId: run.id,
+        commandType: "tax.archive",
+        resourceType: "tax_filing_batch",
+        resourceId: batchId,
+        idempotencyKey: `tax-archive:${batchId}:${target.updatedAt}`,
+        objectVersion: target.updatedAt,
+        inputSnapshot: { archiveLabel: archive.archiveLabel, archiveNotes: archive.archiveNotes },
+        initiatorUserId: req.auth!.userId,
+        initiatorName: req.auth!.username,
+        authorizerUserId,
+        authorizerName
+      });
+      const running = markWorkflowCommandStatus(command, "running", { progress: "archiving" });
+      await insertWorkflowTransition(client, transition);
+      await insertWorkflowCommandExecution(client, running);
+      await updateWorkflowCommandExecution(
+        client,
+        markWorkflowCommandStatus(running, "succeeded", {
+          progress: "archived",
+          resultSnapshot: { archivedAt: archive.archivedAt, archiveLabel: archive.archiveLabel }
+        })
+      );
+      await updateWorkflowRunState(client, run.id, nextState, null, archive.archivedAt);
+    }
   });
   return getTaxFilingBatchDetail(req, res, batchId);
 }

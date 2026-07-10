@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Row, Col, Card, Button, Space, Typography, Alert, Skeleton } from "antd";
 import { PlusOutlined, QuestionCircleOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
@@ -7,12 +7,13 @@ import type { Voucher } from "@finance-taxation/domain-model";
 import {
   approveVoucher, createVoucherFromTemplate, getVoucherDetail,
   listVouchers, listVoucherTemplates, postVoucher, updateVoucher,
-  validateVoucher, type VoucherDetail, type VoucherTemplate,
+  validateVoucher, type VoucherDetail, type VoucherTemplate, type WorkflowRunDetail,
 } from "../lib/api";
 import { normalizeDrilldownState } from "./drilldown";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { PageHeader } from "../components/ui/PageHeader";
+import { WorkflowRuntimeCard } from "../components/workflow/WorkflowRuntimeCard";
 import { VouchersList } from "./vouchers/VouchersList";
 import { VoucherDetailPanel } from "./vouchers/VoucherDetailPanel";
 import { VoucherCreateModal } from "./vouchers/VoucherCreateModal";
@@ -21,6 +22,7 @@ const { Text } = Typography;
 
 export function VouchersPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const navState   = normalizeDrilldownState(location.state);
   const navEventId   = navState.businessEventId ?? null;
   const navVoucherId = navState.voucherId       ?? null;
@@ -29,6 +31,7 @@ export function VouchersPage() {
   const [templates, setTemplates] = useState<VoucherTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail,     setDetail]     = useState<VoucherDetail | null>(null);
+  const [runtimeDetail, setRuntimeDetail] = useState<WorkflowRunDetail | null>(null);
   const [validation, setValidation] = useState<{
     valid: boolean; totals: { debit: string; credit: string }; issues: string[]
   } | null>(null);
@@ -218,6 +221,15 @@ export function VouchersPage() {
         />
       )}
 
+      <WorkflowRuntimeCard
+        title="凭证运行态 / 授权态"
+        resourceType="voucher"
+        resourceId={detail?.id ?? selectedId}
+        emptyHint="选择凭证后，可查看该凭证的运行状态、授权状态、重试与补偿信息。"
+        onChanged={() => refresh(detail?.id ?? selectedId ?? undefined)}
+        onDetailChange={setRuntimeDetail}
+      />
+
       {/* Process flow */}
       {detail && (
         <ProcessFlowStageSection
@@ -257,12 +269,17 @@ export function VouchersPage() {
               <Card style={{ borderRadius: 12 }}>
                 <VoucherDetailPanel
                   detail={detail}
+                  runtimeDetail={runtimeDetail}
                   validation={validation}
                   updating={updating}
                   onValidate={handleValidate}
                   onApprove={handleApprove}
                   onPost={handlePost}
                   onSummaryUpdate={handleSummaryUpdate}
+                  onOpenEvent={(businessEventId) => navigate("/events", { state: { businessEventId } })}
+                  onOpenDocuments={(businessEventId) => navigate("/documents", { state: { businessEventId } })}
+                  onOpenTax={(businessEventId) => navigate("/tax", { state: { businessEventId } })}
+                  onOpenLedger={(voucherId, businessEventId) => navigate("/ledger", { state: { voucherId, businessEventId } })}
                 />
               </Card>
             </Col>

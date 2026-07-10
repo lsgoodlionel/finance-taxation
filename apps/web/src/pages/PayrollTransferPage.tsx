@@ -4,6 +4,7 @@
  * 采用 V3 hero/section 壳层风格（对齐总账中心）。
  */
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card, Button, Table, Input, Tag, Space, Typography, Statistic, Row, Col,
   Alert, Spin, Divider, Popconfirm, message as antdMessage,
@@ -14,12 +15,13 @@ import {
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "../components/ui/PageHeader";
+import { WorkflowRuntimeCard } from "../components/workflow/WorkflowRuntimeCard";
 import { SalaryAccountDrawer } from "./payroll-transfer/SalaryAccountDrawer";
 import { usePeriod } from "../lib/period-context";
 import {
   listTransferBatches, getTransferBatch, buildTransferBatch, approveTransferBatch,
   disburseTransferBatch, downloadTransferFile, closeSocialSecurity,
-  type PayrollTransferBatch, type PayrollTransferLine,
+  type PayrollTransferBatch, type PayrollTransferLine, type WorkflowRunDetail,
 } from "../lib/api";
 
 const { Text } = Typography;
@@ -33,9 +35,11 @@ const STATUS_TAG: Record<string, { color: string; label: string }> = {
 };
 
 export function PayrollTransferPage() {
+  const navigate = useNavigate();
   const { period: globalPeriod } = usePeriod();
   const [batches, setBatches] = useState<PayrollTransferBatch[]>([]);
   const [selected, setSelected] = useState<{ batch: PayrollTransferBatch; lines: PayrollTransferLine[] } | null>(null);
+  const [runtimeDetail, setRuntimeDetail] = useState<WorkflowRunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [genPeriod, setGenPeriod] = useState(globalPeriod);
@@ -132,6 +136,13 @@ export function PayrollTransferPage() {
     } finally { setBusy(false); }
   }
 
+  async function handleRuntimeChanged() {
+    await loadBatches();
+    if (selected?.batch.id) {
+      await selectBatch(selected.batch.id);
+    }
+  }
+
   const totalAmount = batches.reduce((s, b) => s + Number(b.total_amount), 0);
   const disbursedCount = batches.filter(b => b.status === "disbursed" || b.status === "confirmed").length;
   const st = selected?.batch.status;
@@ -152,6 +163,15 @@ export function PayrollTransferPage() {
           <Col span={8}><Statistic title="已代发批次" value={disbursedCount} valueStyle={{ color: "#16a34a" }} /></Col>
         </Row>
       </section>
+
+      <WorkflowRuntimeCard
+        title="工资代发运行态 / 授权态"
+        resourceType="payroll"
+        resourceId={selected?.batch.id ?? batches[0]?.id ?? null}
+        emptyHint="选择代发批次后，可查看该批次的运行状态、授权状态、重试与补偿信息。"
+        onChanged={() => handleRuntimeChanged()}
+        onDetailChange={setRuntimeDetail}
+      />
 
       <div className="v3-result-grid v3-result-grid--wide">
         {/* 左：批次列表 + 生成 */}
@@ -184,6 +204,32 @@ export function PayrollTransferPage() {
               {selected ? (
                 <Card size="small" title={<Space><FileDoneOutlined />{selected.batch.payroll_period} 代发批次 <Tag color={STATUS_TAG[st!]?.color}>{STATUS_TAG[st!]?.label}</Tag></Space>}
                   extra={selected.batch.bank_transfer_ref && <Text type="secondary" style={{ fontSize: 12 }}>批次号 {selected.batch.bank_transfer_ref}</Text>}>
+                  {runtimeDetail?.run.blockedReason ? (
+                    <Alert
+                      style={{ marginBottom: 12 }}
+                      type="error"
+                      showIcon
+                      message="运行阻塞"
+                      description={runtimeDetail.run.blockedReason}
+                    />
+                  ) : null}
+                  {runtimeDetail?.commands[0]?.lastErrorDetail || runtimeDetail?.compensations.length ? (
+                    <Alert
+                      style={{ marginBottom: 12 }}
+                      type="warning"
+                      showIcon
+                      message={runtimeDetail?.commands[0]?.lastErrorCode || "运行提示"}
+                      description={`${runtimeDetail?.commands[0]?.lastErrorDetail || "已存在人工补偿记录"}${runtimeDetail?.compensations.length ? `；补偿 ${runtimeDetail.compensations.length} 条` : ""}`}
+                    />
+                  ) : null}
+                  <Space wrap style={{ marginBottom: 12 }}>
+                    <Button size="small" onClick={() => navigate("/payroll", { state: { payrollPeriod: selected.batch.payroll_period, tab: "payroll" } })}>
+                      查看工资页
+                    </Button>
+                    <Button size="small" onClick={() => navigate("/audit", { state: { resourceType: "payroll", resourceId: selected.batch.id, payrollPeriod: selected.batch.payroll_period } })}>
+                      查看审计
+                    </Button>
+                  </Space>
                   <Table<PayrollTransferLine>
                     size="small" rowKey="id" dataSource={selected.lines} pagination={false} style={{ marginBottom: 12 }}
                     columns={[
