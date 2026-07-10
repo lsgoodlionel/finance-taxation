@@ -1,0 +1,13 @@
+{
+  "generatedAt": "2026-07-06T05:20:37.177Z",
+  "samples": 3,
+  "pageP95Ms": 1132,
+  "apiP95Ms": 6,
+  "errorRate": 0,
+  "scenarios": [
+    "payroll_runtime_repair",
+    "payroll_transfer_runtime_repair",
+    "tax_runtime_repair"
+  ],
+  "source": "playwright-and-health-probe"
+}
