@@ -369,7 +369,52 @@ const migratedRoutes: RouteDef[] = [
     auth: true,
     permission: "workflow.manage",
     handler: (req, res, p) => createWorkflowCompensationRoute(req, res, p.id!)
-  }
+  },
+
+  // ledger
+  { method: "GET", path: "/api/ledger/entries", auth: true, permission: "ledger.view", handler: listLedgerEntries },
+  { method: "GET", path: "/api/ledger/posting-batches", auth: true, permission: "ledger.view", handler: listLedgerPostingBatches },
+  { method: "GET", path: "/api/ledger/summary", auth: true, permission: "ledger.view", handler: getLedgerSummary },
+  { method: "GET", path: "/api/ledger/balances", auth: true, permission: "ledger.view", handler: getLedgerBalances },
+  { method: "GET", path: "/api/ledger/cash-journal", auth: true, permission: "ledger.view", handler: getCashJournal },
+  { method: "GET", path: "/api/ledger/periods", auth: true, permission: "ledger.view", handler: listAccountingPeriods },
+  {
+    method: "POST",
+    path: "/api/ledger/periods/:id/lock",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => lockAccountingPeriod(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/ledger/periods/:id/unlock",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => unlockAccountingPeriod(req, res, p.id!)
+  },
+
+  // accounts
+  { method: "GET", path: "/api/accounts", auth: true, permission: "ledger.view", handler: listAccounts },
+  {
+    method: "GET",
+    path: "/api/accounts/:code",
+    auth: true,
+    permission: "ledger.view",
+    handler: (req, res, p) => getAccountByCode(req, res, p.code!)
+  },
+
+  // reports
+  { method: "GET", path: "/api/reports/balance-sheet", auth: true, permission: "ledger.view", handler: getBalanceSheet },
+  { method: "GET", path: "/api/reports/profit-statement", auth: true, permission: "ledger.view", handler: getProfitStatement },
+  { method: "GET", path: "/api/reports/cash-flow", auth: true, permission: "ledger.view", handler: getCashFlow },
+  { method: "GET", path: "/api/reports/snapshots", auth: true, permission: "ledger.view", handler: listReportSnapshots },
+  { method: "POST", path: "/api/reports/snapshots", auth: true, permission: "ledger.view", handler: createReportSnapshot },
+  { method: "GET", path: "/api/reports/diff", auth: true, permission: "ledger.view", handler: getReportDiff },
+  { method: "GET", path: "/api/reports/chairman-summary", auth: true, permission: "dashboard.view", handler: getChairmanReportSummary },
+  { method: "GET", path: "/api/reports/printable", auth: true, permission: "ledger.view", handler: getPrintableReport },
+
+  // rnd
+  { method: "GET", path: "/api/rnd/trend", auth: true, permission: "rnd.view", handler: getRndTrend }
 ];
 for (const route of migratedRoutes) {
   appRouter.register(route);
@@ -405,120 +450,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
 
     // tasks + workflow runtime → migrated to appRouter
 
-  if (url.pathname === "/api/ledger/entries") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return listLedgerEntries(req, res);
-  }
-
-  if (url.pathname === "/api/ledger/posting-batches") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return listLedgerPostingBatches(req, res);
-  }
-
-  if (url.pathname === "/api/ledger/summary") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return getLedgerSummary(req, res);
-  }
-
-  if (url.pathname === "/api/ledger/balances") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return getLedgerBalances(req, res);
-  }
-
-  if (url.pathname === "/api/ledger/cash-journal") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return getCashJournal(req, res);
-  }
-
-  if (url.pathname === "/api/ledger/periods") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return listAccountingPeriods(req, res);
-  }
-
-  const periodLockMatch = url.pathname.match(/^\/api\/ledger\/periods\/([^/]+)\/lock$/);
-  const periodLockId = periodLockMatch?.[1];
-  if (periodLockId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.post", req, res))) return;
-    if (req.method === "POST") return lockAccountingPeriod(req, res, decodeURIComponent(periodLockId));
-  }
-
-  const periodUnlockMatch = url.pathname.match(/^\/api\/ledger\/periods\/([^/]+)\/unlock$/);
-  const periodUnlockId = periodUnlockMatch?.[1];
-  if (periodUnlockId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.post", req, res))) return;
-    if (req.method === "POST") return unlockAccountingPeriod(req, res, decodeURIComponent(periodUnlockId));
-  }
-
-  if (url.pathname === "/api/accounts") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return listAccounts(req, res);
-  }
-
-  const accountCodeMatch = url.pathname.match(/^\/api\/accounts\/([^/]+)$/);
-  const accountCode = accountCodeMatch?.[1];
-  if (accountCode) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return getAccountByCode(req, res, accountCode);
-  }
-
-  if (url.pathname === "/api/reports/balance-sheet") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return getBalanceSheet(req, res);
-  }
-
-  if (url.pathname === "/api/reports/profit-statement") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return getProfitStatement(req, res);
-  }
-
-  if (url.pathname === "/api/reports/cash-flow") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return getCashFlow(req, res);
-  }
-
-  if (url.pathname === "/api/reports/snapshots") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return listReportSnapshots(req, res);
-    if (req.method === "POST") return createReportSnapshot(req, res);
-  }
-
-  if (url.pathname === "/api/reports/diff") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return getReportDiff(req, res);
-  }
-
-  if (url.pathname === "/api/reports/chairman-summary") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("dashboard.view", req, res))) return;
-    if (req.method === "GET") return getChairmanReportSummary(req, res);
-  }
-
-  if (url.pathname === "/api/reports/printable") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return getPrintableReport(req, res);
-  }
-
-  if (req.method === "GET" && url.pathname === "/api/rnd/trend") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("rnd.view", req, res))) return;
-    return getRndTrend(req, res);
-  }
+    // ledger + accounts + reports + rnd/trend → migrated to appRouter
 
   if (url.pathname === "/api/rnd/projects") {
     if (!(await requireAuth(req, res))) return;
