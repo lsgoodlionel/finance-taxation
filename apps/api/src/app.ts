@@ -674,6 +674,91 @@ const migratedRoutes: RouteDef[] = [
     auth: true,
     permission: "ledger.post",
     handler: (req, res, p) => updateVoucher(req, res, p.id!)
+  },
+
+  // employees
+  { method: "GET", path: "/api/employees", auth: true, permission: "payroll.view", handler: listEmployees },
+  { method: "POST", path: "/api/employees", auth: true, permission: "payroll.manage", handler: createEmployee },
+  {
+    method: "PUT",
+    path: "/api/employees/:id",
+    auth: true,
+    permission: "payroll.manage",
+    handler: (req, res, p) => updateEmployee(req, res, p.id!)
+  },
+
+  // payroll — policy / periods / compute / review
+  { method: "GET", path: "/api/payroll/policy", auth: true, permission: "payroll.view", handler: getPayrollPolicy },
+  { method: "PUT", path: "/api/payroll/policy", auth: true, permission: "payroll.manage", handler: updatePayrollPolicy },
+  { method: "GET", path: "/api/payroll/periods", auth: true, permission: "payroll.view", handler: getPayrollPeriods },
+  {
+    method: "POST",
+    path: "/api/payroll/periods/:id/social-security-closure",
+    auth: true,
+    permission: "payroll.manage",
+    handler: (req, res, p) => socialSecurityClosureRoute(req, res, p.id!)
+  },
+  { method: "POST", path: "/api/payroll/compute", auth: true, permission: "payroll.manage", handler: computePayroll },
+  { method: "GET", path: "/api/payroll/review-ledgers", auth: true, permission: "payroll.view", handler: listPayrollReviewLedgers },
+  { method: "POST", path: "/api/payroll/review-ledgers", auth: true, permission: "payroll.manage", handler: syncPayrollReviewLedgers },
+  { method: "PATCH", path: "/api/payroll/employees/salary-accounts", auth: true, permission: "payroll.manage", handler: updateSalaryAccounts },
+
+  // payroll — transfer (P3)
+  { method: "GET", path: "/api/payroll/transfer/batches", auth: true, permission: "payroll.view", handler: listBatchesRoute },
+  { method: "POST", path: "/api/payroll/transfer/batches", auth: true, permission: "payroll.manage", handler: buildBatchRoute },
+  { method: "GET", path: "/api/runtime/payroll-transfer", auth: true, permission: "payroll.view", handler: getPayrollTransferRuntimeSummaryRoute },
+  {
+    method: "GET",
+    path: "/api/payroll/transfer/batches/:id/file",
+    auth: true,
+    permission: "payroll.view",
+    handler: (req, res, p) => downloadBatchFileRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/payroll/transfer/batches/:id/approve",
+    auth: true,
+    permission: "payroll.manage",
+    handler: (req, res, p) => approveBatchRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/payroll/transfer/batches/:id/disburse",
+    auth: true,
+    permission: "payroll.manage",
+    handler: (req, res, p) => disburseBatchRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/payroll/transfer/batches/:id/compensate",
+    auth: true,
+    permission: "payroll.manage",
+    handler: (req, res, p) => compensateBatchRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/payroll/transfer/batches/:id/submit-api",
+    auth: true,
+    permission: "payroll.manage",
+    handler: (req, res, p) => submitTransferApiRoute(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/payroll/transfer/batches/:id",
+    auth: true,
+    permission: "payroll.view",
+    handler: (req, res, p) => getBatchRoute(req, res, p.id!)
+  },
+
+  // payroll — base
+  { method: "GET", path: "/api/payroll", auth: true, permission: "payroll.view", handler: listPayroll },
+  { method: "GET", path: "/api/runtime/payroll", auth: true, permission: "payroll.view", handler: getPayrollRuntimeSummaryRoute },
+  {
+    method: "POST",
+    path: "/api/payroll/:id/confirm",
+    auth: true,
+    permission: "payroll.manage",
+    handler: (req, res, p) => confirmPayroll(req, res, p.id!)
   }
 ];
 for (const route of migratedRoutes) {
@@ -718,167 +803,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
 
     // vouchers + closing-bundle → migrated to appRouter
 
-  if (url.pathname === "/api/employees") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("payroll.view", req, res))) return;
-      return listEmployees(req, res);
-    }
-    if (req.method === "POST") {
-      if (!(await requirePermission("payroll.manage", req, res))) return;
-      return createEmployee(req, res);
-    }
-  }
-
-  const employeeDetailMatch = url.pathname.match(/^\/api\/employees\/([^/]+)$/);
-  const employeeDetailId = employeeDetailMatch?.[1];
-  if (employeeDetailId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "PUT") {
-      if (!(await requirePermission("payroll.manage", req, res))) return;
-      return updateEmployee(req, res, employeeDetailId);
-    }
-  }
-
-  if (url.pathname === "/api/payroll/policy") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("payroll.view", req, res))) return;
-      return getPayrollPolicy(req, res);
-    }
-    if (req.method === "PUT") {
-      if (!(await requirePermission("payroll.manage", req, res))) return;
-      return updatePayrollPolicy(req, res);
-    }
-  }
-
-  if (url.pathname === "/api/payroll/periods") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.view", req, res))) return;
-    if (req.method === "GET") return getPayrollPeriods(req, res);
-  }
-
-  // ── P4: 社保联动（工资关账 → 社保申报 + 三险一金凭证）──────────────────────
-  const ssClosureMatch = url.pathname.match(/^\/api\/payroll\/periods\/([^/]+)\/social-security-closure$/);
-  if (ssClosureMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.manage", req, res))) return;
-    if (req.method === "POST") return socialSecurityClosureRoute(req, res, ssClosureMatch[1]);
-  }
-
-  if (url.pathname === "/api/payroll/compute") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.manage", req, res))) return;
-    if (req.method === "POST") return computePayroll(req, res);
-  }
-
-  if (url.pathname === "/api/payroll/review-ledgers") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("payroll.view", req, res))) return;
-      return listPayrollReviewLedgers(req, res);
-    }
-    if (req.method === "POST") {
-      if (!(await requirePermission("payroll.manage", req, res))) return;
-      return syncPayrollReviewLedgers(req, res);
-    }
-  }
-
-  // ── P1-6: 批量维护工资账号 ────────────────────────────────────────────────
-  if (url.pathname === "/api/payroll/employees/salary-accounts") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.manage", req, res))) return;
-    if (req.method === "PATCH") {
-      await readJsonBody(req);
-      return updateSalaryAccounts(req, res);
-    }
-  }
-
-  // ── P3: 工资代发 ──────────────────────────────────────────────────────────
-  if (url.pathname === "/api/payroll/transfer/batches") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("payroll.view", req, res))) return;
-      return listBatchesRoute(req, res);
-    }
-    if (req.method === "POST") {
-      if (!(await requirePermission("payroll.manage", req, res))) return;
-      await readJsonBody(req);
-      return buildBatchRoute(req, res);
-    }
-  }
-  if (url.pathname === "/api/runtime/payroll-transfer") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.view", req, res))) return;
-    if (req.method === "GET") return getPayrollTransferRuntimeSummaryRoute(req, res);
-  }
-  const transferFileMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/file$/);
-  if (transferFileMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.view", req, res))) return;
-    if (req.method === "GET") return downloadBatchFileRoute(req, res, transferFileMatch[1]);
-  }
-  const transferApproveMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/approve$/);
-  if (transferApproveMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.manage", req, res))) return;
-    if (req.method === "POST") return approveBatchRoute(req, res, transferApproveMatch[1]);
-  }
-  const transferDisburseMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/disburse$/);
-  if (transferDisburseMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.manage", req, res))) return;
-    if (req.method === "POST") {
-      await readJsonBody(req);
-      return disburseBatchRoute(req, res, transferDisburseMatch[1]);
-    }
-  }
-  const transferCompensateMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/compensate$/);
-  if (transferCompensateMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.manage", req, res))) return;
-    if (req.method === "POST") {
-      await readJsonBody(req);
-      return compensateBatchRoute(req, res, transferCompensateMatch[1]);
-    }
-  }
-  const transferSubmitApiMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/submit-api$/);
-  if (transferSubmitApiMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.manage", req, res))) return;
-    if (req.method === "POST") {
-      await readJsonBody(req);
-      return submitTransferApiRoute(req, res, transferSubmitApiMatch[1]);
-    }
-  }
-  const transferBatchMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)$/);
-  if (transferBatchMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.view", req, res))) return;
-    if (req.method === "GET") return getBatchRoute(req, res, transferBatchMatch[1]);
-  }
-
-  if (url.pathname === "/api/payroll") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.view", req, res))) return;
-    if (req.method === "GET") return listPayroll(req, res);
-  }
-
-  if (url.pathname === "/api/runtime/payroll") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.view", req, res))) return;
-    if (req.method === "GET") return getPayrollRuntimeSummaryRoute(req, res);
-  }
-
-  const payrollConfirmMatch = url.pathname.match(/^\/api\/payroll\/([^/]+)\/confirm$/);
-  const payrollConfirmId = payrollConfirmMatch?.[1];
-  if (payrollConfirmId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("payroll.manage", req, res))) return;
-      return confirmPayroll(req, res, payrollConfirmId);
-    }
-  }
+    // employees + payroll (policy/periods/compute/review/transfer/base) → migrated to appRouter
 
   if (url.pathname === "/api/contracts") {
     if (!(await requireAuth(req, res))) return;
