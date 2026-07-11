@@ -244,9 +244,9 @@ git worktree add ../ft-v5-<lane> -b codex/v5-<lane> origin/main
 | 项 | 状态 | 落地 / 证据 |
 |---|---|---|
 | B4 架构规整 | ✅ 完成（已合 main） | 手写 1600+ 行 if 分发链 → 声明式路由表。新增 `router/router.ts`（路由核心 + 9 单测）、`router/dispatch.ts`（auth/permission 统一施加）、`observability/logger.ts`（零依赖结构化日志 + requestId）、`routes/registry.ts`（全部 ~190 路由声明 + handlers）。app.ts **1624→52 行**（主入口 <200 达标）；统一错误中间件（顶层 try/catch 兜底 500 + 结构化日志，覆盖全部路由）。分 11 提交增量迁移，每批 typecheck + verify + buildApp 冒烟全绿，零行为变更 |
-| B1 安全加固 | ⏳ 下一项 | Zod 统一入参校验 + 安全头（HSTS/X-Frame/Referrer/CSP）+ 限流（补 A4 评审 H3 的 IP 级）+ CSRF |
-| B2 账务内核 | ⏳ 待做（高风险） | 结转损益 + 期末结账凭证 + 去兜底配平 + 物化余额 + idempotency_key。需 DB 集成测试 + PR/SME 评审 |
-| B3 测试底座 | ⏳ 待做 | Playwright 5 流 + DB 集成测试 + 覆盖率门禁 ≥60%（与后台 CI 测试收集任务交叠）|
+| B1 安全加固 | 🟡 进行中（`codex/v5-security-hardening`） | **已完成 3 项**：① 安全头 `94ce8a2`（HSTS/X-Content-Type/X-Frame/Referrer/Permissions-Policy/CSP frame-ancestors，`security/headers.ts` + 4 单测）② 限流 `f11176d`（零依赖固定窗口，全局 + auth 端点更严桶，429+Retry-After，闭合 A4 评审 H3，`security/rate-limit.ts` + 7 单测）③ 审计脱敏 `86d9e4a`（`security/redact.ts` 递归掩码 password/secret/token/apiKey，写库前生效 + 7 单测）。每项 verify 退出码 0。**剩余**：Zod 统一入参校验（需先定 zod 依赖 vs 零依赖 helper，且覆盖面大）；CSRF（本项目 Bearer-token 鉴权、非 Cookie 环境，CSRF 不适用，建议标注 N/A）；HTML 端点 nonce CSP（小众，后置）|
+| B2 账务内核 | ⏳ 待做（高风险，需 DB） | 结转损益 + 期末结账凭证 + 去兜底配平 + 物化余额 + idempotency_key。**硬约束**：需可起 Postgres 的环境验证结转正确性 + DB 集成测试，且必须走 PR + SME 评审，不可无 DB 盲改 |
+| B3 测试底座 | ⏳ 待做（需 DB/运行时） | Playwright 5 流 + DB 集成测试 + 覆盖率门禁 ≥60%（与后台 CI 测试收集任务 `task_094ac1ce` 交叠）|
 | B5 前端工程化 | ⏳ 待做 | React.lazy 懒加载 + 状态管理 + TanStack Query + 大页拆分 |
 
 ---
