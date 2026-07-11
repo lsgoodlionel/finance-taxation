@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import type {
   CorporateIncomeTaxPreparation,
   IndividualIncomeTaxMaterial,
@@ -29,8 +29,7 @@ import {
   listTaxpayerProfiles,
   reviewTaxFilingBatch,
   submitTaxFilingBatch,
-  validateTaxFilingBatch,
-  type WorkflowRunDetail
+  validateTaxFilingBatch
 } from "../lib/api";
 import { TaxBatchesPanel } from "./tax/TaxBatchesPanel";
 import { TaxHeader } from "./tax/TaxHeader";
@@ -44,7 +43,10 @@ import { TaxCalendar } from "./tax/TaxCalendar";
 import { VatDeclarationWizard } from "./tax/VatDeclarationWizard";
 import { DeclarationExportPanel } from "./tax/DeclarationExportPanel";
 import { TaxWorkspaceSummary } from "./tax/TaxWorkspaceSummary";
-import { WorkflowRuntimeCard } from "../components/workflow/WorkflowRuntimeCard";
+import { useAccessUser } from "../features/runtime/useAccessUser";
+import { deriveTaxRuntimeSummary } from "../features/runtime/workflow-runtime";
+import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
+import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
 
 const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
   vat: "增值税底稿",
@@ -69,7 +71,6 @@ function openPrintableHtml(html: string) {
 
 export function TaxPage() {
   const location = useLocation();
-  const navigate = useNavigate();
   const navState = normalizeDrilldownState(location.state);
   const navEventId = navState.businessEventId ?? null;
   const navTaxItemId = navState.taxItemId ?? null;
@@ -81,7 +82,6 @@ export function TaxPage() {
   const [batches, setBatches] = useState<TaxFilingBatch[]>([]);
   const [profiles, setProfiles] = useState<TaxpayerProfile[]>([]);
   const [selectedBatchDetail, setSelectedBatchDetail] = useState<TaxBatchDetail | null>(null);
-  const [runtimeDetail, setRuntimeDetail] = useState<WorkflowRunDetail | null>(null);
   const [validation, setValidation] = useState<{ valid: boolean; issues: string[]; itemCount: number } | null>(null);
   const [ruleProfile, setRuleProfile] = useState<(TaxRuleProfile & { filingPeriod: string }) | null>(null);
   const [vatPaper, setVatPaper] = useState<VatWorkingPaper | null>(null);
@@ -111,6 +111,8 @@ export function TaxPage() {
   });
   const [showHelp, setShowHelp] = useState(false);
   const [vatWizardOpen, setVatWizardOpen] = useState(false);
+  const [runtimeActionKey, setRuntimeActionKey] = useState<string | null>(null);
+  const accessUser = useAccessUser();
 
   useEffect(() => {
     async function bootstrap() {
@@ -313,6 +315,41 @@ export function TaxPage() {
   const selectedBatchLabel = selectedBatchDetail
     ? `${selectedBatchDetail.taxType} · ${selectedBatchDetail.filingPeriod}`
     : batches.find((item) => item.id === selectedBatchState)?.id || "";
+  const localRuntimeSummary = deriveTaxRuntimeSummary(
+    items,
+    batches,
+    selectedBatchDetail,
+    profiles,
+    accessUser?.roleIds ?? []
+  );
+  const runtimeSummary = useWorkflowRuntimeSummary(
+    "tax",
+    {
+      batchId: (selectedBatchDetail?.id ?? selectedBatchState) || undefined,
+      businessEventId: navEventId ?? undefined
+    },
+    localRuntimeSummary
+  );
+
+  async function handleRuntimeAction(action: NonNullable<typeof runtimeSummary.actions>[number]) {
+    if (action.key !== "retry-tax-review" || !action.params?.batchId) {
+      return;
+    }
+    setRuntimeActionKey(action.key);
+    try {
+      const detail = await reviewTaxFilingBatch(action.params.batchId, {
+        reviewResult: "approved",
+        reviewNotes: "runtime quick retry"
+      });
+      setSelectedBatchDetail(detail);
+      await refreshBatches(action.params.batchId);
+      setNotice({ tone: "success", message: `批次 ${action.params.batchId} 已重新复核。` });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    } finally {
+      setRuntimeActionKey(null);
+    }
+  }
 
   return (
     <section style={{ display: "grid", gap: "20px" }}>
@@ -323,6 +360,12 @@ export function TaxPage() {
         summary={(
           <>
             <TaxCalendar batches={batches} onStartVatDeclaration={() => setVatWizardOpen(true)} />
+            <WorkflowRuntimePanel
+              title="税务运行态与授权态"
+              summary={runtimeSummary}
+              onAction={(action) => void handleRuntimeAction(action)}
+              busyActionKey={runtimeActionKey}
+            />
             <TaxWorkspaceSummary
               itemCount={items.length}
               batchCount={batches.length}
@@ -337,14 +380,6 @@ export function TaxPage() {
               currentNodeId={selectedBatchDetail?.archives.length ? "archive_trace_query" : "tax_filing_archive"}
               branch={null}
             />
-            <WorkflowRuntimeCard
-              title="税务批次运行态 / 授权态"
-              resourceType="tax_filing_batch"
-              resourceId={selectedBatchDetail?.id ?? selectedBatchState ?? null}
-              emptyHint="选择或生成申报批次后，可查看该批次的运行状态、授权状态、重试与补偿信息。"
-              onChanged={() => refreshBatches(selectedBatchDetail?.id ?? selectedBatchState ?? undefined)}
-              onDetailChange={setRuntimeDetail}
-            />
             <TaxProfilePanel
               profiles={profiles}
               profileForm={profileForm}
@@ -356,28 +391,23 @@ export function TaxPage() {
           </>
         )}
         taxItems={<TaxItemsPanel items={items} navEventId={navEventId} navTaxItemId={navTaxItemId} />}
-            batches={(
-              <TaxBatchesPanel
-                batches={batches}
-                selectedBatchId={selectedBatchState || null}
-                selectedBatchDetail={selectedBatchDetail}
-                runtimeDetail={runtimeDetail}
-                validation={validation}
+        batches={(
+          <TaxBatchesPanel
+            batches={batches}
+            selectedBatchId={selectedBatchState || null}
+            selectedBatchDetail={selectedBatchDetail}
+            validation={validation}
             reviewForm={reviewForm}
             archiveForm={archiveForm}
             onSelectBatch={(batchId) => void handleSelectBatch(batchId)}
             onReviewFormChange={setReviewForm}
             onArchiveFormChange={setArchiveForm}
-                onValidateBatch={() => void handleValidateBatch()}
-                onSubmitBatch={() => void handleSubmitBatch()}
-                onReviewBatch={() => void handleReviewBatch()}
-                onArchiveBatch={() => void handleArchiveBatch()}
-                onOpenEvent={(businessEventId) => navigate("/events", { state: { businessEventId } })}
-                onOpenDocuments={(businessEventId) => navigate("/documents", { state: { businessEventId } })}
-                onOpenVoucherHub={(businessEventId) => navigate("/vouchers", { state: { businessEventId } })}
-                onOpenTaxItem={(taxItemId) => navigate("/tax", { state: { taxItemId } })}
-              />
-            )}
+            onValidateBatch={() => void handleValidateBatch()}
+            onSubmitBatch={() => void handleSubmitBatch()}
+            onReviewBatch={() => void handleReviewBatch()}
+            onArchiveBatch={() => void handleArchiveBatch()}
+          />
+        )}
         materials={(
           <TaxMaterialsPanel
             activeMaterial={activeMaterial}

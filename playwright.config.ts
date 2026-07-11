@@ -21,7 +21,15 @@ export default defineConfig({
   },
   projects: [
     { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "tablet-chromium", use: { ...devices["iPad Pro 11"] } }
+    {
+      name: "tablet-chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 834, height: 1194 },
+        isMobile: true,
+        hasTouch: true
+      }
+    }
   ],
   outputDir: "artifacts/v4/baseline/browser/results"
 });

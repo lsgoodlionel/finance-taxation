@@ -23,6 +23,11 @@ const jobs: ExportJob[] = [{
   resourceId: "snap-1",
   periodLabel: "2026-05",
   status: "opened",
+  retryCount: 1,
+  lastError: "归档索引写入失败，等待重试",
+  lastAttemptAt: "2026-05-27T10:05:00.000Z",
+  nextRetryAt: "2026-05-27T10:20:00.000Z",
+  completedAt: null,
   createdByUserId: null,
   createdByName: "系统",
   createdAt: "2026-05-27T10:00:00.000Z",
@@ -51,6 +56,9 @@ const historyHtml = renderToStaticMarkup(createElement(ExportHistoryPanel, {
 
 assert(historyHtml.includes("最近导出记录"), "expected export history title");
 assert(historyHtml.includes("利润表 2026-05"), "expected export history row");
+assert(historyHtml.includes("重试：1 次"), "expected retry count");
+assert(historyHtml.includes("失败原因：归档索引写入失败，等待重试"), "expected last error");
+assert(historyHtml.includes("下次重试："), "expected next retry time");
 
 const archiveHtml = renderToStaticMarkup(createElement(ExportArchivePanel, {
   archiveEntries,
@@ -69,19 +77,20 @@ const auditHtml = renderToStaticMarkup(createElement(ExportAuditPanel, {
     id: "audit-1",
     companyId: "company-demo",
     userId: null,
-    action: "created",
+    action: "retry",
     resourceType: "export_job",
     resourceId: "job-1",
     resourceLabel: "利润表 2026-05",
     userName: "系统",
-    changes: null,
+    changes: { retryCount: 1, lastError: "归档索引写入失败，等待重试" },
     createdAt: "2026-05-27T10:00:00.000Z"
   }],
   cellStyle: () => ({ borderBottom: "1px solid #eee", padding: "8px", textAlign: "left" as const })
 }));
 
 assert(auditHtml.includes("导出审计轨迹"), "expected export audit title");
-assert(auditHtml.includes("created"), "expected export audit action");
+assert(auditHtml.includes("重试"), "expected export audit action label");
+assert(auditHtml.includes("重试次数：1"), "expected export audit change summary");
 
 const reportsHtml = renderToStaticMarkup(createElement(ExportReportsPanel, {
   snapshots: [{

@@ -9,7 +9,8 @@ const STORAGE_KEY = "ft-lang";
 export const EVENT_TYPE_LABELS: Record<string, string> = {
   sales: "销售", procurement: "采购", expense: "费用",
   payroll: "工资", tax: "税务", asset: "资产",
-  financing: "融资", rnd: "研发", general: "其他"
+  financing: "融资", rnd: "研发", general: "其他",
+  purchase_expense: "采购报销", travel_expense: "差旅报销", contract_revenue: "合同收入"
 };
 
 export const EVENT_STATUS_LABELS: Record<string, string> = {
@@ -71,6 +72,9 @@ export const DOC_TYPE_LABELS: Record<string, string> = {
   attendance_record: "考勤记录",
   tax_declaration: "申报表",
   collection_schedule: "回款计划",
+  service_contract: "服务合同",
+  output_invoice: "销项发票",
+  billing_schedule: "开票与履约计划",
   invoice_bundle: "发票包",
   rnd_project_file: "研发项目档案",
   timesheet: "工时记录",

@@ -56,7 +56,8 @@ import type {
 } from "@finance-taxation/domain-model";
 import { describePageLoadError, isAuthRequiredError } from "./request-errors";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
+const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+export const API_BASE_URL = rawApiBaseUrl === undefined ? "http://127.0.0.1:3100" : rawApiBaseUrl;
 const TOKEN_KEY = "finance-taxation-v2-token";
 const REFRESH_TOKEN_KEY = "finance-taxation-v2-refresh-token";
 export const AUTH_EXPIRED_EVENT = "finance-taxation-v2-auth-expired";
@@ -67,7 +68,38 @@ interface AccessUser {
   username: string;
   displayName: string;
   roleIds: string[];
+  departmentName: string | null;
 }
+
+export type RuntimeExecutionState = "waiting" | "running" | "succeeded" | "failed" | "cancelled";
+export type RuntimeAuthorizationState = "not_required" | "awaiting_authorization" | "authorized" | "insufficient";
+
+export interface WorkflowRuntimeSummary {
+  executionState: RuntimeExecutionState;
+  executionLabel: string;
+  executionMessage: string;
+  authorizationState: RuntimeAuthorizationState;
+  authorizationLabel: string;
+  authorizationMessage: string;
+  stats: Array<{
+    label: string;
+    value: string;
+  }>;
+  issue?: {
+    tone: "info" | "warning" | "error";
+    title: string;
+    message: string;
+    detail?: string;
+  };
+  actions?: Array<{
+    key: string;
+    label: string;
+    tone?: "primary" | "default" | "danger";
+    params?: Record<string, string>;
+  }>;
+}
+
+export type WorkflowRuntimeScope = "tasks" | "tax" | "vouchers" | "payroll" | "payroll-transfer";
 
 export interface EventDetail extends BusinessEvent {
   relations: Array<{
@@ -291,6 +323,21 @@ export async function refreshSession() {
   setStoredToken(payload.accessToken);
   setStoredRefreshToken(payload.refreshToken);
   return payload;
+}
+
+export async function getWorkflowRuntimeSummary(
+  scope: WorkflowRuntimeScope,
+  params: Record<string, string | undefined> = {}
+) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      search.set(key, value);
+    }
+  }
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+  const payload = await request<{ summary: WorkflowRuntimeSummary }>(`/api/runtime/${scope}${suffix}`);
+  return payload.summary;
 }
 
 export async function getCurrentUser() {
@@ -940,6 +987,20 @@ export async function updateExportJobStatus(jobId: string, status: ExportJob["st
   });
 }
 
+export async function updateExportJobRuntime(
+  jobId: string,
+  input: {
+    status: ExportJob["status"];
+    errorMessage?: string;
+    nextRetryAt?: string | null;
+  }
+) {
+  return request<{ job: ExportJob }>(`/api/exports/jobs/${encodeURIComponent(jobId)}/status`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
 export interface DashboardCard {
   key: string;
   label: string;
@@ -1195,6 +1256,13 @@ export interface PayrollTransferBatch {
   total_amount: string;
   employee_count: number;
   status: "draft" | "approved" | "exported" | "disbursed" | "confirmed";
+  retry_count: number;
+  last_error: string | null;
+  last_attempt_at: string | null;
+  next_retry_at: string | null;
+  compensation_status: "not_required" | "pending" | "completed" | "failed";
+  compensation_event_id: string | null;
+  compensated_at: string | null;
   bank_transfer_ref: string | null;
   notes: string;
   created_at: string;
@@ -1238,6 +1306,13 @@ export async function disburseTransferBatch(batchId: string, bankTransferRef?: s
   return request<{ ok: boolean; eventId: string }>(`/api/payroll/transfer/batches/${batchId}/disburse`, {
     method: "POST", body: JSON.stringify({ bankTransferRef })
   });
+}
+
+export async function compensateTransferBatch(batchId: string) {
+  return request<{ ok: boolean; eventId: string; reused: boolean }>(
+    `/api/payroll/transfer/batches/${batchId}/compensate`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
 }
 
 export async function downloadTransferFile(batchId: string, format: "generic" | "cmb") {

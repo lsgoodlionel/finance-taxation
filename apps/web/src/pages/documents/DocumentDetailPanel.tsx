@@ -7,6 +7,9 @@ import {
   buildExpenseDocumentTemplateModel,
   getExpenseDocumentTemplateKind
 } from "../document-relations";
+import { deriveContractRevenueDocumentGuidance } from "./contract-revenue-document-guidance";
+import { derivePurchaseDocumentGuidance } from "./purchase-document-guidance";
+import { deriveTravelDocumentGuidance } from "./travel-document-guidance";
 import { DocumentFormalView, type ExpenseTemplateDetail } from "./DocumentFormalView";
 import { DocumentRelationsPanel } from "./DocumentRelationsPanel";
 import { DocumentAttachments } from "./DocumentAttachments";
@@ -71,6 +74,19 @@ export function DocumentDetailPanel({
       model: buildExpenseDocumentTemplateModel({ document: detail, tasks, taxItems, vouchers })
     };
   }, [detail, tasks, taxItems, vouchers]);
+  const purchaseGuidance = useMemo(
+    () => derivePurchaseDocumentGuidance(detail, tasks, taxItems, vouchers),
+    [detail, tasks, taxItems, vouchers]
+  );
+  const travelGuidance = useMemo(
+    () => deriveTravelDocumentGuidance(detail, tasks, taxItems, vouchers),
+    [detail, tasks, taxItems, vouchers]
+  );
+  const contractGuidance = useMemo(
+    () => deriveContractRevenueDocumentGuidance(detail, tasks, taxItems, vouchers),
+    [detail, tasks, taxItems, vouchers]
+  );
+  const workflowGuidance = purchaseGuidance ?? travelGuidance ?? contractGuidance;
 
   if (!detail) {
     return (
@@ -82,6 +98,26 @@ export function DocumentDetailPanel({
 
   return (
     <div style={{ display: "grid", gap: "16px" }}>
+      {workflowGuidance && (
+        <div
+          style={{
+            borderRadius: 14,
+            border: workflowGuidance.tone === "error"
+              ? "1px solid rgba(185,28,28,0.18)"
+              : "1px solid rgba(217,119,6,0.18)",
+            background: workflowGuidance.tone === "error"
+              ? "rgba(254,242,242,0.92)"
+              : "rgba(255,251,235,0.96)",
+            padding: "14px 16px",
+            display: "grid",
+            gap: 6
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 700 }}>{workflowGuidance.title}</div>
+          <div style={{ fontSize: 13.5, lineHeight: 1.7 }}>{workflowGuidance.message}</div>
+        </div>
+      )}
+
       <ProcessFlowStageSection
         title="单据阶段流程回看"
         subtitle="当前页定位到单据生成或归档节点。若已关联具体事项，则会尽量使用该事项上下文高亮分支。"

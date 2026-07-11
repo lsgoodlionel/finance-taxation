@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { PageHeader } from "../components/ui/PageHeader";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { Card, Space, Tag, Alert, Tooltip, Button, Segmented, Skeleton, Typography } from "antd";
 import {
   ClockCircleOutlined, ExclamationCircleOutlined, QuestionCircleOutlined,
@@ -8,15 +8,21 @@ import {
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import type { Task, TaskStatus } from "@finance-taxation/domain-model";
-import { listTasks, remindTask, type WorkflowRunDetail, updateTaskStatus } from "../lib/api";
+import { listTasks, remindTask, updateTaskStatus } from "../lib/api";
 import { TASK_STATUS_LABELS } from "../lib/i18n";
 import { buildResultPageSubtitle } from "../lib/entry-guidance";
 import { normalizeDrilldownState } from "./drilldown";
 import { useQueryState } from "../hooks/useQueryState";
-import { WorkflowRuntimeCard } from "../components/workflow/WorkflowRuntimeCard";
 import { TaskKanbanView } from "./tasks/TaskKanbanView";
 import { TaskListView } from "./tasks/TaskListView";
 import { TaskDrawer } from "./tasks/TaskDrawer";
+import { deriveContractRevenueTaskGuidance } from "./tasks/contract-revenue-task-guidance";
+import { derivePurchaseTaskGuidance } from "./tasks/purchase-task-guidance";
+import { deriveTravelTaskGuidance } from "./tasks/travel-task-guidance";
+import { useAccessUser } from "../features/runtime/useAccessUser";
+import { deriveTaskRuntimeSummary } from "../features/runtime/workflow-runtime";
+import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
+import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
 
 const { Title, Text } = Typography;
 
@@ -25,7 +31,6 @@ type ViewMode = "list" | "kanban";
 
 export function TasksPage() {
   const location = useLocation();
-  const navigate = useNavigate();
   const navEventId = normalizeDrilldownState(location.state).businessEventId ?? null;
 
   const [tasks, setTasks] = useState<TaskWithOverdue[]>([]);
@@ -33,9 +38,9 @@ export function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [remindingId, setRemindingId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [runtimeActionKey, setRuntimeActionKey] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [detailTask, setDetailTask] = useState<TaskWithOverdue | null>(null);
-  const [runtimeDetail, setRuntimeDetail] = useState<WorkflowRunDetail | null>(null);
   const [viewStr, setViewStr] = useQueryState("view", "kanban");
   const viewMode = (viewStr === "list" ? "list" : "kanban") as ViewMode;
 
@@ -44,10 +49,8 @@ export function TasksPage() {
     try {
       const payload = await listTasks(navEventId || undefined, onlyOverdue);
       setTasks(payload.items);
-      return payload.items;
     } catch (err) {
       toast.error((err as Error).message);
-      return null;
     } finally {
       setLoading(false);
     }
@@ -86,16 +89,38 @@ export function TasksPage() {
     }
   }
 
-  async function handleRuntimeChanged() {
-    const items = await loadTasks(overdueOnly);
-    if (detailTask?.id && items) {
-      setDetailTask(items.find((task) => task.id === detailTask.id) ?? null);
-    }
-  }
-
   const overdueCount = useMemo(() => tasks.filter(t => t.isOverdue).length, [tasks]);
   const notStartedCount = useMemo(() => tasks.filter(t => t.status === "not_started").length, [tasks]);
-  const runtimeTaskId = detailTask?.id ?? tasks[0]?.id ?? null;
+  const purchaseGuidance = useMemo(() => derivePurchaseTaskGuidance(tasks), [tasks]);
+  const travelGuidance = useMemo(() => deriveTravelTaskGuidance(tasks), [tasks]);
+  const contractGuidance = useMemo(() => deriveContractRevenueTaskGuidance(tasks), [tasks]);
+  const workflowGuidance = purchaseGuidance ?? travelGuidance ?? contractGuidance;
+  const accessUser = useAccessUser();
+  const localRuntimeSummary = useMemo(
+    () => deriveTaskRuntimeSummary(tasks, accessUser?.roleIds ?? []),
+    [accessUser?.roleIds, tasks]
+  );
+  const runtimeSummary = useWorkflowRuntimeSummary(
+    "tasks",
+    { businessEventId: navEventId ?? undefined },
+    localRuntimeSummary
+  );
+
+  async function handleRuntimeAction(action: NonNullable<typeof runtimeSummary.actions>[number]) {
+    if (action.key !== "retry-blocked-task" || !action.params?.taskId) {
+      return;
+    }
+    setRuntimeActionKey(action.key);
+    try {
+      await updateTaskStatus(action.params.taskId, "not_started");
+      await loadTasks(overdueOnly);
+      toast.success("已重开阻塞任务，当前可继续补资料或重新推进。");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setRuntimeActionKey(null);
+    }
+  }
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -190,14 +215,20 @@ export function TasksPage() {
           message={<>当前仅显示事项 <Text code>{navEventId}</Text> 的关联任务。</>}
         />
       )}
-
-      <WorkflowRuntimeCard
-        title="任务运行态 / 授权态"
-        resourceType="task"
-        resourceId={runtimeTaskId}
-        emptyHint="选择一个任务后，可查看其执行状态、授权状态、重试与补偿信息。"
-        onChanged={() => handleRuntimeChanged()}
-        onDetailChange={setRuntimeDetail}
+      {workflowGuidance && (
+        <Alert
+          type={workflowGuidance.tone === "error" ? "error" : "warning"}
+          showIcon
+          style={{ borderRadius: 8 }}
+          message={workflowGuidance.title}
+          description={workflowGuidance.message}
+        />
+      )}
+      <WorkflowRuntimePanel
+        title="任务运行态与授权态"
+        summary={runtimeSummary}
+        onAction={(action) => void handleRuntimeAction(action)}
+        busyActionKey={runtimeActionKey}
       />
 
       {/* Main content */}
@@ -236,22 +267,16 @@ export function TasksPage() {
       {/* Detail drawer */}
       <TaskDrawer
         task={detailTask}
-        runtimeDetail={runtimeDetail}
         updatingId={updatingId}
         remindingId={remindingId}
         onClose={() => setDetailTask(null)}
         onStatusChange={handleStatusChange}
         onRemind={handleRemind}
-        onOpenEvent={(businessEventId) => navigate("/events", { state: { businessEventId } })}
-        onOpenDocuments={(businessEventId) => navigate("/documents", { state: { businessEventId } })}
-        onOpenTax={(businessEventId) => navigate("/tax", { state: { businessEventId } })}
-        onOpenVouchers={(businessEventId) => navigate("/vouchers", { state: { businessEventId } })}
       />
 
       {/* Help drawer */}
       <TaskDrawer
         task={null}
-        runtimeDetail={null}
         updatingId={null}
         remindingId={null}
         onClose={() => setHelpOpen(false)}

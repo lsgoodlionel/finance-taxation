@@ -24,6 +24,9 @@ import { listCompanyVouchers } from "../vouchers/routes.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { buildGeneratedTasksForEvent } from "./task-chain.js";
+import { buildContractRevenueBundle } from "./contract-revenue-rules.js";
+import { buildPurchaseExpenseBundle } from "./purchase-expense-rules.js";
+import { buildTravelExpenseBundle } from "./travel-expense-rules.js";
 import { buildContractObjectLinks } from "../contracts/links.js";
 import { buildWorkflowRun } from "../workflows/commands.js";
 import {
@@ -301,7 +304,7 @@ export function buildTaskTree(tasks: Task[]): TaskTreeNode[] {
   return roots;
 }
 
-function scopeEvents(rows: BusinessEvent[], req: ApiRequest) {
+export function scopeEvents(rows: BusinessEvent[], req: ApiRequest) {
   const companyRows = rows.filter((row) => row.companyId === req.auth!.companyId);
   if (hasCompanyWideAccess(req.auth!.roleCodes)) {
     return companyRows;
@@ -344,8 +347,15 @@ function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
   const documentMappings: EventDocumentMapping[] = [];
   const taxMappings: EventTaxMapping[] = [];
   const voucherDrafts: EventVoucherDraft[] = [];
+  const eventType = String(event.type);
 
-  switch (event.type) {
+  switch (eventType) {
+    case "contract_revenue":
+      return buildContractRevenueBundle(event);
+    case "purchase_expense":
+      return buildPurchaseExpenseBundle(event);
+    case "travel_expense":
+      return buildTravelExpenseBundle(event);
     case "sales":
       documentMappings.push(
         {
@@ -522,16 +532,28 @@ function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
           notes: "需补齐发票、回单、差旅行程或招待说明。"
         }
       );
-      taxMappings.push({
-        id: makeId("tax-map", event.id, "eit"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        taxType: "企业所得税",
-        treatment: "复核费用真实性、关联性和税前扣除凭证完整性。",
-        status: "attention",
-        basis: "资料不完整时不应直接作为最终税前扣除依据。",
-        filingPeriod: event.occurredOn.slice(0, 7)
-      });
+      taxMappings.push(
+        {
+          id: makeId("tax-map", event.id, "input-vat"),
+          companyId: event.companyId,
+          businessEventId: event.id,
+          taxType: "增值税",
+          treatment: "复核发票类型、用途与抵扣条件，判断是否形成可抵扣进项税额。",
+          status: "attention",
+          basis: "报销事项如取得合规专票且用途符合规定，需同步进入进项税额复核。",
+          filingPeriod: event.occurredOn.slice(0, 7)
+        },
+        {
+          id: makeId("tax-map", event.id, "eit"),
+          companyId: event.companyId,
+          businessEventId: event.id,
+          taxType: "企业所得税",
+          treatment: "复核费用真实性、关联性和税前扣除凭证完整性。",
+          status: "attention",
+          basis: "资料不完整时不应直接作为最终税前扣除依据。",
+          filingPeriod: event.occurredOn.slice(0, 7)
+        }
+      );
       voucherDrafts.push({
         id: makeId("vou-map", event.id, "expense"),
         companyId: event.companyId,

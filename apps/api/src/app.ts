@@ -133,6 +133,7 @@ import {
   listBatchesRoute,
   getBatchRoute,
   approveBatchRoute,
+  compensateBatchRoute,
   downloadBatchFileRoute,
   disburseBatchRoute
 } from "./modules/payroll/transfer.routes.js";
@@ -162,6 +163,13 @@ import {
   listExportJobs,
   updateExportJobStatus
 } from "./modules/exports/routes.js";
+import {
+  getPayrollRuntimeSummaryRoute,
+  getPayrollTransferRuntimeSummaryRoute,
+  getTaskRuntimeSummaryRoute,
+  getTaxRuntimeSummaryRoute,
+  getVoucherRuntimeSummaryRoute
+} from "./modules/runtime/routes.js";
 import { listAuditLogs } from "./modules/audit/routes.js";
 import { bossChat } from "./modules/boss-qa/routes.js";
 import {
@@ -187,7 +195,7 @@ import {
   upsertIntegrationConfig,
   testIntegrationConfig,
 } from "./modules/settings/integration-config.routes.js";
-import { login, logout, me, refresh, requireAuth, requirePermission } from "./middleware/auth.js";
+import { login, logout, me, refresh, requireAnyPermission, requireAuth, requirePermission } from "./middleware/auth.js";
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
 import { readJsonBody, shouldReadJsonBody } from "./utils/body.js";
@@ -336,7 +344,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
   if (eventRiskCheckId) {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "POST") {
-      if (!(await requirePermission("risk.manage", req, res))) return;
+      if (!(await requireAnyPermission(["risk.manage", "tax.manage", "events.create"], req, res))) return;
       return runEventRiskCheck(req, res, eventRiskCheckId);
     }
   }
@@ -361,6 +369,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
       if (!(await requirePermission("tasks.view", req, res))) return;
       return listTasks(req, res);
     }
+  }
+
+  if (url.pathname === "/api/runtime/tasks") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tasks.view", req, res))) return;
+    if (req.method === "GET") return getTaskRuntimeSummaryRoute(req, res);
   }
 
   const taskRemindMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/remind$/);
@@ -688,6 +702,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "GET") return listTaxItems(req, res);
   }
 
+  if (url.pathname === "/api/runtime/tax") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("tax.view", req, res))) return;
+    if (req.method === "GET") return getTaxRuntimeSummaryRoute(req, res);
+  }
+
   if (url.pathname === "/api/tax-filing-batches") {
     if (!(await requireAuth(req, res))) return;
     if (req.method === "GET") {
@@ -820,6 +840,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
       if (!(await requirePermission("ledger.post", req, res))) return;
       return createVoucherFromTemplate(req, res);
     }
+  }
+
+  if (url.pathname === "/api/runtime/vouchers") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("ledger.view", req, res))) return;
+    if (req.method === "GET") return getVoucherRuntimeSummaryRoute(req, res);
   }
 
   if (url.pathname === "/api/packages/closing-bundle") {
@@ -1020,6 +1046,11 @@ async function router(req: ApiRequest, res: ServerResponse) {
       return buildBatchRoute(req, res);
     }
   }
+  if (url.pathname === "/api/runtime/payroll-transfer") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.view", req, res))) return;
+    if (req.method === "GET") return getPayrollTransferRuntimeSummaryRoute(req, res);
+  }
   const transferFileMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/file$/);
   if (transferFileMatch?.[1]) {
     if (!(await requireAuth(req, res))) return;
@@ -1039,6 +1070,15 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "POST") {
       await readJsonBody(req);
       return disburseBatchRoute(req, res, transferDisburseMatch[1]);
+    }
+  }
+  const transferCompensateMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/compensate$/);
+  if (transferCompensateMatch?.[1]) {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.manage", req, res))) return;
+    if (req.method === "POST") {
+      await readJsonBody(req);
+      return compensateBatchRoute(req, res, transferCompensateMatch[1]);
     }
   }
   const transferSubmitApiMatch = url.pathname.match(/^\/api\/payroll\/transfer\/batches\/([^/]+)\/submit-api$/);
@@ -1061,6 +1101,12 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (!(await requireAuth(req, res))) return;
     if (!(await requirePermission("payroll.view", req, res))) return;
     if (req.method === "GET") return listPayroll(req, res);
+  }
+
+  if (url.pathname === "/api/runtime/payroll") {
+    if (!(await requireAuth(req, res))) return;
+    if (!(await requirePermission("payroll.view", req, res))) return;
+    if (req.method === "GET") return getPayrollRuntimeSummaryRoute(req, res);
   }
 
   const payrollConfirmMatch = url.pathname.match(/^\/api\/payroll\/([^/]+)\/confirm$/);

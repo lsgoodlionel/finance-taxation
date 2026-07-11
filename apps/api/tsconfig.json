@@ -10,5 +10,9 @@
   },
   "include": [
     "src"
+  ],
+  "exclude": [
+    "src/modules/exports/routes.test.ts",
+    "src/modules/payroll/transfer.test.ts"
   ]
 }

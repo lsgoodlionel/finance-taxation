@@ -300,6 +300,22 @@ export async function requirePermission(
   return true;
 }
 
+export async function requireAnyPermission(
+  permissionKeys: readonly PermissionKey[],
+  req: ApiRequest,
+  res: ServerResponse
+): Promise<boolean> {
+  if (!req.auth) {
+    json(res, 401, { error: "Unauthorized" });
+    return false;
+  }
+  if (!permissionKeys.some((permissionKey) => hasPermission(req.auth!.roleCodes, permissionKey))) {
+    json(res, 403, { error: "Forbidden", requiredPermission: permissionKeys });
+    return false;
+  }
+  return true;
+}
+
 export async function login(req: ApiRequest, res: ServerResponse) {
   const body = (req.body || {}) as { username?: string; password?: string };
   if (!body.username || !body.password) {
@@ -533,7 +549,8 @@ export async function me(req: ApiRequest, res: ServerResponse) {
     companyId: user.companyId,
     username: user.username,
     displayName: user.displayName,
-    roleIds: user.roleIds
+    roleIds: user.roleIds,
+    departmentName: req.auth.departmentName
   });
 }
 

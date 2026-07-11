@@ -38,7 +38,8 @@
     "test:backup-restore": "node --import tsx tools/v4/production-gates.ts backup-restore",
     "test:connectors": "node --import tsx tools/v4/production-gates.ts connectors",
     "test:ai-evals": "node --import tsx tools/v4/production-gates.ts ai-evals",
-    "verify:v4": "npm run typecheck:v2 && npm run typecheck:v4:tools && npm run test:unit && npm run test:db && npm run test:v4:tools && npm run v4:report && node tools/v4/check-plan-artifacts.mjs && npm run check:progress",
+    "verify:v4:ops": "npm run v4:ops:init-sources && npm run v4:ops && npm run test:load && npm run test:backup-restore && npm run test:connectors && npm run test:ai-evals",
+    "verify:v4": "npm run typecheck:v2 && npm run typecheck:v4:tools && npm run test:unit && npm run test:db && npm run test:v4:tools && npm run v4:report && node tools/v4/check-plan-artifacts.mjs && npm run check:progress && npm run verify:v4:ops",
     "verify": "npm run check:prototype && npm run check:backend-js && npm run check:data && npm run check:progress"
   },
   "devDependencies": {

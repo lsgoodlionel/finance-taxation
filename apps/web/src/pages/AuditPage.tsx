@@ -11,7 +11,7 @@ import { AuditPageShell } from "./audit/AuditPageShell";
 import { AuditWorkbenchHeader } from "./audit/AuditWorkbenchHeader";
 import { readAuditUrlState, writeAuditUrlState } from "./audit/audit-url-state";
 
-const RESOURCE_TYPES = ["", "business_event", "voucher", "document", "contract", "employee", "payroll", "tax_item", "risk_finding"];
+const RESOURCE_TYPES = ["", "business_event", "voucher", "document", "contract", "employee", "payroll", "payroll_transfer_batch", "export_job", "tax_item", "risk_finding"];
 
 export function AuditPage() {
   const location = useLocation();
@@ -232,7 +232,13 @@ export function AuditPage() {
           onNextPage={() => void load(offset + LIMIT, resourceType, resourceId, fromDate, toDate, selectedLogId, expandedId ?? "")}
         />
       }
-      detail={<AuditDetailPanel log={logs.find((item) => item.id === selectedLogId || item.id === expandedId) ?? null} renderChanges={renderChanges} />}
+      detail={
+        <AuditDetailPanel
+          log={logs.find((item) => item.id === selectedLogId || item.id === expandedId) ?? null}
+          renderChanges={renderChanges}
+          onNavigate={(path, state) => navigate(path, { state })}
+        />
+      }
     />
   );
 }

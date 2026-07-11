@@ -1,6 +1,7 @@
 # V4 Ops Source Samples
 
 These sample payloads demonstrate the JSON shape expected by `npm run v4:ops:record`.
+Each source keeps the gate-consumed metrics at the top level and adds a `metadata` envelope with source identity, capture time, summary, and evidence artifact references.
 
 Import examples:
 

@@ -23,9 +23,10 @@ test("initializeOpsSources writes three template source files", async () => {
     const connectors = await readFile(result.files.find((item) => item.endsWith("connectors.json")) ?? "", "utf8");
     const ai = await readFile(result.files.find((item) => item.endsWith("ai-evals.json")) ?? "", "utf8");
 
+    assert.match(backup, /"metadata"/);
     assert.match(backup, /fill-with-operator-or-runbook-id/);
-    assert.match(connectors, /invoice_verify/);
-    assert.match(ai, /suggestionAcceptanceRate/);
+    assert.match(connectors, /connector-certification-template/);
+    assert.match(ai, /eval-report/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

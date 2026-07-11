@@ -8,6 +8,8 @@ const RESOURCE_TYPE_LABELS: Record<string, string> = {
   contract: "合同",
   employee: "员工",
   payroll: "工资",
+  payroll_transfer_batch: "工资代发批次",
+  export_job: "导出任务",
   tax_item: "税务事项",
   risk_finding: "风险发现"
 };
@@ -20,10 +22,14 @@ const ACTION_LABELS: Record<string, string> = {
   approve: "审核",
   post: "过账",
   archive: "归档",
+  reuse: "复用",
+  retry: "重试",
   close: "关闭",
   compute: "计算工资",
   confirm: "确认工资",
-  analyze: "AI 分析"
+  analyze: "AI 分析",
+  "payroll.transfer.disbursed": "标记已代发",
+  "payroll.transfer.compensated": "补偿联动事项"
 };
 
 function panelStyle() {
@@ -92,7 +98,11 @@ export function AuditLogTablePanel({
       update_status: "#d97706",
       close: "#dc2626",
       archive: "#6c7a89",
-      delete: "#dc2626"
+      delete: "#dc2626",
+      reuse: "#2563eb",
+      retry: "#d97706",
+      "payroll.transfer.disbursed": "#2563eb",
+      "payroll.transfer.compensated": "#1a7f5a"
     };
     return (
       <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px", background: `${colorMap[action] ?? "#6c7a89"}18`, color: colorMap[action] ?? "#6c7a89", fontWeight: 500, whiteSpace: "nowrap" }}>
@@ -108,64 +118,66 @@ export function AuditLogTablePanel({
       ) : logs.length === 0 ? (
         <div style={{ textAlign: "center", color: "#aab5c0", padding: "40px" }}>暂无审计记录</div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ color: "#6c7a89", fontSize: "12px", letterSpacing: "0.04em" }}>
-              {["时间", "操作人", "操作类型", "对象类型", "对象标签", "变更详情", "跳转"].map((h) => (
-                <th key={h} style={{ ...cell, fontWeight: 500 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {logs.map((log) => {
-              const isExpanded = expandedId === log.id;
-              const hasChanges = !!log.changes;
-              const target = resolveAuditLogTarget(log);
-              const isSelected = selectedLogId === log.id;
-              return (
-                <tr key={log.id} style={{ background: isSelected ? "rgba(37,99,235,0.06)" : "transparent" }}>
-                  <td style={{ ...cell, whiteSpace: "nowrap", color: "#6c7a89" }}>{fmtDate(log.createdAt)}</td>
-                  <td style={cell}>{log.userName ?? log.userId ?? "-"}</td>
-                  <td style={cell}>{actionTag(log.action)}</td>
-                  <td style={cell}>{RESOURCE_TYPE_LABELS[log.resourceType] ?? log.resourceType}</td>
-                  <td style={{ ...cell, background: navResourceId === log.resourceId ? "rgba(37,99,235,0.06)" : "transparent" }}>
-                    <div style={{ maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {log.resourceLabel ?? log.resourceId ?? "-"}
-                    </div>
-                  </td>
-                  <td style={cell}>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      {hasChanges ? (
-                        <button onClick={() => onToggleExpanded(log.id)} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: "pointer" }}>
-                          {isExpanded ? "收起" : "查看变更"}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", minWidth: "840px", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ color: "#6c7a89", fontSize: "12px", letterSpacing: "0.04em" }}>
+                {["时间", "操作人", "操作类型", "对象类型", "对象标签", "变更详情", "跳转"].map((h) => (
+                  <th key={h} style={{ ...cell, fontWeight: 500 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log) => {
+                const isExpanded = expandedId === log.id;
+                const hasChanges = !!log.changes;
+                const target = resolveAuditLogTarget(log);
+                const isSelected = selectedLogId === log.id;
+                return (
+                  <tr key={log.id} style={{ background: isSelected ? "rgba(37,99,235,0.06)" : "transparent" }}>
+                    <td style={{ ...cell, whiteSpace: "nowrap", color: "#6c7a89" }}>{fmtDate(log.createdAt)}</td>
+                    <td style={cell}>{log.userName ?? log.userId ?? "-"}</td>
+                    <td style={cell}>{actionTag(log.action)}</td>
+                    <td style={cell}>{RESOURCE_TYPE_LABELS[log.resourceType] ?? log.resourceType}</td>
+                    <td style={{ ...cell, background: navResourceId === log.resourceId ? "rgba(37,99,235,0.06)" : "transparent" }}>
+                      <div style={{ maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {log.resourceLabel ?? log.resourceId ?? "-"}
+                      </div>
+                    </td>
+                    <td style={cell}>
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        {hasChanges ? (
+                          <button onClick={() => onToggleExpanded(log.id)} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: "pointer" }}>
+                            {isExpanded ? "收起" : "查看变更"}
+                          </button>
+                        ) : (
+                          <span style={{ color: "#aab5c0" }}>-</span>
+                        )}
+                        <button onClick={() => onSelectLog(log.id)} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: "pointer" }}>
+                          {isSelected ? "当前详情" : "查看详情"}
+                        </button>
+                      </div>
+                      {isExpanded ? (
+                        <div style={{ marginTop: "6px", padding: "8px", background: "rgba(20,40,60,0.04)", borderRadius: "6px", maxWidth: "300px" }}>
+                          {renderChanges(log.changes)}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td style={cell}>
+                      {target ? (
+                        <button onClick={() => onNavigate(target.path, target.state)} style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "4px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: "pointer" }}>
+                          {target.label}
                         </button>
                       ) : (
                         <span style={{ color: "#aab5c0" }}>-</span>
                       )}
-                      <button onClick={() => onSelectLog(log.id)} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: "pointer" }}>
-                        {isSelected ? "当前详情" : "查看详情"}
-                      </button>
-                    </div>
-                    {isExpanded ? (
-                      <div style={{ marginTop: "6px", padding: "8px", background: "rgba(20,40,60,0.04)", borderRadius: "6px", maxWidth: "300px" }}>
-                        {renderChanges(log.changes)}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td style={cell}>
-                    {target ? (
-                      <button onClick={() => onNavigate(target.path, target.state)} style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "4px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: "pointer" }}>
-                        {target.label}
-                      </button>
-                    ) : (
-                      <span style={{ color: "#aab5c0" }}>-</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {total > limit ? (

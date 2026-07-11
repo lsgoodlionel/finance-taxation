@@ -4,6 +4,7 @@ import { DataTableShell } from "../../components/ui/DataTableShell";
 
 type ExportHistoryPanelProps = {
   jobs: ExportJob[];
+  highlightedJobId?: string | null;
   onUpdateStatus: (jobId: string, status: ExportJob["status"]) => void;
   renderActionButton: (onClick: () => void, label: string) => React.ReactNode;
   cellStyle: () => {
@@ -13,7 +14,7 @@ type ExportHistoryPanelProps = {
   };
 };
 
-export function ExportHistoryPanel({ jobs, onUpdateStatus, renderActionButton, cellStyle }: ExportHistoryPanelProps) {
+export function ExportHistoryPanel({ jobs, highlightedJobId = null, onUpdateStatus, renderActionButton, cellStyle }: ExportHistoryPanelProps) {
   return (
     <DataTableShell title="最近导出记录">
       {jobs.length === 0 ? (
@@ -29,13 +30,25 @@ export function ExportHistoryPanel({ jobs, onUpdateStatus, renderActionButton, c
           </thead>
           <tbody>
             {jobs.map((item) => (
-              <tr key={item.id}>
+              <tr key={item.id} style={{ background: item.id === highlightedJobId ? "rgba(37,99,235,0.08)" : "transparent" }}>
                 <td style={cellStyle()}>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
                 <td style={cellStyle()}>{item.kind}</td>
                 <td style={cellStyle()}>{item.label}</td>
                 <td style={cellStyle()}>
                   <div>{item.fileName}</div>
                   <div style={{ fontSize: "11px", color: "#6c7a89", marginTop: "2px" }}>状态：{item.status}</div>
+                  <div style={{ fontSize: "11px", color: "#6c7a89", marginTop: "2px" }}>重试：{item.retryCount} 次</div>
+                  {item.lastError ? (
+                    <div style={{ fontSize: "11px", color: "#b45309", marginTop: "2px" }}>失败原因：{item.lastError}</div>
+                  ) : null}
+                  {item.nextRetryAt ? (
+                    <div style={{ fontSize: "11px", color: "#6c7a89", marginTop: "2px" }}>
+                      下次重试：{new Date(item.nextRetryAt).toLocaleString("zh-CN")}
+                    </div>
+                  ) : null}
+                  {item.id === highlightedJobId ? (
+                    <div style={{ fontSize: "11px", color: "#2563eb", marginTop: "2px" }}>当前审计回跳定位任务</div>
+                  ) : null}
                 </td>
                 <td style={cellStyle()}>
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
