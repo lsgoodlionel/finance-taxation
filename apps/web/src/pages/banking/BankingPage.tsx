@@ -1,29 +1,34 @@
 /**
- * 银行管理页面（P1）
+ * 银行管理页面（P1 + P3 对账）
  * 路由：/banking
  * 功能：
  *   - 银行账户管理（多账户）
  *   - 银行流水导入（CSV）
  *   - 流水列表 + 对账状态
  *   - 未匹配汇总
+ *   - 智能对账：运行对账引擎、候选确认/驳回、对账规则配置
  */
 import { useState, useEffect, useCallback } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
 import {
   Typography, Card, Row, Col, Button, Space, Table, Tag, Upload, Alert,
   Statistic, Tabs, Modal, Form, Input, Switch, Empty, Skeleton, Select,
+  InputNumber, Divider, Popconfirm,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   BankOutlined, UploadOutlined, CheckCircleOutlined, ClockCircleOutlined,
-  PlusOutlined, SyncOutlined,
+  PlusOutlined, SyncOutlined, RobotOutlined, SettingOutlined,
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import type { RcFile } from "antd/es/upload";
 import {
   listBankAccounts, createBankAccount, listBankStatements, importBankStatements,
   getBankUnmatchedSummary,
-  type BankAccount, type BankStatement,
+  runBankReconciliation, listReconciliationCandidates,
+  confirmReconciliationCandidate, rejectReconciliationCandidate,
+  getReconciliationRules, updateReconciliationRules,
+  type BankAccount, type BankStatement, type ReconciliationCandidate,
 } from "../../lib/api";
 
 const { Text } = Typography;
@@ -38,30 +43,38 @@ const MATCH_STATUS_LABELS: Record<string, string> = {
 export function BankingPage() {
   const [accounts, setAccounts]     = useState<BankAccount[]>([]);
   const [statements, setStatements] = useState<BankStatement[]>([]);
+  const [candidates, setCandidates] = useState<ReconciliationCandidate[]>([]);
   const [summary, setSummary]       = useState<Record<string, { count: number; totalAmount: number }>>({});
   const [loading, setLoading]       = useState(true);
   const [importing, setImporting]   = useState(false);
+  const [running, setRunning]       = useState(false);
+  const [savingRules, setSavingRules] = useState(false);
   const [addOpen, setAddOpen]       = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(undefined);
   const [form] = Form.useForm();
+  const [rulesForm] = Form.useForm();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [accs, stmts, smry] = await Promise.all([
+      const [accs, stmts, smry, candidateRes, ruleRes] = await Promise.all([
         listBankAccounts(),
         listBankStatements({ pageSize: 50 }),
         getBankUnmatchedSummary(),
+        listReconciliationCandidates("pending"),
+        getReconciliationRules(),
       ]);
       setAccounts(accs.items);
       setStatements(stmts.items);
       setSummary(smry);
+      setCandidates(candidateRes.items);
+      rulesForm.setFieldsValue(ruleRes);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [rulesForm]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -93,8 +106,56 @@ export function BankingPage() {
     }
   }
 
+  async function handleRunReconciliation() {
+    setRunning(true);
+    try {
+      const result = await runBankReconciliation();
+      toast.success(`对账完成：自动匹配 ${result.matched}，建议确认 ${result.suggested}，未匹配 ${result.unmatched}`);
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function handleConfirmCandidate(id: string) {
+    try {
+      await confirmReconciliationCandidate(id);
+      toast.success("候选已确认");
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  async function handleRejectCandidate(id: string) {
+    try {
+      await rejectReconciliationCandidate(id);
+      toast.success("候选已驳回");
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  async function handleSaveRules() {
+    const values = await rulesForm.validateFields();
+    setSavingRules(true);
+    try {
+      await updateReconciliationRules(values);
+      toast.success("对账规则已保存");
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSavingRules(false);
+    }
+  }
+
   const unmatchedCount = summary.unmatched?.count ?? 0;
   const autoCount      = summary.auto?.count ?? 0;
+  const pendingCandidateCount = candidates.length;
 
   // Account columns
   const accountColumns: ColumnsType<BankAccount> = [
@@ -148,6 +209,61 @@ export function BankingPage() {
     },
   ];
 
+  // Reconciliation candidate columns
+  const candidateColumns: ColumnsType<ReconciliationCandidate> = [
+    {
+      title: "流水日期", dataIndex: "stmt_date", key: "stmt_date", width: 110,
+      render: (value: string) => <Text style={{ fontSize: 12 }}>{value}</Text>,
+    },
+    {
+      title: "流水金额", dataIndex: "stmt_amount", key: "stmt_amount", width: 130, align: "right",
+      render: (value: string) => {
+        const amount = Number(value);
+        return (
+          <Text strong style={{ color: amount >= 0 ? "#16a34a" : "#dc2626", fontFamily: "monospace" }}>
+            {amount >= 0 ? "+" : ""}{amount.toLocaleString("zh-CN", { minimumFractionDigits: 2 })}
+          </Text>
+        );
+      },
+    },
+    {
+      title: "流水摘要", dataIndex: "stmt_desc", key: "stmt_desc",
+      render: (value: string | null) => <Text style={{ fontSize: 12 }}>{value ?? "—"}</Text>,
+    },
+    {
+      title: "候选凭证", dataIndex: "voucher_summary", key: "voucher_summary",
+      render: (value: string | null) => <Text>{value ?? "未关联凭证"}</Text>,
+    },
+    {
+      title: "评分", dataIndex: "score", key: "score", width: 90,
+      render: (value: number) => <Tag color={value >= 85 ? "green" : "gold"}>{value}</Tag>,
+    },
+    {
+      title: "命中原因", dataIndex: "match_reasons", key: "match_reasons",
+      render: (value: string[] | string) => {
+        const items = Array.isArray(value) ? value : [];
+        if (!items.length) return <Text type="secondary">—</Text>;
+        return <Space size={[4, 4]} wrap>{items.map((item) => <Tag key={item}>{item}</Tag>)}</Space>;
+      },
+    },
+    {
+      title: "操作", key: "actions", width: 170,
+      render: (_: unknown, record) => (
+        <Space>
+          <Button size="small" type="primary" onClick={() => void handleConfirmCandidate(record.id)}>确认</Button>
+          <Popconfirm
+            title="驳回这条候选？"
+            okText="驳回"
+            cancelText="取消"
+            onConfirm={() => void handleRejectCandidate(record.id)}
+          >
+            <Button size="small">驳回</Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
   if (loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -174,22 +290,28 @@ export function BankingPage() {
 
       {/* KPI */}
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} lg={6}>
           <Card style={{ borderRadius: 10 }} styles={{ body: { padding: "16px 20px" } }}>
             <Statistic title="银行账户数" value={accounts.length} prefix={<BankOutlined />}
               valueStyle={{ color: "#2563eb" }} />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} lg={6}>
           <Card style={{ borderRadius: 10 }} styles={{ body: { padding: "16px 20px" } }}>
             <Statistic title="未对账流水" value={unmatchedCount} prefix={<ClockCircleOutlined />}
               valueStyle={{ color: unmatchedCount > 0 ? "#d97706" : "#64748b" }} />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} lg={6}>
           <Card style={{ borderRadius: 10 }} styles={{ body: { padding: "16px 20px" } }}>
             <Statistic title="自动匹配成功" value={autoCount} prefix={<CheckCircleOutlined />}
               valueStyle={{ color: "#16a34a" }} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card style={{ borderRadius: 10 }} styles={{ body: { padding: "16px 20px" } }}>
+            <Statistic title="待确认候选" value={pendingCandidateCount} prefix={<RobotOutlined />}
+              valueStyle={{ color: pendingCandidateCount > 0 ? "#7c3aed" : "#64748b" }} />
           </Card>
         </Col>
       </Row>
@@ -245,8 +367,82 @@ export function BankingPage() {
                   pagination={{ pageSize: 20, hideOnSinglePage: true, size: "small",
                     showTotal: t => `共 ${t} 条` }}
                   locale={{ emptyText: <Empty description="暂无流水数据，请先导入 CSV" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
-                  rowClassName={r => r.match_status === "unmatched" ? "" : ""}
                 />
+              ),
+            },
+            {
+              key: "reconciliation",
+              label: `智能对账 (${pendingCandidateCount})`,
+              children: (
+                <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="系统按金额、日期、摘要关键词和对方名称对银行流水与已过账凭证进行匹配。高分会自动确认，中分进入人工复核。"
+                  />
+                  <Row gutter={[16, 16]}>
+                    <Col xs={24} lg={10}>
+                      <Card
+                        title={<Space><SettingOutlined />对账规则</Space>}
+                        extra={<Button type="primary" loading={savingRules} onClick={() => void handleSaveRules()}>保存规则</Button>}
+                      >
+                        <Form form={rulesForm} layout="vertical">
+                          <Row gutter={12}>
+                            <Col span={12}>
+                              <Form.Item name="amountTolerance" label="金额容差（元）" rules={[{ required: true }]}>
+                                <InputNumber min={0} step={0.01} precision={2} style={{ width: "100%" }} />
+                              </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                              <Form.Item name="dateWindowDays" label="日期窗口（天）" rules={[{ required: true }]}>
+                                <InputNumber min={0} max={30} style={{ width: "100%" }} />
+                              </Form.Item>
+                            </Col>
+                          </Row>
+                          <Row gutter={12}>
+                            <Col span={12}>
+                              <Form.Item name="autoConfirmThreshold" label="自动确认阈值" rules={[{ required: true }]}>
+                                <InputNumber min={50} max={100} style={{ width: "100%" }} />
+                              </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                              <Form.Item name="unmatchedEventDays" label="未匹配转事项（天）" rules={[{ required: true }]}>
+                                <InputNumber min={1} max={30} style={{ width: "100%" }} />
+                              </Form.Item>
+                            </Col>
+                          </Row>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            当前关键词权重使用系统配置。后续如需可视化编辑，再单独展开。
+                          </Text>
+                        </Form>
+                      </Card>
+                    </Col>
+                    <Col xs={24} lg={14}>
+                      <Card
+                        title={<Space><RobotOutlined />对账工作台</Space>}
+                        extra={<Button type="primary" loading={running} onClick={() => void handleRunReconciliation()}>运行智能对账</Button>}
+                      >
+                        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                          <Row gutter={[12, 12]}>
+                            <Col span={8}><Statistic title="未匹配流水" value={unmatchedCount} /></Col>
+                            <Col span={8}><Statistic title="待人工确认" value={pendingCandidateCount} /></Col>
+                            <Col span={8}><Statistic title="自动匹配" value={autoCount} /></Col>
+                          </Row>
+                          <Divider style={{ margin: "4px 0 0" }} />
+                          <Table
+                            dataSource={candidates}
+                            columns={candidateColumns}
+                            rowKey="id"
+                            size="small"
+                            pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                            scroll={{ x: 1100 }}
+                            locale={{ emptyText: <Empty description="暂无待确认候选，点击“运行智能对账”开始匹配" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+                          />
+                        </Space>
+                      </Card>
+                    </Col>
+                  </Row>
+                </Space>
               ),
             },
             {
