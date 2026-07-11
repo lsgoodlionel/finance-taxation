@@ -199,5 +199,7 @@ test("/payroll/transfer shows mocked runtime repair entry and can compensate bat
   await expect.poll(() => compensateCalls).toBe(1);
   await expect(page.getByText("工资代发已完成，但下游经营事项联动未闭环")).toHaveCount(0);
   await expect(page.getByText("payroll.transfer.compensated")).toBeVisible();
-  await expect(page.getByText("经营事项 evt-payroll-transfer-001")).toBeVisible();
+  // 审计行文案（含「银行批次号」）与补偿 toast（「已补偿生成经营事项…」）都含
+  // 该事项 id,用含「银行批次号」的正则只匹配审计行,避免 strict-mode 命中两元素。
+  await expect(page.getByText(/经营事项 evt-payroll-transfer-001.*银行批次号/)).toBeVisible();
 });
