@@ -13,4 +13,6 @@ export interface AuthContext {
 export interface ApiRequest extends IncomingMessage {
   auth?: AuthContext;
   body?: unknown;
+  /** Correlation id assigned per request for structured logging. */
+  requestId?: string;
 }

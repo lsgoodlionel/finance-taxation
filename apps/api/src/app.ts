@@ -199,6 +199,9 @@ import { login, logout, me, refresh, requireAnyPermission, requireAuth, requireP
 import type { ApiRequest } from "./types.js";
 import { json } from "./utils/http.js";
 import { readJsonBody, shouldReadJsonBody } from "./utils/body.js";
+import { createRouter, type RouteDef, type RouteHandler } from "./router/router.js";
+import { dispatch } from "./router/dispatch.js";
+import { logger, newRequestId } from "./observability/logger.js";
 // P1 外部系统对接模块
 import {
   exportVatXml,
@@ -234,6 +237,61 @@ import {
   generateInvoiceVoucher,
 } from "./modules/invoices/invoice.routes.js";
 
+const appRouter = createRouter();
+
+const healthHandler: RouteHandler = async (_req, res) => {
+  let dbOk = false;
+  let dbLatencyMs: number | null = null;
+  try {
+    const t0 = Date.now();
+    await query("SELECT 1");
+    dbLatencyMs = Date.now() - t0;
+    dbOk = true;
+  } catch {
+    dbOk = false;
+  }
+  return json(res, dbOk ? 200 : 503, {
+    ok: dbOk,
+    service: env.appName,
+    db: { ok: dbOk, latencyMs: dbLatencyMs },
+    uptimeSec: Math.round(process.uptime()),
+    timestamp: new Date().toISOString()
+  });
+};
+
+const bootstrapHandler: RouteHandler = (_req, res) =>
+  json(res, 200, {
+    appName: env.appName,
+    phase: "sprint-0",
+    nextTargets: ["business_events", "tasks", "rbac", "chairman_dashboard"]
+  });
+
+// Routes migrated off the legacy if-chain into the declarative table.
+// The remaining chain below is being progressively moved here (B4).
+const migratedRoutes: RouteDef[] = [
+  { method: "GET", path: "/health", handler: healthHandler },
+  { method: "GET", path: "/api/health", handler: healthHandler },
+  { method: "GET", path: "/bootstrap", handler: bootstrapHandler },
+  { method: "GET", path: "/v2/meta/rbac", handler: handleAuthMeta },
+  { method: "GET", path: "/v2/meta/business-events", handler: handleEventsMeta },
+  { method: "GET", path: "/v2/meta/tasks", handler: handleTasksMeta },
+  {
+    method: "GET",
+    path: "/v2/dashboard/chairman",
+    auth: true,
+    permission: "dashboard.view",
+    handler: handleChairmanDashboard
+  },
+  { method: "POST", path: "/api/auth/login", handler: login },
+  { method: "POST", path: "/api/auth/refresh", handler: refresh },
+  { method: "POST", path: "/api/auth/logout", auth: true, handler: logout },
+  { method: "GET", path: "/api/access/me", auth: true, handler: me },
+  { method: "GET", path: "/api/access/menu", auth: true, handler: getMenu }
+];
+for (const route of migratedRoutes) {
+  appRouter.register(route);
+}
+
 async function router(req: ApiRequest, res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
@@ -245,77 +303,20 @@ async function router(req: ApiRequest, res: ServerResponse) {
     return;
   }
 
+  req.requestId = newRequestId();
+  res.setHeader("X-Request-Id", req.requestId);
   const url = new URL(req.url || "/", `http://${env.host}:${env.port}`);
-  if (shouldReadJsonBody(req.method, req.headers["content-type"], url.pathname)) {
-    req.body = await readJsonBody(req);
-  }
 
-  if (req.method === "GET" && (url.pathname === "/health" || url.pathname === "/api/health")) {
-    let dbOk = false;
-    let dbLatencyMs: number | null = null;
-    try {
-      const t0 = Date.now();
-      await query("SELECT 1");
-      dbLatencyMs = Date.now() - t0;
-      dbOk = true;
-    } catch { dbOk = false; }
-    return json(res, dbOk ? 200 : 503, {
-      ok: dbOk,
-      service: env.appName,
-      db: { ok: dbOk, latencyMs: dbLatencyMs },
-      uptimeSec: Math.round(process.uptime()),
-      timestamp: new Date().toISOString(),
-    });
-  }
+  try {
+    if (shouldReadJsonBody(req.method, req.headers["content-type"], url.pathname)) {
+      req.body = await readJsonBody(req);
+    }
 
-  if (req.method === "GET" && url.pathname === "/bootstrap") {
-    return json(res, 200, {
-      appName: env.appName,
-      phase: "sprint-0",
-      nextTargets: ["business_events", "tasks", "rbac", "chairman_dashboard"]
-    });
-  }
+    if (await dispatch(appRouter, req, res, url.pathname)) {
+      return;
+    }
 
-  if (req.method === "GET" && url.pathname === "/v2/meta/rbac") {
-    return handleAuthMeta(req, res);
-  }
-
-  if (req.method === "GET" && url.pathname === "/v2/meta/business-events") {
-    return handleEventsMeta(req, res);
-  }
-
-  if (req.method === "GET" && url.pathname === "/v2/meta/tasks") {
-    return handleTasksMeta(req, res);
-  }
-
-  if (req.method === "GET" && url.pathname === "/v2/dashboard/chairman") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("dashboard.view", req, res))) return;
-    return handleChairmanDashboard(req, res);
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/auth/login") {
-    return login(req, res);
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/auth/refresh") {
-    return refresh(req, res);
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/auth/logout") {
-    if (!(await requireAuth(req, res))) return;
-    return logout(req, res);
-  }
-
-  if (req.method === "GET" && url.pathname === "/api/access/me") {
-    if (!(await requireAuth(req, res))) return;
-    return me(req, res);
-  }
-
-  if (req.method === "GET" && url.pathname === "/api/access/menu") {
-    if (!(await requireAuth(req, res))) return;
-    return getMenu(req, res);
-  }
+    // ── Legacy dispatch chain (being migrated into appRouter above) ──
 
   if (url.pathname === "/api/events") {
     if (!(await requireAuth(req, res))) return;
@@ -1616,7 +1617,18 @@ async function router(req: ApiRequest, res: ServerResponse) {
     if (req.method === "DELETE") return deleteInvoice(req, res, invoiceDetailMatch[1]);
   }
 
-  return json(res, 404, { error: "Not Found" });
+    return json(res, 404, { error: "Not Found" });
+  } catch (err) {
+    logger.error("unhandled request error", {
+      requestId: req.requestId,
+      method: req.method,
+      path: url.pathname,
+      error: err instanceof Error ? err.message : String(err)
+    });
+    if (!res.headersSent) {
+      json(res, 500, { error: "Internal Server Error", requestId: req.requestId });
+    }
+  }
 }
 
 export function buildApp() {
