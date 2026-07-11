@@ -74,6 +74,12 @@ jobs:
       - name: Run API integration tests
         run: npm run test:api:integration
 
+      # 集成测试会对共享测试库执行 reset+seed(其自身数据),冲掉 V4 验收种子
+      # (v4_* 用户等),导致 e2e 登录 401。此处在跑 e2e 前重置并重播验收种子,
+      # 保证浏览器验收从已知干净的 V4 数据起跑。
+      - name: Re-seed V4 acceptance data before e2e
+        run: npm run v4:test:db:reset && npm run v4:test:seed
+
       - name: Run V4 browser acceptance
         run: npm run test:e2e
 
