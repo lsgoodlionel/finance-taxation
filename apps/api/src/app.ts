@@ -6,9 +6,35 @@ import { readJsonBody, shouldReadJsonBody } from "./utils/body.js";
 import { dispatch } from "./router/dispatch.js";
 import { logger, newRequestId } from "./observability/logger.js";
 import { applySecurityHeaders } from "./security/headers.js";
+import { createRateLimiter, clientKey } from "./security/rate-limit.js";
 import { createAppRouter } from "./routes/registry.js";
 
 const appRouter = createAppRouter();
+
+// Global per-IP throttle plus a stricter bucket for auth endpoints (brute-force
+// defense complementing the per-account lockout in middleware/auth).
+const globalLimiter = createRateLimiter({ windowMs: env.rateLimitWindowMs, max: env.rateLimitMax });
+const authLimiter = createRateLimiter({ windowMs: env.rateLimitWindowMs, max: env.authRateLimitMax });
+const AUTH_RATE_LIMITED_PATHS = new Set(["/api/auth/login", "/api/auth/refresh"]);
+
+function enforceRateLimit(req: ApiRequest, res: ServerResponse, pathname: string): boolean {
+  const key = clientKey(req.headers, req.socket.remoteAddress);
+  const isAuthPath = AUTH_RATE_LIMITED_PATHS.has(pathname);
+  const limiter = isAuthPath ? authLimiter : globalLimiter;
+  const result = limiter.check(`${isAuthPath ? "auth" : "global"}:${key}`);
+  if (result.allowed) {
+    return false;
+  }
+  const retryAfterSec = Math.ceil(result.retryAfterMs / 1000);
+  res.setHeader("Retry-After", String(retryAfterSec));
+  logger.warn("rate limit exceeded", {
+    requestId: req.requestId,
+    path: pathname,
+    scope: isAuthPath ? "auth" : "global"
+  });
+  json(res, 429, { error: "Too Many Requests", retryAfterSeconds: retryAfterSec });
+  return true;
+}
 
 async function router(req: ApiRequest, res: ServerResponse) {
   applySecurityHeaders(res);
@@ -25,6 +51,10 @@ async function router(req: ApiRequest, res: ServerResponse) {
   req.requestId = newRequestId();
   res.setHeader("X-Request-Id", req.requestId);
   const url = new URL(req.url || "/", `http://${env.host}:${env.port}`);
+
+  if (enforceRateLimit(req, res, url.pathname)) {
+    return;
+  }
 
   try {
     if (shouldReadJsonBody(req.method, req.headers["content-type"], url.pathname)) {
