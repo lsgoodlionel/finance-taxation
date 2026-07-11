@@ -1,11 +1,45 @@
 import type { ServerResponse } from "node:http";
 import type { ApiRequest } from "../../types.js";
-import { query, queryOne } from "../../db/client.js";
+import { query, queryOne, withTransaction } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import {
   listCompanyLedgerEntries,
   listCompanyLedgerPostingBatches
 } from "../vouchers/routes.js";
+import { closePeriod } from "./close-period.js";
+
+const PERIOD_LABEL = /^\d{4}-\d{2}$/;
+
+function periodEndDate(period: string): string {
+  const [year, month] = period.split("-").map(Number);
+  // Day 0 of the next month is the last day of `month`.
+  return new Date(Date.UTC(year!, month!, 0)).toISOString().slice(0, 10);
+}
+
+/**
+ * POST /api/ledger/periods/:period/close-income — 期末结转损益。
+ * Generates and posts the income-summary closing voucher for the period,
+ * idempotently. See modules/ledger/close-period.
+ */
+export async function closeIncomeRoute(
+  req: ApiRequest,
+  res: ServerResponse,
+  period: string
+): Promise<void> {
+  if (!PERIOD_LABEL.test(period)) {
+    json(res, 400, { error: "period must look like YYYY-MM" });
+    return;
+  }
+  const result = await withTransaction((client) =>
+    closePeriod(client, {
+      companyId: req.auth!.companyId,
+      periodLabel: period,
+      asOfDate: periodEndDate(period),
+      now: new Date().toISOString()
+    })
+  );
+  json(res, result.alreadyClosed ? 200 : 201, result);
+}
 
 export async function listLedgerEntries(req: ApiRequest, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://127.0.0.1");

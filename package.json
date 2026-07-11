@@ -13,7 +13,7 @@
     "test:api": "npm run -w @finance-taxation/api test:serial",
     "test:web:runner": "node --test tools/v4/run-web-tests.test.mjs",
     "test:web": "npm run test:web:runner && node tools/v4/run-web-tests.mjs",
-    "test:db": "node --import tsx --test tools/v4/workflow-runtime-db.test.ts",
+    "test:db": "node --import tsx --test tools/v4/*-db.test.ts",
     "test:v4:tools": "node --import tsx --test tools/v4/*.test.ts",
     "test:unit": "npm run test:api && npm run test:web",
     "test:e2e": "playwright test",

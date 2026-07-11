@@ -30,7 +30,8 @@ import {
   listLedgerEntries,
   listLedgerPostingBatches,
   lockAccountingPeriod,
-  unlockAccountingPeriod
+  unlockAccountingPeriod,
+  closeIncomeRoute
 } from "../modules/ledger/routes.js";
 import {
   getChairmanReportSummary,
@@ -425,6 +426,13 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "ledger.post",
     handler: (req, res, p) => lockAccountingPeriod(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/ledger/periods/:id/close-income",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => closeIncomeRoute(req, res, p.id!)
   },
   {
     method: "POST",
