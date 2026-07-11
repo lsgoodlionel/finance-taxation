@@ -24,6 +24,9 @@ services:
       NODE_ENV: test
       JWT_SECRET: v4-test-only-secret-not-for-production
       ANTHROPIC_API_KEY: ""
+      # Dial scrypt cost down for the test stack so login hashing stays cheap on
+      # a CPU-constrained runner (production keeps the OWASP 2^17 baseline).
+      LOGIN_SCRYPT_COST_N: "16384"
     ports:
       - "33100:3100"
     depends_on:

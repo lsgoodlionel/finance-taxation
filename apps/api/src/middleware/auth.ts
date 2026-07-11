@@ -88,7 +88,8 @@ interface AuthUserRow {
 
 // Fixed hash used to equalize verify timing when a username is unknown, so login
 // latency does not reveal whether an account exists (mitigates timing-based
-// user enumeration). Computed once at module load.
+// user enumeration). Computed once at module load; a Promise because hashing is
+// async (await it at the use site).
 const TIMING_EQUALIZER_HASH = hashPassword("timing-equalizer-not-a-real-secret");
 
 interface SessionRow {
@@ -360,7 +361,7 @@ async function clearLockAndUpgrade(
   plainPassword: string,
   storedHash: string
 ): Promise<void> {
-  const nextHash = needsRehash(storedHash) ? hashPassword(plainPassword) : storedHash;
+  const nextHash = needsRehash(storedHash) ? await hashPassword(plainPassword) : storedHash;
   await query(
     `
       update user_passwords
@@ -387,7 +388,7 @@ export async function login(req: ApiRequest, res: ServerResponse) {
   // 401. (Account existence can still be inferred from the lockout response
   // below; IP-level throttling + full enumeration hardening is Stage B / B1.)
   if (!userRow || userRow.status !== "active") {
-    verifyPassword(body.password, TIMING_EQUALIZER_HASH);
+    await verifyPassword(body.password, await TIMING_EQUALIZER_HASH);
     return json(res, 401, { error: "Invalid credentials" });
   }
 
@@ -398,7 +399,7 @@ export async function login(req: ApiRequest, res: ServerResponse) {
   }
 
   const storedHash = userRow.password_hash ?? "";
-  if (!verifyPassword(body.password, storedHash)) {
+  if (!(await verifyPassword(body.password, storedHash))) {
     await registerFailedLogin(userRow.id);
     return json(res, 401, { error: "Invalid credentials" });
   }

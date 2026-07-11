@@ -13,6 +13,10 @@ export const env = {
   dbStartupDelayMs: Number(process.env.DB_STARTUP_DELAY_MS || 2000),
   loginMaxFailedAttempts: positiveIntEnv(process.env.LOGIN_MAX_FAILED_ATTEMPTS, 5),
   loginLockoutMs: positiveIntEnv(process.env.LOGIN_LOCKOUT_MS, 15 * 60 * 1000),
+  // scrypt cost factor N (OWASP baseline 2^17 in production; the test stack
+  // dials this down via LOGIN_SCRYPT_COST_N so login hashing stays cheap under
+  // a CPU-constrained runner). Must be a power of two > 1.
+  loginScryptCostN: positiveIntEnv(process.env.LOGIN_SCRYPT_COST_N, 131072),
   databaseUrl: process.env.DATABASE_URL || null,
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || null,
   ollamaBaseUrl: process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434",
