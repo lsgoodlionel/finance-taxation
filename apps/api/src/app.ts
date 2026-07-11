@@ -759,6 +759,61 @@ const migratedRoutes: RouteDef[] = [
     auth: true,
     permission: "payroll.manage",
     handler: (req, res, p) => confirmPayroll(req, res, p.id!)
+  },
+
+  // contracts
+  { method: "GET", path: "/api/contracts", auth: true, permission: "contracts.view", handler: listContracts },
+  { method: "POST", path: "/api/contracts", auth: true, permission: "contracts.manage", handler: createContract },
+  {
+    method: "POST",
+    path: "/api/contracts/:id/close",
+    auth: true,
+    permission: "contracts.manage",
+    handler: (req, res, p) => closeContract(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/contracts/:id/events",
+    auth: true,
+    permission: "contracts.view",
+    handler: (req, res, p) => getContractEvents(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/contracts/:id",
+    auth: true,
+    permission: "contracts.view",
+    handler: (req, res, p) => getContractDetail(req, res, p.id!)
+  },
+  {
+    method: "PUT",
+    path: "/api/contracts/:id",
+    auth: true,
+    permission: "contracts.manage",
+    handler: (req, res, p) => updateContract(req, res, p.id!)
+  },
+
+  // exports (auth only, no permission)
+  { method: "GET", path: "/api/exports/jobs", auth: true, handler: listExportJobs },
+  { method: "POST", path: "/api/exports/jobs", auth: true, handler: createExportJob },
+  {
+    method: "POST",
+    path: "/api/exports/jobs/:id/status",
+    auth: true,
+    handler: (req, res, p) => updateExportJobStatus(req, res, p.id!)
+  },
+  { method: "GET", path: "/api/exports/archive-index", auth: true, handler: listExportArchiveEntries },
+
+  // pdf export
+  { method: "GET", path: "/api/pdf/payroll", auth: true, permission: "payroll.view", handler: payrollPdf },
+  { method: "GET", path: "/api/pdf/payroll-slip", auth: true, permission: "payroll.view", handler: payrollSlipPdf },
+  { method: "GET", path: "/api/pdf/report", auth: true, permission: "ledger.view", handler: reportPdf },
+  {
+    method: "GET",
+    path: "/api/pdf/voucher/:id",
+    auth: true,
+    permission: "ledger.view",
+    handler: (req, res, p) => voucherPdf(req, res, p.id!)
   }
 ];
 for (const route of migratedRoutes) {
@@ -805,93 +860,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
 
     // employees + payroll (policy/periods/compute/review/transfer/base) → migrated to appRouter
 
-  if (url.pathname === "/api/contracts") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("contracts.view", req, res))) return;
-      return listContracts(req, res);
-    }
-    if (req.method === "POST") {
-      if (!(await requirePermission("contracts.manage", req, res))) return;
-      return createContract(req, res);
-    }
-  }
-
-  const contractCloseMatch = url.pathname.match(/^\/api\/contracts\/([^/]+)\/close$/);
-  const contractCloseId = contractCloseMatch?.[1];
-  if (contractCloseId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("contracts.manage", req, res))) return;
-      return closeContract(req, res, contractCloseId);
-    }
-  }
-
-  const contractEventsMatch = url.pathname.match(/^\/api\/contracts\/([^/]+)\/events$/);
-  const contractEventsId = contractEventsMatch?.[1];
-  if (contractEventsId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("contracts.view", req, res))) return;
-    if (req.method === "GET") return getContractEvents(req, res, contractEventsId);
-  }
-
-  const contractDetailMatch = url.pathname.match(/^\/api\/contracts\/([^/]+)$/);
-  const contractDetailId = contractDetailMatch?.[1];
-  if (contractDetailId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("contracts.view", req, res))) return;
-      return getContractDetail(req, res, contractDetailId);
-    }
-    if (req.method === "PUT") {
-      if (!(await requirePermission("contracts.manage", req, res))) return;
-      return updateContract(req, res, contractDetailId);
-    }
-  }
-
-  if (url.pathname === "/api/exports/jobs") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return listExportJobs(req, res);
-    if (req.method === "POST") return createExportJob(req, res);
-  }
-
-  const exportStatusMatch = url.pathname.match(/^\/api\/exports\/jobs\/([^/]+)\/status$/);
-  if (exportStatusMatch) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") return updateExportJobStatus(req, res, decodeURIComponent(exportStatusMatch[1]!));
-  }
-
-  if (url.pathname === "/api/exports/archive-index") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return listExportArchiveEntries(req, res);
-  }
-
-  // ── PDF Export ──
-  if (url.pathname === "/api/pdf/payroll") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.view", req, res))) return;
-    if (req.method === "GET") return payrollPdf(req, res);
-  }
-
-  if (url.pathname === "/api/pdf/payroll-slip") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("payroll.view", req, res))) return;
-    if (req.method === "GET") return payrollSlipPdf(req, res);
-  }
-
-  if (url.pathname === "/api/pdf/report") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return reportPdf(req, res);
-  }
-
-  const voucherPdfMatch = url.pathname.match(/^\/api\/pdf\/voucher\/([^/]+)$/);
-  const voucherPdfId = voucherPdfMatch?.[1];
-  if (voucherPdfId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return voucherPdf(req, res, voucherPdfId);
-  }
+    // contracts + exports + pdf → migrated to appRouter
 
   // ── Assistant ──
   if (url.pathname === "/api/assistant/chat") {
