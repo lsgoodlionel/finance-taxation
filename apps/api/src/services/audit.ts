@@ -1,4 +1,5 @@
 import { query } from "../db/client.js";
+import { redactSensitive } from "../security/redact.js";
 
 export interface AuditEntry {
   companyId: string;
@@ -24,7 +25,7 @@ export function writeAudit(entry: AuditEntry): void {
       entry.resourceType,
       entry.resourceId ?? null,
       entry.resourceLabel ?? null,
-      entry.changes ? JSON.stringify(entry.changes) : null
+      entry.changes ? JSON.stringify(redactSensitive(entry.changes)) : null
     ]
   ).catch(() => {
     // Audit failure must never crash business operations
