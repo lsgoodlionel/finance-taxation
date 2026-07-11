@@ -70,7 +70,10 @@ export function canTransitionWorkflowState(
   previousState: WorkflowState,
   nextState: WorkflowState
 ): boolean {
-  return TRANSITIONS[previousState].includes(nextState);
+  // Guard against a `previousState` that is not a known key (e.g. a legacy or
+  // unmapped status reaching this path): treat it as having no valid outgoing
+  // transitions rather than dereferencing `undefined` and crashing the process.
+  return (TRANSITIONS[previousState] ?? []).includes(nextState);
 }
 
 export function validateWorkflowTransition(
@@ -125,6 +128,13 @@ export function mapBusinessEventStatusToWorkflowState(status: BusinessEventStatu
       return "completed";
     case "blocked":
       return "blocked";
+    default:
+      // The persisted `business_events.status` vocabulary can include values
+      // outside the compile-time `BusinessEventStatus` union (e.g. seeded/legacy
+      // "pending", "confirmed", "ready", "needs_review", "pending_authorization").
+      // Map any unrecognized status to the most permissive workflow state so the
+      // transition gate never yields `undefined` (which would crash the process).
+      return "draft";
   }
 }
 
