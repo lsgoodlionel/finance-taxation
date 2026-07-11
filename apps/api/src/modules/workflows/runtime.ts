@@ -32,7 +32,7 @@ const TRANSITIONS: Record<WorkflowState, readonly WorkflowState[]> = {
   awaiting_authorization: ["executing", "correcting", "blocked", "cancelled"],
   executing: ["under_review", "completed", "blocked", "correcting", "cancelled"],
   completed: [],
-  blocked: ["correcting", "cancelled", "awaiting_authorization", "executing"],
+  blocked: ["draft", "correcting", "cancelled", "awaiting_authorization", "executing"],
   cancelled: [],
   correcting: ["collecting_documents", "ready_for_review", "under_review", "cancelled", "blocked"]
 };
