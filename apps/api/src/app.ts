@@ -513,6 +513,69 @@ const migratedRoutes: RouteDef[] = [
     auth: true,
     permission: "documents.manage",
     handler: (req, res, p) => updateDocument(req, res, p.id!)
+  },
+
+  // tax
+  { method: "GET", path: "/api/tax-items", auth: true, permission: "tax.view", handler: listTaxItems },
+  { method: "GET", path: "/api/runtime/tax", auth: true, permission: "tax.view", handler: getTaxRuntimeSummaryRoute },
+  { method: "GET", path: "/api/tax-filing-batches", auth: true, permission: "tax.view", handler: listTaxFilingBatches },
+  { method: "POST", path: "/api/tax-filing-batches", auth: true, permission: "tax.manage", handler: createTaxFilingBatch },
+  { method: "GET", path: "/api/taxpayer-profiles", auth: true, permission: "tax.view", handler: listTaxpayerProfiles },
+  { method: "POST", path: "/api/taxpayer-profiles", auth: true, permission: "tax.manage", handler: createTaxpayerProfile },
+  { method: "GET", path: "/api/tax/vat-working-paper", auth: true, permission: "tax.view", handler: getVatWorkingPaper },
+  { method: "GET", path: "/api/tax/rules", auth: true, permission: "tax.view", handler: getTaxRuleProfile },
+  { method: "GET", path: "/api/tax/individual-income-tax-materials", auth: true, permission: "tax.view", handler: getIndividualIncomeTaxMaterials },
+  { method: "GET", path: "/api/tax/stamp-and-surtax-summary", auth: true, permission: "tax.view", handler: getStampAndSurtaxSummary },
+  { method: "GET", path: "/api/tax/corporate-income-tax-preparation", auth: true, permission: "tax.view", handler: getCorporateIncomeTaxPreparation },
+  { method: "GET", path: "/api/tax/printable", auth: true, permission: "tax.view", handler: getTaxWorkingPaperPrintable },
+  {
+    method: "POST",
+    path: "/api/tax-filing-batches/:id/validate",
+    auth: true,
+    permission: "tax.manage",
+    handler: (req, res, p) => validateTaxFilingBatch(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/tax-filing-batches/:id/review",
+    auth: true,
+    permission: "tax.manage",
+    handler: (req, res, p) => reviewTaxFilingBatch(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/tax-filing-batches/:id/submit",
+    auth: true,
+    permission: "tax.manage",
+    handler: (req, res, p) => submitTaxFilingBatch(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/tax-filing-batches/:id/archive",
+    auth: true,
+    permission: "tax.manage",
+    handler: (req, res, p) => archiveTaxFilingBatch(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/tax-filing-batches/:id",
+    auth: true,
+    permission: "tax.view",
+    handler: (req, res, p) => getTaxFilingBatchDetail(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/tax-items/:id",
+    auth: true,
+    permission: "tax.view",
+    handler: (req, res, p) => getTaxItemDetail(req, res, p.id!)
+  },
+  {
+    method: "PUT",
+    path: "/api/tax-items/:id",
+    auth: true,
+    permission: "tax.manage",
+    handler: (req, res, p) => updateTaxItem(req, res, p.id!)
   }
 ];
 for (const route of migratedRoutes) {
@@ -553,139 +616,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
 
     // rnd/projects + risk + documents → migrated to appRouter
 
-  if (url.pathname === "/api/tax-items") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.view", req, res))) return;
-    if (req.method === "GET") return listTaxItems(req, res);
-  }
-
-  if (url.pathname === "/api/runtime/tax") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.view", req, res))) return;
-    if (req.method === "GET") return getTaxRuntimeSummaryRoute(req, res);
-  }
-
-  if (url.pathname === "/api/tax-filing-batches") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("tax.view", req, res))) return;
-      return listTaxFilingBatches(req, res);
-    }
-    if (req.method === "POST") {
-      if (!(await requirePermission("tax.manage", req, res))) return;
-      return createTaxFilingBatch(req, res);
-    }
-  }
-
-  if (url.pathname === "/api/taxpayer-profiles") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("tax.view", req, res))) return;
-      return listTaxpayerProfiles(req, res);
-    }
-    if (req.method === "POST") {
-      if (!(await requirePermission("tax.manage", req, res))) return;
-      return createTaxpayerProfile(req, res);
-    }
-  }
-
-  if (url.pathname === "/api/tax/vat-working-paper") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.view", req, res))) return;
-    if (req.method === "GET") return getVatWorkingPaper(req, res);
-  }
-
-  if (url.pathname === "/api/tax/rules") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.view", req, res))) return;
-    if (req.method === "GET") return getTaxRuleProfile(req, res);
-  }
-
-  if (url.pathname === "/api/tax/individual-income-tax-materials") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.view", req, res))) return;
-    if (req.method === "GET") return getIndividualIncomeTaxMaterials(req, res);
-  }
-
-  if (url.pathname === "/api/tax/stamp-and-surtax-summary") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.view", req, res))) return;
-    if (req.method === "GET") return getStampAndSurtaxSummary(req, res);
-  }
-
-  if (url.pathname === "/api/tax/corporate-income-tax-preparation") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.view", req, res))) return;
-    if (req.method === "GET") return getCorporateIncomeTaxPreparation(req, res);
-  }
-
-  if (url.pathname === "/api/tax/printable") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.view", req, res))) return;
-    if (req.method === "GET") return getTaxWorkingPaperPrintable(req, res);
-  }
-
-  const taxFilingBatchValidateMatch = url.pathname.match(/^\/api\/tax-filing-batches\/([^/]+)\/validate$/);
-  const taxFilingBatchValidateId = taxFilingBatchValidateMatch?.[1];
-  if (taxFilingBatchValidateId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("tax.manage", req, res))) return;
-      return validateTaxFilingBatch(req, res, taxFilingBatchValidateId);
-    }
-  }
-
-  const taxFilingBatchReviewMatch = url.pathname.match(/^\/api\/tax-filing-batches\/([^/]+)\/review$/);
-  const taxFilingBatchReviewId = taxFilingBatchReviewMatch?.[1];
-  if (taxFilingBatchReviewId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("tax.manage", req, res))) return;
-      return reviewTaxFilingBatch(req, res, taxFilingBatchReviewId);
-    }
-  }
-
-  const taxFilingBatchSubmitMatch = url.pathname.match(/^\/api\/tax-filing-batches\/([^/]+)\/submit$/);
-  const taxFilingBatchSubmitId = taxFilingBatchSubmitMatch?.[1];
-  if (taxFilingBatchSubmitId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("tax.manage", req, res))) return;
-      return submitTaxFilingBatch(req, res, taxFilingBatchSubmitId);
-    }
-  }
-
-  const taxFilingBatchArchiveMatch = url.pathname.match(/^\/api\/tax-filing-batches\/([^/]+)\/archive$/);
-  const taxFilingBatchArchiveId = taxFilingBatchArchiveMatch?.[1];
-  if (taxFilingBatchArchiveId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("tax.manage", req, res))) return;
-      return archiveTaxFilingBatch(req, res, taxFilingBatchArchiveId);
-    }
-  }
-
-  const taxFilingBatchDetailMatch = url.pathname.match(/^\/api\/tax-filing-batches\/([^/]+)$/);
-  const taxFilingBatchDetailId = taxFilingBatchDetailMatch?.[1];
-  if (taxFilingBatchDetailId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.view", req, res))) return;
-    if (req.method === "GET") return getTaxFilingBatchDetail(req, res, taxFilingBatchDetailId);
-  }
-
-  const taxItemDetailMatch = url.pathname.match(/^\/api\/tax-items\/([^/]+)$/);
-  const taxItemDetailId = taxItemDetailMatch?.[1];
-  if (taxItemDetailId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("tax.view", req, res))) return;
-      return getTaxItemDetail(req, res, taxItemDetailId);
-    }
-    if (req.method === "PUT") {
-      if (!(await requirePermission("tax.manage", req, res))) return;
-      return updateTaxItem(req, res, taxItemDetailId);
-    }
-  }
+    // tax family → migrated to appRouter
 
   if (url.pathname === "/api/vouchers") {
     if (!(await requireAuth(req, res))) return;
