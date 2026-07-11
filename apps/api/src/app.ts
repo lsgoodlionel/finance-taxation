@@ -1620,5 +1620,18 @@ async function router(req: ApiRequest, res: ServerResponse) {
 }
 
 export function buildApp() {
-  return createServer(router);
+  // Error boundary: `router` is async, so a rejected handler promise would
+  // otherwise surface as an unhandledRejection and terminate the whole process
+  // (taking every subsequent request down with it — nginx then returns 502).
+  // Catch here so a single failing request yields a 500 and the server stays up.
+  return createServer((req, res) => {
+    void router(req as ApiRequest, res).catch((error) => {
+      console.error("[api] unhandled request error:", error);
+      if (!res.headersSent) {
+        json(res, 500, { error: "Internal Server Error" });
+      } else {
+        res.destroy();
+      }
+    });
+  });
 }
