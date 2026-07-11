@@ -6,6 +6,12 @@ import { env } from "../config/env.js";
 import { query, queryOne, withTransaction } from "../db/client.js";
 import { json } from "../utils/http.js";
 import { hashPassword, needsRehash, verifyPassword } from "./password.js";
+import { validateObject, type ObjectSchema } from "../utils/validate.js";
+
+const LOGIN_SCHEMA: ObjectSchema = {
+  username: { type: "string", required: true, min: 1, max: 64 },
+  password: { type: "string", required: true, min: 1, max: 200 }
+};
 
 const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
   "role-chairman": [
@@ -375,19 +381,20 @@ async function clearLockAndUpgrade(
 }
 
 export async function login(req: ApiRequest, res: ServerResponse) {
-  const body = (req.body || {}) as { username?: string; password?: string };
-  if (!body.username || !body.password) {
-    return json(res, 400, { error: "username and password are required" });
+  const parsed = validateObject<{ username: string; password: string }>(req.body, LOGIN_SCHEMA);
+  if (!parsed.ok || !parsed.value) {
+    return json(res, 400, { error: "Invalid request", details: parsed.errors });
   }
+  const { username, password } = parsed.value;
 
-  const userRow = await loadUserByUsername(body.username);
+  const userRow = await loadUserByUsername(username);
 
   // Unknown / inactive user: run an equivalent-cost dummy verify so this path
   // takes the same time as a real password check, then return the same generic
   // 401. (Account existence can still be inferred from the lockout response
   // below; IP-level throttling + full enumeration hardening is Stage B / B1.)
   if (!userRow || userRow.status !== "active") {
-    verifyPassword(body.password, TIMING_EQUALIZER_HASH);
+    verifyPassword(password, TIMING_EQUALIZER_HASH);
     return json(res, 401, { error: "Invalid credentials" });
   }
 
@@ -398,14 +405,14 @@ export async function login(req: ApiRequest, res: ServerResponse) {
   }
 
   const storedHash = userRow.password_hash ?? "";
-  if (!verifyPassword(body.password, storedHash)) {
+  if (!verifyPassword(password, storedHash)) {
     await registerFailedLogin(userRow.id);
     return json(res, 401, { error: "Invalid credentials" });
   }
 
   // Successful login: reset the failure counter and lazily upgrade legacy
   // plaintext / outdated hashes to the current scrypt scheme.
-  await clearLockAndUpgrade(userRow.id, body.password, storedHash);
+  await clearLockAndUpgrade(userRow.id, password, storedHash);
 
   const user = mapUserProfile(userRow);
   const session = buildSession(user);
