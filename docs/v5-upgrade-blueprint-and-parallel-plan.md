@@ -223,6 +223,24 @@ git worktree add ../ft-v5-<lane> -b codex/v5-<lane> origin/main
 
 ---
 
+## 7. 执行进展（更新 2026-07-11）
+
+> 本节记录蓝图落地的真实状态，供接力与验收追溯。基线较 §0 已推进：A1/A3 收口发现已在 main 完成，本轮补齐 A4/A2。
+
+### Stage A — 收敛上云与清创
+
+| 项 | 状态 | 落地 / 证据 |
+|---|---|---|
+| A1 v4 切片收口 | ✅ 完成 | 17→ main 领先 origin **20** 提交（含本轮 A4/A2）；见 `docs/integration-report-2026-07-11.md` |
+| A2 清创 | ✅ 完成 | `fe5b947`：删 V1 三代遗留（`backend/`·`src/`·`index.html`）+ 死占位（`apps/api/migrations/`、`tools/check-json.mjs`）；移除失效 `check:prototype/backend-js/data`；`verify` 重定义为真实 V2 门禁（typecheck:v2 + test:unit + check:progress）。核实 apps/tools 无源码引用；迁移 runner 指向根 `migrations/`。共删 39 文件 / -6779 行 |
+| A3 CI 重建 | 🟡 大体完成 | CI 已跑 typecheck:v2 + api/web/v4 测试 + check:progress + v4-acceptance。**已知缺口**：`test:api` 的 glob `src/**/*.test.ts` 在 sh 下退化为单层，仅收集 4/62 测试文件——独立任务修复中（拆分 DB 集成测试后递归收集） |
+| A4 明文密码（CRITICAL） | ✅ 完成 + 安全评审闭环 | `b3c2a04`：Node scrypt（OWASP 基线 N=2^17）替换明文比对；登录失败锁定（原子自增防竞态，423）；惰性升级历史明文；时序对齐防枚举；migration `034_login_lockout.sql`。安全评审无 CRITICAL，HIGH 已修，IP 级限流归 B1 |
+| 收敛上云（push） | ⏸️ 待手动 | 外向发布分类器拦截，需人工在交互终端 `git push origin main`。这是达成 **M0 主干可信** 的最后一步 |
+
+**M0 主干可信** 就绪度：17+ 分支收敛 ✅ · 明文密码修复 ✅ · CI 跑 V2（🟡 待补全测试收集）· 仅剩推送上云 ⏸️。
+
+---
+
 ## 附录 · 关键文件索引
 - 路由分发：`apps/api/src/app.ts`　认证/明文密码：`apps/api/src/middleware/auth.ts`
 - 账务内核：`apps/api/src/modules/vouchers/routes.ts`　报表：`apps/api/src/modules/reports/summary.ts`
