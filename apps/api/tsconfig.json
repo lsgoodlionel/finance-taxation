@@ -12,7 +12,7 @@
     "src"
   ],
   "exclude": [
-    "src/modules/exports/routes.test.ts",
-    "src/modules/payroll/transfer.test.ts"
+    "src/modules/exports/routes.integration.test.ts",
+    "src/modules/payroll/transfer.integration.test.ts"
   ]
 }

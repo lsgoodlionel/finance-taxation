@@ -30,6 +30,7 @@ test("normalizeDrilldownState keeps supported ids and context keys", () => {
     employeeId: undefined,
     payrollPeriod: "2026-05",
     tab: "payroll",
+    scene: undefined,
     focus: "runtime",
     riskScope: undefined,
     resourceType: "payroll",
