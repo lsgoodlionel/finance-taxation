@@ -239,6 +239,16 @@ git worktree add ../ft-v5-<lane> -b codex/v5-<lane> origin/main
 
 **M0 主干可信** 就绪度：17+ 分支收敛 ✅ · 明文密码修复 ✅ · CI 跑 V2（🟡 待补全测试收集）· 仅剩推送上云 ⏸️。
 
+### Stage B — 生产就绪硬底座（进行中）
+
+| 项 | 状态 | 落地 / 证据 |
+|---|---|---|
+| B4 架构规整 | ✅ 完成（已合 main） | 手写 1600+ 行 if 分发链 → 声明式路由表。新增 `router/router.ts`（路由核心 + 9 单测）、`router/dispatch.ts`（auth/permission 统一施加）、`observability/logger.ts`（零依赖结构化日志 + requestId）、`routes/registry.ts`（全部 ~190 路由声明 + handlers）。app.ts **1624→52 行**（主入口 <200 达标）；统一错误中间件（顶层 try/catch 兜底 500 + 结构化日志，覆盖全部路由）。分 11 提交增量迁移，每批 typecheck + verify + buildApp 冒烟全绿，零行为变更 |
+| B1 安全加固 | ⏳ 下一项 | Zod 统一入参校验 + 安全头（HSTS/X-Frame/Referrer/CSP）+ 限流（补 A4 评审 H3 的 IP 级）+ CSRF |
+| B2 账务内核 | ⏳ 待做（高风险） | 结转损益 + 期末结账凭证 + 去兜底配平 + 物化余额 + idempotency_key。需 DB 集成测试 + PR/SME 评审 |
+| B3 测试底座 | ⏳ 待做 | Playwright 5 流 + DB 集成测试 + 覆盖率门禁 ≥60%（与后台 CI 测试收集任务交叠）|
+| B5 前端工程化 | ⏳ 待做 | React.lazy 懒加载 + 状态管理 + TanStack Query + 大页拆分 |
+
 ---
 
 ## 附录 · 关键文件索引
