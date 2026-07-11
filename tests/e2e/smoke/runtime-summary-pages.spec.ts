@@ -338,16 +338,17 @@ for (const item of CASES) {
 
     await repairButton.click();
 
-    if (item.route !== "/vouchers") {
-      await expect(page.getByRole("button", { name: "处理中..." })).toBeVisible();
-    }
+    // 不断言瞬时的「处理中...」loading 态:mock 会即时返回,该态转瞬即逝,
+    // playwright 轮询可能整体错过而误判失败(竞态)。以下的请求计数与成功文案
+    // 已充分覆盖修复动作的实际结果。
     await expect
       .poll(() => actionRequestCount, {
         message: `${item.route} should submit the runtime repair action`
       })
       .toBe(1);
     expect(item.actionMatcher(actionRequestBody)).toBeTruthy();
-    await expect(page.getByText(item.successText)).toBeVisible();
+    // successText 可能同时出现在主内容与通知 toast 两处,用 first() 消 strict-mode 歧义。
+    await expect(page.getByText(item.successText).first()).toBeVisible();
     });
   }
 }
