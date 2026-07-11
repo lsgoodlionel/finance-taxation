@@ -814,6 +814,196 @@ const migratedRoutes: RouteDef[] = [
     auth: true,
     permission: "ledger.view",
     handler: (req, res, p) => voucherPdf(req, res, p.id!)
+  },
+
+  // assistant (per-route OPTIONS handled by the global handler at the top)
+  { method: "POST", path: "/api/assistant/chat", auth: true, handler: assistantChat },
+  { method: "POST", path: "/api/assistant/ocr", auth: true, handler: assistantOcr },
+
+  // audit
+  { method: "GET", path: "/api/audit/logs", auth: true, permission: "audit.view", handler: listAuditLogs },
+
+  // boss-qa
+  { method: "POST", path: "/api/boss-qa/chat", auth: true, permission: "dashboard.view", handler: bossChat },
+
+  // knowledge (parse-documents + base before the /:id catch-all)
+  { method: "POST", path: "/api/knowledge/parse-documents", auth: true, permission: "knowledge.manage", handler: parseKnowledgeDocuments },
+  { method: "GET", path: "/api/knowledge", auth: true, permission: "knowledge.view", handler: listKnowledgeItems },
+  { method: "POST", path: "/api/knowledge", auth: true, permission: "knowledge.manage", handler: createKnowledgeItem },
+  {
+    method: "PUT",
+    path: "/api/knowledge/:id",
+    auth: true,
+    permission: "knowledge.manage",
+    handler: (req, res, p) => updateKnowledgeItem(req, res, p.id!)
+  },
+  {
+    method: "DELETE",
+    path: "/api/knowledge/:id",
+    auth: true,
+    permission: "knowledge.manage",
+    handler: (req, res, p) => deleteKnowledgeItem(req, res, p.id!)
+  },
+
+  // settings
+  { method: "GET", path: "/api/settings/company", auth: true, permission: "dashboard.view", handler: getCompanySettings },
+  { method: "PUT", path: "/api/settings/company", auth: true, permission: "dashboard.view", handler: updateCompanySettings },
+  { method: "GET", path: "/api/settings/ai", auth: true, permission: "dashboard.view", handler: getAiSettings },
+  { method: "PUT", path: "/api/settings/ai", auth: true, permission: "dashboard.view", handler: updateAiSettings },
+  { method: "GET", path: "/api/settings/ai/ollama-models", auth: true, handler: getOllamaModels },
+  { method: "POST", path: "/api/settings/ai/test", auth: true, handler: testAiConnection },
+  { method: "GET", path: "/api/settings/users", auth: true, permission: "dashboard.view", handler: getUserList },
+  { method: "GET", path: "/api/settings/integrations", auth: true, permission: "dashboard.view", handler: listIntegrationConfigs },
+  {
+    method: "POST",
+    path: "/api/settings/integrations/:type/test",
+    auth: true,
+    permission: "dashboard.view",
+    handler: (req, res, p) => testIntegrationConfig(req, res, p.type!)
+  },
+  {
+    method: "GET",
+    path: "/api/settings/integrations/:type",
+    auth: true,
+    permission: "dashboard.view",
+    handler: (req, res, p) => getIntegrationConfig(req, res, p.type!)
+  },
+  {
+    method: "PUT",
+    path: "/api/settings/integrations/:type",
+    auth: true,
+    permission: "dashboard.view",
+    handler: (req, res, p) => upsertIntegrationConfig(req, res, p.type!)
+  },
+
+  // tax-integration
+  { method: "GET", path: "/api/tax-integration/vat-xml", auth: true, permission: "tax.manage", handler: exportVatXml },
+  { method: "GET", path: "/api/tax-integration/iit-csv", auth: true, permission: "tax.manage", handler: exportIitCsv },
+  { method: "GET", path: "/api/tax-integration/si-csv", auth: true, permission: "tax.manage", handler: exportSiCsv },
+  { method: "GET", path: "/api/tax-integration/fund-csv", auth: true, permission: "tax.manage", handler: exportFundCsv },
+  { method: "GET", path: "/api/tax-integration/submissions", auth: true, permission: "tax.view", handler: listSubmissions },
+  {
+    method: "PATCH",
+    path: "/api/tax-integration/submissions/:id/confirm",
+    auth: true,
+    permission: "tax.manage",
+    handler: (req, res, p) => confirmSubmission(req, res, p.id!)
+  },
+
+  // banking (P1 accounts/statements + P3 reconciliation + P5 sync)
+  { method: "GET", path: "/api/banking/accounts", auth: true, handler: listBankAccounts },
+  { method: "POST", path: "/api/banking/accounts", auth: true, handler: createBankAccount },
+  { method: "GET", path: "/api/banking/statements", auth: true, handler: listBankStatements },
+  { method: "POST", path: "/api/banking/statements/import", auth: true, handler: importBankStatements },
+  { method: "GET", path: "/api/banking/statements/unmatched", auth: true, handler: getUnmatchedSummary },
+  {
+    method: "PATCH",
+    path: "/api/banking/statements/:id/match",
+    auth: true,
+    handler: (req, res, p) => matchStatement(req, res, p.id!)
+  },
+  { method: "POST", path: "/api/banking/reconciliation/run", auth: true, handler: runReconciliationRoute },
+  { method: "GET", path: "/api/banking/reconciliation/candidates", auth: true, handler: listCandidatesRoute },
+  {
+    method: "POST",
+    path: "/api/banking/reconciliation/candidates/:id/confirm",
+    auth: true,
+    handler: (req, res, p) => confirmCandidateRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/banking/reconciliation/candidates/:id/reject",
+    auth: true,
+    handler: (req, res, p) => rejectCandidateRoute(req, res, p.id!)
+  },
+  { method: "GET", path: "/api/banking/reconciliation/rules", auth: true, handler: getReconRulesRoute },
+  { method: "PUT", path: "/api/banking/reconciliation/rules", auth: true, handler: upsertReconRulesRoute },
+  { method: "POST", path: "/api/banking/sync-statements", auth: true, handler: syncStatementsRoute },
+
+  // global search
+  { method: "GET", path: "/api/search", auth: true, handler: globalSearch },
+
+  // ai agents (P6)
+  { method: "POST", path: "/api/ai/accounting/suggest", auth: true, handler: suggestAccounting },
+  { method: "POST", path: "/api/ai/completeness/assess", auth: true, handler: assessEventCompleteness },
+  { method: "POST", path: "/api/ai/audit/review", auth: true, handler: auditReview },
+  { method: "GET", path: "/api/ai/results", auth: true, handler: getAiResults },
+  {
+    method: "POST",
+    path: "/api/ai/results/:id/accept",
+    auth: true,
+    handler: (req, res, p) => acceptAiResult(req, res, p.id!)
+  },
+
+  // counterparties (P7)
+  { method: "GET", path: "/api/counterparties", auth: true, handler: listCounterparties },
+  { method: "POST", path: "/api/counterparties", auth: true, handler: createCounterparty },
+  {
+    method: "PATCH",
+    path: "/api/counterparties/:id",
+    auth: true,
+    handler: (req, res, p) => updateCounterparty(req, res, p.id!)
+  },
+
+  // billing (P8)
+  { method: "GET", path: "/api/billing/plans", auth: true, handler: listPlans },
+  { method: "GET", path: "/api/billing/subscription", auth: true, handler: getSubscription },
+  { method: "POST", path: "/api/billing/subscribe", auth: true, handler: subscribePlan },
+  { method: "GET", path: "/api/billing/payments", auth: true, handler: listPayments },
+  {
+    method: "POST",
+    path: "/api/billing/payments/:id/confirm",
+    auth: true,
+    handler: (req, res, p) => confirmPayment(req, res, p.id!)
+  },
+
+  // misc single-endpoint domains
+  { method: "GET", path: "/api/tax/deadlines", auth: true, handler: getTaxDeadlines },
+  { method: "GET", path: "/api/feedback", auth: true, handler: listFeedback },
+  { method: "POST", path: "/api/feedback", auth: true, handler: submitFeedback },
+  { method: "POST", path: "/api/feedback/consolidate", auth: true, handler: consolidateFeedbackRoute },
+  { method: "GET", path: "/api/proposals", auth: true, handler: listProposals },
+  {
+    method: "POST",
+    path: "/api/proposals/:id/decide",
+    auth: true,
+    permission: "settings.manage",
+    handler: (req, res, p) => decideProposal(req, res, p.id!)
+  },
+  { method: "GET", path: "/api/archive/package", auth: true, handler: getArchivePackage },
+  { method: "GET", path: "/api/forecast/cash", auth: true, handler: getCashForecast },
+  { method: "GET", path: "/api/setup/status", auth: true, handler: getSetupStatus },
+  { method: "GET", path: "/api/inbox", auth: true, handler: getInbox },
+  { method: "GET", path: "/api/close/status", auth: true, handler: getCloseStatus },
+
+  // invoices (P1) — ocr + sub-paths before the /:id catch-all
+  { method: "GET", path: "/api/invoices", auth: true, handler: listInvoices },
+  { method: "POST", path: "/api/invoices", auth: true, handler: createInvoice },
+  { method: "POST", path: "/api/invoices/ocr", auth: true, handler: ocrInvoice },
+  {
+    method: "POST",
+    path: "/api/invoices/:id/verify",
+    auth: true,
+    handler: (req, res, p) => verifyInvoice(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/invoices/:id/voucher",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => generateInvoiceVoucher(req, res, p.id!)
+  },
+  {
+    method: "PATCH",
+    path: "/api/invoices/:id",
+    auth: true,
+    handler: (req, res, p) => updateInvoice(req, res, p.id!)
+  },
+  {
+    method: "DELETE",
+    path: "/api/invoices/:id",
+    auth: true,
+    handler: (req, res, p) => deleteInvoice(req, res, p.id!)
   }
 ];
 for (const route of migratedRoutes) {
@@ -862,414 +1052,6 @@ async function router(req: ApiRequest, res: ServerResponse) {
 
     // contracts + exports + pdf → migrated to appRouter
 
-  // ── Assistant ──
-  if (url.pathname === "/api/assistant/chat") {
-    if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization"
-      });
-      res.end();
-      return;
-    }
-    if (req.method === "POST") {
-      if (!(await requireAuth(req, res))) return;
-      return assistantChat(req, res);
-    }
-  }
-
-  if (url.pathname === "/api/assistant/ocr") {
-    if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization"
-      });
-      res.end();
-      return;
-    }
-    if (req.method === "POST") {
-      if (!(await requireAuth(req, res))) return;
-      return assistantOcr(req, res);
-    }
-  }
-
-  if (req.method === "GET" && url.pathname === "/api/audit/logs") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("audit.view", req, res))) return;
-    return listAuditLogs(req, res);
-  }
-
-  if (url.pathname === "/api/boss-qa/chat") {
-    if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization"
-      });
-      res.end();
-      return;
-    }
-    if (req.method === "POST") {
-      if (!(await requireAuth(req, res))) return;
-      if (!(await requirePermission("dashboard.view", req, res))) return;
-      return bossChat(req, res);
-    }
-  }
-
-  // ── Knowledge Base ──
-  if (url.pathname === "/api/knowledge/parse-documents") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("knowledge.manage", req, res))) return;
-      return parseKnowledgeDocuments(req, res);
-    }
-  }
-
-  if (url.pathname === "/api/knowledge") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("knowledge.view", req, res))) return;
-      return listKnowledgeItems(req, res);
-    }
-    if (req.method === "POST") {
-      if (!(await requirePermission("knowledge.manage", req, res))) return;
-      return createKnowledgeItem(req, res);
-    }
-  }
-
-  const knowledgeItemMatch = url.pathname.match(/^\/api\/knowledge\/([^/]+)$/);
-  const knowledgeItemId = knowledgeItemMatch?.[1];
-  if (knowledgeItemId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "PUT") {
-      if (!(await requirePermission("knowledge.manage", req, res))) return;
-      return updateKnowledgeItem(req, res, knowledgeItemId);
-    }
-    if (req.method === "DELETE") {
-      if (!(await requirePermission("knowledge.manage", req, res))) return;
-      return deleteKnowledgeItem(req, res, knowledgeItemId);
-    }
-  }
-
-  // ── Settings ──
-  if (url.pathname === "/api/settings/company") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("dashboard.view", req, res))) return;
-      return getCompanySettings(req, res);
-    }
-    if (req.method === "PUT") {
-      if (!(await requirePermission("dashboard.view", req, res))) return;
-      return updateCompanySettings(req, res);
-    }
-  }
-
-  if (url.pathname === "/api/settings/ai") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("dashboard.view", req, res))) return;
-    if (req.method === "GET") return getAiSettings(req, res);
-    if (req.method === "PUT") return updateAiSettings(req, res);
-  }
-
-  if (url.pathname === "/api/settings/ai/ollama-models") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return getOllamaModels(req, res);
-  }
-
-  if (url.pathname === "/api/settings/ai/test") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") return testAiConnection(req, res);
-  }
-
-  if (url.pathname === "/api/settings/users") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("dashboard.view", req, res))) return;
-    if (req.method === "GET") return getUserList(req, res);
-  }
-
-  // ── P2: 外部对接配置 ─────────────────────────────────────────────────────────
-  if (url.pathname === "/api/settings/integrations") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("dashboard.view", req, res))) return;
-    if (req.method === "GET") return listIntegrationConfigs(req, res);
-  }
-  const integrationTypeMatch = url.pathname.match(/^\/api\/settings\/integrations\/([^/]+)$/);
-  if (integrationTypeMatch?.[1] && !url.pathname.endsWith("/test")) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("dashboard.view", req, res))) return;
-    const configType = integrationTypeMatch[1];
-    if (req.method === "GET") return getIntegrationConfig(req, res, configType);
-    if (req.method === "PUT") { await readJsonBody(req); return upsertIntegrationConfig(req, res, configType); }
-  }
-  const integrationTestMatch = url.pathname.match(/^\/api\/settings\/integrations\/([^/]+)\/test$/);
-  if (integrationTestMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("dashboard.view", req, res))) return;
-    if (req.method === "POST") return testIntegrationConfig(req, res, integrationTestMatch[1]);
-  }
-
-  // ── P1: 税务申报文件导出 ─────────────────────────────────────────────────────
-  if (url.pathname === "/api/tax-integration/vat-xml") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.manage", req, res))) return;
-    if (req.method === "GET") return exportVatXml(req, res);
-  }
-  if (url.pathname === "/api/tax-integration/iit-csv") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.manage", req, res))) return;
-    if (req.method === "GET") return exportIitCsv(req, res);
-  }
-  if (url.pathname === "/api/tax-integration/si-csv") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.manage", req, res))) return;
-    if (req.method === "GET") return exportSiCsv(req, res);
-  }
-  if (url.pathname === "/api/tax-integration/fund-csv") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.manage", req, res))) return;
-    if (req.method === "GET") return exportFundCsv(req, res);
-  }
-  if (url.pathname === "/api/tax-integration/submissions") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.view", req, res))) return;
-    if (req.method === "GET") return listSubmissions(req, res);
-  }
-  const submissionConfirmMatch = url.pathname.match(/^\/api\/tax-integration\/submissions\/([^/]+)\/confirm$/);
-  if (submissionConfirmMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tax.manage", req, res))) return;
-    if (req.method === "PATCH") return confirmSubmission(req, res, submissionConfirmMatch[1]);
-  }
-
-  // ── P1: 银行账户与流水 ────────────────────────────────────────────────────
-  if (url.pathname === "/api/banking/accounts") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET")  return listBankAccounts(req, res);
-    if (req.method === "POST") {
-      await readJsonBody(req);
-      return createBankAccount(req, res);
-    }
-  }
-  if (url.pathname === "/api/banking/statements") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return listBankStatements(req, res);
-  }
-  if (url.pathname === "/api/banking/statements/import") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") return importBankStatements(req, res);
-  }
-  if (url.pathname === "/api/banking/statements/unmatched") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return getUnmatchedSummary(req, res);
-  }
-  const stmtMatchRoute = url.pathname.match(/^\/api\/banking\/statements\/([^/]+)\/match$/);
-  if (stmtMatchRoute?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "PATCH") {
-      await readJsonBody(req);
-      return matchStatement(req, res, stmtMatchRoute[1]);
-    }
-  }
-
-  // ── P3: 对账引擎 ──────────────────────────────────────────────────────────
-  if (url.pathname === "/api/banking/reconciliation/run") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      await readJsonBody(req);
-      return runReconciliationRoute(req, res);
-    }
-  }
-  if (url.pathname === "/api/banking/reconciliation/candidates") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return listCandidatesRoute(req, res);
-  }
-  const candidateConfirmRoute = url.pathname.match(/^\/api\/banking\/reconciliation\/candidates\/([^/]+)\/confirm$/);
-  if (candidateConfirmRoute?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") return confirmCandidateRoute(req, res, candidateConfirmRoute[1]);
-  }
-  const candidateRejectRoute = url.pathname.match(/^\/api\/banking\/reconciliation\/candidates\/([^/]+)\/reject$/);
-  if (candidateRejectRoute?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") return rejectCandidateRoute(req, res, candidateRejectRoute[1]);
-  }
-  if (url.pathname === "/api/banking/reconciliation/rules") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return getReconRulesRoute(req, res);
-    if (req.method === "PUT") {
-      await readJsonBody(req);
-      return upsertReconRulesRoute(req, res);
-    }
-  }
-
-  // ── 全局搜索 ──────────────────────────────────────────────────────────────
-  if (url.pathname === "/api/search") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return globalSearch(req, res);
-  }
-
-  // ── P6: AI Agents ─────────────────────────────────────────────────────────
-  if (url.pathname === "/api/ai/accounting/suggest") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") { await readJsonBody(req); return suggestAccounting(req, res); }
-  }
-  if (url.pathname === "/api/ai/completeness/assess") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") { await readJsonBody(req); return assessEventCompleteness(req, res); }
-  }
-  if (url.pathname === "/api/ai/audit/review") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") { await readJsonBody(req); return auditReview(req, res); }
-  }
-  if (url.pathname === "/api/ai/results") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return getAiResults(req, res);
-  }
-  const aiAcceptMatch = url.pathname.match(/^\/api\/ai\/results\/([^/]+)\/accept$/);
-  if (aiAcceptMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") { await readJsonBody(req); return acceptAiResult(req, res, aiAcceptMatch[1]); }
-  }
-
-  // ── P7: 往来单位 ──────────────────────────────────────────────────────────
-  if (url.pathname === "/api/counterparties") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return listCounterparties(req, res);
-    if (req.method === "POST") { await readJsonBody(req); return createCounterparty(req, res); }
-  }
-  const cpMatch = url.pathname.match(/^\/api\/counterparties\/([^/]+)$/);
-  if (cpMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "PATCH") { await readJsonBody(req); return updateCounterparty(req, res, cpMatch[1]); }
-  }
-
-  // ── P8-C3: 订阅计费 ───────────────────────────────────────────────────────
-  if (url.pathname === "/api/billing/plans") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return listPlans(req, res);
-  }
-  if (url.pathname === "/api/billing/subscription") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return getSubscription(req, res);
-  }
-  if (url.pathname === "/api/billing/subscribe") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") { await readJsonBody(req); return subscribePlan(req, res); }
-  }
-  if (url.pathname === "/api/billing/payments") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return listPayments(req, res);
-  }
-  const payConfirmMatch = url.pathname.match(/^\/api\/billing\/payments\/([^/]+)\/confirm$/);
-  if (payConfirmMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") { await readJsonBody(req); return confirmPayment(req, res, payConfirmMatch[1]); }
-  }
-
-  // ── P7: 申报到期提醒 ──────────────────────────────────────────────────────
-  if (url.pathname === "/api/tax/deadlines") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return getTaxDeadlines(req, res);
-  }
-
-  // ── Phase9 任务2: 反馈与升级需求 ──────────────────────────────────────────
-  if (url.pathname === "/api/feedback") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return listFeedback(req, res);
-    if (req.method === "POST") { await readJsonBody(req); return submitFeedback(req, res); }
-  }
-  if (url.pathname === "/api/feedback/consolidate") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") { await readJsonBody(req); return consolidateFeedbackRoute(req, res); }
-  }
-  if (url.pathname === "/api/proposals") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return listProposals(req, res);
-  }
-  const proposalDecideMatch = url.pathname.match(/^\/api\/proposals\/([^/]+)\/decide$/);
-  if (proposalDecideMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("settings.manage", req, res))) return;
-    if (req.method === "POST") { await readJsonBody(req); return decideProposal(req, res, proposalDecideMatch[1]); }
-  }
-
-  // ── Phase9-F9: 财税资料包 ─────────────────────────────────────────────────
-  if (url.pathname === "/api/archive/package") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return getArchivePackage(req, res);
-  }
-
-  // ── P7: 现金流前瞻 ────────────────────────────────────────────────────────
-  if (url.pathname === "/api/forecast/cash") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return getCashForecast(req, res);
-  }
-
-  // ── 设置就绪度 ────────────────────────────────────────────────────────────
-  if (url.pathname === "/api/setup/status") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return getSetupStatus(req, res);
-  }
-
-  // ── 统一待办收件箱 ────────────────────────────────────────────────────────
-  if (url.pathname === "/api/inbox") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return getInbox(req, res);
-  }
-
-  // ── 月度结账状态聚合 ──────────────────────────────────────────────────────
-  if (url.pathname === "/api/close/status") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return getCloseStatus(req, res);
-  }
-
-  // ── P5: 银行 API 直连——自动拉流水并对账 ───────────────────────────────────
-  if (url.pathname === "/api/banking/sync-statements") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      await readJsonBody(req);
-      return syncStatementsRoute(req, res);
-    }
-  }
-
-  // ── P1: 发票台账 ─────────────────────────────────────────────────────────
-  if (url.pathname === "/api/invoices") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") return listInvoices(req, res);
-    if (req.method === "POST") {
-      await readJsonBody(req);
-      return createInvoice(req, res);
-    }
-  }
-  if (url.pathname === "/api/invoices/ocr") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      await readJsonBody(req);
-      return ocrInvoice(req, res);
-    }
-  }
-  const invoiceVerifyMatch = url.pathname.match(/^\/api\/invoices\/([^/]+)\/verify$/);
-  if (invoiceVerifyMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") return verifyInvoice(req, res, invoiceVerifyMatch[1]);
-  }
-  const invoiceVoucherMatch = url.pathname.match(/^\/api\/invoices\/([^/]+)\/voucher$/);
-  if (invoiceVoucherMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.post", req, res))) return;
-    if (req.method === "POST") return generateInvoiceVoucher(req, res, invoiceVoucherMatch[1]);
-  }
-  const invoiceDetailMatch = url.pathname.match(/^\/api\/invoices\/([^/]+)$/);
-  if (invoiceDetailMatch?.[1]) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "PATCH") {
-      await readJsonBody(req);
-      return updateInvoice(req, res, invoiceDetailMatch[1]);
-    }
-    if (req.method === "DELETE") return deleteInvoice(req, res, invoiceDetailMatch[1]);
-  }
 
     return json(res, 404, { error: "Not Found" });
   } catch (err) {
