@@ -16,10 +16,15 @@ export interface DrilldownState {
   employeeId?: string;
   payrollPeriod?: string;
   tab?: string;
+  scene?: string;
   focus?: string;
   riskScope?: string;
   resourceType?: string;
   resourceId?: string;
+}
+
+function extractResourceIdSuffix(resourceId: string, prefix: string) {
+  return resourceId.startsWith(prefix) ? resourceId.slice(prefix.length) : null;
 }
 
 function buildAuditState(
@@ -108,6 +113,7 @@ export function normalizeDrilldownState(state: unknown): DrilldownState {
     employeeId: pick("employeeId"),
     payrollPeriod: pick("payrollPeriod"),
     tab: pick("tab"),
+    scene: pick("scene"),
     focus: pick("focus"),
     riskScope: pick("riskScope"),
     resourceType: pick("resourceType"),
@@ -156,6 +162,17 @@ export function resolveAuditLogTarget(log: AuditLog): DrilldownTarget | null {
       return { path: "/contracts", state: buildAuditState("contract", log.resourceId, { contractId: log.resourceId }), label: "查看合同" };
     case "employee":
       return { path: "/payroll", state: buildAuditState("employee", log.resourceId, { employeeId: log.resourceId, tab: "employees" }), label: "查看员工" };
+    case "export_job": {
+      const scene = extractExportScene(log);
+      return {
+        path: "/pdf-export",
+        state: buildAuditState("export_job", log.resourceId, {
+          resourceId: log.resourceId,
+          ...(scene ? { scene } : {})
+        }),
+        label: "查看导出任务"
+      };
+    }
     case "tax_item":
       return { path: "/tax", state: buildAuditState("tax_item", log.resourceId, { taxItemId: log.resourceId }), label: "查看税务事项" };
     case "risk_finding":
@@ -163,6 +180,17 @@ export function resolveAuditLogTarget(log: AuditLog): DrilldownTarget | null {
     case "payroll": {
       const period = extractPayrollPeriod(log);
       return period ? { path: "/payroll", state: buildAuditState("payroll", log.resourceId, { payrollPeriod: period, tab: "payroll" }), label: "查看工资期间" } : null;
+    }
+    case "payroll_transfer_batch": {
+      const payrollPeriod = extractPayrollTransferPeriod(log);
+      return {
+        path: "/payroll/transfer",
+        state: buildAuditState("payroll_transfer_batch", log.resourceId, {
+          resourceId: log.resourceId,
+          ...(payrollPeriod ? { payrollPeriod } : {})
+        }),
+        label: "查看代发批次"
+      };
     }
     default:
       return null;
@@ -185,6 +213,53 @@ function extractPayrollPeriod(log: AuditLog): string | null {
 
   if (periodFromChanges && /^\d{4}-\d{2}$/.test(periodFromChanges)) {
     return periodFromChanges;
+  }
+
+  const candidates = [log.resourceLabel, log.resourceId].filter((value): value is string => Boolean(value));
+  for (const value of candidates) {
+    const match = value.match(/\b\d{4}-\d{2}\b/);
+    if (match) {
+      return match[0];
+    }
+  }
+
+  return null;
+}
+
+function extractExportScene(log: AuditLog): string | null {
+  const changes = log.changes as Record<string, unknown> | null;
+  const direct = typeof changes?.kind === "string" ? changes.kind : null;
+  if (direct === "report") {
+    return "reports";
+  }
+  if (direct === "voucher") {
+    return "vouchers";
+  }
+  if (direct === "payroll") {
+    return "payroll";
+  }
+  if (direct === "package") {
+    return "packages";
+  }
+  return null;
+}
+
+function extractPayrollTransferPeriod(log: AuditLog): string | null {
+  const changes = log.changes as Record<string, unknown> | null;
+  if (typeof changes?.period === "string" && /^\d{4}-\d{2}$/.test(changes.period)) {
+    return changes.period;
+  }
+
+  if (typeof changes?.payrollPeriod === "string" && /^\d{4}-\d{2}$/.test(changes.payrollPeriod)) {
+    return changes.payrollPeriod;
+  }
+
+  const data = changes?.data;
+  if (data && typeof data === "object") {
+    const candidate = (data as Record<string, unknown>).period;
+    if (typeof candidate === "string" && /^\d{4}-\d{2}$/.test(candidate)) {
+      return candidate;
+    }
   }
 
   const candidates = [log.resourceLabel, log.resourceId].filter((value): value is string => Boolean(value));

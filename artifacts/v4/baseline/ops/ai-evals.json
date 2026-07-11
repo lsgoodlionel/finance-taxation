@@ -1,0 +1,9 @@
+{
+  "generatedAt": "2026-07-06T05:20:37.177Z",
+  "sampleSize": 180,
+  "suggestionAcceptanceRate": 0.9,
+  "documentRecallRate": 0.97,
+  "highRiskAutoExecutionCount": 0,
+  "falsePositiveRate": 0.03,
+  "source": "evaluation"
+}

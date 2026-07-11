@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createEvent, analyzeEvent, getCurrentUser, getCompanyProfile, listDocuments, uploadDocumentFileRaw, refreshSession } from "../lib/api";
+import { API_BASE_URL, createEvent, analyzeEvent, getCurrentUser, getCompanyProfile, listDocuments, uploadDocumentFileRaw, refreshSession } from "../lib/api";
 import { useChatSessions } from "../lib/useChatSessions";
 import type { SessionMessage } from "../lib/useChatSessions";
 import { EVENT_TYPE_LABELS as EVENT_TYPE_LABELS_I18N } from "../lib/i18n";
@@ -20,7 +20,6 @@ import { AssistantSessionList } from "./assistant/AssistantSessionList";
 import { AssistantSuggestedEventsCard } from "./assistant/AssistantSuggestedEventsCard";
 import { AssistantInputBar } from "./assistant/AssistantInputBar";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
 const TOKEN_KEY = "finance-taxation-v2-token";
 const STORAGE_KEY = "ft-assistant-history";
 const FLOW_CONTEXT_STORAGE_KEY = `${STORAGE_KEY}:flow-context`;
@@ -195,6 +194,7 @@ export function AssistantPage() {
   // Role / view mode
   const [isBoss, setIsBoss] = useState(false);
   const [companyId, setCompanyId] = useState("");
+  const [requestDepartment, setRequestDepartment] = useState("财务部");
   const [viewMode, setViewMode] = useState<"boss" | "staff">("staff");
   const [approverRoleLabel, setApproverRoleLabel] = useState("创始人/董事长");
 
@@ -228,6 +228,7 @@ export function AssistantPage() {
         const boss = user.roleIds.some((r) => BOSS_ROLES.has(r));
         setIsBoss(boss);
         setCompanyId(user.companyId);
+        setRequestDepartment(user.departmentName || "财务部");
         const savedMode = localStorage.getItem(`ft-view-mode-${user.companyId}`) as "boss" | "staff" | null;
         const nextMode = boss
           ? (modeState === "boss" || modeState === "staff" ? modeState : (savedMode ?? "boss"))
@@ -442,7 +443,7 @@ export function AssistantPage() {
           type: ev.type as Parameters<typeof createEvent>[0]["type"],
           title: ev.title,
           description: ev.description,
-          department: "财务部",
+          department: requestDepartment,
           occurredOn: ev.occurredOn ?? new Date().toISOString().slice(0, 10),
           amount: ev.amount !== null ? String(ev.amount) : null,
           currency: ev.currency || "CNY",

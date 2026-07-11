@@ -39,6 +39,12 @@ interface AttachmentRow {
   uploaded_at: string | Date;
 }
 
+interface AccessibleEventRow {
+  id: string;
+  owner_id: string | null;
+  department: string | null;
+}
+
 function toIsoString(value: string | Date | null | undefined): string | null {
   if (!value) return null;
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -136,24 +142,46 @@ export async function listCompanyDocuments(
   return rows.map((row) => mapDocumentRow(row, attachments));
 }
 
-function scopeDocuments(rows: GeneratedDocument[], req: ApiRequest) {
+async function scopeDocuments(rows: GeneratedDocument[], req: ApiRequest) {
   const companyRows = rows.filter((row) => row.companyId === req.auth!.companyId);
   if (hasCompanyWideAccess(req.auth!.roleCodes)) {
     return companyRows;
   }
-  return companyRows.filter((row) => row.ownerDepartment === req.auth!.departmentName);
+
+  const accessibleEvents = await query<AccessibleEventRow>(
+    `
+      select id, owner_id, department
+      from business_events
+      where company_id = $1
+    `,
+    [req.auth!.companyId]
+  );
+  const accessibleEventIds = new Set(
+    accessibleEvents
+      .filter(
+        (row) =>
+          row.owner_id === req.auth!.userId || row.department === req.auth!.departmentName
+      )
+      .map((row) => row.id)
+  );
+
+  return companyRows.filter(
+    (row) =>
+      row.ownerDepartment === req.auth!.departmentName ||
+      accessibleEventIds.has(row.businessEventId)
+  );
 }
 
 async function getScopedDocument(req: ApiRequest, documentId: string): Promise<GeneratedDocument | null> {
   const rows = await listCompanyDocuments(req.auth!.companyId, { documentId });
-  return scopeDocuments(rows, req)[0] ?? null;
+  return (await scopeDocuments(rows, req))[0] ?? null;
 }
 
 export async function listDocuments(req: ApiRequest, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://127.0.0.1");
   const eventId = url.searchParams.get("businessEventId") || undefined;
   const rows = await listCompanyDocuments(req.auth!.companyId, { businessEventId: eventId });
-  const filtered = scopeDocuments(rows, req);
+  const filtered = await scopeDocuments(rows, req);
   return json(res, 200, { items: filtered, total: filtered.length });
 }
 

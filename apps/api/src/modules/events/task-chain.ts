@@ -1,4 +1,7 @@
 import type { BusinessEvent, Task } from "@finance-taxation/domain-model";
+import { resolveContractRevenueScenario } from "./contract-revenue-rules.js";
+import { resolvePurchaseExpenseScenario } from "./purchase-expense-rules.js";
+import { resolveTravelExpenseScenario } from "./travel-expense-rules.js";
 
 interface BuildGeneratedTasksForEventOptions {
   event: BusinessEvent;
@@ -195,6 +198,291 @@ function contractWorkflowTemplates(event: BusinessEvent): TaskTemplate[] | null 
   ];
 }
 
+function purchaseExpenseTemplates(event: BusinessEvent): TaskTemplate[] | null {
+  if (String(event.type) !== "purchase_expense") {
+    return null;
+  }
+
+  const scenario = resolvePurchaseExpenseScenario(event);
+  if (scenario.missingInvoiceBundle) {
+    return [
+      {
+        title: "补齐发票与票据依据",
+        description: "补充发票、付款回单、报销说明和业务背景，先把票据包补齐。",
+        priority: "high",
+        assigneeDepartment: event.department
+      },
+      {
+        title: "复核税前扣除与进项限制",
+        description: "明确缺票阶段的税前扣除与进项税限制，避免形成错误税务结论。",
+        priority: "high",
+        assigneeDepartment: "财务部"
+      },
+      {
+        title: "补票前冻结正式过账",
+        description: "在票据补齐前仅保留待补票草稿，不进入正式过账和申报。",
+        priority: "medium",
+        assigneeDepartment: "财务部"
+      }
+    ];
+  }
+
+  if (scenario.duplicateInvoice) {
+    return [
+      {
+        title: "核对重复票据与历史报销",
+        description: "排查同票号、同金额、同业务背景的既有报销与入账记录。",
+        priority: "high",
+        assigneeDepartment: "财务部"
+      },
+      {
+        title: "关闭重复事项或并单处理",
+        description: "确认保留哪条事项，关闭重复流转或合并为同一报销处理。",
+        priority: "high",
+        assigneeDepartment: event.department
+      },
+      {
+        title: "复核税务抵扣留痕",
+        description: "检查是否已形成重复抵扣、重复申报或重复归档痕迹。",
+        priority: "medium",
+        assigneeDepartment: "财务部"
+      }
+    ];
+  }
+
+  if (scenario.classificationConflict) {
+    return [
+      {
+        title: "改走固定资产审批链",
+        description: "按固定资产或采购申请重新确认审批口径，不再按普通费用处理。",
+        priority: "high",
+        assigneeDepartment: event.department
+      },
+      {
+        title: "补齐资产验收与台账资料",
+        description: "补齐采购申请、验收单、资产台账和后续折旧所需资料。",
+        priority: "high",
+        assigneeDepartment: event.department
+      },
+      {
+        title: "按固定资产口径调整凭证",
+        description: "将凭证、税务和归档链切到固定资产处理口径。",
+        priority: "medium",
+        assigneeDepartment: "财务部"
+      }
+    ];
+  }
+
+  return [
+    {
+      title: "核对报销事由与票据包",
+      description: "确认报销事由、金额、票据和审批流保持一致。",
+      priority: "high",
+      assigneeDepartment: event.department
+    },
+    {
+      title: "复核税务与凭证草稿",
+      description: "核对进项税、税前扣除和费用入账口径。",
+      priority: "medium",
+      assigneeDepartment: "财务部"
+    }
+  ];
+}
+
+function travelExpenseTemplates(event: BusinessEvent): TaskTemplate[] | null {
+  if (String(event.type) !== "travel_expense") {
+    return null;
+  }
+
+  const scenario = resolveTravelExpenseScenario(event);
+  if (scenario.missingHotelInvoice) {
+    return [
+      {
+        title: "补齐住宿发票与行程依据",
+        description: "补充住宿发票、入住凭证和差旅行程，明确缺失住宿部分的业务背景。",
+        priority: "high",
+        assigneeDepartment: event.department
+      },
+      {
+        title: "确认暂估入账与税前扣除限制",
+        description: "在补票前，仅对已取得合规票据部分暂估处理，并复核税前扣除限制。",
+        priority: "high",
+        assigneeDepartment: "财务部"
+      },
+      {
+        title: "补票前冻结住宿部分过账",
+        description: "补齐住宿发票前，不进入完整差旅过账和正式抵扣。",
+        priority: "medium",
+        assigneeDepartment: "财务部"
+      }
+    ];
+  }
+
+  if (scenario.duplicateClaim) {
+    return [
+      {
+        title: "核对重复差旅报销记录",
+        description: "排查同一行程、同一交通住宿票据和同金额差旅报销是否已提交或入账。",
+        priority: "high",
+        assigneeDepartment: "财务部"
+      },
+      {
+        title: "保留有效报销主链",
+        description: "确认保留哪条差旅报销主链，其余重复流转关闭或并单处理。",
+        priority: "high",
+        assigneeDepartment: event.department
+      },
+      {
+        title: "复核交通住宿进项留痕",
+        description: "检查交通住宿票据是否已被重复抵扣、归档或纳入申报。",
+        priority: "medium",
+        assigneeDepartment: "财务部"
+      }
+    ];
+  }
+
+  if (scenario.accountingPeriodConflict) {
+    return [
+      {
+        title: "拆分跨期差旅归属月份",
+        description: "按出差起止日期拆分各月份应确认的差旅费用，不按报销提交月份整体入账。",
+        priority: "high",
+        assigneeDepartment: "财务部"
+      },
+      {
+        title: "复核认证抵扣与所得税期间",
+        description: "分别复核增值税认证月份和企业所得税费用归属期，避免跨期错配。",
+        priority: "high",
+        assigneeDepartment: "财务部"
+      },
+      {
+        title: "提交跨期差旅最终授权",
+        description: "由负责人确认跨期处理口径后，再进入正式过账或申报环节。",
+        priority: "medium",
+        assigneeDepartment: event.department
+      }
+    ];
+  }
+
+  return [
+    {
+      title: "核对差旅申请与行程",
+      description: "确认出差申请、行程时间和客户拜访背景与报销一致。",
+      priority: "high",
+      assigneeDepartment: event.department
+    },
+    {
+      title: "复核交通住宿票据",
+      description: "复核交通、住宿和餐饮相关票据的真实性、完整性和制度边界。",
+      priority: "high",
+      assigneeDepartment: "财务部"
+    },
+    {
+      title: "生成差旅税务与凭证建议",
+      description: "同步准备差旅进项税、税前扣除和报销凭证草稿。",
+      priority: "medium",
+      assigneeDepartment: "财务部"
+    }
+  ];
+}
+
+function contractRevenueTemplates(event: BusinessEvent): TaskTemplate[] | null {
+  if (String(event.type) !== "contract_revenue") {
+    return null;
+  }
+
+  const scenario = resolveContractRevenueScenario(event);
+  if (scenario.missingAcceptanceRecord) {
+    return [
+      {
+        title: "补齐验收单与履约证据",
+        description: "补充服务验收单、交付证明和客户确认资料，先锁定履约完成证据。",
+        priority: "high",
+        assigneeDepartment: event.department
+      },
+      {
+        title: "冻结正式收入确认",
+        description: "在验收单补齐前，暂不正式确认主营业务收入，只保留待复核草稿。",
+        priority: "high",
+        assigneeDepartment: "财务部"
+      },
+      {
+        title: "复核开票与所得税时点",
+        description: "分别复核已开票销项税义务和所得税收入确认时点，避免税会错配。",
+        priority: "medium",
+        assigneeDepartment: "财务部"
+      }
+    ];
+  }
+
+  if (scenario.duplicateContract) {
+    return [
+      {
+        title: "核对重复合同与收入主链",
+        description: "排查同合同号、同金额、同客户的既有合同收入与应收确认记录。",
+        priority: "high",
+        assigneeDepartment: "财务部"
+      },
+      {
+        title: "关闭重复确认流转",
+        description: "确认保留哪条合同收入主链，其余重复导入或重复确认流转关闭处理。",
+        priority: "high",
+        assigneeDepartment: event.department
+      },
+      {
+        title: "复核销项税与应收留痕",
+        description: "检查是否已形成重复销项税、重复应收或重复归档痕迹。",
+        priority: "medium",
+        assigneeDepartment: "财务部"
+      }
+    ];
+  }
+
+  if (scenario.revenueTimingConflict) {
+    return [
+      {
+        title: "拆分服务期间收入归属",
+        description: "按合同履约期间拆分各月应确认收入，不按一次性开票或导入整体确认。",
+        priority: "high",
+        assigneeDepartment: "财务部"
+      },
+      {
+        title: "改按合同负债分期结转",
+        description: "先确认合同负债或预收，再按后续履约进度分期结转主营业务收入。",
+        priority: "high",
+        assigneeDepartment: "财务部"
+      },
+      {
+        title: "复核税会时点差异",
+        description: "分别复核销项税义务与所得税收入归属差异，并保留审计复核说明。",
+        priority: "medium",
+        assigneeDepartment: "财务部"
+      }
+    ];
+  }
+
+  return [
+    {
+      title: "核对合同与验收依据",
+      description: "确认合同条款、服务验收和客户确认资料与收入事项一致。",
+      priority: "high",
+      assigneeDepartment: event.department
+    },
+    {
+      title: "复核开票与销项税时点",
+      description: "复核开票节点、销项税义务和应收确认口径。",
+      priority: "high",
+      assigneeDepartment: "财务部"
+    },
+    {
+      title: "生成收入确认与应收凭证",
+      description: "同步准备收入确认、应收账款和税务处理草稿。",
+      priority: "medium",
+      assigneeDepartment: "财务部"
+    }
+  ];
+}
+
 function standardTemplates(): TaskTemplate[] {
   return [
     {
@@ -218,7 +506,12 @@ export function buildGeneratedTasksForEvent({
   actorUserId
 }: BuildGeneratedTasksForEventOptions): Task[] {
   const rootTask = makeRootTask(event, now, actorUserId);
-  const templates = contractWorkflowTemplates(event) ?? standardTemplates();
+  const templates =
+    purchaseExpenseTemplates(event) ??
+    travelExpenseTemplates(event) ??
+    contractRevenueTemplates(event) ??
+    contractWorkflowTemplates(event) ??
+    standardTemplates();
 
   const childTasks = templates.map((template, index) => ({
     id: `task-${event.id}-${index + 1}`,

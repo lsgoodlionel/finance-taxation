@@ -1,4 +1,5 @@
 import { Button, Space, Tag, Typography, Descriptions, Divider, Table } from "antd";
+import type { WorkflowRunDetail } from "../../lib/api";
 import type { ColumnsType } from "antd/es/table";
 import {
   CheckOutlined, AuditOutlined, PrinterOutlined, EditOutlined, SafetyCertificateOutlined,
@@ -20,12 +21,17 @@ interface VoucherLine {
 
 interface VoucherDetailPanelProps {
   detail: VoucherDetail | null;
+  runtimeDetail?: WorkflowRunDetail | null;
   validation: { valid: boolean; totals: { debit: string; credit: string }; issues: string[] } | null;
   updating: boolean;
   onValidate: () => Promise<void>;
   onApprove: () => Promise<void>;
   onPost: () => Promise<void>;
   onSummaryUpdate: (summary: string) => Promise<void>;
+  onOpenEvent?: (businessEventId: string) => void;
+  onOpenDocuments?: (businessEventId: string) => void;
+  onOpenTax?: (businessEventId: string) => void;
+  onOpenLedger?: (voucherId: string, businessEventId: string) => void;
 }
 
 const LINE_COLUMNS: ColumnsType<VoucherLine> = [
@@ -52,7 +58,18 @@ const LINE_COLUMNS: ColumnsType<VoucherLine> = [
 ];
 
 export function VoucherDetailPanel({
-  detail, validation, updating, onValidate, onApprove, onPost, onSummaryUpdate,
+  detail,
+  runtimeDetail,
+  validation,
+  updating,
+  onValidate,
+  onApprove,
+  onPost,
+  onSummaryUpdate,
+  onOpenEvent,
+  onOpenDocuments,
+  onOpenTax,
+  onOpenLedger
 }: VoucherDetailPanelProps) {
   const { t } = useI18n();
 
@@ -68,6 +85,7 @@ export function VoucherDetailPanel({
   const totalDebit  = detail.lines.reduce((s, l) => s + Number(l.debit), 0);
   const totalCredit = detail.lines.reduce((s, l) => s + Number(l.credit), 0);
   const isPosted    = detail.status === "posted";
+  const latestCommand = runtimeDetail?.commands[0] ?? null;
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -115,6 +133,34 @@ export function VoucherDetailPanel({
           <Descriptions.Item label="过账日期">{detail.postedAt.slice(0, 10)}</Descriptions.Item>
         )}
       </Descriptions>
+
+      {runtimeDetail?.run.blockedReason ? (
+        <div style={{ borderRadius: 10, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.16)", padding: "10px 12px", color: "#991b1b", fontSize: 12 }}>
+          阻塞原因：{runtimeDetail.run.blockedReason}
+        </div>
+      ) : null}
+      {latestCommand?.lastErrorDetail || runtimeDetail?.compensations.length ? (
+        <div style={{ borderRadius: 10, background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.18)", padding: "10px 12px", fontSize: 12, color: "#92400e" }}>
+          <div>运行提示：{latestCommand?.lastErrorDetail || "已存在人工补偿记录"}</div>
+          <div style={{ marginTop: 4 }}>
+            补偿记录：{runtimeDetail?.compensations.length ?? 0} 条
+          </div>
+        </div>
+      ) : null}
+      <Space wrap size={8}>
+        <Button size="small" onClick={() => onOpenEvent?.(detail.businessEventId)}>
+          查看事项
+        </Button>
+        <Button size="small" onClick={() => onOpenDocuments?.(detail.businessEventId)}>
+          查看单据
+        </Button>
+        <Button size="small" onClick={() => onOpenTax?.(detail.businessEventId)}>
+          查看税务
+        </Button>
+        <Button size="small" onClick={() => onOpenLedger?.(detail.id, detail.businessEventId)}>
+          查看总账
+        </Button>
+      </Space>
 
       {/* Validation result */}
       {validation && <BalanceIndicator result={validation} />}

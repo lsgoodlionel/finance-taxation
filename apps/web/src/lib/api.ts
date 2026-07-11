@@ -48,11 +48,16 @@ import type {
   TaxRuleProfile,
   TaskTreeNode,
   VatWorkingPaper,
-  Voucher
+  Voucher,
+  WorkflowCommandExecution,
+  WorkflowCompensationRecord,
+  WorkflowRun,
+  WorkflowTransitionRecord
 } from "@finance-taxation/domain-model";
 import { describePageLoadError, isAuthRequiredError } from "./request-errors";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
+const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+export const API_BASE_URL = rawApiBaseUrl === undefined ? "http://127.0.0.1:3100" : rawApiBaseUrl;
 const TOKEN_KEY = "finance-taxation-v2-token";
 const REFRESH_TOKEN_KEY = "finance-taxation-v2-refresh-token";
 export const AUTH_EXPIRED_EVENT = "finance-taxation-v2-auth-expired";
@@ -63,7 +68,38 @@ interface AccessUser {
   username: string;
   displayName: string;
   roleIds: string[];
+  departmentName: string | null;
 }
+
+export type RuntimeExecutionState = "waiting" | "running" | "succeeded" | "failed" | "cancelled";
+export type RuntimeAuthorizationState = "not_required" | "awaiting_authorization" | "authorized" | "insufficient";
+
+export interface WorkflowRuntimeSummary {
+  executionState: RuntimeExecutionState;
+  executionLabel: string;
+  executionMessage: string;
+  authorizationState: RuntimeAuthorizationState;
+  authorizationLabel: string;
+  authorizationMessage: string;
+  stats: Array<{
+    label: string;
+    value: string;
+  }>;
+  issue?: {
+    tone: "info" | "warning" | "error";
+    title: string;
+    message: string;
+    detail?: string;
+  };
+  actions?: Array<{
+    key: string;
+    label: string;
+    tone?: "primary" | "default" | "danger";
+    params?: Record<string, string>;
+  }>;
+}
+
+export type WorkflowRuntimeScope = "tasks" | "tax" | "vouchers" | "payroll" | "payroll-transfer";
 
 export interface EventDetail extends BusinessEvent {
   relations: Array<{
@@ -118,6 +154,27 @@ export interface RndProjectDetail extends RndProject {
   summary: RndProjectSummary;
   policyReview: RndAccountingPolicyReview;
   guidance: RndPolicyGuidance;
+}
+
+export interface WorkflowRunDetail {
+  run: WorkflowRun;
+  transitions: WorkflowTransitionRecord[];
+  commands: WorkflowCommandExecution[];
+  compensations: WorkflowCompensationRecord[];
+}
+
+export interface WorkflowCommandDetail {
+  command: WorkflowCommandExecution;
+  run: WorkflowRun | null;
+  compensations: WorkflowCompensationRecord[];
+}
+
+export interface WorkflowCompensationCreateInput {
+  actionType?: string;
+  reason: string;
+  handoffToUserId?: string | null;
+  handoffToName?: string | null;
+  notes?: string;
 }
 
 export function getStoredToken() {
@@ -268,6 +325,21 @@ export async function refreshSession() {
   return payload;
 }
 
+export async function getWorkflowRuntimeSummary(
+  scope: WorkflowRuntimeScope,
+  params: Record<string, string | undefined> = {}
+) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      search.set(key, value);
+    }
+  }
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+  const payload = await request<{ summary: WorkflowRuntimeSummary }>(`/api/runtime/${scope}${suffix}`);
+  return payload.summary;
+}
+
 export async function getCurrentUser() {
   return request<AccessUser>("/api/access/me");
 }
@@ -333,6 +405,68 @@ export async function listTasks(businessEventId?: string, overdueOnly?: boolean)
   return request<{ items: (Task & { isOverdue?: boolean })[]; tree: TaskTreeNode[]; total: number }>(
     `/api/tasks${qs ? "?" + qs : ""}`
   );
+}
+
+export async function listWorkflowRuns(filters?: {
+  resourceType?: string;
+  resourceId?: string;
+  state?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.resourceType) params.set("resourceType", filters.resourceType);
+  if (filters?.resourceId) params.set("resourceId", filters.resourceId);
+  if (filters?.state) params.set("state", filters.state);
+  const qs = params.toString();
+  return request<{ items: WorkflowRun[]; total: number }>(`/api/workflows/runs${qs ? `?${qs}` : ""}`);
+}
+
+export async function getWorkflowRunDetail(runId: string) {
+  return request<WorkflowRunDetail>(`/api/workflows/runs/${runId}`);
+}
+
+export async function listWorkflowCommands(filters?: {
+  workflowRunId?: string;
+  resourceType?: string;
+  resourceId?: string;
+  status?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.workflowRunId) params.set("workflowRunId", filters.workflowRunId);
+  if (filters?.resourceType) params.set("resourceType", filters.resourceType);
+  if (filters?.resourceId) params.set("resourceId", filters.resourceId);
+  if (filters?.status) params.set("status", filters.status);
+  const qs = params.toString();
+  return request<{ items: WorkflowCommandExecution[]; total: number }>(
+    `/api/workflows/commands${qs ? `?${qs}` : ""}`
+  );
+}
+
+export async function getWorkflowCommandDetail(commandId: string) {
+  return request<WorkflowCommandDetail>(`/api/workflows/commands/${commandId}`);
+}
+
+export async function retryWorkflowCommand(commandId: string) {
+  return request<WorkflowCommandExecution>(`/api/workflows/commands/${commandId}/retry`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+}
+
+export async function cancelWorkflowCommand(commandId: string) {
+  return request<WorkflowCommandExecution>(`/api/workflows/commands/${commandId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+}
+
+export async function createWorkflowCompensation(
+  commandId: string,
+  input: WorkflowCompensationCreateInput
+) {
+  return request<WorkflowCompensationRecord>(`/api/workflows/commands/${commandId}/compensations`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
 }
 
 export async function remindTask(taskId: string) {
@@ -853,6 +987,20 @@ export async function updateExportJobStatus(jobId: string, status: ExportJob["st
   });
 }
 
+export async function updateExportJobRuntime(
+  jobId: string,
+  input: {
+    status: ExportJob["status"];
+    errorMessage?: string;
+    nextRetryAt?: string | null;
+  }
+) {
+  return request<{ job: ExportJob }>(`/api/exports/jobs/${encodeURIComponent(jobId)}/status`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
 export interface DashboardCard {
   key: string;
   label: string;
@@ -1108,6 +1256,13 @@ export interface PayrollTransferBatch {
   total_amount: string;
   employee_count: number;
   status: "draft" | "approved" | "exported" | "disbursed" | "confirmed";
+  retry_count: number;
+  last_error: string | null;
+  last_attempt_at: string | null;
+  next_retry_at: string | null;
+  compensation_status: "not_required" | "pending" | "completed" | "failed";
+  compensation_event_id: string | null;
+  compensated_at: string | null;
   bank_transfer_ref: string | null;
   notes: string;
   created_at: string;
@@ -1151,6 +1306,13 @@ export async function disburseTransferBatch(batchId: string, bankTransferRef?: s
   return request<{ ok: boolean; eventId: string }>(`/api/payroll/transfer/batches/${batchId}/disburse`, {
     method: "POST", body: JSON.stringify({ bankTransferRef })
   });
+}
+
+export async function compensateTransferBatch(batchId: string) {
+  return request<{ ok: boolean; eventId: string; reused: boolean }>(
+    `/api/payroll/transfer/batches/${batchId}/compensate`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
 }
 
 export async function downloadTransferFile(batchId: string, format: "generic" | "cmb") {
@@ -1953,4 +2115,74 @@ export async function testIntegrationConfig(configType: string) {
     `/api/settings/integrations/${configType}/test`,
     { method: "POST" },
   );
+}
+
+// ── 银行对账（P3 对账引擎前端对接） ──────────────────────────────
+export interface ReconciliationCandidate {
+  id: string;
+  statement_id: string;
+  voucher_id: string | null;
+  score: number;
+  match_reasons: string[] | string;
+  amount_diff: string;
+  date_diff_days: number;
+  status: "pending" | "confirmed" | "rejected" | "superseded";
+  created_at: string;
+  stmt_date: string;
+  stmt_amount: string;
+  stmt_desc: string | null;
+  voucher_summary: string | null;
+}
+
+export interface ReconciliationRules {
+  amountTolerance: number;
+  dateWindowDays: number;
+  autoConfirmThreshold: number;
+  unmatchedEventDays: number;
+  keywordWeights: Record<string, number>;
+}
+
+export async function runBankReconciliation(data?: {
+  statementIds?: string[];
+  importBatch?: string;
+}) {
+  return request<{ ok: boolean; matched: number; suggested: number; unmatched: number }>(
+    "/api/banking/reconciliation/run",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data ?? {}),
+    },
+  );
+}
+
+export async function listReconciliationCandidates(status?: string) {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return request<{ items: ReconciliationCandidate[]; total: number }>(
+    `/api/banking/reconciliation/candidates${qs}`,
+  );
+}
+
+export async function confirmReconciliationCandidate(id: string) {
+  return request<{ ok: boolean }>(`/api/banking/reconciliation/candidates/${id}/confirm`, {
+    method: "POST",
+  });
+}
+
+export async function rejectReconciliationCandidate(id: string) {
+  return request<{ ok: boolean }>(`/api/banking/reconciliation/candidates/${id}/reject`, {
+    method: "POST",
+  });
+}
+
+export async function getReconciliationRules() {
+  return request<ReconciliationRules>("/api/banking/reconciliation/rules");
+}
+
+export async function updateReconciliationRules(data: Partial<ReconciliationRules>) {
+  return request<{ ok: boolean; rules: ReconciliationRules }>("/api/banking/reconciliation/rules", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 }

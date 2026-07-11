@@ -1,4 +1,5 @@
 import type { AuditLog } from "@finance-taxation/domain-model";
+import { resolveAuditLogTarget } from "../drilldown";
 
 function panelStyle() {
   return {
@@ -12,9 +13,11 @@ function panelStyle() {
 type AuditDetailPanelProps = {
   log: AuditLog | null;
   renderChanges: (changes: Record<string, unknown> | null) => React.ReactNode;
+  onNavigate: (path: string, state?: Record<string, string>) => void;
 };
 
-export function AuditDetailPanel({ log, renderChanges }: AuditDetailPanelProps) {
+export function AuditDetailPanel({ log, renderChanges, onNavigate }: AuditDetailPanelProps) {
+  const target = log ? resolveAuditLogTarget(log) : null;
   return (
     <article style={panelStyle()}>
       <h3 style={{ marginTop: 0 }}>日志详情</h3>
@@ -31,6 +34,19 @@ export function AuditDetailPanel({ log, renderChanges }: AuditDetailPanelProps) 
           </div>
           <div>
             <strong>时间：</strong>{log.createdAt}
+          </div>
+          <div>
+            <strong>业务回跳：</strong>
+            {target ? (
+              <button
+                onClick={() => onNavigate(target.path, target.state)}
+                style={{ marginLeft: "8px", fontSize: "12px", padding: "4px 10px", borderRadius: "6px", border: "1px solid rgba(20,40,60,0.15)", background: "none", cursor: "pointer" }}
+              >
+                {target.label}
+              </button>
+            ) : (
+              <span style={{ marginLeft: "8px", color: "#aab5c0" }}>暂无回跳目标</span>
+            )}
           </div>
           <div>
             <strong>变更：</strong>

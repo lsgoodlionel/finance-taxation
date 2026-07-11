@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "schemaVersion": "2026-07-ops-source-v1",
+    "sourceType": "backup-restore",
+    "sourceId": "backup-drill-sample-2026-07",
+    "capturedAt": "2026-07-04T09:00:00.000Z",
+    "summary": "Nightly backup and restore drill sample for the purchase expense baseline environment.",
+    "artifacts": [
+      {
+        "kind": "runbook-log",
+        "path": "docs/v4/examples/ops-source-samples/evidence/backup-drill-sample-2026-07.log"
+      }
+    ]
+  },
+  "generatedAt": "2026-07-04T09:00:00.000Z",
+  "backupCompletedAt": "2026-07-04T01:00:00.000Z",
+  "restoreVerifiedAt": "2026-07-04T03:00:00.000Z",
+  "rpoHours": 2,
+  "rtoHours": 2,
+  "verifiedBy": "ops-drill-sample-2026-07"
+}

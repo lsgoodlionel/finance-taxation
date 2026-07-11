@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "schemaVersion": "2026-07-ops-source-v1",
+    "sourceType": "connectors",
+    "sourceId": "connector-certification-sample-2026-07",
+    "capturedAt": "2026-07-04T09:00:00.000Z",
+    "summary": "Connector certification sample covering invoice, bank, tax export, and OCR workflows in sandbox.",
+    "artifacts": [
+      {
+        "kind": "certification-report",
+        "path": "docs/v4/examples/ops-source-samples/evidence/connector-certification-sample-2026-07.md"
+      }
+    ]
+  },
+  "generatedAt": "2026-07-04T09:00:00.000Z",
+  "connectors": [
+    {
+      "key": "invoice_verify",
+      "label": "发票验真",
+      "status": "passed",
+      "lastVerifiedAt": "2026-07-04T08:30:00.000Z",
+      "roundtripMs": 220,
+      "notes": "税盘沙箱验真通过"
+    },
+    {
+      "key": "bank_api",
+      "label": "银行直连",
+      "status": "passed",
+      "lastVerifiedAt": "2026-07-04T08:32:00.000Z",
+      "roundtripMs": 310,
+      "notes": "招行代发沙箱联通"
+    },
+    {
+      "key": "tax_export",
+      "label": "税务导出",
+      "status": "passed",
+      "lastVerifiedAt": "2026-07-04T08:35:00.000Z",
+      "roundtripMs": 410,
+      "notes": "申报文件导出验证通过"
+    },
+    {
+      "key": "ocr",
+      "label": "OCR 识别",
+      "status": "passed",
+      "lastVerifiedAt": "2026-07-04T08:36:00.000Z",
+      "roundtripMs": 180,
+      "notes": "票据识别抽样通过"
+    }
+  ]
+}

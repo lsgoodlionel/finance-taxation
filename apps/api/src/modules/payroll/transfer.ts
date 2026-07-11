@@ -25,6 +25,13 @@ interface BatchRow {
   total_amount: string;
   employee_count: number;
   status: string;
+  retry_count: number;
+  last_error: string | null;
+  last_attempt_at: string | null;
+  next_retry_at: string | null;
+  compensation_status: string;
+  compensation_event_id: string | null;
+  compensated_at: string | null;
   bank_transfer_ref: string | null;
   notes: string;
   created_at: string;
@@ -43,6 +50,23 @@ interface LineRow {
 
 function genId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function buildPayrollDisbursedDescription(batch: BatchRow, batchId: string, bankTransferRef?: string) {
+  return `代发批次 ${batchId} 已完成，${batch.employee_count} 人，合计 ¥${Number(batch.total_amount).toFixed(2)}${bankTransferRef ? `，银行批次号 ${bankTransferRef}` : ""}`;
+}
+
+async function recordCompensationFailure(companyId: string, batchId: string, message: string) {
+  await query(
+    `update payroll_transfer_batches
+     set compensation_status = 'failed',
+         last_error = $3,
+         last_attempt_at = now(),
+         next_retry_at = now() + interval '15 minutes',
+         updated_at = now()
+     where id = $1 and company_id = $2`,
+    [batchId, companyId, message]
+  );
 }
 
 // ── 1. 从已确认工资生成代发批次 ───────────────────────────────────────────────
@@ -203,7 +227,17 @@ export async function generateBatchFile(
   // 首次导出推进到 exported
   if (data.batch.status === "approved") {
     await query(
-      "UPDATE payroll_transfer_batches SET status='exported', exported_at=now(), updated_at=now() WHERE id=$1",
+      `UPDATE payroll_transfer_batches
+       SET status='exported',
+           exported_at=now(),
+           last_error=null,
+           last_attempt_at=now(),
+           next_retry_at=null,
+           compensation_status='not_required',
+           compensation_event_id=null,
+           compensated_at=null,
+           updated_at=now()
+       WHERE id=$1`,
       [batchId],
     );
   }
@@ -220,43 +254,145 @@ export async function generateBatchFile(
 export async function markDisbursed(
   companyId: string, batchId: string, userId: string, bankTransferRef?: string,
 ) {
-  const batch = await queryOne<BatchRow>(
-    "SELECT * FROM payroll_transfer_batches WHERE id=$1 AND company_id=$2",
-    [batchId, companyId],
-  );
-  if (!batch) throw new Error("代发批次不存在");
-  if (batch.status !== "exported") {
-    throw new Error(`仅已导出批次可标记代发完成，当前为「${batch.status}」`);
+  try {
+    const result = await withTransaction(async (tx) => {
+      const batchRows = await tx.query<BatchRow>(
+        "SELECT * FROM payroll_transfer_batches WHERE id=$1 AND company_id=$2 FOR UPDATE",
+        [batchId, companyId]
+      );
+      const batch = batchRows.rows[0];
+      if (!batch) throw new Error("代发批次不存在");
+      if (
+        ["disbursed", "confirmed"].includes(batch.status) &&
+        batch.compensation_status === "completed" &&
+        batch.compensation_event_id
+      ) {
+        return { eventId: batch.compensation_event_id, reused: true };
+      }
+      if (batch.status !== "exported") {
+        throw new Error(`仅已导出批次可标记代发完成，当前为「${batch.status}」`);
+      }
+
+      const eventId = genId("evt-pay");
+      const now = new Date().toISOString();
+      await tx.query(
+        `UPDATE payroll_transfer_batches
+         SET status='disbursed',
+             disbursed_at=now(),
+             bank_transfer_ref=$1,
+             compensation_status='pending',
+             last_error=null,
+             last_attempt_at=now(),
+             next_retry_at=null,
+             updated_at=now()
+         WHERE id=$2`,
+        [bankTransferRef ?? null, batchId],
+      );
+      await tx.query(
+        `INSERT INTO business_events
+           (id, company_id, type, title, description, department, occurred_on,
+            amount, currency, status, source, created_at, updated_at)
+         VALUES ($1,$2,'payroll_disbursed',$3,$4,'财务',$5,$6,'CNY','analyzed','integration',$7,$7)`,
+        [
+          eventId,
+          companyId,
+          `${batch.payroll_period} 工资代发完成`,
+          buildPayrollDisbursedDescription(batch, batchId, bankTransferRef),
+         `${batch.payroll_period}-01`,
+          batch.total_amount,
+          now,
+        ],
+      );
+      await tx.query(
+        `UPDATE payroll_transfer_batches
+         SET compensation_status='completed',
+             compensation_event_id=$1,
+             compensated_at=now(),
+             updated_at=now()
+         WHERE id=$2`,
+        [eventId, batchId]
+      );
+      return { eventId, reused: false };
+    });
+
+    if (!result.reused) {
+      writeAudit({
+        companyId, userId, action: "payroll.transfer.disbursed",
+        resourceType: "payroll_transfer_batch", resourceId: batchId,
+        changes: { bankTransferRef, eventId: result.eventId },
+      });
+    }
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "工资代发补偿联动失败";
+    await recordCompensationFailure(companyId, batchId, message);
+    throw error;
   }
+}
 
-  const eventId = genId("evt-pay");
-  const now = new Date().toISOString();
-  await withTransaction(async (tx) => {
-    await tx.query(
-      "UPDATE payroll_transfer_batches SET status='disbursed', disbursed_at=now(), bank_transfer_ref=$1, updated_at=now() WHERE id=$2",
-      [bankTransferRef ?? null, batchId],
-    );
-    // 联动：生成「工资代发完成」经营事项，供对账与凭证流转
-    await tx.query(
-      `INSERT INTO business_events
-         (id, company_id, type, title, description, department, occurred_on,
-          amount, currency, status, source, created_at, updated_at)
-       VALUES ($1,$2,'payroll_disbursed',$3,$4,'财务',$5,$6,'CNY','analyzed','integration',$7,$7)`,
-      [
-        eventId, companyId,
-        `${batch.payroll_period} 工资代发完成`,
-        `代发批次 ${batchId} 已完成，${batch.employee_count} 人，合计 ¥${Number(batch.total_amount).toFixed(2)}${bankTransferRef ? `，银行批次号 ${bankTransferRef}` : ""}`,
-        `${batch.payroll_period}-01`,
-        batch.total_amount,
-        now,
-      ],
-    );
-  });
+export async function compensateDisbursedBatch(companyId: string, batchId: string, userId: string) {
+  try {
+    const result = await withTransaction(async (tx) => {
+      const batchRows = await tx.query<BatchRow>(
+        "SELECT * FROM payroll_transfer_batches WHERE id=$1 AND company_id=$2 FOR UPDATE",
+        [batchId, companyId]
+      );
+      const batch = batchRows.rows[0];
+      if (!batch) throw new Error("代发批次不存在");
+      if (!["disbursed", "confirmed"].includes(batch.status)) {
+        throw new Error(`仅已代发批次可执行补偿，当前为「${batch.status}」`);
+      }
+      if (batch.compensation_status === "completed" && batch.compensation_event_id) {
+        return { eventId: batch.compensation_event_id, reused: true };
+      }
 
-  writeAudit({
-    companyId, userId, action: "payroll.transfer.disbursed",
-    resourceType: "payroll_transfer_batch", resourceId: batchId,
-    changes: { bankTransferRef, eventId },
-  });
-  return { eventId };
+      const eventId = genId("evt-pay");
+      const now = new Date().toISOString();
+      await tx.query(
+        `INSERT INTO business_events
+           (id, company_id, type, title, description, department, occurred_on,
+            amount, currency, status, source, created_at, updated_at)
+         VALUES ($1,$2,'payroll_disbursed',$3,$4,'财务',$5,$6,'CNY','analyzed','integration',$7,$7)`,
+        [
+          eventId,
+          companyId,
+          `${batch.payroll_period} 工资代发完成（补偿）`,
+          buildPayrollDisbursedDescription(batch, batchId, batch.bank_transfer_ref ?? undefined),
+          `${batch.payroll_period}-01`,
+          batch.total_amount,
+          now
+        ]
+      );
+      await tx.query(
+        `UPDATE payroll_transfer_batches
+         SET compensation_status='completed',
+             compensation_event_id=$1,
+             compensated_at=now(),
+             retry_count=retry_count + 1,
+             last_error=null,
+             last_attempt_at=now(),
+             next_retry_at=null,
+             updated_at=now()
+         WHERE id=$2`,
+        [eventId, batchId]
+      );
+      return { eventId, reused: false };
+    });
+
+    if (!result.reused) {
+      writeAudit({
+        companyId,
+        userId,
+        action: "payroll.transfer.compensated",
+        resourceType: "payroll_transfer_batch",
+        resourceId: batchId,
+        changes: { eventId: result.eventId }
+      });
+    }
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "工资代发补偿联动失败";
+    await recordCompensationFailure(companyId, batchId, message);
+    throw error;
+  }
 }

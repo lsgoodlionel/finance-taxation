@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { Alert, Typography } from "antd";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { GeneratedDocument, Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import {
+  API_BASE_URL,
   archiveDocument,
   getDocumentDetail,
   listDocuments,
@@ -21,7 +23,8 @@ import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentDetailPanel } from "./documents/DocumentDetailPanel";
 import { DocumentsHelpModal } from "./documents/DocumentsHelpModal";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
+const { Text } = Typography;
+
 const TOKEN_KEY = "finance-taxation-v2-token";
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
@@ -180,6 +183,12 @@ export function DocumentsPage() {
   return (
     <>
       {showHelp && <DocumentsHelpModal onClose={() => setShowHelp(false)} />}
+      {navEventId && (
+        <Alert
+          type="info" showIcon style={{ borderRadius: 8, marginBottom: 12 }}
+          message={<>当前经营事项 <Text code>{navEventId}</Text> 的关联单据。</>}
+        />
+      )}
       <DocumentsShell
         header={<DocumentsHeader onOpenHelp={() => setShowHelp(true)} />}
         summary={<DocumentsSummary summary={summary} message={message} />}

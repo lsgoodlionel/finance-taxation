@@ -24,7 +24,21 @@ import { listCompanyVouchers } from "../vouchers/routes.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { buildGeneratedTasksForEvent } from "./task-chain.js";
+import { buildContractRevenueBundle } from "./contract-revenue-rules.js";
+import { buildPurchaseExpenseBundle } from "./purchase-expense-rules.js";
+import { buildTravelExpenseBundle } from "./travel-expense-rules.js";
 import { buildContractObjectLinks } from "../contracts/links.js";
+import { buildWorkflowRun } from "../workflows/commands.js";
+import {
+  ensureWorkflowRun,
+  insertWorkflowTransition,
+  updateWorkflowRunState
+} from "../workflows/persistence.js";
+import {
+  buildWorkflowTransitionRecord,
+  mapBusinessEventStatusToWorkflowState,
+  validateWorkflowTransition
+} from "../workflows/runtime.js";
 
 interface BusinessEventRow {
   id: string;
@@ -290,7 +304,7 @@ export function buildTaskTree(tasks: Task[]): TaskTreeNode[] {
   return roots;
 }
 
-function scopeEvents(rows: BusinessEvent[], req: ApiRequest) {
+export function scopeEvents(rows: BusinessEvent[], req: ApiRequest) {
   const companyRows = rows.filter((row) => row.companyId === req.auth!.companyId);
   if (hasCompanyWideAccess(req.auth!.roleCodes)) {
     return companyRows;
@@ -333,8 +347,15 @@ function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
   const documentMappings: EventDocumentMapping[] = [];
   const taxMappings: EventTaxMapping[] = [];
   const voucherDrafts: EventVoucherDraft[] = [];
+  const eventType = String(event.type);
 
-  switch (event.type) {
+  switch (eventType) {
+    case "contract_revenue":
+      return buildContractRevenueBundle(event);
+    case "purchase_expense":
+      return buildPurchaseExpenseBundle(event);
+    case "travel_expense":
+      return buildTravelExpenseBundle(event);
     case "sales":
       documentMappings.push(
         {
@@ -511,16 +532,28 @@ function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
           notes: "需补齐发票、回单、差旅行程或招待说明。"
         }
       );
-      taxMappings.push({
-        id: makeId("tax-map", event.id, "eit"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        taxType: "企业所得税",
-        treatment: "复核费用真实性、关联性和税前扣除凭证完整性。",
-        status: "attention",
-        basis: "资料不完整时不应直接作为最终税前扣除依据。",
-        filingPeriod: event.occurredOn.slice(0, 7)
-      });
+      taxMappings.push(
+        {
+          id: makeId("tax-map", event.id, "input-vat"),
+          companyId: event.companyId,
+          businessEventId: event.id,
+          taxType: "增值税",
+          treatment: "复核发票类型、用途与抵扣条件，判断是否形成可抵扣进项税额。",
+          status: "attention",
+          basis: "报销事项如取得合规专票且用途符合规定，需同步进入进项税额复核。",
+          filingPeriod: event.occurredOn.slice(0, 7)
+        },
+        {
+          id: makeId("tax-map", event.id, "eit"),
+          companyId: event.companyId,
+          businessEventId: event.id,
+          taxType: "企业所得税",
+          treatment: "复核费用真实性、关联性和税前扣除凭证完整性。",
+          status: "attention",
+          basis: "资料不完整时不应直接作为最终税前扣除依据。",
+          filingPeriod: event.occurredOn.slice(0, 7)
+        }
+      );
       voucherDrafts.push({
         id: makeId("vou-map", event.id, "expense"),
         companyId: event.companyId,
@@ -1304,6 +1337,19 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
       ]
     );
     await insertActivities(client, [activity]);
+    await ensureWorkflowRun(
+      client,
+      buildWorkflowRun({
+        companyId: next.companyId,
+        workflowKey: "business_event.lifecycle",
+        resourceType: "business_event",
+        resourceId: next.id,
+        resourceLabel: next.title,
+        currentState: "draft",
+        initiatorUserId: req.auth!.userId,
+        initiatorName: req.auth!.username
+      })
+    );
   });
 
   writeAudit({
@@ -1454,6 +1500,16 @@ export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId:
   const activities = [
     buildActivity(req, updated.id, "updated", `更新经营事项：${updated.title}`)
   ];
+  let workflowTransition: { previousState: ReturnType<typeof mapBusinessEventStatusToWorkflowState>; nextState: ReturnType<typeof mapBusinessEventStatusToWorkflowState> } | null = null;
+  if (existing.status !== updated.status) {
+    const previousState = mapBusinessEventStatusToWorkflowState(existing.status);
+    const nextState = mapBusinessEventStatusToWorkflowState(updated.status);
+    const validation = validateWorkflowTransition(previousState, nextState);
+    if (!validation.ok) {
+      return json(res, 400, { error: validation.message, code: validation.errorCode });
+    }
+    workflowTransition = { previousState, nextState };
+  }
   if (existing.status !== updated.status) {
     activities.unshift(
       buildActivity(
@@ -1492,6 +1548,41 @@ export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId:
       ]
     );
     await insertActivities(client, activities);
+    if (workflowTransition) {
+      const run = await ensureWorkflowRun(
+        client,
+        buildWorkflowRun({
+          companyId: updated.companyId,
+          workflowKey: "business_event.lifecycle",
+          resourceType: "business_event",
+          resourceId: updated.id,
+          resourceLabel: updated.title,
+          currentState: workflowTransition.previousState,
+          initiatorUserId: req.auth!.userId,
+          initiatorName: req.auth!.username
+        })
+      );
+      const transition = buildWorkflowTransitionRecord({
+        companyId: updated.companyId,
+        workflowRunId: run.id,
+        resourceType: "business_event",
+        resourceId: updated.id,
+        previousState: workflowTransition.previousState,
+        nextState: workflowTransition.nextState,
+        actorUserId: req.auth!.userId,
+        actorName: req.auth!.username,
+        basis: `business_event.status:${existing.status}->${updated.status}`,
+        ruleVersion: "v4-1a"
+      });
+      await insertWorkflowTransition(client, transition);
+      await updateWorkflowRunState(
+        client,
+        run.id,
+        workflowTransition.nextState,
+        workflowTransition.nextState === "blocked" ? `event:${updated.id}` : null,
+        transition.occurredAt
+      );
+    }
   });
 
   writeAudit({
@@ -1562,6 +1653,12 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
     ),
     buildActivity(req, eventId, "analyzed", "完成事项分析并输出执行建议。")
   ];
+  const previousState = mapBusinessEventStatusToWorkflowState(target.status);
+  const nextState = mapBusinessEventStatusToWorkflowState(analyzedEvent.status);
+  const analysisTransitionValidation = validateWorkflowTransition(previousState, nextState);
+  if (!analysisTransitionValidation.ok) {
+    return json(res, 400, { error: analysisTransitionValidation.message, code: analysisTransitionValidation.errorCode });
+  }
 
   await withTransaction(async (client) => {
     await client.query(
@@ -1711,6 +1808,33 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
     await insertVouchers(client, nextVouchers);
     await insertContractObjectLinks(client, contractObjectLinks);
     await insertActivities(client, analysisActivities);
+    const run = await ensureWorkflowRun(
+      client,
+      buildWorkflowRun({
+        companyId: analyzedEvent.companyId,
+        workflowKey: "business_event.lifecycle",
+        resourceType: "business_event",
+        resourceId: analyzedEvent.id,
+        resourceLabel: analyzedEvent.title,
+        currentState: previousState,
+        initiatorUserId: req.auth!.userId,
+        initiatorName: req.auth!.username
+      })
+    );
+    const transition = buildWorkflowTransitionRecord({
+      companyId: analyzedEvent.companyId,
+      workflowRunId: run.id,
+      resourceType: "business_event",
+      resourceId: analyzedEvent.id,
+      previousState,
+      nextState,
+      actorUserId: req.auth!.userId,
+      actorName: req.auth!.username,
+      basis: "event.analyze",
+      ruleVersion: "v4-1a"
+    });
+    await insertWorkflowTransition(client, transition);
+    await updateWorkflowRunState(client, run.id, nextState, null, transition.occurredAt);
   });
 
   return json(res, 200, {

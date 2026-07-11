@@ -1,5 +1,6 @@
 import React from "react";
 import type { TaxFilingBatch } from "@finance-taxation/domain-model";
+import type { WorkflowRunDetail } from "../../lib/api";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { useI18n, REVIEW_RESULT_LABELS, TAX_BATCH_STATUS_LABELS, TAX_STATUS_LABELS } from "../../lib/i18n";
 import type { TaxBatchDetail } from "./taxTypes";
@@ -11,6 +12,7 @@ type TaxBatchesPanelProps = {
   batches: TaxFilingBatch[];
   selectedBatchId: string | null;
   selectedBatchDetail: TaxBatchDetail | null;
+  runtimeDetail?: WorkflowRunDetail | null;
   validation: ValidationResult;
   reviewForm: {
     reviewResult: "approved" | "rejected";
@@ -27,12 +29,17 @@ type TaxBatchesPanelProps = {
   onSubmitBatch: () => void;
   onReviewBatch: () => void;
   onArchiveBatch: () => void;
+  onOpenEvent?: (businessEventId: string) => void;
+  onOpenVoucherHub?: (businessEventId: string) => void;
+  onOpenDocuments?: (businessEventId: string) => void;
+  onOpenTaxItem?: (taxItemId: string) => void;
 };
 
 export function TaxBatchesPanel({
   batches,
   selectedBatchId,
   selectedBatchDetail,
+  runtimeDetail,
   validation,
   reviewForm,
   archiveForm,
@@ -42,10 +49,15 @@ export function TaxBatchesPanel({
   onValidateBatch,
   onSubmitBatch,
   onReviewBatch,
-  onArchiveBatch
+  onArchiveBatch,
+  onOpenEvent,
+  onOpenVoucherHub,
+  onOpenDocuments,
+  onOpenTaxItem
 }: TaxBatchesPanelProps) {
   const { t } = useI18n();
   const readyCount = batches.filter((item) => item.status === "ready" || item.status === "review_required").length;
+  const latestCommand = runtimeDetail?.commands[0] ?? null;
 
   return (
     <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
@@ -100,6 +112,33 @@ export function TaxBatchesPanel({
               <div>申报期：{selectedBatchDetail.filingPeriod}</div>
               <div>状态：{t(TAX_BATCH_STATUS_LABELS, selectedBatchDetail.status)}</div>
             </div>
+            {runtimeDetail?.run.blockedReason ? (
+              <div style={{ borderRadius: "12px", background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.16)", padding: "12px 14px", color: "#991b1b" }}>
+                阻塞原因：{runtimeDetail.run.blockedReason}
+              </div>
+            ) : null}
+            {latestCommand?.lastErrorDetail || runtimeDetail?.compensations.length ? (
+              <div style={{ borderRadius: "12px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.16)", padding: "12px 14px", color: "#92400e" }}>
+                <div>最近运行：{latestCommand?.lastErrorDetail || "已进入人工补偿处理"}</div>
+                <div style={{ marginTop: 4 }}>补偿记录：{runtimeDetail?.compensations.length ?? 0} 条</div>
+              </div>
+            ) : null}
+            {selectedBatchDetail.items[0]?.businessEventId ? (
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button onClick={() => onOpenEvent?.(selectedBatchDetail.items[0]!.businessEventId)} style={actionButtonStyle()}>
+                  查看事项
+                </button>
+                <button onClick={() => onOpenDocuments?.(selectedBatchDetail.items[0]!.businessEventId)} style={actionButtonStyle()}>
+                  查看单据
+                </button>
+                <button onClick={() => onOpenVoucherHub?.(selectedBatchDetail.items[0]!.businessEventId)} style={actionButtonStyle()}>
+                  查看凭证
+                </button>
+                <button onClick={() => onOpenTaxItem?.(selectedBatchDetail.items[0]!.id)} style={actionButtonStyle()}>
+                  定位税项
+                </button>
+              </div>
+            ) : null}
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
               <button onClick={onValidateBatch} style={actionButtonStyle()}>校验批次</button>
               <button onClick={onSubmitBatch} style={actionButtonStyle("primary")}>提交批次</button>

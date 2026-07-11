@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "schemaVersion": "2026-07-ops-source-v1",
+    "sourceType": "ai-evals",
+    "sourceId": "ai-evals-sample-2026-07",
+    "capturedAt": "2026-07-04T09:00:00.000Z",
+    "summary": "Weekly AI evaluation sample for suggestion acceptance and supporting document retrieval.",
+    "artifacts": [
+      {
+        "kind": "eval-report",
+        "path": "docs/v4/examples/ops-source-samples/evidence/ai-evals-sample-2026-07.jsonl"
+      }
+    ]
+  },
+  "generatedAt": "2026-07-04T09:00:00.000Z",
+  "sampleSize": 180,
+  "suggestionAcceptanceRate": 0.9,
+  "documentRecallRate": 0.97,
+  "highRiskAutoExecutionCount": 0,
+  "falsePositiveRate": 0.03
+}

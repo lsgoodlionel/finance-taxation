@@ -15,6 +15,21 @@ import {
 } from "./templates.js";
 import { writeAudit } from "../../services/audit.js";
 import { isPeriodLocked } from "../ledger/routes.js";
+import { validateWorkflowAuthorization } from "../workflows/authorization.js";
+import { buildWorkflowCommandExecution, buildWorkflowRun, markWorkflowCommandStatus } from "../workflows/commands.js";
+import {
+  ensureWorkflowRun,
+  findSuccessfulWorkflowCommandExecution,
+  insertWorkflowCommandExecution,
+  insertWorkflowTransition,
+  updateWorkflowCommandExecution,
+  updateWorkflowRunState
+} from "../workflows/persistence.js";
+import {
+  buildWorkflowTransitionRecord,
+  mapVoucherStatusToWorkflowState,
+  validateWorkflowTransition
+} from "../workflows/runtime.js";
 
 interface VoucherRow {
   id: string;
@@ -554,18 +569,52 @@ export async function approveVoucher(req: ApiRequest, res: ServerResponse, vouch
     return json(res, 404, { error: "Voucher not found" });
   }
   const now = new Date().toISOString();
-  await queryOne(
-    `
-      update vouchers
-      set
-        status = 'review_required',
-        approved_at = $1::timestamptz,
-        updated_at = $1::timestamptz
-      where id = $2 and company_id = $3
-      returning id
-    `,
-    [now, voucherId, req.auth!.companyId]
-  );
+  const previousState = mapVoucherStatusToWorkflowState(target.status);
+  const nextState = mapVoucherStatusToWorkflowState("review_required");
+  const transitionValidation = validateWorkflowTransition(previousState, nextState);
+  if (!transitionValidation.ok) {
+    return json(res, 400, { error: transitionValidation.message, code: transitionValidation.errorCode });
+  }
+  await withTransaction(async (client) => {
+    await client.query(
+      `
+        update vouchers
+        set
+          status = 'review_required',
+          approved_at = $1::timestamptz,
+          updated_at = $1::timestamptz
+        where id = $2 and company_id = $3
+      `,
+      [now, voucherId, req.auth!.companyId]
+    );
+    const run = await ensureWorkflowRun(
+      client,
+      buildWorkflowRun({
+        companyId: req.auth!.companyId,
+        workflowKey: "voucher.lifecycle",
+        resourceType: "voucher",
+        resourceId: voucherId,
+        resourceLabel: target.summary,
+        currentState: previousState,
+        initiatorUserId: req.auth!.userId,
+        initiatorName: req.auth!.username
+      })
+    );
+    const transition = buildWorkflowTransitionRecord({
+      companyId: req.auth!.companyId,
+      workflowRunId: run.id,
+      resourceType: "voucher",
+      resourceId: voucherId,
+      previousState,
+      nextState,
+      actorUserId: req.auth!.userId,
+      actorName: req.auth!.username,
+      basis: "voucher.approve",
+      ruleVersion: "v4-1a"
+    });
+    await insertWorkflowTransition(client, transition);
+    await updateWorkflowRunState(client, run.id, nextState, null, transition.occurredAt);
+  });
   const updated = await getVoucherForCompany(req.auth!.companyId, voucherId);
   writeAudit({
     companyId: req.auth!.companyId,
@@ -606,6 +655,25 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
   }
   if (!target.approvedAt) {
     return json(res, 400, { error: "Voucher must be approved before posting" });
+  }
+  const body = (req.body || {}) as { authorizerUserId?: string; authorizerName?: string };
+  const authorizerUserId = body.authorizerUserId ?? req.auth!.userId;
+  const authorizerName = body.authorizerName ?? req.auth!.username;
+  const authCheck = validateWorkflowAuthorization({
+    action: "voucher.post",
+    reviewerUserId: req.auth!.userId,
+    posterUserId: req.auth!.userId,
+    executorUserId: req.auth!.userId,
+    authorizerUserId
+  });
+  if (!authCheck.ok) {
+    return json(res, 400, { error: authCheck.message, code: authCheck.errorCode });
+  }
+  const previousState = mapVoucherStatusToWorkflowState(target.status);
+  const nextState = mapVoucherStatusToWorkflowState("posted");
+  const transitionValidation = validateWorkflowTransition(previousState, nextState);
+  if (!transitionValidation.ok) {
+    return json(res, 400, { error: transitionValidation.message, code: transitionValidation.errorCode });
   }
 
   const postedAt = new Date().toISOString();
@@ -775,6 +843,73 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
         `,
         [createdBatch.id, entryId]
       );
+    }
+    const reusable = await findSuccessfulWorkflowCommandExecution(req.auth!.companyId, {
+      commandType: "voucher.post",
+      resourceType: "voucher",
+      resourceId: voucherId,
+      idempotencyKey: `voucher-post:${voucherId}:${target.updatedAt}`,
+      objectVersion: target.updatedAt
+    });
+    if (!reusable) {
+      const run = await ensureWorkflowRun(
+        client,
+        buildWorkflowRun({
+          companyId: req.auth!.companyId,
+          workflowKey: "voucher.lifecycle",
+          resourceType: "voucher",
+          resourceId: voucherId,
+          resourceLabel: target.summary,
+          currentState: previousState,
+          initiatorUserId: req.auth!.userId,
+          initiatorName: req.auth!.username,
+          authorizerUserId,
+          authorizerName
+        })
+      );
+      const transition = buildWorkflowTransitionRecord({
+        companyId: req.auth!.companyId,
+        workflowRunId: run.id,
+        resourceType: "voucher",
+        resourceId: voucherId,
+        previousState,
+        nextState,
+        actorUserId: req.auth!.userId,
+        actorName: req.auth!.username,
+        basis: "voucher.post",
+        ruleVersion: "v4-1a"
+      });
+      const command = buildWorkflowCommandExecution({
+        companyId: req.auth!.companyId,
+        workflowRunId: run.id,
+        commandType: "voucher.post",
+        resourceType: "voucher",
+        resourceId: voucherId,
+        idempotencyKey: `voucher-post:${voucherId}:${target.updatedAt}`,
+        objectVersion: target.updatedAt,
+        inputSnapshot: { voucherId, lineCount: target.lines.length, businessEventId: target.businessEventId },
+        initiatorUserId: req.auth!.userId,
+        initiatorName: req.auth!.username,
+        executorUserId: req.auth!.userId,
+        executorName: req.auth!.username,
+        authorizerUserId,
+        authorizerName
+      });
+      const running = markWorkflowCommandStatus(command, "running", { progress: "posting_voucher" });
+      await insertWorkflowTransition(client, transition);
+      await insertWorkflowCommandExecution(client, running);
+      await updateWorkflowCommandExecution(
+        client,
+        markWorkflowCommandStatus(running, "succeeded", {
+          progress: "posted",
+          resultSnapshot: {
+            postedAt,
+            entryCount: createdLedgerEntries.length,
+            batchId: createdBatch.id
+          }
+        })
+      );
+      await updateWorkflowRunState(client, run.id, nextState, null, postedAt);
     }
   });
 

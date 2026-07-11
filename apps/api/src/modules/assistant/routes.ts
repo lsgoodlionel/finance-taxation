@@ -5,8 +5,36 @@ import { json } from "../../utils/http.js";
 import { streamChat, ocrImage, isAiConfigured } from "../../services/ai.js";
 import type { ChatMessage } from "../../services/ai.js";
 import type { ApiRequest } from "../../types.js";
+import { buildDeterministicAssistantReply, buildDeterministicOcrText } from "./fallback.js";
 
 const BOSS_ROLES = new Set(["role-chairman", "role-finance-director"]);
+const TEST_ASSISTANT_FALLBACK = process.env.NODE_ENV === "test";
+
+function writeSse(res: ServerResponse, payload: object): void {
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function startSseResponse(res: ServerResponse): void {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*"
+  });
+}
+
+function streamDeterministicAssistant(
+  res: ServerResponse,
+  messages: ChatMessage[],
+  mode: "boss" | "staff"
+): void {
+  startSseResponse(res);
+  const reply = buildDeterministicAssistantReply(messages, mode);
+  const fullText = reply.actionText ? `${reply.content}\n\n${reply.actionText}` : reply.content;
+  writeSse(res, { type: "delta", text: fullText });
+  writeSse(res, { type: "done", fullText });
+  res.end();
+}
 
 function isBossUser(roleCodes: string[]): boolean {
   return roleCodes.some((r) => BOSS_ROLES.has(r));
@@ -238,11 +266,6 @@ export async function chat(req: ApiRequest, res: ServerResponse): Promise<void> 
     return;
   }
 
-  if (!(await isAiConfigured(req.auth.companyId))) {
-    json(res, 503, { error: "AI 服务未配置，请在系统设置中配置 AI 后端。" });
-    return;
-  }
-
   const body = (req.body ?? {}) as { messages?: ChatMessage[]; mode?: "boss" | "staff" };
   const messages: ChatMessage[] = body.messages ?? [];
   if (messages.length === 0) {
@@ -250,8 +273,17 @@ export async function chat(req: ApiRequest, res: ServerResponse): Promise<void> 
     return;
   }
 
-  // mode can be overridden by client (e.g. boss toggling to operation view)
   const boss = body.mode === "boss" ? true : body.mode === "staff" ? false : isBossUser(req.auth.roleCodes);
+  if (TEST_ASSISTANT_FALLBACK) {
+    streamDeterministicAssistant(res, messages, boss ? "boss" : "staff");
+    return;
+  }
+
+  if (!(await isAiConfigured(req.auth.companyId))) {
+    json(res, 503, { error: "AI 服务未配置，请在系统设置中配置 AI 后端。" });
+    return;
+  }
+
   let systemPrompt: string;
 
   if (boss) {
@@ -278,6 +310,12 @@ export async function chat(req: ApiRequest, res: ServerResponse): Promise<void> 
 export async function ocr(req: ApiRequest, res: ServerResponse): Promise<void> {
   if (!req.auth) {
     json(res, 401, { error: "Unauthorized" });
+    return;
+  }
+
+  if (TEST_ASSISTANT_FALLBACK) {
+    const body = (req.body ?? {}) as { mimeType?: string };
+    json(res, 200, { text: buildDeterministicOcrText(body.mimeType ?? "image/jpeg") });
     return;
   }
 

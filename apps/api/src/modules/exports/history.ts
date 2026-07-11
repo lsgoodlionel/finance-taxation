@@ -59,6 +59,11 @@ export function buildExportJob(input: {
     resourceId: input.resourceId ?? null,
     periodLabel: input.periodLabel ?? null,
     status: input.status ?? "created",
+    retryCount: 0,
+    lastError: null,
+    lastAttemptAt: null,
+    nextRetryAt: null,
+    completedAt: null,
     createdByUserId: input.userId,
     createdByName: input.userName,
     createdAt: nowIso()

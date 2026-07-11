@@ -1,11 +1,15 @@
 import type { ServerResponse } from "node:http";
 import type { Contract, ContractObjectLinkType, ContractWithEventCount, GeneratedDocument, Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
-import { query, queryOne } from "../../db/client.js";
+import { query, queryOne, withTransaction } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { buildContractWorkspaceSummary } from "./summary.js";
 import { getContractCloseEventStatus } from "./status-sync.js";
+import { validateWorkflowAuthorization } from "../workflows/authorization.js";
+import { buildWorkflowRun } from "../workflows/commands.js";
+import { ensureWorkflowRun, insertWorkflowTransition, updateWorkflowRunState } from "../workflows/persistence.js";
+import { buildWorkflowTransitionRecord, mapContractStatusToWorkflowState, validateWorkflowTransition } from "../workflows/runtime.js";
 
 interface ContractRow {
   id: string;
@@ -421,30 +425,90 @@ export async function updateContract(req: ApiRequest, res: ServerResponse, contr
 
 export async function closeContract(req: ApiRequest, res: ServerResponse, contractId: string) {
   const companyId = req.auth!.companyId;
-  const body = req.body as { status?: "fulfilled" | "terminated" };
+  const body = req.body as {
+    status?: "fulfilled" | "terminated";
+    authorizerUserId?: string;
+    authorizerName?: string;
+  };
   const newStatus = body.status ?? "fulfilled";
   const nextEventStatus = getContractCloseEventStatus(newStatus);
-
-  const row = await queryOne<ContractRow>(
-    `
-      update contracts set status = $1, updated_at = now()
-      where id = $2 and company_id = $3
-      returning *
-    `,
-    [newStatus, contractId, companyId]
+  const authorizerUserId = body.authorizerUserId ?? req.auth!.userId;
+  const authorizerName = body.authorizerName ?? req.auth!.username;
+  const existing = await queryOne<ContractRow>(
+    `select * from contracts where id = $1 and company_id = $2`,
+    [contractId, companyId]
   );
+  if (!existing) return json(res, 404, { error: "Contract not found" });
+  const authCheck = validateWorkflowAuthorization({
+    action: "contract.close",
+    requesterUserId: req.auth!.userId,
+    executorUserId: req.auth!.userId,
+    authorizerUserId
+  });
+  if (!authCheck.ok) {
+    return json(res, 400, { error: authCheck.message, code: authCheck.errorCode });
+  }
+  const previousState = mapContractStatusToWorkflowState(existing.status);
+  const nextState = mapContractStatusToWorkflowState(newStatus);
+  const transitionValidation = validateWorkflowTransition(previousState, nextState);
+  if (!transitionValidation.ok) {
+    return json(res, 400, { error: transitionValidation.message, code: transitionValidation.errorCode });
+  }
+
+  const row = await withTransaction(async (client) => {
+    const result = await client.query<ContractRow>(
+      `
+        update contracts set status = $1, updated_at = now()
+        where id = $2 and company_id = $3
+        returning *
+      `,
+      [newStatus, contractId, companyId]
+    );
+    const updated = result.rows[0] ?? null;
+    if (!updated) return null;
+    await client.query(
+      `
+        update business_events
+        set status = $1, updated_at = now()
+        where contract_id = $2
+          and company_id = $3
+          and status in ('draft', 'analyzed', 'awaiting_documents', 'awaiting_approval')
+      `,
+      [nextEventStatus, contractId, companyId]
+    );
+    const closed = mapRow(updated);
+    const run = await ensureWorkflowRun(
+      client,
+      buildWorkflowRun({
+        companyId,
+        workflowKey: "contract.lifecycle",
+        resourceType: "contract",
+        resourceId: contractId,
+        resourceLabel: closed.title,
+        currentState: previousState,
+        initiatorUserId: req.auth!.userId,
+        initiatorName: req.auth!.username,
+        authorizerUserId,
+        authorizerName
+      })
+    );
+    const transition = buildWorkflowTransitionRecord({
+      companyId,
+      workflowRunId: run.id,
+      resourceType: "contract",
+      resourceId: contractId,
+      previousState,
+      nextState,
+      actorUserId: req.auth!.userId,
+      actorName: req.auth!.username,
+      basis: `contract.close:${newStatus}`,
+      ruleVersion: "v4-1a"
+    });
+    await insertWorkflowTransition(client, transition);
+    await updateWorkflowRunState(client, run.id, nextState, null, transition.occurredAt);
+    return updated;
+  });
   if (!row) return json(res, 404, { error: "Contract not found" });
-
-  await query(
-    `
-      update business_events
-      set status = $1, updated_at = now()
-      where contract_id = $2
-        and company_id = $3
-        and status in ('draft', 'analyzed', 'awaiting_documents', 'awaiting_approval')
-    `,
-    [nextEventStatus, contractId, companyId]
-  );
 
   const closed = mapRow(row);
   writeAudit({

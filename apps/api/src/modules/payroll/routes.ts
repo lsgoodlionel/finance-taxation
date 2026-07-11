@@ -448,12 +448,7 @@ export async function computePayroll(req: ApiRequest, res: ServerResponse) {
   return listPayroll(req, res);
 }
 
-export async function listPayroll(req: ApiRequest, res: ServerResponse) {
-  const companyId = req.auth!.companyId;
-  const url = new URL(req.url!, "http://x");
-  const body = req.body as { period?: string } | undefined;
-  const period = url.searchParams.get("period") ?? body?.period ?? "";
-
+export async function listCompanyPayrollRecords(companyId: string, period?: string): Promise<PayrollRecord[]> {
   const params: unknown[] = [companyId];
   let where = "company_id = $1";
   if (period) {
@@ -465,27 +460,36 @@ export async function listPayroll(req: ApiRequest, res: ServerResponse) {
     `select * from payroll_records where ${where} order by period desc, employee_name asc`,
     params
   );
+  return rows.map(mapRecord);
+}
 
-  if (!rows.length) return json(res, 200, { items: [], total: 0, summary: null });
+export async function listPayroll(req: ApiRequest, res: ServerResponse) {
+  const companyId = req.auth!.companyId;
+  const url = new URL(req.url!, "http://x");
+  const body = req.body as { period?: string } | undefined;
+  const period = url.searchParams.get("period") ?? body?.period ?? "";
+  const items = await listCompanyPayrollRecords(companyId, period);
+
+  if (!items.length) return json(res, 200, { items: [], total: 0, summary: null });
 
   const summary: PayrollPeriodSummary = {
-    period: period || rows[0]?.period || "",
-    headcount: rows.length,
-    totalGross: rows.reduce((s, r) => s + Number(r.gross_salary), 0),
-    totalSocialSecurityEmployee: rows.reduce((s, r) => s + Number(r.social_security_employee), 0),
-    totalSocialSecurityEmployer: rows.reduce((s, r) => s + Number(r.social_security_employer), 0),
-    totalHousingFundEmployee: rows.reduce((s, r) => s + Number(r.housing_fund_employee), 0),
-    totalHousingFundEmployer: rows.reduce((s, r) => s + Number(r.housing_fund_employer), 0),
-    totalIit: rows.reduce((s, r) => s + Number(r.iit_withheld), 0),
-    totalNetPay: rows.reduce((s, r) => s + Number(r.net_pay), 0),
-    status: rows.every((r) => r.status === "confirmed")
+    period: period || items[0]?.period || "",
+    headcount: items.length,
+    totalGross: items.reduce((s, r) => s + Number(r.grossSalary), 0),
+    totalSocialSecurityEmployee: items.reduce((s, r) => s + Number(r.socialSecurityEmployee), 0),
+    totalSocialSecurityEmployer: items.reduce((s, r) => s + Number(r.socialSecurityEmployer), 0),
+    totalHousingFundEmployee: items.reduce((s, r) => s + Number(r.housingFundEmployee), 0),
+    totalHousingFundEmployer: items.reduce((s, r) => s + Number(r.housingFundEmployer), 0),
+    totalIit: items.reduce((s, r) => s + Number(r.iitWithheld), 0),
+    totalNetPay: items.reduce((s, r) => s + Number(r.netPay), 0),
+    status: items.every((r) => r.status === "confirmed")
       ? "confirmed"
-      : rows.some((r) => r.status === "confirmed")
+      : items.some((r) => r.status === "confirmed")
         ? "mixed"
         : "draft"
   };
 
-  return json(res, 200, { items: rows.map(mapRecord), total: rows.length, summary });
+  return json(res, 200, { items, total: items.length, summary });
 }
 
 export async function confirmPayroll(req: ApiRequest, res: ServerResponse, payrollId: string) {
@@ -558,6 +562,14 @@ export async function listPayrollReviewLedgers(req: ApiRequest, res: ServerRespo
   const period = url.searchParams.get("period");
   if (!period) return json(res, 400, { error: "period is required" });
 
+  const items = await listCompanyPayrollReviewLedgers(companyId, period);
+  return json(res, 200, { items, total: items.length });
+}
+
+export async function listCompanyPayrollReviewLedgers(
+  companyId: string,
+  period: string
+): Promise<PayrollTaxReviewLedger[]> {
   const rows = await query<PayrollTaxReviewLedgerRow>(
     `
       select *
@@ -568,7 +580,7 @@ export async function listPayrollReviewLedgers(req: ApiRequest, res: ServerRespo
     [companyId, period]
   );
 
-  return json(res, 200, { items: rows.map(mapReviewLedger), total: rows.length });
+  return rows.map(mapReviewLedger);
 }
 
 export async function syncPayrollReviewLedgers(req: ApiRequest, res: ServerResponse) {

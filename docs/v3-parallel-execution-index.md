@@ -2,7 +2,7 @@
 
 > 目的：把当前 V3 剩余工作拆成可并行推进的子任务，供新窗口直接接续开发。
 > 适用基线：`/Users/lionel/Develop/FT`
-> 更新时间：`2026-05-28`
+> 更新时间：`2026-06-08`
 
 ## 1. 并行执行原则
 
@@ -14,13 +14,13 @@
 
 ## 2. 当前可并行的任务车道
 
-| 车道 | 分支 | 状态 | 并行安全级别 | 主要范围 | 当前剩余重点 |
+| 车道 | 分支 | 状态 | 并行安全级别 | 主要范围 | 结果 |
 | --- | --- | --- | --- | --- | --- |
-| Lane A | `codex/v3-tax-center-rework` | 已有实现，待验证收口 | 高 | `apps/web/src/pages/tax/*`, `TaxPage.tsx` | Tax 页 summary-first 收口验证、响应式和空态一致性 |
-| Lane B | `codex/v3-ledger-page-rework` | 进行中 | 高 | `apps/web/src/pages/ledger/*`, `LedgerPage.tsx` | table density、responsive、empty-state consistency |
-| Lane C | `codex/v3-reports-page-rework` | 已有第一批实现 | 高 | `apps/web/src/pages/reports/*`, `ReportsPage.tsx` | 结果页摘要优先、图表/KPI 层次、快照/差异/老板摘要整合 |
-| Lane D | `codex/v3-risk-page-rework` | 已有第一批实现 | 中 | `apps/web/src/pages/risk/*`, `apps/web/src/pages/audit/*`, `RiskPage.tsx`, `AuditPage.tsx`, 少量 `drilldown` | 风险闭环工作台、审计追溯台、上下文恢复与复盘链 |
-| Lane E | `codex/v3-layout-visibility-polish` | 进行中 | 低，必须后置 | `global.css` + 多页面壳层 | 把可见性收口补到 `Tax / Ledger / Reports / Risk` |
+| Lane A | `codex/v3-tax-center-rework` | ✅ 已完成并合回 | 高 | `apps/web/src/pages/tax/*`, `TaxPage.tsx` | Tax 页 summary-first 收口完成 |
+| Lane B | `codex/v3-ledger-page-rework` | ✅ 已完成并合回 | 高 | `apps/web/src/pages/ledger/*`, `LedgerPage.tsx` | 五场景密度/空态/响应式一致 |
+| Lane C | `codex/v3-reports-page-rework` | ✅ 已完成并合回 | 高 | `apps/web/src/pages/reports/*`, `ReportsPage.tsx` | summary-first + KPI + 快照整合完成 |
+| Lane D | `codex/v3-risk-page-rework` | ✅ 已完成并合回 | 中 | `apps/web/src/pages/risk/*`, `RiskPage.tsx`, `AuditPage.tsx` | 风险闭环工作台 + 审计追溯台完成 |
+| Lane E | `codex/v3-layout-visibility-polish` | ✅ 已完成并合回 | 低 | `global.css` + 多页面壳层 | 全站可见性统一收口完成 |
 
 ## 3. 车道边界
 
