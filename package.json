@@ -7,9 +7,6 @@
     "packages/*"
   ],
   "scripts": {
-    "check:prototype": "node --check src/scripts/app.js",
-    "check:backend-js": "find backend/src -name '*.js' -print0 | xargs -0 -n1 node --check",
-    "check:data": "node tools/check-json.mjs backend/data",
     "check:progress": "node tools/check-progress-board.mjs docs/v4-progress-board.md",
     "typecheck:v2": "npm run -w @finance-taxation/web typecheck && npm run -w @finance-taxation/api typecheck",
     "test": "npm run test -w @finance-taxation/api",
@@ -40,7 +37,7 @@
     "test:ai-evals": "node --import tsx tools/v4/production-gates.ts ai-evals",
     "verify:v4:ops": "npm run v4:ops:init-sources && npm run v4:ops && npm run test:load && npm run test:backup-restore && npm run test:connectors && npm run test:ai-evals",
     "verify:v4": "npm run typecheck:v2 && npm run typecheck:v4:tools && npm run test:unit && npm run test:db && npm run test:v4:tools && npm run v4:report && node tools/v4/check-plan-artifacts.mjs && npm run check:progress && npm run verify:v4:ops",
-    "verify": "npm run check:prototype && npm run check:backend-js && npm run check:data && npm run check:progress"
+    "verify": "npm run typecheck:v2 && npm run test:unit && npm run check:progress"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.0"
