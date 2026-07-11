@@ -414,7 +414,106 @@ const migratedRoutes: RouteDef[] = [
   { method: "GET", path: "/api/reports/printable", auth: true, permission: "ledger.view", handler: getPrintableReport },
 
   // rnd
-  { method: "GET", path: "/api/rnd/trend", auth: true, permission: "rnd.view", handler: getRndTrend }
+  { method: "GET", path: "/api/rnd/trend", auth: true, permission: "rnd.view", handler: getRndTrend },
+  { method: "GET", path: "/api/rnd/projects", auth: true, permission: "rnd.view", handler: listRndProjects },
+  { method: "POST", path: "/api/rnd/projects", auth: true, permission: "rnd.manage", handler: createRndProject },
+  {
+    method: "GET",
+    path: "/api/rnd/projects/:id/super-deduction-package",
+    auth: true,
+    permission: "rnd.view",
+    handler: (req, res, p) => getRndSuperDeductionPackage(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/rnd/projects/:id/cost-lines",
+    auth: true,
+    permission: "rnd.manage",
+    handler: (req, res, p) => createRndCostLine(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/rnd/projects/:id/time-entries",
+    auth: true,
+    permission: "rnd.manage",
+    handler: (req, res, p) => createRndTimeEntry(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/rnd/projects/:id",
+    auth: true,
+    permission: "rnd.view",
+    handler: (req, res, p) => getRndProjectDetail(req, res, p.id!)
+  },
+
+  // risk
+  { method: "GET", path: "/api/risk/findings", auth: true, permission: "risk.view", handler: listRiskFindings },
+  {
+    method: "POST",
+    path: "/api/risk/findings/:id/close",
+    auth: true,
+    permission: "risk.manage",
+    handler: (req, res, p) => closeRiskFinding(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/risk/findings/:id/closures",
+    auth: true,
+    permission: "risk.view",
+    handler: (req, res, p) => listRiskClosureRecords(req, res, p.id!)
+  },
+
+  // documents (specific sub-paths before the /:id catch-all)
+  { method: "GET", path: "/api/documents", auth: true, permission: "documents.view", handler: listDocuments },
+  {
+    method: "POST",
+    path: "/api/documents/:id/upload",
+    auth: true,
+    permission: "documents.manage",
+    handler: (req, res, p) => uploadDocumentFile(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/documents/:id/attach",
+    auth: true,
+    permission: "documents.manage",
+    handler: (req, res, p) => attachDocumentFile(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/documents/:id/archive",
+    auth: true,
+    permission: "documents.manage",
+    handler: (req, res, p) => archiveDocument(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/documents/:id/attachments",
+    auth: true,
+    permission: "documents.view",
+    handler: (req, res, p) => listDocumentAttachments(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/attachments/:id/download",
+    auth: true,
+    permission: "documents.view",
+    handler: (req, res, p) => downloadAttachment(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/documents/:id",
+    auth: true,
+    permission: "documents.view",
+    handler: (req, res, p) => getDocumentDetail(req, res, p.id!)
+  },
+  {
+    method: "PUT",
+    path: "/api/documents/:id",
+    auth: true,
+    permission: "documents.manage",
+    handler: (req, res, p) => updateDocument(req, res, p.id!)
+  }
 ];
 for (const route of migratedRoutes) {
   appRouter.register(route);
@@ -452,137 +551,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
 
     // ledger + accounts + reports + rnd/trend → migrated to appRouter
 
-  if (url.pathname === "/api/rnd/projects") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("rnd.view", req, res))) return;
-      return listRndProjects(req, res);
-    }
-    if (req.method === "POST") {
-      if (!(await requirePermission("rnd.manage", req, res))) return;
-      return createRndProject(req, res);
-    }
-  }
-
-  const rndProjectDetailMatch = url.pathname.match(/^\/api\/rnd\/projects\/([^/]+)$/);
-  const rndProjectDetailId = rndProjectDetailMatch?.[1];
-  if (rndProjectDetailId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("rnd.view", req, res))) return;
-    if (req.method === "GET") return getRndProjectDetail(req, res, rndProjectDetailId);
-  }
-
-  const rndPackageMatch = url.pathname.match(/^\/api\/rnd\/projects\/([^/]+)\/super-deduction-package$/);
-  const rndPackageProjectId = rndPackageMatch?.[1];
-  if (rndPackageProjectId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("rnd.view", req, res))) return;
-    if (req.method === "GET") return getRndSuperDeductionPackage(req, res, rndPackageProjectId);
-  }
-
-  const rndCostLineMatch = url.pathname.match(/^\/api\/rnd\/projects\/([^/]+)\/cost-lines$/);
-  const rndCostLineProjectId = rndCostLineMatch?.[1];
-  if (rndCostLineProjectId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("rnd.manage", req, res))) return;
-    if (req.method === "POST") return createRndCostLine(req, res, rndCostLineProjectId);
-  }
-
-  const rndTimeEntryMatch = url.pathname.match(/^\/api\/rnd\/projects\/([^/]+)\/time-entries$/);
-  const rndTimeEntryProjectId = rndTimeEntryMatch?.[1];
-  if (rndTimeEntryProjectId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("rnd.manage", req, res))) return;
-    if (req.method === "POST") return createRndTimeEntry(req, res, rndTimeEntryProjectId);
-  }
-
-  if (url.pathname === "/api/risk/findings") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("risk.view", req, res))) return;
-    if (req.method === "GET") return listRiskFindings(req, res);
-  }
-
-  const riskCloseMatch = url.pathname.match(/^\/api\/risk\/findings\/([^/]+)\/close$/);
-  const riskCloseId = riskCloseMatch?.[1];
-  if (riskCloseId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("risk.manage", req, res))) return;
-    if (req.method === "POST") return closeRiskFinding(req, res, riskCloseId);
-  }
-
-  const riskHistoryMatch = url.pathname.match(/^\/api\/risk\/findings\/([^/]+)\/closures$/);
-  const riskHistoryId = riskHistoryMatch?.[1];
-  if (riskHistoryId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("risk.view", req, res))) return;
-    if (req.method === "GET") return listRiskClosureRecords(req, res, riskHistoryId);
-  }
-
-  if (url.pathname === "/api/documents") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("documents.view", req, res))) return;
-    if (req.method === "GET") return listDocuments(req, res);
-  }
-
-  const documentUploadMatch = url.pathname.match(/^\/api\/documents\/([^/]+)\/upload$/);
-  const documentUploadId = documentUploadMatch?.[1];
-  if (documentUploadId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("documents.manage", req, res))) return;
-      return uploadDocumentFile(req, res, documentUploadId);
-    }
-  }
-
-  const documentAttachMatch = url.pathname.match(/^\/api\/documents\/([^/]+)\/attach$/);
-  const documentAttachId = documentAttachMatch?.[1];
-  if (documentAttachId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("documents.manage", req, res))) return;
-      return attachDocumentFile(req, res, documentAttachId);
-    }
-  }
-
-  const documentArchiveMatch = url.pathname.match(/^\/api\/documents\/([^/]+)\/archive$/);
-  const documentArchiveId = documentArchiveMatch?.[1];
-  if (documentArchiveId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("documents.manage", req, res))) return;
-      return archiveDocument(req, res, documentArchiveId);
-    }
-  }
-
-  const documentAttachmentsMatch = url.pathname.match(/^\/api\/documents\/([^/]+)\/attachments$/);
-  const documentAttachmentsId = documentAttachmentsMatch?.[1];
-  if (documentAttachmentsId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("documents.view", req, res))) return;
-    if (req.method === "GET") return listDocumentAttachments(req, res, documentAttachmentsId);
-  }
-
-  const attachmentDownloadMatch = url.pathname.match(/^\/api\/attachments\/([^/]+)\/download$/);
-  const attachmentDownloadId = attachmentDownloadMatch?.[1];
-  if (attachmentDownloadId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("documents.view", req, res))) return;
-    if (req.method === "GET") return downloadAttachment(req, res, attachmentDownloadId);
-  }
-
-  const documentDetailMatch = url.pathname.match(/^\/api\/documents\/([^/]+)$/);
-  const documentDetailId = documentDetailMatch?.[1];
-  if (documentDetailId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("documents.view", req, res))) return;
-      return getDocumentDetail(req, res, documentDetailId);
-    }
-    if (req.method === "PUT") {
-      if (!(await requirePermission("documents.manage", req, res))) return;
-      return updateDocument(req, res, documentDetailId);
-    }
-  }
+    // rnd/projects + risk + documents → migrated to appRouter
 
   if (url.pathname === "/api/tax-items") {
     if (!(await requireAuth(req, res))) return;
