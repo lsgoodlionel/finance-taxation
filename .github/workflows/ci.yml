@@ -83,18 +83,6 @@ jobs:
       - name: Run V4 browser acceptance
         run: npm run test:e2e
 
-      - name: Dump API container diagnostics
-        if: always()
-        run: |
-          echo "=== container states ==="
-          docker ps -a --filter "name=finance-taxation-v4-test" --format '{{.Names}}\t{{.Status}}' || true
-          echo "=== api inspect ==="
-          docker inspect finance-taxation-v4-test-api-1 --format 'state={{.State.Status}} exitCode={{.State.ExitCode}} oomKilled={{.State.OOMKilled}} restarts={{.RestartCount}}' || true
-          echo "=== api logs (tail 250) ==="
-          docker logs --tail 250 finance-taxation-v4-test-api-1 2>&1 || true
-          echo "=== web/nginx logs (tail 80) ==="
-          docker logs --tail 80 finance-taxation-v4-test-web-1 2>&1 || true
-
       - name: Generate acceptance report
         run: npm run v4:report
 
