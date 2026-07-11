@@ -260,6 +260,55 @@ const bootstrapHandler: RouteHandler = (_req, res) =>
     nextTargets: ["business_events", "tasks", "rbac", "chairman_dashboard"]
   });
 
+const closingBundleHandler: RouteHandler = async (req, res) => {
+  const url = new URL(req.url || "/", `http://${env.host}:${env.port}`);
+  const kind = (url.searchParams.get("kind") || "month_end") as "month_end" | "audit" | "inspection";
+  const period = url.searchParams.get("period") || "2026-05";
+  const companyId = req.auth!.companyId;
+  const snapshotRows = await query<{ id: string }>(
+    `
+      select id
+      from report_snapshots
+      where company_id = $1 and period_label = $2
+      order by snapshot_date desc, created_at desc
+    `,
+    [companyId, period]
+  );
+  const taxBatchRows = await query<{ id: string }>(
+    `
+      select id
+      from tax_filing_batches
+      where company_id = $1 and filing_period = $2
+      order by created_at desc
+    `,
+    [companyId, period]
+  );
+  const rndRows = await query<{ id: string }>(
+    `
+      select id
+      from rnd_projects
+      where company_id = $1 and (
+        started_on like $2
+        or coalesce(ended_on::text, '') like $2
+      )
+      order by created_at desc
+    `,
+    [companyId, `${period}%`]
+  );
+  const findings = await listCompanyRiskFindings(companyId);
+  const bundle = buildClosingPackageExport(kind, period, {
+    reportSnapshotIds: snapshotRows.map((item) => item.id),
+    taxBatchIds: taxBatchRows.map((item) => item.id),
+    riskFindingIds: findings
+      .filter((item) => item.status === "open" && item.createdAt.startsWith(period.slice(0, 4)))
+      .map((item) => item.id),
+    rndProjectIds: rndRows.map((item) => item.id)
+  });
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.end(buildClosingPackageHtml(bundle));
+};
+
 // Routes migrated off the legacy if-chain into the declarative table.
 // The remaining chain below is being progressively moved here (B4).
 const migratedRoutes: RouteDef[] = [
@@ -576,6 +625,55 @@ const migratedRoutes: RouteDef[] = [
     auth: true,
     permission: "tax.manage",
     handler: (req, res, p) => updateTaxItem(req, res, p.id!)
+  },
+
+  // vouchers (templates + specific sub-paths before the /:id catch-all)
+  { method: "GET", path: "/api/vouchers", auth: true, permission: "ledger.view", handler: listVouchers },
+  { method: "POST", path: "/api/vouchers", auth: true, permission: "ledger.post", handler: createVoucherFromTemplate },
+  { method: "GET", path: "/api/runtime/vouchers", auth: true, permission: "ledger.view", handler: getVoucherRuntimeSummaryRoute },
+  { method: "GET", path: "/api/packages/closing-bundle", auth: true, permission: "dashboard.view", handler: closingBundleHandler },
+  { method: "GET", path: "/api/vouchers/templates", auth: true, permission: "ledger.view", handler: getVoucherTemplates },
+  {
+    method: "POST",
+    path: "/api/vouchers/:id/post",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => postVoucher(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/vouchers/:id/approve",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => approveVoucher(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/vouchers/:id/validate",
+    auth: true,
+    permission: "ledger.view",
+    handler: (req, res, p) => validateVoucher(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/vouchers/:id/posting-records",
+    auth: true,
+    permission: "ledger.view",
+    handler: (req, res, p) => listVoucherPostingRecords(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/vouchers/:id",
+    auth: true,
+    permission: "ledger.view",
+    handler: (req, res, p) => getVoucherDetail(req, res, p.id!)
+  },
+  {
+    method: "PUT",
+    path: "/api/vouchers/:id",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => updateVoucher(req, res, p.id!)
   }
 ];
 for (const route of migratedRoutes) {
@@ -618,132 +716,7 @@ async function router(req: ApiRequest, res: ServerResponse) {
 
     // tax family → migrated to appRouter
 
-  if (url.pathname === "/api/vouchers") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("ledger.view", req, res))) return;
-      return listVouchers(req, res);
-    }
-    if (req.method === "POST") {
-      if (!(await requirePermission("ledger.post", req, res))) return;
-      return createVoucherFromTemplate(req, res);
-    }
-  }
-
-  if (url.pathname === "/api/runtime/vouchers") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return getVoucherRuntimeSummaryRoute(req, res);
-  }
-
-  if (url.pathname === "/api/packages/closing-bundle") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("dashboard.view", req, res))) return;
-    if (req.method === "GET") {
-      const kind = (url.searchParams.get("kind") || "month_end") as "month_end" | "audit" | "inspection";
-      const period = url.searchParams.get("period") || "2026-05";
-      const companyId = req.auth!.companyId;
-      const snapshotRows = await query<{ id: string }>(
-        `
-          select id
-          from report_snapshots
-          where company_id = $1 and period_label = $2
-          order by snapshot_date desc, created_at desc
-        `,
-        [companyId, period]
-      );
-      const taxBatchRows = await query<{ id: string }>(
-        `
-          select id
-          from tax_filing_batches
-          where company_id = $1 and filing_period = $2
-          order by created_at desc
-        `,
-        [companyId, period]
-      );
-      const rndRows = await query<{ id: string }>(
-        `
-          select id
-          from rnd_projects
-          where company_id = $1 and (
-            started_on like $2
-            or coalesce(ended_on::text, '') like $2
-          )
-          order by created_at desc
-        `,
-        [companyId, `${period}%`]
-      );
-      const findings = await listCompanyRiskFindings(companyId);
-      const bundle = buildClosingPackageExport(kind, period, {
-        reportSnapshotIds: snapshotRows.map((item) => item.id),
-        taxBatchIds: taxBatchRows.map((item) => item.id),
-        riskFindingIds: findings
-          .filter((item) => item.status === "open" && item.createdAt.startsWith(period.slice(0, 4)))
-          .map((item) => item.id),
-        rndProjectIds: rndRows.map((item) => item.id)
-      });
-      res.statusCode = 200;
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.end(buildClosingPackageHtml(bundle));
-      return;
-    }
-  }
-
-  if (url.pathname === "/api/vouchers/templates") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return getVoucherTemplates(req, res);
-  }
-
-  const voucherPostMatch = url.pathname.match(/^\/api\/vouchers\/([^/]+)\/post$/);
-  const voucherPostId = voucherPostMatch?.[1];
-  if (voucherPostId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("ledger.post", req, res))) return;
-      return postVoucher(req, res, voucherPostId);
-    }
-  }
-
-  const voucherApproveMatch = url.pathname.match(/^\/api\/vouchers\/([^/]+)\/approve$/);
-  const voucherApproveId = voucherApproveMatch?.[1];
-  if (voucherApproveId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("ledger.post", req, res))) return;
-      return approveVoucher(req, res, voucherApproveId);
-    }
-  }
-
-  const voucherValidateMatch = url.pathname.match(/^\/api\/vouchers\/([^/]+)\/validate$/);
-  const voucherValidateId = voucherValidateMatch?.[1];
-  if (voucherValidateId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return validateVoucher(req, res, voucherValidateId);
-  }
-
-  const voucherPostingRecordsMatch = url.pathname.match(/^\/api\/vouchers\/([^/]+)\/posting-records$/);
-  const voucherPostingRecordsId = voucherPostingRecordsMatch?.[1];
-  if (voucherPostingRecordsId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("ledger.view", req, res))) return;
-    if (req.method === "GET") return listVoucherPostingRecords(req, res, voucherPostingRecordsId);
-  }
-
-  const voucherDetailMatch = url.pathname.match(/^\/api\/vouchers\/([^/]+)$/);
-  const voucherDetailId = voucherDetailMatch?.[1];
-  if (voucherDetailId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("ledger.view", req, res))) return;
-      return getVoucherDetail(req, res, voucherDetailId);
-    }
-    if (req.method === "PUT") {
-      if (!(await requirePermission("ledger.post", req, res))) return;
-      return updateVoucher(req, res, voucherDetailId);
-    }
-  }
+    // vouchers + closing-bundle → migrated to appRouter
 
   if (url.pathname === "/api/employees") {
     if (!(await requireAuth(req, res))) return;
