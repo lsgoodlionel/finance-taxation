@@ -3,8 +3,9 @@ import { randomBytes } from "node:crypto";
 import type { PermissionKey, UserProfile } from "@finance-taxation/domain-model";
 import type { ApiRequest, AuthContext } from "../types.js";
 import { env } from "../config/env.js";
-import { queryOne, withTransaction } from "../db/client.js";
+import { query, queryOne, withTransaction } from "../db/client.js";
 import { json } from "../utils/http.js";
+import { hashPassword, needsRehash, verifyPassword } from "./password.js";
 
 const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
   "role-chairman": [
@@ -77,9 +78,18 @@ interface AuthUserRow {
   email: string | null;
   phone: string | null;
   status: UserProfile["status"];
-  password_hash: string;
+  // Only selected on the login path; omitted elsewhere to avoid pulling the
+  // credential into memory on flows that never verify it (/me, refresh).
+  password_hash?: string;
   role_codes: string[] | null;
+  failed_attempts?: number;
+  locked_until?: string | Date | null;
 }
+
+// Fixed hash used to equalize verify timing when a username is unknown, so login
+// latency does not reveal whether an account exists (mitigates timing-based
+// user enumeration). Computed once at module load.
+const TIMING_EQUALIZER_HASH = hashPassword("timing-equalizer-not-a-real-secret");
 
 interface SessionRow {
   id: string;
@@ -189,6 +199,8 @@ async function loadUserByUsername(username: string): Promise<AuthUserRow | null>
         u.phone,
         u.status,
         up.password_hash,
+        up.failed_attempts,
+        up.locked_until,
         coalesce(array_agg(r.code order by r.code) filter (where r.code is not null), '{}') as role_codes
       from users u
       join user_passwords up on up.user_id = u.id
@@ -204,13 +216,17 @@ async function loadUserByUsername(username: string): Promise<AuthUserRow | null>
         u.email,
         u.phone,
         u.status,
-        up.password_hash
+        up.password_hash,
+        up.failed_attempts,
+        up.locked_until
     `,
     [username]
   );
 }
 
 async function loadUserById(userId: string): Promise<AuthUserRow | null> {
+  // Note: password_hash is intentionally not selected here — the /me path never
+  // needs it, so we avoid pulling the credential into memory (least privilege).
   return queryOne<AuthUserRow>(
     `
       select
@@ -222,10 +238,8 @@ async function loadUserById(userId: string): Promise<AuthUserRow | null> {
         u.email,
         u.phone,
         u.status,
-        up.password_hash,
         coalesce(array_agg(r.code order by r.code) filter (where r.code is not null), '{}') as role_codes
       from users u
-      join user_passwords up on up.user_id = u.id
       left join user_roles ur on ur.user_id = u.id
       left join roles r on r.id = ur.role_id
       where u.id = $1
@@ -237,8 +251,7 @@ async function loadUserById(userId: string): Promise<AuthUserRow | null> {
         u.display_name,
         u.email,
         u.phone,
-        u.status,
-        up.password_hash
+        u.status
     `,
     [userId]
   );
@@ -316,6 +329,51 @@ export async function requireAnyPermission(
   return true;
 }
 
+function isLocked(lockedUntil: string | Date | null | undefined): boolean {
+  if (!lockedUntil) {
+    return false;
+  }
+  return new Date(lockedUntil).getTime() > Date.now();
+}
+
+async function registerFailedLogin(userId: string): Promise<void> {
+  // Increment atomically in SQL so concurrent failed logins cannot lose an
+  // update; the row is locked once the incremented count crosses the threshold.
+  await query(
+    `
+      update user_passwords
+      set failed_attempts = failed_attempts + 1,
+          locked_until = case
+            when failed_attempts + 1 >= $2
+              then now() + ($3 || ' milliseconds')::interval
+            else locked_until
+          end,
+          updated_at = now()
+      where user_id = $1
+    `,
+    [userId, env.loginMaxFailedAttempts, env.loginLockoutMs]
+  );
+}
+
+async function clearLockAndUpgrade(
+  userId: string,
+  plainPassword: string,
+  storedHash: string
+): Promise<void> {
+  const nextHash = needsRehash(storedHash) ? hashPassword(plainPassword) : storedHash;
+  await query(
+    `
+      update user_passwords
+      set failed_attempts = 0,
+          locked_until = null,
+          password_hash = $2,
+          updated_at = now()
+      where user_id = $1
+    `,
+    [userId, nextHash]
+  );
+}
+
 export async function login(req: ApiRequest, res: ServerResponse) {
   const body = (req.body || {}) as { username?: string; password?: string };
   if (!body.username || !body.password) {
@@ -323,9 +381,31 @@ export async function login(req: ApiRequest, res: ServerResponse) {
   }
 
   const userRow = await loadUserByUsername(body.username);
-  if (!userRow || userRow.status !== "active" || userRow.password_hash !== body.password) {
+
+  // Unknown / inactive user: run an equivalent-cost dummy verify so this path
+  // takes the same time as a real password check, then return the same generic
+  // 401. (Account existence can still be inferred from the lockout response
+  // below; IP-level throttling + full enumeration hardening is Stage B / B1.)
+  if (!userRow || userRow.status !== "active") {
+    verifyPassword(body.password, TIMING_EQUALIZER_HASH);
     return json(res, 401, { error: "Invalid credentials" });
   }
+
+  if (isLocked(userRow.locked_until)) {
+    return json(res, 423, {
+      error: "Account temporarily locked due to repeated failed logins. Please try again later."
+    });
+  }
+
+  const storedHash = userRow.password_hash ?? "";
+  if (!verifyPassword(body.password, storedHash)) {
+    await registerFailedLogin(userRow.id);
+    return json(res, 401, { error: "Invalid credentials" });
+  }
+
+  // Successful login: reset the failure counter and lazily upgrade legacy
+  // plaintext / outdated hashes to the current scrypt scheme.
+  await clearLockAndUpgrade(userRow.id, body.password, storedHash);
 
   const user = mapUserProfile(userRow);
   const session = buildSession(user);
@@ -382,6 +462,8 @@ export async function refresh(req: ApiRequest, res: ServerResponse) {
       return { error: "Refresh token expired" as const };
     }
 
+    // password_hash is not selected here — refresh authenticates via the refresh
+    // token, so the credential is never needed on this path (least privilege).
     const userResult = await client.query<AuthUserRow>(
       `
         select
@@ -393,10 +475,8 @@ export async function refresh(req: ApiRequest, res: ServerResponse) {
           u.email,
           u.phone,
           u.status,
-          up.password_hash,
           coalesce(array_agg(r.code order by r.code) filter (where r.code is not null), '{}') as role_codes
         from users u
-        join user_passwords up on up.user_id = u.id
         left join user_roles ur on ur.user_id = u.id
         left join roles r on r.id = ur.role_id
         where u.id = $1
@@ -408,8 +488,7 @@ export async function refresh(req: ApiRequest, res: ServerResponse) {
           u.display_name,
           u.email,
           u.phone,
-          u.status,
-          up.password_hash
+          u.status
       `,
       [current.user_id]
     );
