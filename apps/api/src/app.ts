@@ -67,13 +67,7 @@ import {
   getWorkflowRunDetailRoute,
   listWorkflowCommandsRoute,
   listWorkflowRunsRoute,
-  WORKFLOW_COMMAND_CANCEL_PATH,
-  WORKFLOW_COMMAND_COMPENSATIONS_PATH,
-  WORKFLOW_COMMAND_DETAIL_PATH,
-  WORKFLOW_COMMAND_RETRY_PATH,
   retryWorkflowCommandRoute
-  ,
-  WORKFLOW_RUN_DETAIL_PATH
 } from "./modules/workflows/routes.js";
 import {
   createTaxFilingBatch,
@@ -286,7 +280,96 @@ const migratedRoutes: RouteDef[] = [
   { method: "POST", path: "/api/auth/refresh", handler: refresh },
   { method: "POST", path: "/api/auth/logout", auth: true, handler: logout },
   { method: "GET", path: "/api/access/me", auth: true, handler: me },
-  { method: "GET", path: "/api/access/menu", auth: true, handler: getMenu }
+  { method: "GET", path: "/api/access/menu", auth: true, handler: getMenu },
+
+  // events (specific sub-paths before the /:id catch-all)
+  { method: "GET", path: "/api/events", auth: true, permission: "events.view", handler: listEvents },
+  { method: "POST", path: "/api/events", auth: true, permission: "events.create", handler: createEvent },
+  {
+    method: "POST",
+    path: "/api/events/:id/analyze",
+    auth: true,
+    permission: "events.create",
+    handler: (req, res, p) => analyzeEvent(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/events/:id/risk-check",
+    auth: true,
+    permission: { anyOf: ["risk.manage", "tax.manage", "events.create"] },
+    handler: (req, res, p) => runEventRiskCheck(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/events/:id",
+    auth: true,
+    permission: "events.view",
+    handler: (req, res, p) => getEventDetail(req, res, p.id!)
+  },
+  {
+    method: "PUT",
+    path: "/api/events/:id",
+    auth: true,
+    permission: "events.create",
+    handler: (req, res, p) => updateEvent(req, res, p.id!)
+  },
+
+  // tasks
+  { method: "GET", path: "/api/tasks", auth: true, permission: "tasks.view", handler: listTasks },
+  { method: "GET", path: "/api/runtime/tasks", auth: true, permission: "tasks.view", handler: getTaskRuntimeSummaryRoute },
+  {
+    method: "POST",
+    path: "/api/tasks/:id/remind",
+    auth: true,
+    permission: "tasks.view",
+    handler: (req, res, p) => remindTask(req, res, p.id!)
+  },
+  {
+    method: "PUT",
+    path: "/api/tasks/:id",
+    auth: true,
+    permission: "tasks.view",
+    handler: (req, res, p) => updateTask(req, res, p.id!)
+  },
+
+  // workflow runtime
+  { method: "GET", path: "/api/workflows/runs", auth: true, permission: "workflow.view", handler: listWorkflowRunsRoute },
+  {
+    method: "GET",
+    path: "/api/workflows/runs/:id",
+    auth: true,
+    permission: "workflow.view",
+    handler: (req, res, p) => getWorkflowRunDetailRoute(req, res, p.id!)
+  },
+  { method: "GET", path: "/api/workflows/commands", auth: true, permission: "workflow.view", handler: listWorkflowCommandsRoute },
+  {
+    method: "GET",
+    path: "/api/workflows/commands/:id",
+    auth: true,
+    permission: "workflow.view",
+    handler: (req, res, p) => getWorkflowCommandDetailRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/workflows/commands/:id/retry",
+    auth: true,
+    permission: "workflow.manage",
+    handler: (req, res, p) => retryWorkflowCommandRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/workflows/commands/:id/cancel",
+    auth: true,
+    permission: "workflow.manage",
+    handler: (req, res, p) => cancelWorkflowCommandRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/workflows/commands/:id/compensations",
+    auth: true,
+    permission: "workflow.manage",
+    handler: (req, res, p) => createWorkflowCompensationRoute(req, res, p.id!)
+  }
 ];
 for (const route of migratedRoutes) {
   appRouter.register(route);
@@ -318,137 +401,9 @@ async function router(req: ApiRequest, res: ServerResponse) {
 
     // ── Legacy dispatch chain (being migrated into appRouter above) ──
 
-  if (url.pathname === "/api/events") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("events.view", req, res))) return;
-      return listEvents(req, res);
-    }
-    if (req.method === "POST") {
-      if (!(await requirePermission("events.create", req, res))) return;
-      return createEvent(req, res);
-    }
-  }
+    // events → migrated to appRouter
 
-  const eventAnalyzeMatch = url.pathname.match(/^\/api\/events\/([^/]+)\/analyze$/);
-  const eventAnalyzeId = eventAnalyzeMatch?.[1];
-  if (eventAnalyzeId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("events.create", req, res))) return;
-      return analyzeEvent(req, res, eventAnalyzeId);
-    }
-  }
-
-  const eventRiskCheckMatch = url.pathname.match(/^\/api\/events\/([^/]+)\/risk-check$/);
-  const eventRiskCheckId = eventRiskCheckMatch?.[1];
-  if (eventRiskCheckId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requireAnyPermission(["risk.manage", "tax.manage", "events.create"], req, res))) return;
-      return runEventRiskCheck(req, res, eventRiskCheckId);
-    }
-  }
-
-  const eventDetailMatch = url.pathname.match(/^\/api\/events\/([^/]+)$/);
-  const eventDetailId = eventDetailMatch?.[1];
-  if (eventDetailId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("events.view", req, res))) return;
-      return getEventDetail(req, res, eventDetailId);
-    }
-    if (req.method === "PUT") {
-      if (!(await requirePermission("events.create", req, res))) return;
-      return updateEvent(req, res, eventDetailId);
-    }
-  }
-
-  if (url.pathname === "/api/tasks") {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "GET") {
-      if (!(await requirePermission("tasks.view", req, res))) return;
-      return listTasks(req, res);
-    }
-  }
-
-  if (url.pathname === "/api/runtime/tasks") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("tasks.view", req, res))) return;
-    if (req.method === "GET") return getTaskRuntimeSummaryRoute(req, res);
-  }
-
-  const taskRemindMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/remind$/);
-  const taskRemindId = taskRemindMatch?.[1];
-  if (taskRemindId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "POST") {
-      if (!(await requirePermission("tasks.view", req, res))) return;
-      return remindTask(req, res, taskRemindId);
-    }
-  }
-
-  const taskIdMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)$/);
-  const taskId = taskIdMatch?.[1];
-  if (taskId) {
-    if (!(await requireAuth(req, res))) return;
-    if (req.method === "PUT") {
-      if (!(await requirePermission("tasks.view", req, res))) return;
-      return updateTask(req, res, taskId);
-    }
-  }
-
-  if (url.pathname === "/api/workflows/runs") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("workflow.view", req, res))) return;
-    if (req.method === "GET") return listWorkflowRunsRoute(req, res);
-  }
-
-  const workflowRunMatch = url.pathname.match(WORKFLOW_RUN_DETAIL_PATH);
-  const workflowRunId = workflowRunMatch?.[1];
-  if (workflowRunId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("workflow.view", req, res))) return;
-    if (req.method === "GET") return getWorkflowRunDetailRoute(req, res, workflowRunId);
-  }
-
-  if (url.pathname === "/api/workflows/commands") {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("workflow.view", req, res))) return;
-    if (req.method === "GET") return listWorkflowCommandsRoute(req, res);
-  }
-
-  const workflowCommandMatch = url.pathname.match(WORKFLOW_COMMAND_DETAIL_PATH);
-  const workflowCommandId = workflowCommandMatch?.[1];
-  if (workflowCommandId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("workflow.view", req, res))) return;
-    if (req.method === "GET") return getWorkflowCommandDetailRoute(req, res, workflowCommandId);
-  }
-
-  const workflowRetryMatch = url.pathname.match(WORKFLOW_COMMAND_RETRY_PATH);
-  const workflowRetryId = workflowRetryMatch?.[1];
-  if (workflowRetryId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("workflow.manage", req, res))) return;
-    if (req.method === "POST") return retryWorkflowCommandRoute(req, res, workflowRetryId);
-  }
-
-  const workflowCancelMatch = url.pathname.match(WORKFLOW_COMMAND_CANCEL_PATH);
-  const workflowCancelId = workflowCancelMatch?.[1];
-  if (workflowCancelId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("workflow.manage", req, res))) return;
-    if (req.method === "POST") return cancelWorkflowCommandRoute(req, res, workflowCancelId);
-  }
-
-  const workflowCompensationMatch = url.pathname.match(WORKFLOW_COMMAND_COMPENSATIONS_PATH);
-  const workflowCompensationId = workflowCompensationMatch?.[1];
-  if (workflowCompensationId) {
-    if (!(await requireAuth(req, res))) return;
-    if (!(await requirePermission("workflow.manage", req, res))) return;
-    if (req.method === "POST") return createWorkflowCompensationRoute(req, res, workflowCompensationId);
-  }
+    // tasks + workflow runtime → migrated to appRouter
 
   if (url.pathname === "/api/ledger/entries") {
     if (!(await requireAuth(req, res))) return;
