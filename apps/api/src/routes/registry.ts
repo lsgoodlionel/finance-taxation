@@ -226,6 +226,8 @@ import {
   deleteInvoice,
   generateInvoiceVoucher,
 } from "../modules/invoices/invoice.routes.js";
+// E1/E2 数据智能
+import { cashForecastRoute, revenueComparisonRoute } from "../modules/analytics/routes.js";
 
 const healthHandler: RouteHandler = async (_req, res) => {
   let dbOk = false;
@@ -1004,7 +1006,11 @@ const routes: RouteDef[] = [
     path: "/api/invoices/:id",
     auth: true,
     handler: (req, res, p) => deleteInvoice(req, res, p.id!)
-  }
+  },
+
+  // 数据智能（E1/E2）
+  { method: "GET", path: "/api/analytics/cash-forecast", auth: true, permission: "dashboard.view", handler: cashForecastRoute },
+  { method: "GET", path: "/api/analytics/revenue-comparison", auth: true, permission: "dashboard.view", handler: revenueComparisonRoute }
 ];
 
 export function createAppRouter(): Router {
