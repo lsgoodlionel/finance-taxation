@@ -1,0 +1,20 @@
+{
+  "name": "AI 财税负责人工作台",
+  "short_name": "财税工作台",
+  "description": "面向科技型中小企业的 AI 财税负责人工作台",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f1f5f9",
+  "theme_color": "#2563eb",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
