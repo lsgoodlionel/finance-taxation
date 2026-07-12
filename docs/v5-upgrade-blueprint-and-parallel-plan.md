@@ -279,6 +279,18 @@ git worktree add ../ft-v5-<lane> -b codex/v5-<lane> origin/main
 
 **收口建议序**：分支收敛回 main → 接真实 Postgres 跑 DB/RLS 集成 + 覆盖率 → 纯核心接入路由/持久层 → 补 E2E + 安全扫描 → 再推 M5 前端与外部真连。
 
+### 收口执行进展（步骤 1–5，2026-07-12）
+
+| 步骤 | 状态 | 落地 |
+|---|---|---|
+| **1 分支收敛** | ✅ 完成 | 5 条 codex 车道全部 merge 回 `main`（B2/C1/D2-6/D5/E1-2 汇聚），typecheck:v2 绿、buildApp 冒烟通过 |
+| **2 接真实 PG** | ✅ 部分 | 测试库(35 迁移+种子)下 **B2 close-period 2/2 绿、C1 RLS 3/3 绿**（真实 Postgres 验证账务结转正确 + 租户隔离）。剩余：覆盖率量化 ≥60%（需补大量业务模块测试）；workflow blocked→not_started 1 例既有失败归 `task_5caa1830` |
+| **3 核心接线** | 🟡 部分 | E1/E2 接入 HTTP：`GET /api/analytics/cash-forecast`、`/api/analytics/revenue-comparison`（真实 ledger 数据冒烟 200）。剩余：consistency/governance/hash-chain 接线；withTenantContext 全域接入 + 真实表启 RLS |
+| **4 补 CI** | ⏳ 未做 | E2E 5 条需运行 api+web 全栈 + Playwright 浏览器；安全扫描未跑 |
+| **5 M5 前端** | 🟡 部分 | **PWA 可安装 + 离线外壳**（manifest/sw.js/icon，build 验证 dist 产出，/api 不缓存）。剩余：移动端审批/BottomSheet/暗色；诺诺开票真连/企微通知需外部凭证**无法在本环境完成** |
+
+**里程碑变化**：M5 由 🔴 not-met → 🟡 partial（PWA 已可安装）。M0 分支已收敛、M1/M2 的账务与 RLS 已获真实 DB 验证、M4 分析核心已可用。**仍硬阻塞的验收项**：E2E 5 条 + ≥60% 覆盖率 + 安全扫描（CI/infra）；持牌开票 API 真连 + 企微通知 + AI 记账准确率基准（需外部服务/凭证/标注集）；3 家企业多租户部署 + 移动端审批完整（需生产接线/前端）。
+
 ---
 
 ## 附录 · 关键文件索引
