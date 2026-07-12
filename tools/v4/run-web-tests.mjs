@@ -15,7 +15,7 @@ export async function collectWebTests(directory) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
       tests.push(...await collectWebTests(path));
-    } else if (entry.isFile() && /\.test\.tsx?$/.test(entry.name)) {
+    } else if (entry.isFile() && /\.test\.(mjs|tsx?)$/.test(entry.name)) {
       tests.push(path);
     }
   }

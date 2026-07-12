@@ -23,7 +23,7 @@ test("assertNonEmptyTests rejects a discovered empty test directory", async () =
   }
 });
 
-test("collectWebTests returns only sorted TypeScript test files", async () => {
+test("collectWebTests returns sorted ts, tsx, and mjs test files", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v4-web-tests-"));
 
   try {
@@ -31,12 +31,14 @@ test("collectWebTests returns only sorted TypeScript test files", async () => {
     await Promise.all([
       writeFile(path.join(root, "z.test.ts"), ""),
       writeFile(path.join(root, "nested", "a.test.tsx"), ""),
+      writeFile(path.join(root, "nested", "b.test.mjs"), ""),
       writeFile(path.join(root, "ignored.ts"), ""),
       writeFile(path.join(root, "ignored.test.js"), "")
     ]);
 
     assert.deepEqual(await collectWebTests(root), [
       path.join(root, "nested", "a.test.tsx"),
+      path.join(root, "nested", "b.test.mjs"),
       path.join(root, "z.test.ts")
     ]);
   } finally {
