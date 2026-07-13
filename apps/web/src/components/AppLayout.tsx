@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { RouteFallback } from "./RouteFallback";
 import {
   Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid, Badge, Breadcrumb,
 } from "antd";
@@ -437,7 +438,9 @@ export function AppLayout() {
         </Drawer>
 
         <Content style={{ padding: "16px" }}>
-          <Outlet />
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
         </Content>
       </Layout>
     );
@@ -499,7 +502,9 @@ export function AppLayout() {
           </div>
         </div>
         <Content style={{ padding: "24px 28px" }}>
-          <Outlet />
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
         </Content>
       </Layout>
     </Layout>

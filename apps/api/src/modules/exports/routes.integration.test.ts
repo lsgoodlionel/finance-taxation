@@ -234,24 +234,33 @@ test("updateExportJobStatus records retry metadata and audit trail for failed th
     assert.equal(persisted.rows[0]?.last_error, null);
     assert.equal(persisted.rows[0]?.next_retry_at, null);
 
-    const auditCapture = createResponseCapture();
-    await listAuditLogs(
-      {
-        method: "GET",
-        url: `/api/audit/logs?resourceType=export_job&resourceId=${jobId}&limit=10`,
-        auth: createAuthContext()
-      } as ApiRequest,
-      auditCapture.response
-    );
-    const auditList = auditCapture.readJson<{
-      items: Array<{ action: string; changes: { retryCount?: number; lastError?: string | null } | null }>;
-    }>();
+    // writeAudit 是 fire-and-forget(services/audit.ts:query(...).catch()),审计插入
+    // 与本查询存在竞态,偶发查不到刚写入的 'retry' 条目。轮询直到三条审计动作齐全,
+    // 消除该 flaky(设计上审计不阻塞业务,故此处以测试侧等待收敛)。
+    let auditItems: Array<{ action: string; changes: { retryCount?: number; lastError?: string | null } | null }> = [];
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const auditCapture = createResponseCapture();
+      await listAuditLogs(
+        {
+          method: "GET",
+          url: `/api/audit/logs?resourceType=export_job&resourceId=${jobId}&limit=10`,
+          auth: createAuthContext()
+        } as ApiRequest,
+        auditCapture.response
+      );
+      const auditList = auditCapture.readJson<{
+        items: Array<{ action: string; changes: { retryCount?: number; lastError?: string | null } | null }>;
+      }>();
+      auditItems = auditList.body?.items ?? [];
+      if (auditItems.length >= 3) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
     assert.deepEqual(
-      auditList.body?.items.map((item) => item.action),
+      auditItems.map((item) => item.action),
       ["retry", "update_status", "create"]
     );
-    assert.equal(auditList.body?.items[0]?.changes?.retryCount, 1);
-    assert.equal(auditList.body?.items[1]?.changes?.lastError, "归档索引写入失败，等待重试");
+    assert.equal(auditItems[0]?.changes?.retryCount, 1);
+    assert.equal(auditItems[1]?.changes?.lastError, "归档索引写入失败，等待重试");
 
     await closePool();
   } finally {

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="财税工作台">
+  <rect width="512" height="512" rx="96" fill="#2563eb"/>
+  <path d="M160 352V176h112c40 0 68 24 68 60 0 30-19 51-50 57l54 59h-46l-50-56h-46v56zm42-92h64c22 0 36-11 36-30s-14-30-36-30h-64z" fill="#ffffff"/>
+  <rect x="150" y="228" width="212" height="20" rx="10" fill="#ffffff"/>
+</svg>

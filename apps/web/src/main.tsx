@@ -7,6 +7,7 @@ import "./index.css";
 import "./styles/tokens.css";
 import "./styles/global.css";
 import { App } from "./App";
+import { registerServiceWorker } from "./pwa";
 
 const antdTheme = {
   token: {
@@ -64,3 +65,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </ConfigProvider>
   </React.StrictMode>
 );
+
+registerServiceWorker();

@@ -32,7 +32,14 @@ test("deriveTaxRuntimeSummary marks ready batch as authorized for tax specialist
 test("deriveVoucherRuntimeSummary marks review vouchers as awaiting authorization for employee", () => {
   const summary = deriveVoucherRuntimeSummary(
     [{ id: "v1", status: "review_required" }],
-    { id: "v1", status: "review_required" },
+    {
+      id: "v1",
+      status: "review_required",
+      lines: [
+        { debit: 100, credit: 0, accountCode: "1001", accountName: "库存现金" },
+        { debit: 0, credit: 100, accountCode: "6001", accountName: "主营业务收入" }
+      ]
+    },
     ["role-employee"]
   );
   assert.equal(summary.executionState, "running");

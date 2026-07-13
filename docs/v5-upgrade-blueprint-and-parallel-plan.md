@@ -239,6 +239,58 @@ git worktree add ../ft-v5-<lane> -b codex/v5-<lane> origin/main
 
 **M0 主干可信** 就绪度：17+ 分支收敛 ✅ · 明文密码修复 ✅ · CI 跑 V2（🟡 待补全测试收集）· 仅剩推送上云 ⏸️。
 
+### Stage B — 生产就绪硬底座（进行中）
+
+| 项 | 状态 | 落地 / 证据 |
+|---|---|---|
+| B4 架构规整 | ✅ 完成（已合 main） | 手写 1600+ 行 if 分发链 → 声明式路由表。新增 `router/router.ts`（路由核心 + 9 单测）、`router/dispatch.ts`（auth/permission 统一施加）、`observability/logger.ts`（零依赖结构化日志 + requestId）、`routes/registry.ts`（全部 ~190 路由声明 + handlers）。app.ts **1624→52 行**（主入口 <200 达标）；统一错误中间件（顶层 try/catch 兜底 500 + 结构化日志，覆盖全部路由）。分 11 提交增量迁移，每批 typecheck + verify + buildApp 冒烟全绿，零行为变更 |
+| B1 安全加固 | 🟡 进行中（`codex/v5-security-hardening`） | **已完成 3 项**：① 安全头 `94ce8a2`（HSTS/X-Content-Type/X-Frame/Referrer/Permissions-Policy/CSP frame-ancestors，`security/headers.ts` + 4 单测）② 限流 `f11176d`（零依赖固定窗口，全局 + auth 端点更严桶，429+Retry-After，闭合 A4 评审 H3，`security/rate-limit.ts` + 7 单测）③ 审计脱敏 `86d9e4a`（`security/redact.ts` 递归掩码 password/secret/token/apiKey，写库前生效 + 7 单测）。每项 verify 退出码 0。**剩余**：Zod 统一入参校验（需先定 zod 依赖 vs 零依赖 helper，且覆盖面大）；CSRF（本项目 Bearer-token 鉴权、非 Cookie 环境，CSRF 不适用，建议标注 N/A）；HTML 端点 nonce CSP（小众，后置）|
+| B2 账务内核 | ⏳ 待做（高风险，需 DB） | 结转损益 + 期末结账凭证 + 去兜底配平 + 物化余额 + idempotency_key。**硬约束**：需可起 Postgres 的环境验证结转正确性 + DB 集成测试，且必须走 PR + SME 评审，不可无 DB 盲改 |
+| B3 测试底座 | ⏳ 待做（需 DB/运行时） | Playwright 5 流 + DB 集成测试 + 覆盖率门禁 ≥60%（与后台 CI 测试收集任务 `task_094ac1ce` 交叠）|
+| B5 前端工程化 | 🟡 部分（已合 main） | React.lazy 27 页懒加载 + RouteFallback + vite manualChunks vendor 分包（主包 1189→89kB）。剩余：状态管理/TanStack Query/大页拆分 |
+
+> 注：上表为 Stage B 早期快照。全阶段（A–E）真实完成度以下方「里程碑完成度评分卡」为准。
+
+### 里程碑完成度评分卡（多 Agent 审计 2026-07-12）
+
+> 方法：5 个审计 Agent 经 `git show <branch>` 只读核实各车道已提交交付物 + 综合员对照 M0–M5 验收标准评分。**核心结论：可验证核心完成度高，里程碑级「生产就绪 + 已验证」达成度低——总体约 47%。**
+
+| 里程碑 | 状态 | 已达成 / 未闭合 |
+|---|---|---|
+| **M0 主干可信** | 🟡 partial | ✅ 明文密码 scrypt（合 main）✅ A2 清创 ｜ ✗ 5 条 codex 车道未收敛回 main ✗ CI 跑 V2 全绿未证实 |
+| **M1 生产就绪** | 🟡 partial | ✅ 账务结转正确（显式 3131 平衡腿，非兜底；纯函数+DB 双层断言）｜ ✗ E2E 5 条（全库无）✗ 覆盖率 ≥60%（未量化）✗ 安全扫描 0 CRITICAL（未跑）✗ summary.ts:84 兜底腿仅规避未物理删除 |
+| **M2 多租户** | 🟡 partial | ✅ `withTenantContext` + RLS 隔离/拒写/fails-closed 端到端证明 ｜ ✗ 真实业务表未启用 RLS ✗ 无调用点接入 ✗ 无非超级用户角色运行时守卫 |
+| **M3 集成打通** | 🟡 partial | ✅ 票税一致性/hash链/数电票解析/API Key·Webhook 核心 ｜ ✗ 诺诺等持牌开票 API 真连（无凭证）✗ 企微通知 ✗ 核心未接 HTTP/DB |
+| **M4 智能财税** | 🟡 partial | ✅ AI 分级自动化决策门（硬校验绝不交 LLM）+ 同比环比/现金流预测核心 ｜ ✗ 自动记账准确率 ≥80%（无准确率基准）✗ 自定义报表构建器 |
+| **M5 移动办公** | 🔴 not-met | ✗ 全缺：无 PWA/service-worker/BottomSheet/暗色/移动审批 |
+
+**五类阻塞**：① DB 环境（账务/RLS 集成 external-blocked 未运行）② 外部服务无凭证（持牌开票/企微/PaddleOCR）③ 前端未集成（M5 全缺、自定义报表缺）④ CI/覆盖率未跑（E2E/扫描未证实）⑤ 分支未收敛 + 纯核心未接路由/持久层。
+
+**车道分支拓扑**（各高风险者待 PR + SME 评审后合 main）：
+
+| 分支 | 阶段 | HEAD |
+|---|---|---|
+| `main` | A + B4 + B1 + B5 | 已合入 |
+| `codex/v5-ledger-core` | B2 结转损益（+端点+迁移035+DB集成测试） | `8efa5b2` |
+| `codex/v5-multitenant-rls` | C1 租户上下文 + RLS 机制 | `fb75411` |
+| `codex/v5-integration-connectors` | D2/D3/D4/D6 集成核心 | `b6347c9` |
+| `codex/v5-ai-governance` | D5 AI 治理门 | `1d2417e` |
+| `codex/v5-data-intelligence` | E1/E2 数据智能核心 | `0f58423` |
+
+**收口建议序**：分支收敛回 main → 接真实 Postgres 跑 DB/RLS 集成 + 覆盖率 → 纯核心接入路由/持久层 → 补 E2E + 安全扫描 → 再推 M5 前端与外部真连。
+
+### 收口执行进展（步骤 1–5，2026-07-12）
+
+| 步骤 | 状态 | 落地 |
+|---|---|---|
+| **1 分支收敛** | ✅ 完成 | 5 条 codex 车道全部 merge 回 `main`（B2/C1/D2-6/D5/E1-2 汇聚），typecheck:v2 绿、buildApp 冒烟通过 |
+| **2 接真实 PG** | ✅ 部分 | 测试库(35 迁移+种子)下 **B2 close-period 2/2 绿、C1 RLS 3/3 绿**（真实 Postgres 验证账务结转正确 + 租户隔离）。剩余：覆盖率量化 ≥60%（需补大量业务模块测试）；workflow blocked→not_started 1 例既有失败归 `task_5caa1830` |
+| **3 核心接线** | 🟡 部分 | E1/E2 接入 HTTP：`GET /api/analytics/cash-forecast`、`/api/analytics/revenue-comparison`（真实 ledger 数据冒烟 200）。剩余：consistency/governance/hash-chain 接线；withTenantContext 全域接入 + 真实表启 RLS |
+| **4 补 CI** | ⏳ 未做 | E2E 5 条需运行 api+web 全栈 + Playwright 浏览器；安全扫描未跑 |
+| **5 M5 前端** | 🟡 部分 | **PWA 可安装 + 离线外壳**（manifest/sw.js/icon，build 验证 dist 产出，/api 不缓存）。剩余：移动端审批/BottomSheet/暗色；诺诺开票真连/企微通知需外部凭证**无法在本环境完成** |
+
+**里程碑变化**：M5 由 🔴 not-met → 🟡 partial（PWA 已可安装）。M0 分支已收敛、M1/M2 的账务与 RLS 已获真实 DB 验证、M4 分析核心已可用。**仍硬阻塞的验收项**：E2E 5 条 + ≥60% 覆盖率 + 安全扫描（CI/infra）；持牌开票 API 真连 + 企微通知 + AI 记账准确率基准（需外部服务/凭证/标注集）；3 家企业多租户部署 + 移动端审批完整（需生产接线/前端）。
+
 ---
 
 ## 附录 · 关键文件索引

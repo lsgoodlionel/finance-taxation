@@ -1,34 +1,38 @@
+import { lazy } from "react";
 import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
 import { LanguageProvider } from "./lib/i18n";
 import { PeriodProvider } from "./lib/period-context";
 import { AppLayout } from "./components/AppLayout";
-import { ChairmanDashboardPage } from "./pages/ChairmanDashboardPage";
-import { AssistantPage } from "./pages/AssistantPage";
-import { PdfExportPage } from "./pages/PdfExportPage";
-import { ContractsPage } from "./pages/ContractsPage";
-import { PayrollPage } from "./pages/PayrollPage";
-import { PayrollTransferPage } from "./pages/PayrollTransferPage";
-import { MonthEndClosePage } from "./pages/MonthEndClosePage";
-import { MyDayPage } from "./pages/MyDayPage";
-import { CounterpartiesPage } from "./pages/CounterpartiesPage";
-import { BillingPage } from "./pages/BillingPage";
-import { ArchivePackagePage } from "./pages/ArchivePackagePage";
-import { FeedbackPage } from "./pages/FeedbackPage";
-import { DocumentsPage } from "./pages/DocumentsPage";
-import { EventsPage } from "./pages/EventsPage";
-import { LedgerPage } from "./pages/LedgerPage";
-import { ReportsPage } from "./pages/ReportsPage";
-import { RiskPage } from "./pages/RiskPage";
-import { RndPage } from "./pages/RndPage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { TaxPage } from "./pages/TaxPage";
-import { TasksPage } from "./pages/TasksPage";
-import { VouchersPage } from "./pages/VouchersPage";
-import { AuditPage } from "./pages/AuditPage";
-import { KnowledgePage } from "./pages/KnowledgePage";
-import { BankingPage } from "./pages/banking/BankingPage";
-import { InvoicesPage } from "./pages/invoices/InvoicesPage";
 import { LEGACY_ENTRY_ALIASES } from "./lib/entry-guidance";
+
+// Route-level code splitting: each page loads as its own chunk on demand.
+// Pages use named exports, so map them to the default the lazy loader expects.
+const ChairmanDashboardPage = lazy(() => import("./pages/ChairmanDashboardPage").then((m) => ({ default: m.ChairmanDashboardPage })));
+const AssistantPage = lazy(() => import("./pages/AssistantPage").then((m) => ({ default: m.AssistantPage })));
+const PdfExportPage = lazy(() => import("./pages/PdfExportPage").then((m) => ({ default: m.PdfExportPage })));
+const ContractsPage = lazy(() => import("./pages/ContractsPage").then((m) => ({ default: m.ContractsPage })));
+const PayrollPage = lazy(() => import("./pages/PayrollPage").then((m) => ({ default: m.PayrollPage })));
+const PayrollTransferPage = lazy(() => import("./pages/PayrollTransferPage").then((m) => ({ default: m.PayrollTransferPage })));
+const MonthEndClosePage = lazy(() => import("./pages/MonthEndClosePage").then((m) => ({ default: m.MonthEndClosePage })));
+const MyDayPage = lazy(() => import("./pages/MyDayPage").then((m) => ({ default: m.MyDayPage })));
+const CounterpartiesPage = lazy(() => import("./pages/CounterpartiesPage").then((m) => ({ default: m.CounterpartiesPage })));
+const BillingPage = lazy(() => import("./pages/BillingPage").then((m) => ({ default: m.BillingPage })));
+const ArchivePackagePage = lazy(() => import("./pages/ArchivePackagePage").then((m) => ({ default: m.ArchivePackagePage })));
+const FeedbackPage = lazy(() => import("./pages/FeedbackPage").then((m) => ({ default: m.FeedbackPage })));
+const DocumentsPage = lazy(() => import("./pages/DocumentsPage").then((m) => ({ default: m.DocumentsPage })));
+const EventsPage = lazy(() => import("./pages/EventsPage").then((m) => ({ default: m.EventsPage })));
+const LedgerPage = lazy(() => import("./pages/LedgerPage").then((m) => ({ default: m.LedgerPage })));
+const ReportsPage = lazy(() => import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })));
+const RiskPage = lazy(() => import("./pages/RiskPage").then((m) => ({ default: m.RiskPage })));
+const RndPage = lazy(() => import("./pages/RndPage").then((m) => ({ default: m.RndPage })));
+const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const TaxPage = lazy(() => import("./pages/TaxPage").then((m) => ({ default: m.TaxPage })));
+const TasksPage = lazy(() => import("./pages/TasksPage").then((m) => ({ default: m.TasksPage })));
+const VouchersPage = lazy(() => import("./pages/VouchersPage").then((m) => ({ default: m.VouchersPage })));
+const AuditPage = lazy(() => import("./pages/AuditPage").then((m) => ({ default: m.AuditPage })));
+const KnowledgePage = lazy(() => import("./pages/KnowledgePage").then((m) => ({ default: m.KnowledgePage })));
+const BankingPage = lazy(() => import("./pages/banking/BankingPage").then((m) => ({ default: m.BankingPage })));
+const InvoicesPage = lazy(() => import("./pages/invoices/InvoicesPage").then((m) => ({ default: m.InvoicesPage })));
 
 const router = createBrowserRouter([
   {

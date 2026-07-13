@@ -17,6 +17,9 @@ export const env = {
   // dials this down via LOGIN_SCRYPT_COST_N so login hashing stays cheap under
   // a CPU-constrained runner). Must be a power of two > 1.
   loginScryptCostN: positiveIntEnv(process.env.LOGIN_SCRYPT_COST_N, 131072),
+  rateLimitWindowMs: positiveIntEnv(process.env.RATE_LIMIT_WINDOW_MS, 60 * 1000),
+  rateLimitMax: positiveIntEnv(process.env.RATE_LIMIT_MAX, 300),
+  authRateLimitMax: positiveIntEnv(process.env.AUTH_RATE_LIMIT_MAX, 10),
   databaseUrl: process.env.DATABASE_URL || null,
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || null,
   ollamaBaseUrl: process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434",
