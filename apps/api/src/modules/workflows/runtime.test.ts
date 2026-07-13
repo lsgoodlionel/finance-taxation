@@ -54,3 +54,37 @@ test("legacy object status adapters map to workflow states", () => {
   assert.equal(mapVoucherStatusToWorkflowState("review_required"), "under_review");
   assert.equal(mapPayrollTransferBatchStatusToWorkflowState("approved"), "awaiting_authorization");
 });
+
+test("analyze never crashes on seeded statuses outside the BusinessEventStatus union", () => {
+  // Seeded acceptance fixtures persist statuses ("needs_review",
+  // "pending_authorization", "ready") that are outside the compile-time
+  // BusinessEventStatus union. analyzeEvent maps the persisted status then runs
+  // the transition gate; an unmapped status previously yielded `undefined` and
+  // crashed `TRANSITIONS[undefined].includes(...)` with a 500.
+  for (const seededStatus of ["needs_review", "pending_authorization", "ready", "pending", "confirmed"]) {
+    const previousState = mapBusinessEventStatusToWorkflowState(
+      seededStatus as unknown as Parameters<typeof mapBusinessEventStatusToWorkflowState>[0]
+    );
+    assert.equal(previousState, "draft");
+    // The analyze target state is always "ready_for_review"; the gate must
+    // return a validation result instead of throwing.
+    assert.doesNotThrow(() => validateWorkflowTransition(previousState, "ready_for_review"));
+    assert.equal(validateWorkflowTransition(previousState, "ready_for_review").ok, true);
+  }
+});
+
+test("canTransitionWorkflowState tolerates an unknown previous state", () => {
+  assert.doesNotThrow(() =>
+    canTransitionWorkflowState(
+      "not_a_real_state" as unknown as Parameters<typeof canTransitionWorkflowState>[0],
+      "ready_for_review"
+    )
+  );
+  assert.equal(
+    canTransitionWorkflowState(
+      "not_a_real_state" as unknown as Parameters<typeof canTransitionWorkflowState>[0],
+      "ready_for_review"
+    ),
+    false
+  );
+});

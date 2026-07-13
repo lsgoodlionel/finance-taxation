@@ -1681,37 +1681,6 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
 
     await client.query(
       `
-        delete from voucher_draft_lines
-        where draft_id in (
-          select id from event_voucher_drafts
-          where company_id = $1 and business_event_id = $2
-        )
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from event_voucher_drafts
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from event_document_mappings
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from event_tax_mappings
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
         delete from document_attachment_records
         where document_id in (
           select id from generated_documents
@@ -1795,6 +1764,41 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
     await client.query(
       `
         delete from contract_object_links
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+    // Mapping tables are deleted last: generated_documents.mapping_id,
+    // tax_items.mapping_id and vouchers.mapping_id all reference them, so a
+    // re-analyze must remove those children first or the FK constraints abort
+    // the transaction (surfaced as analyze 500 on already-analyzed events).
+    await client.query(
+      `
+        delete from voucher_draft_lines
+        where draft_id in (
+          select id from event_voucher_drafts
+          where company_id = $1 and business_event_id = $2
+        )
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from event_voucher_drafts
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from event_document_mappings
+        where company_id = $1 and business_event_id = $2
+      `,
+      [target.companyId, target.id]
+    );
+    await client.query(
+      `
+        delete from event_tax_mappings
         where company_id = $1 and business_event_id = $2
       `,
       [target.companyId, target.id]
