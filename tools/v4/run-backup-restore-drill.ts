@@ -36,13 +36,18 @@ export interface DrillMeasurements {
   logArtifactPath: string;
 }
 
+// 生成器把 rpoHours/rtoHours <= 0 的源识别为未填写的占位模板并丢弃
+// (createRenderableBackupRestoreSource),因此实测值以 1 秒为最小分辨率下限:
+// 亚秒级的备份龄期/恢复耗时如实上报为「至多 1 秒」。
+const MIN_MEASURABLE_HOURS = Number((1 / 3600).toFixed(6));
+
 export function computeDrillHours(fromIso: string, toIso: string): number {
   const millis = new Date(toIso).getTime() - new Date(fromIso).getTime();
   if (!Number.isFinite(millis) || millis < 0) {
     throw new Error(`invalid drill interval: ${fromIso} -> ${toIso}`);
   }
   // 保留 6 位小数(≈4ms 粒度),避免长浮点噪音进入证据文件。
-  return Number((millis / 3_600_000).toFixed(6));
+  return Math.max(MIN_MEASURABLE_HOURS, Number((millis / 3_600_000).toFixed(6)));
 }
 
 export function buildBackupRestoreDrillSource(input: DrillMeasurements): BackupRestoreSourceInput {
