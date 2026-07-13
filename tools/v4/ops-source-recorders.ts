@@ -50,7 +50,7 @@ export interface AiEvalSourceInput {
   falsePositiveRate: number;
 }
 
-const OPS_SOURCE_SCHEMA_VERSION = "2026-07-ops-source-v1";
+export const OPS_SOURCE_SCHEMA_VERSION = "2026-07-ops-source-v1";
 
 function assertNonEmptyString(value: unknown, field: string) {
   if (typeof value !== "string" || value.trim() === "") {
