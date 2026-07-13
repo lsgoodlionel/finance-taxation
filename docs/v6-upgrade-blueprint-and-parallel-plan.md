@@ -1,0 +1,219 @@
+# V6 升级蓝图与并行开发计划 — 串联收口 · 体验合并 · AI 月结
+
+> 日期：2026-07-13
+> 编制方式：全代码库重扫（路由表/导航/接线点逐一核实）+ 2026-07 外部前沿刷新 + 承接 `docs/v5-upgrade-blueprint-and-parallel-plan.md`
+> 基线：`main`（V5 全车道已收敛，typecheck 绿 / API 单测 320 绿 / B2·C1 真实 PG 验证绿）
+> 定位：V5 解决了「工程底座」，V6 解决三件事——**① 全模块功能串联收口（纯核心接线）② 操作简便性与引导（同类功能合并、流程简化）③ AI 从问答升级为 Agent 干活（月结自动化）**
+
+---
+
+## 0. 执行摘要（TL;DR）
+
+- **现状**：业务纵深完整（26 页 / 206 API / 35 migrations），V5 交付了安全、架构、账务内核、多租户机制、7 个集成/AI 纯核心与 PWA 外壳。**但重扫证实：7 个纯核心 0 个接入 HTTP、`withTenantContext` 0 个业务调用点、入参校验仅覆盖 1/206 端点、RLS 未在任何业务表启用**——V5 的核心资产还躺在库里没通电。
+- **体验侧**：导航 8 组 25 项，同类功能至少 5 组重叠（导出×4 入口、票据×3 入口、上传识别×3 处、工作台×3 页、工资×2 页）；财税链路条只覆盖 6/26 页；`AssistantPage` 1022 行超标。用户从「一笔业务」到「凭证入账」仍需跨 4–5 页手动找入口。
+- **前沿刷新（2026-07）**：赛道已从「AI 问答」进入「**Agentic Close（AI 月结代理）**」——Pilot 发布全自主 AI Accountant，Digits 走 autonomous-first（AI 先做、人复核），Puzzle 发布 agent 月结方法论；共识模式是 **draft-then-approve（AI 起草分录/对账 → 批量呈报 → 人一键批准）**。本项目已有的「分级自动化决策门 + 月结向导 + 结转损益内核」恰好是这套模式的全部零件，**只差组装**。
+- **V6 主线**：Stage F 接线收口 → Stage G 功能合并与引导简化 → Stage H AI 月结 Agent（旗舰）→ Stage I 外部真连与商用试点。四个 Stage 拆 9 条并行车道。
+
+---
+
+## 1. 现状全貌核查（2026-07-13 重扫实证）
+
+### 1.1 规模盘点
+
+| 维度 | 实测值 |
+|---|---|
+| 前端路由 | 27 条（`apps/web/src/App.tsx:37`），26 个页面（`/boss-qa` 已 301 → `/assistant`） |
+| 导航结构 | 8 组 25 项（`AppLayout.tsx:70-149`）：业务入口 / 经营管理 / 财务运营 / 税务人力 / 研发风控 / 外部系统对接 / AI 与工具 / 系统 |
+| 后端路由 | **206 条**（`apps/api/src/routes/registry.ts`），最大域：payroll 18 · banking 13 · settings 11 |
+| 数据库 | migrations 001–035，约 45+ 张表 |
+| 测试 | 123 个测试文件（含 3 个 `*.integration.test.ts`）；E2E 13 spec（smoke 7 + scenarios 6） |
+| CI | `ci.yml` + `pr-review.yml` |
+
+### 1.2 接线缺口（V6-F 的直接输入，逐项核实）
+
+| V5 交付的纯核心 | 文件 | HTTP/持久层接线 |
+|---|---|---|
+| 票税一致性引擎 | `modules/tax-integration/consistency.ts` | ❌ 未接（registry 无引用） |
+| 开票连接器（诺诺槽） | `modules/tax-integration/invoicing/` | ❌ 未接 |
+| 审计 hash 链 | `security/hash-chain.ts` | ❌ 未接（审计写入未挂链） |
+| 调度退避 | `modules/jobs/schedule.ts` | ❌ 未接（无 job runner 进程） |
+| 数电票解析 | `modules/invoices/einvoice-parse.ts` | ❌ 未接（发票台账未调用） |
+| AI 分级自动化决策门 | `ai-agents/governance.ts` | ❌ 未接（assistant 未走门） |
+| API Key + Webhook HMAC | `security/api-credentials.ts` | ❌ 未接（无对外开放端点） |
+| 数据智能 | `modules/analytics/` | 🟡 仅 2 条（cash-forecast / revenue-comparison）；预算差异未接 |
+| 结转损益 | `modules/ledger/closing.ts` | ✅ 已接（`POST /api/ledger/periods/:id/close-income`） |
+
+多租户与安全覆盖面：
+
+- `withTenantContext`（`db/tenant.ts`）**除定义处外零调用点**；`migrations/` 中**无任何 `ENABLE ROW LEVEL SECURITY`**（RLS 证明只存在于集成测试临时建的表）→ C1 生产铺开度 ≈ 0。
+- `utils/validate.ts` 仅 `middleware/auth.ts`（login）一处接入 → 入参校验覆盖 **1/206**。
+- headers / rate-limit / redact ✅ 已全局生效（dispatch 层）。
+
+### 1.3 同类功能重叠清单（V6-G 合并对象）
+
+| # | 重叠组 | 现状入口 | 合并方向 |
+|---|---|---|---|
+| 1 | **导出类 ×4** | `/pdf-export`（688 行独立页）· `/archive-package` · 报表打印版 · 税务 printable（另有 4 条 `/api/exports` 路由） | 合并为一个「**导出与归档中心**」：场景卡片（月结包/审计包/单张凭证/工资条…）+ 历史记录；`/pdf-export`、`/archive-package` 下线，各业务页保留就地「导出」按钮直达对应场景 |
+| 2 | **票据类 ×3** | `/invoices` 发票台账 · `/documents` 单据中心 · `/banking` 银行流水 | 统一「**票据收件箱**」心智：任何来源（上传/邮件/数电票结构化/银行流水）进同一收纳管道 → AI 识别 → 分派到 单据/发票/流水 三个视图（同页 Tab），保留深链 |
+| 3 | **上传识别 ×3** | 单据 multipart 上传 · 知识库 `parse-documents` · 秘书 PDF 直传 | 抽公共「**智能上传识别管道**」组件 + 后端统一 `POST /api/ingest`（type=document/knowledge/chat），三处复用同一 UI 与解析链 |
+| 4 | **工作台类 ×3** | `/inbox` 我的一天 · `/tasks` 任务中心 · `/dashboard/chairman` 驾驶舱 | 按角色收敛：**财务视角默认落 `/inbox`（inbox-first，融合任务待办）**，`/tasks` 降级为 inbox 的「全部任务」视图；驾驶舱保留为老板视角只读页 |
+| 5 | **工资类 ×2** | `/payroll`（703 行）· `/payroll/transfer`（445 行） | 合并为「**工资域**」单入口：档案→计算→确认→代发→社保 一条向导流（现有工资向导扩到代发环节），导航减 1 项 |
+| 6 | AI 入口 ×2（已收敛 1 例） | `/boss-qa` → `/assistant` ✅ 已合并 | 继续：驾驶舱 AI 摘要与 assistant 共用同一后端会话上下文，避免两套 prompt 漂移 |
+
+### 1.4 串联断点（业务主链核查）
+
+财税链路条（`features/process-flow`）现覆盖 **6/26 页**：Assistant / Events / Vouchers / Tax / Risk / DocumentDetail。断点：
+
+1. **凭证过账后 → 报表/总账**：Reports、Ledger 页无链路条、无「来源事项」回溯；
+2. **报表 → 申报**：有直达按钮，但申报完成后 → 归档（archive-package）需手动找入口；
+3. **发票台账 / 银行管理**（外部对接组）完全游离于链路条之外，对账结果不回写事项链路；
+4. **月度结账向导**（`/close`，146 行）只是 checklist，不驱动实际动作（结转、快照、申报、归档均需跳出手动做）——这正是 Stage H 的组装点。
+
+引导现状：双主入口文案（`lib/entry-guidance.ts`）+ CommandPalette ⌘K + GlobalPeriodPicker + 导航角标已就位；缺**场景级引导**（"发工资"、"收到发票"、"要报税"一键进入对应流程）与**空状态下一步建议**。
+
+---
+
+## 2. 外部对标刷新（2026-07）
+
+V5 蓝图 §3 的调研（复式记账铁律 / 分层对接策略 / 金税四期卖点）仍然成立，本节只做增量刷新：
+
+- **Agentic Close 成为赛道主叙事**：[Pilot 2026-02 发布全自主 AI Accountant](https://cfotech.asia/story/ai-agents-shake-up-accounting-firms-bookkeeping-workflows)（onboarding→月结零人工）；[Puzzle 发布 AI Agent 月结方法论](https://puzzle.io/blog/ai-agents-month-end-close-guide)；Deloitte 2026-01：63% 财务组织已全面部署 AI。
+- **两种人机模式分化**：Digits 走 **autonomous-first**（AI 先做、人复核结果）；主流稳妥派走 **draft-then-approve**（每笔 AI 起草的分录/对账例外先进复核队列，批量呈报、借贷全显、一键批准）——后者与本项目已有的 `governance.ts` 分级决策门完全同构，**V6 采用 draft-then-approve，本项目差异化在「硬校验绝不交 LLM」+ hash 链留痕**。
+- **准确率是商用门槛**：行业公开口径为标准报表准备 95%+ 准确率；意味着 V6 必须建立**自动分录评测集**（用 migration 015 的 28 个首年场景作黄金标注集，是现成资产）。
+- **开源侧**：[Bigcapital](https://openalternative.co/compare/bigcapital/vs/erpnext)（同栈参照）与 ERPNext 仍是域模型教科书；ERPNext 的 AI 均为外挂 add-on（changAI/NextAI），**开源界尚无「记账内核 + 原生 AI 治理门」一体的产品——这是本项目的空位**。Midday（TS/React，inbox-first + 时间轴 + magic inbox 邮件收票）是票据收件箱与极简 UX 的最佳交互参照。
+- **中国合规**：数电票为默认形态、报税层无官方自助 API、乐企对 SME 不可及——V5 结论不变，开票/查验层走诺诺沙箱仍是唯一可真连路径。
+
+来源：[cfotech.asia](https://cfotech.asia/story/ai-agents-shake-up-accounting-firms-bookkeeping-workflows) · [puzzle.io agent close guide](https://puzzle.io/blog/ai-agents-month-end-close-guide) · [puzzle.io best AI finance agents](https://puzzle.io/blog/best-ai-finance-agents) · [dualentry AI in accounting 2026](https://www.dualentry.com/blog/ai-in-accounting) · [openalternative Bigcapital vs ERPNext](https://openalternative.co/compare/bigcapital/vs/erpnext)
+
+---
+
+## 3. V6 设计原则（产品北极星）
+
+> **从「26 页功能工具箱」→「三屏 AI 财税工作台」**：
+> ① **收件箱（Inbox）** —— 所有待办、票据、审批、AI 草稿在一处，处理完即归零；
+> ② **对话（Copilot）** —— 提问、上传、指挥 Agent 干活的统一入口；
+> ③ **账簿（Books）** —— 凭证/总账/报表/税务等结果页，只读复核 + 导出。
+> 其余页面全部是这三屏的下钻视图。**衡量指标：完成"收到一张发票→入账"从 ~12 次点击降到 ≤4 次；月结从跨 6 页手动操作降到向导内一键驱动 + 逐项批准。**
+
+硬原则（继承 V5 并加严）：金额硬校验/借贷平衡绝不交 LLM；AI 只产草稿，入账必经人批准（draft-then-approve）；每个 AI 动作过 `governance.ts` 决策门并挂 hash 链留痕。
+
+---
+
+## 4. V6 升级蓝图（四 Stage）
+
+### Stage F — 接线收口：让 V5 资产通电（1.5–2 周，P0）
+
+**目标**：§1.2 表格全部变 ✅，无新功能，只做「核心→HTTP→持久层→前端消费」。
+
+- **F1 票税一致性上线**：`consistency.ts` → `GET /api/tax-integration/consistency`（按期间比对进销项/税负）+ 持久化预警记录 → 风险勾稽页新增「票税比对」Tab + 税务中心横幅预警。
+- **F2 审计链挂载**：`writeAudit` 写入时串 `hash-chain.ts`（prev_hash 列，migration 036）；审计页显示链校验状态；提供 `GET /api/audit/verify-chain`。
+- **F3 数电票解析接线**：发票台账上传 XML/OFD → `einvoice-parse.ts` → 结构化落库 + 价税校验结果展示（为 Stage G 票据收件箱铺路）。
+- **F4 AI 决策门接线**：assistant 的「建议创建事项/凭证」动作全部改走 `governance.ts` 分级门（auto/confirm/deny），返回决策级别给前端呈现。
+- **F5 调度 runner**：以 `jobs/schedule.ts` 起最小 job runner（`setInterval` 轮询 jobs 表即可，暂不引 pg-boss），承接：申报到期提醒、逾期任务扫描、快照定时生成。
+- **F6 开放能力**：`api-credentials.ts` → API Key 管理端点 + 1 个 Webhook 事件（凭证过账）打通端到端。
+- **F7 analytics 补全**：预算差异端点 + 报表页消费三个 analytics 端点（图表化）。
+- **F8 多租户生产铺开（高风险，独立车道）**：migration 037 给核心业务表加 `tenant_id` + `ENABLE ROW LEVEL SECURITY` + 策略；`dispatch.ts` 统一注入 `withTenantContext`（一处接入覆盖 206 路由，而非逐 handler 改）；建非超级用户 app 角色；DB 集成测试扩到 ≥5 张核心表。
+- **F9 校验覆盖**：`utils/validate.ts` schema 声明入路由表（`RouteDef` 加 `bodySchema` 字段，dispatch 统一校验），POST/PUT 端点覆盖 100%。
+
+### Stage G — 功能合并与引导简化（2 周，P0，可与 F 并行）
+
+**目标**：§1.3 五组重叠合并落地，导航 25 项 → **≤17 项**；主链无断点。
+
+- **G1 导出与归档中心**（合并组 1）：新 `ExportCenterPage`（场景卡片 + 历史）；`/pdf-export`、`/archive-package` 路由 301；各业务页「导出」按钮带参深链。
+- **G2 票据收件箱**（合并组 2+3，借鉴 Midday magic inbox）：统一 `POST /api/ingest` 收纳管道（复用 F3 解析）；`/documents`、`/invoices`、`/banking` 流水导入合并为「票据中心」三 Tab；抽公共 `SmartUploadDropzone` 组件供知识库/秘书复用。
+- **G3 inbox-first 工作台**（合并组 4）：`/inbox` 吸收任务待办、审批请求、AI 草稿（为 Stage H 预留队列区）、风险预警四类卡片；`/tasks` 变为其全量视图；登录后默认落 `/inbox`。
+- **G4 工资域合并**（合并组 5）：工资向导扩为 档案→计算→确认→代发→社保申报 五步；`/payroll/transfer` 并入；导航减 1。
+- **G5 链路条全覆盖**：process-flow 扩到 Reports/Ledger/票据中心/导出中心（§1.4 断点 1–3 闭合）；每个结果页固定「← 来源事项 / 下一步 →」导航条。
+- **G6 场景引导 v2**：CommandPalette 增加**场景动词**（"发工资 / 收到发票 / 要报税 / 月底结账"→ 直达对应向导第一步）；全站空状态组件带「下一步建议 + 一键示例数据」；新手 checklist（公司信息→科目→首笔事项→首张凭证）。
+- **G7 大页拆分**：`AssistantPage` 1022 行拆为 会话/流程图/建议动作 三模块（<400 行/文件）；Payroll、PdfExport、Settings、Events 同步拆到 <500 行。
+
+### Stage H — AI 月结 Agent（旗舰，2–3 周，P1，依赖 F4/F5/G3）
+
+**目标**：把「月度结账向导」从 checklist 升级为 **draft-then-approve 的 Agentic Close**——对标 Puzzle/Digits，2026 年的核心竞争位。
+
+- **H1 自动分录草稿**：事项→分录建议器（规则引擎优先命中 + LLM 兜底分类），全部产出为 `draft` 凭证进 inbox 草稿队列，借贷全显、来源留痕、过 governance 门。
+- **H2 月结 Agent 编排**：月结向导逐步自动执行——未入账事项清扫→折旧/摊销草稿→社保工资计提核对→票税一致性检查（F1）→结转损益（已有端点）→快照→申报底稿生成→归档包（G1）；每步产出草稿/检查结果，人逐项批准后推进；全程 hash 链留痕（F2）。
+- **H3 准确率评测集**：以 migration 015 的 28 个首年场景为黄金集，建 `ai/evals/journal-entry-bench`，CI 报告分类准确率；**M4 验收「自动记账 ≥80%」在此闭环**。
+- **H4 异常检测**：规则型（重复付款/断号发票/周末大额/税负突变）进 inbox 预警卡片，与风险勾稽引擎合流。
+
+### Stage I — 外部真连与商用试点（2–3 周，P1/P2，外部依赖强）
+
+- **I1 诺诺沙箱真连**：`InvoiceProvider` 接 `sandbox.nuonuocs.cn`（需申请凭证），开票/查验闭环 → 票税一致性用真实数据。
+- **I2 企微/钉钉通知**：审批请求、风险预警、月结完成推送（需企业凭证）。
+- **I3 多租户试点**：F8 之上造 3 家企业数据，验证隔离 + 计费联动（M2 收口）。
+- **I4 移动审批**：PWA 深化——inbox 卡片移动端审批（批准 AI 草稿）、BottomSheet、暗色模式（M5 收口）。
+- **I5 生产部署**：secrets 轮换、TLS、备份演练、安全扫描 0 CRITICAL、覆盖率 ≥60% 门禁 + E2E 扩到「票据→草稿→批准→月结」新主链。
+
+### 里程碑
+
+| 里程碑 | 验收标准 |
+|---|---|
+| **M6.0 通电** | §1.2 表全 ✅：7 核心接线 + RLS 铺开(≥5 表) + 校验 100% POST/PUT + 调度 runner 跑通 |
+| **M6.1 简化** | 导航 ≤17 项 · 发票→入账 ≤4 次点击（E2E 断言）· 链路条覆盖主链全部结果页 · 无 >800 行页面 |
+| **M6.2 AI 月结** | 月结向导一键驱动全步骤 · 自动分录评测 ≥80%（28 场景基准）· 全部 AI 动作过门 + 上链 |
+| **M6.3 商用** | 诺诺沙箱真连 · 3 租户隔离运行 · 移动审批 · 安全扫描 0 CRITICAL + 覆盖率 ≥60% |
+
+---
+
+## 5. 并行车道分派（可直接开工）
+
+沿用既有协作模型：每车道独立 worktree + `codex/v6-*` 分支从最新 `main` 切出；共享文件仅集成车道可改。
+
+**高冲突共享文件（业务车道禁改，走集成窗口）**：`apps/api/src/routes/registry.ts`、`router/dispatch.ts`、`apps/web/src/App.tsx`、`AppLayout.tsx`、`lib/api.ts`、`packages/domain-model/src/index.ts`、`package.json`、`.github/workflows/*`。
+> 注：F 阶段多数车道需要在 registry.ts 注册路由——各车道在自己模块内导出 `xxxRoutes: RouteDef[]` 数组，由集成车道每日窗口统一并入 registry，避免冲突。
+
+### 波次与车道
+
+```
+波次 1（并行）：F 系接线（4 车道）+ G7 大页拆分
+波次 2（并行，依赖波次 1 部分合入）：G1–G6 合并简化（3 车道）
+波次 3（并行）：H 月结 Agent · I4 移动 · I5 生产化
+外部凭证到位即插入：I1 诺诺 · I2 企微 · I3 租户试点
+```
+
+| 车道 | 分支 | 范围 | 依赖 | 完成定义 |
+|---|---|---|---|---|
+| K0 集成/共享文件 | `codex/v6-integration` | 唯一可改共享文件；每日合并窗口 | — | registry/导航/路由变更全部经此合入，CI 全绿 |
+| K1 集成接线 | `codex/v6-wire-integration` | F1/F2/F3/F6：tax-integration、hash-chain、einvoice、api-credentials 模块内 | — | 4 组核心接 HTTP+持久化+前端消费，集成测试绿 |
+| K2 AI 接线与治理 | `codex/v6-wire-ai` | F4/F7 + H3 评测集地基：ai-agents、analytics、assistant 模块 | — | 决策门生效、analytics 3 端点图表化、评测集跑通 |
+| K3 调度与开放 | `codex/v6-jobs-runner` | F5：jobs 模块 + runner 进程 | — | 3 类定时任务跑通，退避可观测 |
+| K4 多租户铺开 | `codex/v6-rls-rollout` | F8/F9：migrations、db/tenant、dispatch（经 K0） | — | ≥5 表 RLS + 全路由租户上下文 + 校验 100%，**高风险：PR + SME 评审** |
+| K5 UX 合并·导出与票据 | `codex/v6-ux-merge-io` | G1/G2：导出中心、票据中心、ingest 管道 | K1(F3) | 导航减 3 项，旧路由 301，E2E 更新 |
+| K6 UX 合并·工作台与工资 | `codex/v6-ux-merge-work` | G3/G4：inbox-first、工资域合并 | — | 导航减 2 项，inbox 四类卡片，工资五步向导 |
+| K7 引导与链路 | `codex/v6-guidance` | G5/G6/G7：process-flow 扩展、场景命令、空状态、大页拆分 | — | 链路条全覆盖、场景动词 ≥4 个、无 >800 行页面 |
+| K8 月结 Agent | `codex/v6-agentic-close` | H1/H2/H4：close 向导、草稿队列、异常检测 | K2/K3/K6 | M6.2 全项，**高风险：PR + SME 评审** |
+| K9 移动与生产化 | `codex/v6-mobile-prod` | I4/I5：PWA 审批、暗色、E2E/覆盖率/扫描门禁 | K6 | M6.3 的非外部凭证项 |
+
+### 每车道验收门禁（沿用 V5 八项，证据落 `artifacts/v6/<lane>/`）
+
+1 typecheck:v2 绿 · 2 车道单测绿 · 3 相关集成/E2E 绿 · 4 无新增 CRITICAL · 5 不触共享文件（或经 K0）· 6 PR 含范围/验证/风险/回滚 · 7 高风险域（K4/K8 + 账务/税规）SME 评审 · 8 进度板回写。
+
+### 启动命令模板
+
+```bash
+cd /Users/lionel/Develop/FT
+git fetch origin
+git worktree add ../ft-v6-<lane> -b codex/v6-<lane> main
+# 进入后：npm install && npm run typecheck:v2 && npm run test:api
+```
+
+---
+
+## 6. 立即启动的 3 件事
+
+1. **K1+K2 接线双车道开工**（无外部依赖、无共享文件冲突、收益立现）：优先 F1 票税一致性与 F4 决策门——这两个是产品差异化卖点，通电即形成演示价值。
+2. **K4 租户铺开设计评审先行**：`dispatch.ts` 统一注入 `withTenantContext` 的方案（一处覆盖 206 路由）+ RLS migration 草案，先出 PR 讨论再动手——这是 V6 风险最高的改动。
+3. **申请外部凭证**（长周期，今天就发起）：诺诺沙箱账号、企微自建应用——Stage I 的日历时间由它们决定，代码槽位已就绪。
+
+---
+
+## 附录 · 本次核查关键证据索引
+
+- 路由全集：`apps/web/src/App.tsx:37-70` · 导航分组：`apps/web/src/components/AppLayout.tsx:70-149`
+- 后端路由表：`apps/api/src/routes/registry.ts`（206 条；analytics 仅 :1012-1013 两条）
+- 未接线核心：`grep` 证实 consistency/invoicing/hash-chain/jobs/einvoice-parse/governance/api-credentials 在 registry.ts 零引用
+- 租户零调用：`withTenantContext` 仅存在于 `apps/api/src/db/tenant.ts`；`migrations/` 无 RLS 语句
+- 校验覆盖：`utils/validate.ts` 仅 `middleware/auth.ts` 引用
+- 入口引导：`apps/web/src/lib/entry-guidance.ts`（双主入口 + boss-qa 别名）
+- 链路条覆盖：`features/process-flow` 用于 Assistant/Events/Vouchers/Tax/Risk/DocumentDetail 共 6 页
+- 页面规模：AssistantPage 1022 · PayrollPage 703 · PdfExportPage 688 · SettingsPage 665 · EventsPage 655
