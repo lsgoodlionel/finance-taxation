@@ -15,3 +15,4 @@ artifacts/v4/**/*.webm
 artifacts/v4/**/*.trace
 .superpowers/
 .DS_Store
+artifacts/v4/baseline/ops-sources/evidence/
