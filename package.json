@@ -22,6 +22,7 @@
     "v4:report": "node --import tsx tools/v4/generate-acceptance-report.ts",
     "v4:ops:init-sources": "node --import tsx tools/v4/run-init-ops-sources.mjs",
     "v4:ops:record": "node --import tsx tools/v4/record-ops-source.ts",
+    "v4:ops:drill:backup-restore": "node --import tsx tools/v4/run-backup-restore-drill.ts",
     "v4:ops": "bash tools/v4/run-production-gates-generation.sh",
     "v4:feedback:submit": "node --import tsx tools/v4/submit-failures-to-feedback.ts",
     "v4:test:db:start": "docker compose -p finance-taxation-v4-test -f docker-compose.test.yml up -d --wait db",
