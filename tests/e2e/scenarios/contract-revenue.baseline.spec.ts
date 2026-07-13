@@ -20,7 +20,8 @@ test("contract revenue baseline closes the core contract-to-revenue loop", async
   loginAsRole
 }, testInfo) => {
   await loginAsRole("tax");
-  // On tablet viewports the nav collapses behind the trigger button, so accept either.
+  // 平板窄屏下侧边「主导航菜单」收起为「打开导航菜单」汉堡按钮,用与 auth fixture
+  // 一致的容错选择器,避免 tablet 视口下误判失败。
   await expect(
     page.getByRole("button", { name: "打开导航菜单" }).or(page.getByLabel("主导航菜单"))
   ).toBeVisible();

@@ -6,8 +6,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/**/*.test.ts",
-    "test:serial": "tsx --test --test-concurrency=1 src/**/*.test.ts",
+    "test": "npm run test:unit",
+    "test:unit": "tsx --test --test-concurrency=1 $(find src -name '*.test.ts' ! -name '*.integration.test.ts')",
+    "test:integration": "tsx --test --test-concurrency=1 $(find src -name '*.integration.test.ts')",
     "dev": "tsx watch src/main.ts",
     "db:migrate": "tsx src/db/migrate.ts"
   },

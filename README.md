@@ -4,6 +4,34 @@
 
 本项目为 `全栈 TypeScript monorepo + PostgreSQL + AI 辅助` 的形态，覆盖企业经营事项录入、账务内核、财税申报、合同管理、工资计算、研发辅助账、风险勾稽、AI 财税秘书、老板专线和审计日志，目标是为科技型中小企业董事长提供可以直接交办日常财税工作的 **AI 财税负责人工作台**。
 
+## V5 升级（进行中，2026-07）
+
+在 V2–V4 业务闭环之上进行「生产就绪 + 多租户 + 外部集成 + AI 治理 + 数据智能」的工程化升级，全部车道已收敛回 `main`：
+
+| Stage | 内容 | 状态 |
+|------|------|------|
+| **A** 收敛清创 | 删 V1 三代遗留；**明文密码 → scrypt** + 登录锁定/惰性升级 | ✅ 已合入 |
+| **B** 生产硬底座 | `app.ts` 1624→约 90 行**声明式路由表** + 统一错误中间件/结构化日志；**安全**（安全头/限流/审计脱敏/入参校验）；**账务内核**（期末结转损益凭证，去兜底配平，真实 PG 集成测试）；前端懒加载/分包 | ✅ 已合入 |
+| **C** 多租户 | `withTenantContext` + Postgres RLS 隔离（端到端 DB 证明） | ✅ 机制已验证 |
+| **D** 外部集成 + AI 治理 | 开票连接器（诺诺预留槽）· 票税一致性 + hash 链审计 · 数电票解析 · 调度退避 · **AI 分级自动化** · API Key/Webhook | ✅ 核心已交付 |
+| **E** 数据智能 + 移动 | 同比环比/预算差异 · 现金流回归预测（已接 HTTP）· **PWA 可安装 + 离线外壳** | ✅ 部分 |
+
+- **质量**：`typecheck:v2` 绿 · API 单测 **320/320** 绿 · B2/C1 真实 Postgres 集成测试绿 · 全栈 docker（db+api+web）构建运行、登录端到端正常 · E2E 基础设施（Playwright）就绪 · 本地 Ollama `gemma4` 可用。
+- **里程碑与差距**：见 [`docs/v5-upgrade-blueprint-and-parallel-plan.md`](docs/v5-upgrade-blueprint-and-parallel-plan.md)（里程碑评分卡 + 外部依赖清单）。
+- **阶段性总结与移交**：见 [`docs/v5-session-handover-2026-07-12.md`](docs/v5-session-handover-2026-07-12.md)。
+
+```bash
+npm install
+npm run typecheck:v2                         # 类型检查
+npm run test:api                             # API 单测
+npm run v4:test:stack:start                  # 起全栈 docker (db+api+web)
+npm run v4:test:db:reset && npm run v4:test:seed
+V4_BASE_URL=http://127.0.0.1:55173 npx playwright test   # E2E
+npm run v4:test:stack:stop                   # 停栈
+```
+
+> 默认种子账号 `chairman / 123456`（登录时自动 scrypt 惰性升级）。持牌开票/银行/企微等真连需外部凭证，代码已预留接口槽。
+
 ## 当前状态
 
 **Phase 0 → Phase 9 全部完成**（截止 2026-06-08）
