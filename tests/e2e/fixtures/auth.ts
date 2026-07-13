@@ -49,11 +49,12 @@ export async function loginAs(page: Page, role: V4Role): Promise<void> {
       }).toBeTruthy();
       return;
     } catch (error) {
-      const loginError = page.getByText(/Request failed|登录失败|AUTH_REQUIRED/i);
+      const loginError = page.getByText(/Request failed|登录失败|AUTH_REQUIRED|Too Many Requests/i);
       if (attempt === 2 || !(await loginError.isVisible().catch(() => false))) {
         throw error;
       }
-      await page.waitForTimeout(1_000);
+      // Back off progressively — rate-limit style errors need more headroom than 1s.
+      await page.waitForTimeout((attempt + 1) * 2_000);
     }
   }
 }

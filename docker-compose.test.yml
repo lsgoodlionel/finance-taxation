@@ -24,6 +24,11 @@ services:
       NODE_ENV: test
       JWT_SECRET: v4-test-only-secret-not-for-production
       ANTHROPIC_API_KEY: ""
+      # E2E workers all share one client IP; production defaults
+      # (10 logins/min, 300 req/min per IP) trip mid-suite and surface as
+      # nondeterministic "Too Many Requests" login failures. Test stack only.
+      RATE_LIMIT_MAX: "100000"
+      AUTH_RATE_LIMIT_MAX: "10000"
     ports:
       - "33100:3100"
     depends_on:

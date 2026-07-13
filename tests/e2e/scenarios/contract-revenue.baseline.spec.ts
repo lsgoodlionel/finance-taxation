@@ -20,7 +20,10 @@ test("contract revenue baseline closes the core contract-to-revenue loop", async
   loginAsRole
 }, testInfo) => {
   await loginAsRole("tax");
-  await expect(page.getByLabel("主导航菜单")).toBeVisible();
+  // On tablet viewports the nav collapses behind the trigger button, so accept either.
+  await expect(
+    page.getByRole("button", { name: "打开导航菜单" }).or(page.getByLabel("主导航菜单"))
+  ).toBeVisible();
 
   const token = await apiClient.login("v4_tax", "V4-test-123456");
   const detail = await ensureEventAnalyzed(apiClient, token, CONTRACT_FIXTURE.eventTitle);
