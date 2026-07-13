@@ -9,6 +9,11 @@ export function registerServiceWorker(): void {
   if (import.meta.env.DEV) {
     return;
   }
+  // 自动化/E2E 环境（Playwright 等设置 navigator.webdriver）不注册 SW：
+  // 避免 app 外壳/资源缓存在顺序化测试间引入不确定性。
+  if (navigator.webdriver) {
+    return;
+  }
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch(() => {
       // SW 注册失败不应影响应用可用性
