@@ -14,7 +14,7 @@
     "test:api:integration": "npm run -w @finance-taxation/api test:integration",
     "test:web:runner": "node --test tools/v4/run-web-tests.test.mjs",
     "test:web": "npm run test:web:runner && node tools/v4/run-web-tests.mjs",
-    "test:db": "node --import tsx --test tools/v4/*.integration.test.ts",
+    "test:db": "node --import tsx --test --test-concurrency=1 tools/v4/*.integration.test.ts",
     "test:v4:tools": "node --import tsx --test $(find tools/v4 -name '*.test.ts' ! -name '*.integration.test.ts')",
     "test:unit": "npm run test:api && npm run test:web",
     "test:e2e": "playwright test",
