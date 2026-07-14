@@ -228,6 +228,10 @@ import {
 } from "../modules/invoices/invoice.routes.js";
 // E1/E2 数据智能
 import { cashForecastRoute, revenueComparisonRoute, budgetVarianceRoute } from "../modules/analytics/routes.js";
+// H4-w2 异常检测扫描接线
+import { anomalyScanRoute } from "../modules/ai-agents/anomaly/anomaly.routes.js";
+import { generateCloseDrafts, listCloseDrafts, approveCloseDraft, rejectCloseDraft } from "../modules/ai-agents/close/close-drafts.routes.js";
+import { closePlanRoute } from "../modules/ledger/close-plan.routes.js";
 import { parseAndStoreEInvoice } from "../modules/invoices/einvoice.routes.js";
 import { taxConsistencyRoute } from "../modules/tax-integration/consistency.routes.js";
 import { verifyAuditChain } from "../services/audit.js";
@@ -1021,6 +1025,18 @@ const routes: RouteDef[] = [
   { method: "GET", path: "/api/analytics/cash-forecast", auth: true, permission: "dashboard.view", handler: cashForecastRoute },
   { method: "GET", path: "/api/analytics/revenue-comparison", auth: true, permission: "dashboard.view", handler: revenueComparisonRoute },
   { method: "GET", path: "/api/analytics/budget-variance", auth: true, permission: "dashboard.view", handler: budgetVarianceRoute },
+
+  // H4-w2 异常检测扫描（规则型纯核心接线，只读）
+  { method: "GET", path: "/api/anomaly/scan", auth: true, permission: "risk.view", handler: anomalyScanRoute },
+
+  // H2-w2 月结编排（只读）
+  { method: "GET", path: "/api/ledger/close-plan", auth: true, permission: "ledger.view", handler: closePlanRoute },
+
+  // H1-w2 草稿队列 draft-then-approve（generate/list/approve/reject；静态路径在 :id 之前）
+  { method: "POST", path: "/api/close/drafts/generate", auth: true, permission: "ledger.post", handler: generateCloseDrafts },
+  { method: "GET", path: "/api/close/drafts", auth: true, permission: "ledger.view", handler: listCloseDrafts },
+  { method: "POST", path: "/api/close/drafts/:id/approve", auth: true, permission: "ledger.post", handler: (req, res, p) => approveCloseDraft(req, res, p.id!) },
+  { method: "POST", path: "/api/close/drafts/:id/reject", auth: true, permission: "ledger.post", handler: (req, res, p) => rejectCloseDraft(req, res, p.id!) },
 
   // V6 Stage F 接线：票税一致性 / 审计 hash 链校验 / AI 分级决策门 / 开放能力
   { method: "GET", path: "/api/tax-integration/consistency", auth: true, permission: "tax.view", handler: taxConsistencyRoute },
