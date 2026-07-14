@@ -7,7 +7,26 @@
 
 ---
 
-## 执行进展 · Stage G 功能合并与引导（更新 2026-07-14，分支 `codex/v6-stage-g`，未提交）
+## 执行进展 · Stage H AI 月结 Agent（旗舰，更新 2026-07-14，分支 `codex/v6-stage-h`）
+
+> 入场策略：账务逻辑高风险，按协作约束先建**可测纯核心 + 评测集**（不含自动过账/HTTP/DB 写入），把风险接线留给后续 PR + SME 评审。4 车道多 agent 并行，全部纯函数 + 单测。验证：api typecheck 绿 · API 单测 **378/378**（+50）。
+
+| 车道 | 交付 | 关键点 |
+|---|---|---|
+| H3 自动分录评测集 | `ai-evals/journal-entry-bench.ts`（24 黄金集）+ 测试断言 accuracy ≥0.8 | **实测 95.8%** 通过 M4 门 |
+| H1 草稿提案纯核心 | `ai-agents/close/draft-proposal.ts` `buildDraftProposal` | 借贷平衡**硬校验不交 LLM**；不平衡/needsReview/空行 → 强制 manual；本函数只产提案、绝不入账 |
+| H2 月结编排纯核心 | `ledger/close-plan.ts` `buildClosePlan` | 8 步有序状态机（清扫→折旧→计提→票税→结转→快照→申报→归档）；前置未完则后续 blocked；票税 alert 卡 in_review |
+| H4 异常检测纯核心 | `ai-agents/anomaly/detectors.ts` | 重复付款/断号发票/周末大额/税负突变 4 检测器 + 聚合 |
+
+**评测暴露的两处关键真相（供后续 wave 决策，非放宽阈值）**：
+1. `suggestAccountingEntry` **所有分支恒 `needsReview:true`** → 经 draft-proposal 真实路径 level 永远 = manual（符合「入账必经人批准」，但当前无「高置信可自动生成草稿」路径）。
+2. 28 首年场景中 general/financing/rnd/tax 四类（约 53%）**无分录模板** → 恒返回 null+needsReview。已支持类型分类准确率 95.8%，但按真实类型分布的「全自动覆盖率」约 46%。→ 后续应**增强 accounting-agent 覆盖更多类型 + 区分进项/销项发票**，而非调低门槛。
+
+**Stage H 剩余（高风险，需 PR + SME 评审）**：H1→草稿凭证入 `event_voucher_drafts` 队列 + inbox 草稿卡（G3 占位）接线；H2→月结向导 HTTP 端点 + 逐步批准驱动（结转/快照/归档串联，全程 hash 链留痕 F2）；H4→接 HTTP + inbox 预警卡 + 与风险勾稽合流；accounting-agent 类型覆盖增强。
+
+---
+
+## 执行进展 · Stage G 功能合并与引导（更新 2026-07-14，分支 `codex/v6-stage-g`，PR #7）
 
 > 多 agent 并行（3 波共 9 车道），各 agent 在自有模块内构建、主控串行集成 App.tsx/AppLayout.tsx。验证：web typecheck 绿 · web 单测 57/57 · 生产构建通过。**导航 26 → 17 项（达成 ≤17 目标）**。PR #7（stacked on F 的 PR #6）。
 
