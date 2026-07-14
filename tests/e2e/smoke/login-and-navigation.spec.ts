@@ -2,8 +2,8 @@ import { test, expect, loginAs } from "../fixtures/auth";
 
 test("chairman can enter the application", async ({ page }) => {
   await loginAs(page, "chairman");
-  await expect(page).toHaveURL(/\/assistant$/);
-  await expect(page.getByRole("heading", { name: "AI 财税助手" })).toBeVisible();
+  await expect(page).toHaveURL(/\/inbox$/);
+  await expect(page.getByRole("heading", { name: "我的一天" })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "打开导航菜单" }).or(page.getByLabel("主导航菜单"))
   ).toBeVisible();

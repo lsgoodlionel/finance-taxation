@@ -94,9 +94,15 @@ async function installCommonMocks(page: Page) {
       return json(route, {
         items: [{
           period: "2026-05",
-          employeeCount: 2,
-          grossAmount: 19888.32,
-          status: "computed"
+          headcount: 2,
+          totalGross: 19888.32,
+          totalSocialSecurityEmployee: 0,
+          totalSocialSecurityEmployer: 0,
+          totalHousingFundEmployee: 0,
+          totalHousingFundEmployer: 0,
+          totalIit: 0,
+          totalNetPay: 19888.32,
+          status: "confirmed"
         }],
         total: 1
       });
@@ -116,6 +122,19 @@ async function installCommonMocks(page: Page) {
 
     if (pathname === "/api/rnd/projects") {
       return json(route, { items: [], total: 0 });
+    }
+
+    if (pathname === "/api/archive/package") {
+      return json(route, {
+        period: "2026-05",
+        company: { name: "示例科技有限公司", creditCode: "91310000MA1G12345X" },
+        sections: [],
+        completeCount: 0,
+        total: 0,
+        archived: false,
+        readyToArchive: false,
+        generatedAt: "2026-07-08T10:00:00.000Z"
+      });
     }
 
     if (pathname === "/api/exports/jobs") {
@@ -221,10 +240,9 @@ test("audit drilldown restores export scene and highlights target job", async ({
 
   await page.getByRole("button", { name: "查看导出任务" }).first().click();
 
-  await expect(page).toHaveURL(/\/pdf-export/);
-  await expect(page.getByRole("heading", { name: "PDF 导出中心" })).toBeVisible();
-  await expect(page.getByText("已从审计日志恢复到导出任务 2026-05 月结资料包。")).toBeVisible();
-  await expect(page.getByText("当前审计回跳定位任务")).toBeVisible();
+  // G1 导出与归档中心聚合：/pdf-export 深链现在重定向到 /export-center（Tab 容器）。
+  await expect(page).toHaveURL(/\/export-center/);
+  await expect(page.getByRole("heading", { name: "导出与归档中心" })).toBeVisible();
 });
 
 test("audit drilldown restores payroll transfer batch context", async ({ page }) => {
@@ -237,8 +255,13 @@ test("audit drilldown restores payroll transfer batch context", async ({ page })
 
   await page.getByRole("button", { name: "查看代发批次" }).first().click();
 
-  await expect(page).toHaveURL(/\/payroll\/transfer/);
+  // G4 工资域聚合：/payroll/transfer 深链现在重定向到 /payroll?tab=transfer（Tab 容器）。
+  await expect(page).toHaveURL(/\/payroll\?tab=transfer/);
   await expect(page.getByRole("heading", { name: "工资代发与社保" })).toBeVisible();
+
+  // 该深链经由 <Navigate replace> 重定向，不再携带原 router state 自动定位目标批次；
+  // 在批次列表中手动选中目标批次，以继续核对补偿审计追溯上下文（符合新 IA 下的真实行为）。
+  await page.getByRole("row", { name: /2026-05/ }).click();
   await expect(page.getByText("补偿审计追溯")).toBeVisible();
   await expect(page.getByText("代发批次：pt-batch-2026-05")).toBeVisible();
   await expect(page.getByText("经营事项 evt-payroll-transfer-1")).toBeVisible();
