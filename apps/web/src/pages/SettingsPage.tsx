@@ -12,8 +12,10 @@ import {
 import type { CompanyProfile, AiConfigResponse, AiProviderInfo } from "../lib/api";
 import { buildResultPageSubtitle } from "../lib/entry-guidance";
 import { IntegrationSettingsTab } from "./settings/IntegrationSettingsTab";
+import { OpenApiSettingsTab } from "./settings/OpenApiSettingsTab";
+import { AutomationGovernanceTab } from "./settings/AutomationGovernanceTab";
 
-type Tab = "company" | "ai" | "integration" | "display" | "about";
+type Tab = "company" | "ai" | "integration" | "openApi" | "automation" | "display" | "about";
 
 // ─── Shared layout helpers ────────────────────────────────────────────────────
 
@@ -650,6 +652,8 @@ export function SettingsPage() {
           {tabBtn(tab === "company", () => setTab("company"), "公司信息")}
           {tabBtn(tab === "ai", () => setTab("ai"), "AI 配置")}
           {tabBtn(tab === "integration", () => setTab("integration"), "外部对接")}
+          {tabBtn(tab === "openApi", () => setTab("openApi"), "开放 API")}
+          {tabBtn(tab === "automation", () => setTab("automation"), "AI 自动化治理")}
           {tabBtn(tab === "display", () => setTab("display"), "显示设置")}
           {tabBtn(tab === "about", () => setTab("about"), "关于系统")}
         </div>
@@ -658,6 +662,8 @@ export function SettingsPage() {
       {tab === "company" && <CompanyTab />}
       {tab === "ai" && <AiConfigTab />}
       {tab === "integration" && <IntegrationSettingsTab />}
+      {tab === "openApi" && <OpenApiSettingsTab />}
+      {tab === "automation" && <AutomationGovernanceTab />}
       {tab === "display" && <DisplayTab />}
       {tab === "about" && <AboutTab />}
     </div>

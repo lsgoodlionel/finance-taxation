@@ -10,6 +10,7 @@ import { ResultBanner } from "../../components/ui/ResultBanner";
 import type { ReportsStatus, ReportsWorkbenchView } from "./report-types";
 import { getWorkbenchViewLabel } from "./reports-helpers";
 import { BalanceSheetPanel } from "./panels/BalanceSheetPanel";
+import { BudgetVariancePanel } from "./panels/BudgetVariancePanel";
 import { CashFlowPanel } from "./panels/CashFlowPanel";
 import { ChairmanSummaryPanel } from "./panels/ChairmanSummaryPanel";
 import { ProfitStatementPanel } from "./panels/ProfitStatementPanel";
@@ -23,6 +24,7 @@ type ReportsWorkbenchProps = {
   cashFlow: CashFlowReport | null;
   diff: ReportDiffResult | null;
   chairmanSummary: ChairmanReportSummary | null;
+  defaultPeriod: string;
 };
 
 export function ReportsWorkbench({
@@ -32,7 +34,8 @@ export function ReportsWorkbench({
   profitStatement,
   cashFlow,
   diff,
-  chairmanSummary
+  chairmanSummary,
+  defaultPeriod
 }: ReportsWorkbenchProps) {
   const activeViewLabel = getWorkbenchViewLabel(activeView);
   const summaryCards = resolveSummaryCards(activeView, {
@@ -99,6 +102,7 @@ export function ReportsWorkbench({
       {activeView === "cashFlow" ? <CashFlowPanel report={cashFlow} /> : null}
       {activeView === "diff" ? <ReportDiffPanel diff={diff} /> : null}
       {activeView === "chairman" ? <ChairmanSummaryPanel summary={chairmanSummary} /> : null}
+      {activeView === "budgetVariance" ? <BudgetVariancePanel defaultPeriod={defaultPeriod} /> : null}
     </section>
   );
 }

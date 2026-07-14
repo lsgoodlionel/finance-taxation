@@ -1,5 +1,6 @@
 import type { ServerResponse } from "node:http";
 import { query } from "../../db/client.js";
+import { runTenantScoped } from "../../db/tenant.js";
 import { searchKnowledgeForAi } from "../knowledge/routes.js";
 import { json } from "../../utils/http.js";
 import { streamChat, ocrImage, isAiConfigured } from "../../services/ai.js";
@@ -284,27 +285,28 @@ export async function chat(req: ApiRequest, res: ServerResponse): Promise<void> 
     return;
   }
 
-  let systemPrompt: string;
-
-  if (boss) {
-    const ctx = await loadBossContext(req.auth.companyId);
-    systemPrompt = buildBossSystemPrompt(ctx);
-  } else {
+  const companyId = req.auth.companyId;
+  // 取数阶段进入租户上下文（RLS 启用时），读完释放连接再流式输出。
+  const systemPrompt = await runTenantScoped(companyId, async () => {
+    if (boss) {
+      const ctx = await loadBossContext(companyId);
+      return buildBossSystemPrompt(ctx);
+    }
     const lastUserMessage = messages.filter((m) => m.role === "user").at(-1)?.content ?? "";
     const [ctx, knowledgeContext] = await Promise.all([
-      loadStaffContext(req.auth.companyId),
-      searchKnowledgeForAi(req.auth.companyId, lastUserMessage).catch(() => "")
+      loadStaffContext(companyId),
+      searchKnowledgeForAi(companyId, lastUserMessage).catch(() => "")
     ]);
-    systemPrompt = buildStaffSystemPrompt({
+    return buildStaffSystemPrompt({
       companyName: ctx.companyName,
       today: new Date().toLocaleDateString("zh-CN"),
       recentEvents: ctx.recentEvents,
       pendingTasks: ctx.pendingTasks,
       knowledgeContext
     });
-  }
+  });
 
-  await streamChat(res, systemPrompt, messages, req.auth.companyId);
+  await streamChat(res, systemPrompt, messages, companyId);
 }
 
 export async function ocr(req: ApiRequest, res: ServerResponse): Promise<void> {

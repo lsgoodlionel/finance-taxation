@@ -20,6 +20,11 @@ export const env = {
   rateLimitWindowMs: positiveIntEnv(process.env.RATE_LIMIT_WINDOW_MS, 60 * 1000),
   rateLimitMax: positiveIntEnv(process.env.RATE_LIMIT_MAX, 300),
   authRateLimitMax: positiveIntEnv(process.env.AUTH_RATE_LIMIT_MAX, 10),
+  // F8 多租户 RLS 请求级上下文注入。默认关闭：仅当以非属主 app 角色连接
+  // （DATABASE_URL 指向 finance_app）且核心表已启用 RLS 时才置 true 激活强制隔离。
+  tenantRlsEnabled: process.env.TENANT_RLS_ENABLED === "true",
+  schedulerEnabled: process.env.SCHEDULER_ENABLED !== "false",
+  schedulerIntervalMs: positiveIntEnv(process.env.SCHEDULER_INTERVAL_MS, 60 * 1000),
   databaseUrl: process.env.DATABASE_URL || null,
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || null,
   ollamaBaseUrl: process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434",

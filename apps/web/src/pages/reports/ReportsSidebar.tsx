@@ -29,7 +29,8 @@ const views: ReportsWorkbenchView[] = [
   "profitStatement",
   "cashFlow",
   "diff",
-  "chairman"
+  "chairman",
+  "budgetVariance"
 ];
 
 function cardStyle() {

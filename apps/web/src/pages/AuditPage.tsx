@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Button, Tag, message as antdMessage } from "antd";
+import { SafetyCertificateOutlined } from "@ant-design/icons";
 import type { AuditLog } from "@finance-taxation/domain-model";
-import { describePageLoadError, listAuditLogs } from "../lib/api";
+import { type AuditChainVerification, describePageLoadError, listAuditLogs, verifyAuditChain } from "../lib/api";
 import { normalizeDrilldownState, resolveAuditContextFromState } from "./drilldown";
 import { resolveInitialAuditExpansion } from "./risk-scope";
 import { AuditDetailPanel } from "./audit/AuditDetailPanel";
@@ -12,6 +14,27 @@ import { AuditWorkbenchHeader } from "./audit/AuditWorkbenchHeader";
 import { readAuditUrlState, writeAuditUrlState } from "./audit/audit-url-state";
 
 const RESOURCE_TYPES = ["", "business_event", "voucher", "document", "contract", "employee", "payroll", "payroll_transfer_batch", "export_job", "tax_item", "risk_finding"];
+
+type AuditChainVerifyPanelProps = {
+  verifying: boolean;
+  result: AuditChainVerification | null;
+  onVerify: () => void;
+};
+
+function AuditChainVerifyPanel({ verifying, result, onVerify }: AuditChainVerifyPanelProps) {
+  return (
+    <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+      <Button icon={<SafetyCertificateOutlined />} loading={verifying} onClick={onVerify}>
+        校验完整性
+      </Button>
+      {result && (
+        result.valid
+          ? <Tag color="success">审计链完整（共 {result.total} 条）</Tag>
+          : <Tag color="error">审计链在第 {result.brokenAt} 条断裂（共 {result.total} 条）</Tag>
+      )}
+    </div>
+  );
+}
 
 export function AuditPage() {
   const location = useLocation();
@@ -33,6 +56,8 @@ export function AuditPage() {
   const [offset, setOffset] = useState(urlState.offset);
   const [expandedId, setExpandedId] = useState<string | null>(urlState.expandedId || null);
   const [selectedLogId, setSelectedLogId] = useState(urlState.logId);
+  const [chainVerifying, setChainVerifying] = useState(false);
+  const [chainResult, setChainResult] = useState<AuditChainVerification | null>(null);
   const LIMIT = 50;
 
   useEffect(() => {
@@ -95,6 +120,18 @@ export function AuditPage() {
 
   function handleSearch() {
     void load(0, resourceType, resourceId, fromDate, toDate, selectedLogId, expandedId ?? "");
+  }
+
+  async function handleVerifyChain() {
+    setChainVerifying(true);
+    try {
+      const result = await verifyAuditChain();
+      setChainResult(result);
+    } catch (error) {
+      antdMessage.error(describePageLoadError(error));
+    } finally {
+      setChainVerifying(false);
+    }
   }
 
   function renderChanges(changes: Record<string, unknown> | null) {
@@ -190,7 +227,12 @@ export function AuditPage() {
 
   return (
     <AuditPageShell
-      header={<AuditWorkbenchHeader total={total} message={message} navState={navState} />}
+      header={
+        <>
+          <AuditWorkbenchHeader total={total} message={message} navState={navState} />
+          <AuditChainVerifyPanel verifying={chainVerifying} result={chainResult} onVerify={() => void handleVerifyChain()} />
+        </>
+      }
       filters={
         <AuditFiltersBar
           resourceTypes={RESOURCE_TYPES}

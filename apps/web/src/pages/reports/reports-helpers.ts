@@ -25,6 +25,8 @@ export function getWorkbenchViewLabel(view: ReportsWorkbenchView): string {
       return "差异分析";
     case "chairman":
       return "老板摘要";
+    case "budgetVariance":
+      return "预算差异";
     default:
       return "财务报表";
   }

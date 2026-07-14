@@ -227,7 +227,14 @@ import {
   generateInvoiceVoucher,
 } from "../modules/invoices/invoice.routes.js";
 // E1/E2 数据智能
-import { cashForecastRoute, revenueComparisonRoute } from "../modules/analytics/routes.js";
+import { cashForecastRoute, revenueComparisonRoute, budgetVarianceRoute } from "../modules/analytics/routes.js";
+import { parseAndStoreEInvoice } from "../modules/invoices/einvoice.routes.js";
+import { taxConsistencyRoute } from "../modules/tax-integration/consistency.routes.js";
+import { verifyAuditChain } from "../services/audit.js";
+import { automationDecisionRoute, automationThresholdsRoute } from "../modules/ai-agents/governance.routes.js";
+import { createApiKey, listApiKeys, revokeApiKey, registerWebhook } from "../modules/open-api/credentials.routes.js";
+import { listJobs, enqueueJob } from "../modules/jobs/routes.js";
+import { BODY_SCHEMAS } from "./body-schemas.js";
 
 const healthHandler: RouteHandler = async (_req, res) => {
   let dbOk = false;
@@ -819,14 +826,14 @@ const routes: RouteDef[] = [
   },
 
   // assistant (per-route OPTIONS handled by the global handler at the top)
-  { method: "POST", path: "/api/assistant/chat", auth: true, handler: assistantChat },
+  { method: "POST", path: "/api/assistant/chat", auth: true, streaming: true, handler: assistantChat },
   { method: "POST", path: "/api/assistant/ocr", auth: true, handler: assistantOcr },
 
   // audit
   { method: "GET", path: "/api/audit/logs", auth: true, permission: "audit.view", handler: listAuditLogs },
 
   // boss-qa
-  { method: "POST", path: "/api/boss-qa/chat", auth: true, permission: "dashboard.view", handler: bossChat },
+  { method: "POST", path: "/api/boss-qa/chat", auth: true, permission: "dashboard.view", streaming: true, handler: bossChat },
 
   // knowledge (parse-documents + base before the /:id catch-all)
   { method: "POST", path: "/api/knowledge/parse-documents", auth: true, permission: "knowledge.manage", handler: parseKnowledgeDocuments },
@@ -982,6 +989,8 @@ const routes: RouteDef[] = [
   { method: "GET", path: "/api/invoices", auth: true, handler: listInvoices },
   { method: "POST", path: "/api/invoices", auth: true, handler: createInvoice },
   { method: "POST", path: "/api/invoices/ocr", auth: true, handler: ocrInvoice },
+  // 数电票结构化解析入库（须在 /api/invoices/:id catch-all 之前注册）
+  { method: "POST", path: "/api/invoices/parse", auth: true, permission: "documents.manage", handler: parseAndStoreEInvoice },
   {
     method: "POST",
     path: "/api/invoices/:id/verify",
@@ -1010,13 +1019,34 @@ const routes: RouteDef[] = [
 
   // 数据智能（E1/E2）
   { method: "GET", path: "/api/analytics/cash-forecast", auth: true, permission: "dashboard.view", handler: cashForecastRoute },
-  { method: "GET", path: "/api/analytics/revenue-comparison", auth: true, permission: "dashboard.view", handler: revenueComparisonRoute }
+  { method: "GET", path: "/api/analytics/revenue-comparison", auth: true, permission: "dashboard.view", handler: revenueComparisonRoute },
+  { method: "GET", path: "/api/analytics/budget-variance", auth: true, permission: "dashboard.view", handler: budgetVarianceRoute },
+
+  // V6 Stage F 接线：票税一致性 / 审计 hash 链校验 / AI 分级决策门 / 开放能力
+  { method: "GET", path: "/api/tax-integration/consistency", auth: true, permission: "tax.view", handler: taxConsistencyRoute },
+  { method: "GET", path: "/api/audit/verify-chain", auth: true, permission: "audit.view", handler: verifyAuditChain },
+  { method: "POST", path: "/api/ai/automation/decide", auth: true, permission: "dashboard.view", handler: automationDecisionRoute,
+    bodySchema: { ruleConfidence: { type: "number", required: true, min: 0, max: 1 }, isFinancialMutation: { type: "boolean", required: true }, amountCents: { type: "number", int: true, min: 0 } } },
+  { method: "GET", path: "/api/ai/automation/thresholds", auth: true, permission: "dashboard.view", handler: automationThresholdsRoute },
+  { method: "POST", path: "/api/settings/api-keys", auth: true, permission: "settings.manage", handler: createApiKey },
+  { method: "GET", path: "/api/settings/api-keys", auth: true, permission: "settings.manage", handler: listApiKeys },
+  { method: "POST", path: "/api/settings/api-keys/:id/revoke", auth: true, permission: "settings.manage", handler: revokeApiKey },
+  { method: "POST", path: "/api/settings/webhooks", auth: true, permission: "settings.manage", handler: registerWebhook,
+    bodySchema: { event_type: { type: "string", required: true, min: 1 }, target_url: { type: "string", required: true, min: 1 } } },
+
+  // F5 调度任务队列（可观测 + 手动入队）
+  { method: "GET", path: "/api/jobs", auth: true, permission: "workflow.view", handler: listJobs },
+  { method: "POST", path: "/api/jobs", auth: true, permission: "workflow.manage", handler: enqueueJob,
+    bodySchema: { kind: { type: "string", required: true, min: 1 } } }
 ];
 
 export function createAppRouter(): Router {
   const appRouter = createRouter();
   for (const route of routes) {
-    appRouter.register(route);
+    // F9: attach a declarative body schema from the central map unless the route
+    // already declares one inline (inline wins).
+    const bodySchema = route.bodySchema ?? BODY_SCHEMAS[`${route.method} ${route.path}`];
+    appRouter.register(bodySchema ? { ...route, bodySchema } : route);
   }
   return appRouter;
 }

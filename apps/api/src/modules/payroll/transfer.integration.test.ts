@@ -67,6 +67,10 @@ test("markDisbursed is idempotent and does not create duplicate business events 
     assert.equal(eventRows.rows.length, 1);
     assert.equal(eventRows.rows[0]?.id, first.eventId);
 
+    // writeAudit is fire-and-forget through a per-company serial hash-chain queue;
+    // drain it before asserting the audit row is durably persisted.
+    const { drainAuditQueues } = await import("../../services/audit.js");
+    await drainAuditQueues();
     const auditRows = await pool.query<{ action: string }>(
       `select action
        from audit_logs
@@ -148,6 +152,10 @@ test("compensateDisbursedBatch clears retry metadata, links the new event once, 
     assert.equal(eventRows.rows.length, 1);
     assert.equal(eventRows.rows[0]?.id, first.eventId);
 
+    // writeAudit is fire-and-forget through a per-company serial hash-chain queue;
+    // drain it before asserting the audit row is durably persisted.
+    const { drainAuditQueues } = await import("../../services/audit.js");
+    await drainAuditQueues();
     const auditRows = await pool.query<{ action: string }>(
       `select action
        from audit_logs

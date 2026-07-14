@@ -7,6 +7,28 @@
 
 ---
 
+## 执行进展 · Stage F（更新 2026-07-14，均经磁盘 + typecheck + 单测验证）
+
+> 本节记录真实落地状态，供接力追溯。基线较下方蓝图已推进：Stage F 后端接线 + 前端消费 + F5 调度 + F9 校验机制已完成；F8 出设计方案待评审。**当前全部改动未提交（工作区待 commit）**，`typecheck:v2` 绿、API 单测 **328/328** 绿、路由构建冒烟通过。
+
+| 项 | 状态 | 落地 / 证据 |
+|---|---|---|
+| **F1 票税一致性** | ✅ 接线 | `GET /api/tax-integration/consistency`（`consistency.routes.ts`）+ 风险页「票税比对」面板（`risk/TaxConsistencyPanel.tsx`）。申报数暂缺稳定来源 → `declaredDataAvailable:false` 显式标注 |
+| **F2 审计 hash 链** | ✅ 接线 | migration `036` + `services/audit.ts`（per-company 串行链式写入 + `buildAuditPayload` 写/校验共用）+ `GET /api/audit/verify-chain` + 审计页「校验完整性」 |
+| **F3 数电票解析** | ✅ 接线 | `POST /api/invoices/parse`（`einvoice.routes.ts`，解析+价税校验+入库）+ 发票页「导入数电票」 |
+| **F4 AI 决策门** | ✅ 接线 | `POST /api/ai/automation/decide`、`GET .../thresholds`（`ai-agents/governance.routes.ts`）+ 设置页「AI 自动化治理」只读展示 |
+| **F5 调度 runner** | ✅ 完成 | migration `038_scheduled_jobs` + `jobs/runner.ts`（ALS 无关的 setInterval 轮询 + `resolveJobOutcome` 纯函数退避）+ `jobs/handlers.ts`（overdue_task_scan）+ `GET/POST /api/jobs` + main.ts 挂载（env 开关）+ 4 条纯函数单测 |
+| **F6 开放能力** | ✅ 接线 | migration `037_api_credentials` + `open-api/credentials.routes.ts`（API Key 生成/列出/撤销 + Webhook）+ 设置页「开放 API」 |
+| **F7 预算差异** | ✅ 接线 | `GET /api/analytics/budget-variance` + 报表工作台「预算差异」面板 |
+| **F9 校验覆盖** | ✅ 全量完成 | `RouteDef.bodySchema` + dispatch 统一校验（非破坏式、POST/PUT/PATCH，`dispatch.test.ts` 2 例）。**95 个变更路由全覆盖**：54 个消费 JSON body 的路由由 7 个并行 agent 逐 handler 核对后产出 schema（`routes/schemas/*.ts` 7 文件 51 条 + 3 条内联），经 `createAppRouter` 合并挂载；其余为 body-less action / multipart 上传（核实后不加 schema=安全）。已校验 51 个 schema key 全部命中真实路由（无孤儿）；required 仅在 handler 确有 400 守卫处标注（spot-check 抽验 knowledge/exports/settings 均属实） |
+| **F8 多租户 RLS** | ✅ 机制+策略+激活链已实施并端到端 DB 验证 | 评审决策见 [`docs/v6-f8-rls-design.md`](v6-f8-rls-design.md)。**R1 采纳** AsyncLocalStorage 透明租户连接（核查证实 16 个自管事务模块**全部走 `withTransaction` 助手**→ 令其 ALS 感知、复用请求事务、无嵌套冲突）：`db/client.ts`（query/withTransaction 租户感知）+ `db/tenant.ts` `withTenantRequest`/`runTenantScoped` + `dispatch.ts` 注入（env `TENANT_RLS_ENABLED` 默认关，零回归）。**R2 采纳 (c)-当前**：只给 5 张纯请求上下文表（business_events/ledger_entries/vouchers/invoices/contracts）启 RLS（migration `039`），审计/调度所触及表暂不启用避免 fails-closed。**R3 采纳**：请求级事务原子化 + 2 个 SSE 端点标 `streaming:true` 豁免、其取数阶段改用 `runTenantScoped`（先取数后流式）。ENABLE 非 FORCE（owner 跑迁移/种子绕过）。**生产激活已交付**：`scripts/provision-app-role.sql`+`.sh` 建非属主 finance_app 角色（已跑通，属性 nosuper/nobypassrls/login ✓）。**端到端 DB 验证**：core-rls 隔离/拒写/fails-closed 3/3；ALS 运行时 query/withTransaction 携带上下文 1/1；**以 finance_app 真连的端到端强制隔离 PASS**（cmp-a 只见自身行）。**激活开关**：DATABASE_URL 指向 finance_app + `TENANT_RLS_ENABLED=true` |
+
+**里程碑 M6.0「通电」达成**：7 纯核心接线 ✅ · 前端可见 ✅ · 调度 runner ✅ · 校验全量 ✅ · 多租户 RLS 机制+激活链 ✅ · **DB 集成验证 ✅**（036/037/038/039 迁移 + hash 链防篡改 + 调度完成/死信/重排 + RLS 隔离 + ALS 运行时 + finance_app 端到端强制隔离，共 10 例真实 PG 绿）｜ **全绿**：typecheck · API 单测 328/328 · apps 集成 5/5 · tools DB 集成 19/19。剩余为部署配置（切 DATABASE_URL 到 finance_app + 开 flag + 其余租户表分批启 RLS）与 F8 §5.2 异步写入包上下文的后续项。
+
+**工程说明**：本轮采用真实多 agent 并行（6 后端车道 + 5 前端车道，均各自独立模块内实现），registry/api.ts 等共享文件集成由主控串行完成；每车道产物均经磁盘核实（早前一段被污染工具输出产生的"完成"假象已识别并作废重做）。修正的越界：删除某车道多建的未接线 `period_budgets` 表；修复 runner 退避双重自增 bug（单测捕获）。
+
+---
+
 ## 0. 执行摘要（TL;DR）
 
 - **现状**：业务纵深完整（26 页 / 206 API / 35 migrations），V5 交付了安全、架构、账务内核、多租户机制、7 个集成/AI 纯核心与 PWA 外壳。**但重扫证实：7 个纯核心 0 个接入 HTTP、`withTenantContext` 0 个业务调用点、入参校验仅覆盖 1/206 端点、RLS 未在任何业务表启用**——V5 的核心资产还躺在库里没通电。

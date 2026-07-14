@@ -2186,3 +2186,138 @@ export async function updateReconciliationRules(data: Partial<ReconciliationRule
     body: JSON.stringify(data),
   });
 }
+
+// ── V6 Stage F 接线：数据智能 / 票税一致性 / 审计链 / AI 决策门 / 数电票 / 开放能力 ──
+
+export type ConsistencySeverity = "ok" | "warning" | "alert";
+
+export interface TaxConsistencyCheck {
+  key: "output_tax" | "input_tax" | "invoice_vs_ledger_revenue";
+  label: string;
+  invoiceValueCents: number;
+  comparedValueCents: number;
+  differenceCents: number;
+  severity: ConsistencySeverity;
+}
+
+export interface TaxConsistencyReport {
+  period: string;
+  checks: TaxConsistencyCheck[];
+  overall: ConsistencySeverity;
+  declaredDataAvailable: boolean;
+  notes: string[];
+}
+
+/** F1 票税一致性：某属期发票 vs 申报 vs 账面收入分级比对。 */
+export async function getTaxConsistency(period: string) {
+  return request<TaxConsistencyReport>(
+    `/api/tax-integration/consistency?period=${encodeURIComponent(period)}`
+  );
+}
+
+export interface AuditChainVerification {
+  valid: boolean;
+  brokenAt?: number;
+  total: number;
+}
+
+/** F2 审计 hash 链校验：整链是否被篡改。 */
+export async function verifyAuditChain() {
+  return request<AuditChainVerification>("/api/audit/verify-chain");
+}
+
+export interface BudgetVarianceResult {
+  period: string;
+  category: string[];
+  actualCents: number;
+  budgetCents: number;
+  actual: number;
+  budget: number;
+  variance: number;
+  utilization: number | null;
+  status: "over" | "under" | "on_track";
+}
+
+/** F7 预算差异：实际发生额 vs 预算的执行率/超支。 */
+export async function getBudgetVariance(params: { period: string; budget: number; category?: string }) {
+  const qs = new URLSearchParams({ period: params.period, budget: String(params.budget) });
+  if (params.category) qs.set("category", params.category);
+  return request<BudgetVarianceResult>(`/api/analytics/budget-variance?${qs.toString()}`);
+}
+
+export interface AutomationDecision {
+  level: "auto" | "suggest" | "manual";
+  reason: string;
+}
+
+export interface AutomationThresholds {
+  autoMin: number;
+  suggestMin: number;
+  financialCapCents: number;
+}
+
+/** F4 AI 分级自动化决策门：裁定某产出应自动/建议/人工。硬校验不交 LLM。 */
+export async function decideAutomation(input: {
+  ruleConfidence: number;
+  isFinancialMutation: boolean;
+  amountCents?: number;
+}) {
+  return request<AutomationDecision>("/api/ai/automation/decide", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getAutomationThresholds() {
+  return request<AutomationThresholds>("/api/ai/automation/thresholds");
+}
+
+export interface EInvoicePayload {
+  invoiceNumber: string;
+  issueDate: string;
+  sellerTaxNo: string;
+  buyerTaxNo: string;
+  amount: number;
+  tax: number;
+  total: number;
+  direction?: "input" | "output";
+}
+
+/** F3 数电票结构化解析入库。失败返回 ok:false + errors。 */
+export async function parseEInvoice(payload: EInvoicePayload) {
+  return request<{ ok: boolean; invoiceId?: string; invoice?: unknown; errors?: string[] }>(
+    "/api/invoices/parse",
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+}
+
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+/** F6 开放能力：API Key 与 Webhook。 */
+export async function listApiKeys() {
+  return request<{ items: ApiKeyRecord[] }>("/api/settings/api-keys");
+}
+
+export async function createApiKey(name: string) {
+  return request<{ id: string; key: string; keyPrefix: string }>("/api/settings/api-keys", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function revokeApiKey(id: string) {
+  return request<{ ok: boolean }>(`/api/settings/api-keys/${id}/revoke`, { method: "POST" });
+}
+
+export async function registerWebhook(input: { event_type: string; target_url: string }) {
+  return request<{ ok: boolean; id: string; eventType: string; targetUrl: string; secret: string }>(
+    "/api/settings/webhooks",
+    { method: "POST", body: JSON.stringify(input) }
+  );
+}
