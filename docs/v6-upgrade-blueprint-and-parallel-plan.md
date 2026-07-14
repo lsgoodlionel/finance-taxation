@@ -9,7 +9,7 @@
 
 ## 执行进展 · Stage G 功能合并与引导（更新 2026-07-14，分支 `codex/v6-stage-g`，未提交）
 
-> 多 agent 并行（2 波共 7 车道），各 agent 在自有模块内构建、主控串行集成 App.tsx/AppLayout.tsx。验证：web typecheck 绿 · web 单测 57/57 · 生产构建通过（新 chunk BillsCenter/ExportCenter/PayrollDomain 均产出）。**导航 26 → 21 项**（Stage F 后 PR #6 未合，本分支基于 F）。
+> 多 agent 并行（3 波共 9 车道），各 agent 在自有模块内构建、主控串行集成 App.tsx/AppLayout.tsx。验证：web typecheck 绿 · web 单测 57/57 · 生产构建通过。**导航 26 → 17 项（达成 ≤17 目标）**。PR #7（stacked on F 的 PR #6）。
 
 | 车道 | 状态 | 落地 |
 |---|---|---|
@@ -21,9 +21,11 @@
 | G6 场景引导 v2 | ✅ | `lib/scene-commands.ts` + CommandPalette「场景」组：发工资/收到发票/要报税/月底结账/导出资料/记一笔 → 直达合并后新路由 |
 | G7 大页拆分 | ✅ | `AssistantPage` 1022 → 334 行 + `pages/assistant/` 13 子文件（全部 <400 行），零行为变更 |
 
-**导航明细（21 项）**：业务入口(5: inbox/assistant/events/驾驶舱/月结) · 经营管理(3: 合同/往来/工资) · 财务运营(5: 票据中心/凭证/总账/报表/导出归档) · 税务(1) · 研发风控(3: 研发/风险/审计) · AI与工具(1: 制度库) · 系统(3: 设置/计费/反馈)。**剩余到 ≤17**：可再折叠 往来单位→合同域、驾驶舱→inbox 视图、审计→合规分组等（需产品判断，列 wave 3）。
+**wave 3 收敛（21→17）**：W3-a 系统中心 `pages/system/SystemHubPage`（设置+计费+反馈 3 Tab，/billing·/feedback → /settings?tab= 重定向，系统组 3→1）；W3-b 合同与往来 `pages/contracts/ContractsDomainPage`（合同+往来 2 Tab，/counterparties → /contracts?tab= 重定向，2→1）；月度结账 /close 移出一级导航（路由保留，入口经 inbox 提醒 + ⌘K「月底结账」场景命令）。
 
-**剩余 Stage G 项**：G2/G4 Tab 容器目前直接嵌现有页（含各自 hero 壳层，视觉略有嵌套，后续可下沉为轻壳）；G3 AI 草稿卡为 Stage H 占位；导航进一步收敛到 ≤17。
+**导航明细（17 项）**：业务入口(4: inbox/assistant/events/驾驶舱) · 经营管理(2: 合同与往来/工资) · 财务运营(5: 票据中心/凭证/总账/报表/导出归档) · 税务(1) · 研发风控(3: 研发/风险/审计) · AI与工具(1: 制度库) · 系统(1: 系统中心)。
+
+**剩余 Stage G 项**：各 Tab 容器直接嵌现有页（含各自 hero 壳层，视觉略嵌套，后续可下沉轻壳）；G3 AI 草稿卡为 Stage H 占位；E2E 更新（旧路由重定向、新容器页）。
 
 ---
 

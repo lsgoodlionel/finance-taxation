@@ -75,7 +75,6 @@ const navItems = [
       { key: "/assistant", icon: <RobotOutlined />, label: "AI 财税助手" },
       { key: "/events", icon: <UnorderedListOutlined />, label: "经营事项总线" },
       { key: "/dashboard/chairman", icon: <DashboardOutlined />, label: "董事长驾驶舱" },
-      { key: "/close", icon: <CheckCircleOutlined />, label: "月度结账" },
     ],
   },
   {
@@ -83,8 +82,7 @@ const navItems = [
     label: "经营管理",
     type: "group" as const,
     children: [
-      { key: "/contracts", icon: <FileTextOutlined />, label: "合同管理" },
-      { key: "/counterparties", icon: <TeamOutlined />, label: "往来单位" },
+      { key: "/contracts", icon: <FileTextOutlined />, label: "合同与往来" },
       { key: "/payroll", icon: <TeamOutlined />, label: "工资管理" },
     ],
   },
@@ -131,9 +129,7 @@ const navItems = [
     label: "系统",
     type: "group" as const,
     children: [
-      { key: "/settings", icon: <SettingOutlined />, label: "系统设置" },
-      { key: "/billing", icon: <CrownOutlined />, label: "订阅与计费" },
-      { key: "/feedback", icon: <BulbOutlined />, label: "反馈与升级" },
+      { key: "/settings", icon: <SettingOutlined />, label: "系统中心" },
     ],
   },
 ];
