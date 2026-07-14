@@ -26,8 +26,11 @@ function balancedTag(balanced: boolean | null) {
   return <Tag>待校验</Tag>;
 }
 
-function formatYuan(v: number): string {
-  return v > 0 ? `¥${v.toFixed(2)}` : "—";
+// 后端把 debit/credit 序列化为「元」字符串（如 "1000.00"）。防御性转数字，避免
+// 对字符串调用 .toFixed 抛错（H-2）。
+function formatYuan(v: number | string): string {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) && n > 0 ? `¥${n.toFixed(2)}` : "—";
 }
 
 const LINE_COLUMNS: ColumnsType<CloseDraftLine> = [

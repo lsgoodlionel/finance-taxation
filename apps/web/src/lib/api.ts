@@ -2328,8 +2328,9 @@ export interface CloseDraftLine {
   summary: string;
   accountCode: string;
   accountName: string;
-  debit: number;
-  credit: number;
+  // 后端以「元」字符串序列化金额（如 "1000.00"）；前端展示时转数字。
+  debit: number | string;
+  credit: number | string;
 }
 
 export interface CloseDraft {

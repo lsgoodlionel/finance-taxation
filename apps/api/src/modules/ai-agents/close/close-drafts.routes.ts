@@ -23,6 +23,17 @@ import { buildDraftProposalFromSuggestion } from "./draft-proposal.js";
 
 const PERIOD_LABEL = /^\d{4}-\d{2}$/;
 
+/** 仅本模块生成的草稿参与 AI 草稿队列（M-1：不误纳其它来源的草稿）。 */
+const AI_CLOSE_SOURCE = "ai_close";
+
+/** H-1：并发下草稿状态已被改（非 draft），条件更新未命中时抛出，使事务回滚。 */
+class DraftStateConflictError extends Error {
+  constructor() {
+    super("draft state changed concurrently");
+    this.name = "DraftStateConflictError";
+  }
+}
+
 const DRAFT_COLUMNS = `
   id, company_id, business_event_id, voucher_type, status, summary,
   proposal_level, balanced, rationale, source, generated_run_id,
@@ -290,11 +301,16 @@ async function createApprovedVoucher(
         [`${voucherId}-line-${index + 1}`, voucherId, line.summary, line.account_code, line.account_name, line.debit, line.credit, index]
       );
     }
-    await client.query(
+    // H-1 竞态守卫：仅当仍为 draft 时落地。若并发 approve/reject 已改状态，rowCount=0
+    // → 抛错使本事务（含上面的 voucher/voucher_lines 插入）整体回滚，不留残凭证。
+    const updated = await client.query(
       `update event_voucher_drafts set status = 'approved', approved_voucher_id = $1, decided_at = $2::timestamptz
-       where id = $3 and company_id = $4`,
+       where id = $3 and company_id = $4 and status = 'draft'`,
       [voucherId, now, draft.id, companyId]
     );
+    if (updated.rowCount === 0) {
+      throw new DraftStateConflictError();
+    }
   });
   return voucherId;
 }
@@ -331,7 +347,16 @@ export async function approveCloseDraft(req: ApiRequest, res: ServerResponse, dr
   }
 
   const now = new Date().toISOString();
-  const voucherId = await createApprovedVoucher(companyId, draft, lines, now);
+  let voucherId: string;
+  try {
+    voucherId = await createApprovedVoucher(companyId, draft, lines, now);
+  } catch (err) {
+    if (err instanceof DraftStateConflictError) {
+      json(res, 409, { error: "草稿状态已变更，请刷新后重试" });
+      return;
+    }
+    throw err;
+  }
 
   writeAudit({
     companyId,
@@ -365,10 +390,17 @@ export async function rejectCloseDraft(req: ApiRequest, res: ServerResponse, dra
   }
 
   const now = new Date().toISOString();
-  await query(
-    `update event_voucher_drafts set status = 'rejected', decided_at = $1::timestamptz where id = $2 and company_id = $3`,
+  // H-1 竞态守卫：仅当仍为 draft 时驳回（条件更新 + RETURNING）；并发已处理则 409，
+  // 不无条件覆盖（避免把并发 approved 的草稿错误改回 rejected）。
+  const updated = await query<{ id: string }>(
+    `update event_voucher_drafts set status = 'rejected', decided_at = $1::timestamptz
+     where id = $2 and company_id = $3 and status = 'draft' returning id`,
     [now, draftId, companyId]
   );
+  if (updated.length === 0) {
+    json(res, 409, { error: "草稿状态已变更，请刷新后重试" });
+    return;
+  }
 
   writeAudit({
     companyId,

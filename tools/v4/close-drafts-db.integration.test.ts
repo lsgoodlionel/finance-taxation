@@ -144,3 +144,46 @@ test("approve 只生成 draft 状态凭证，绝不过账", async (t) => {
   )).rows[0];
   assert.equal(Math.round(Number(bal!.d) * 100), Math.round(Number(bal!.c) * 100), "借贷必须平衡");
 });
+
+test("H-1 守卫：已批准草稿再驳回 → 409，且不覆盖状态", async (t) => {
+  if (!reachable) {
+    t.skip("db unreachable");
+    return;
+  }
+  // 上一个测试已把 be-exp-1 的草稿批准为 approved。对其驳回应 409、状态保持 approved。
+  const approved = (await admin.query<{ id: string }>(
+    "select id from event_voucher_drafts where company_id=$1 and status='approved' limit 1",
+    [COMPANY]
+  )).rows[0];
+  assert.ok(approved, "存在已批准草稿");
+  const { res, captured } = fakeRes();
+  await drafts.rejectCloseDraft(fakeReq({ reason: "race" }), res, approved!.id);
+  assert.equal(captured.status, 409, "已批准草稿驳回应 409");
+  const after = (await admin.query<{ status: string }>(
+    "select status from event_voucher_drafts where id=$1",
+    [approved!.id]
+  )).rows[0];
+  assert.equal(after!.status, "approved", "状态未被驳回覆盖");
+});
+
+test("不平衡草稿 approve → 400（服务端重算拒绝）", async (t) => {
+  if (!reachable) {
+    t.skip("db unreachable");
+    return;
+  }
+  await admin.query(
+    `insert into event_voucher_drafts (id, company_id, business_event_id, voucher_type, status, summary, proposal_level, balanced)
+     values ('draft-unbal', $1, 'be-exp-1', 'analysis', 'draft', '故意不平衡', 'manual', true)`,
+    [COMPANY]
+  );
+  await admin.query(
+    `insert into voucher_draft_lines (id, draft_id, summary, account_code, account_name, debit, credit, sort_order)
+     values ('dl-unbal-1','draft-unbal','借','6602','管理费用',100,0,0),
+            ('dl-unbal-2','draft-unbal','贷','1002','银行存款',0,90,1)`
+  );
+  const { res, captured } = fakeRes();
+  await drafts.approveCloseDraft(fakeReq(null), res, "draft-unbal");
+  assert.equal(captured.status, 400, "不平衡应被服务端重算拒绝");
+  const noVoucher = (await admin.query("select 1 from vouchers where id='close-voucher-draft-unbal'")).rows.length;
+  assert.equal(noVoucher, 0, "不平衡时不得生成任何凭证");
+});
