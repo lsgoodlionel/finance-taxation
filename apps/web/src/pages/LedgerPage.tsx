@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LedgerEntry, LedgerPostingBatch } from "@finance-taxation/domain-model";
+import { FinanceFlowBar } from "../components/FinanceFlowBar";
 import {
   getCashJournal,
   getLedgerBalances,
@@ -296,42 +297,45 @@ export function LedgerPage() {
   });
 
   return (
-    <LedgerShell
-      header={<LedgerHeader activeSceneLabel={activeOption.title} />}
-      summary={(
-        <LedgerSceneSummary
-          scene={activeScene}
-          title={sceneSummary.title}
-          description={sceneSummary.description}
-          highlights={sceneSummary.highlights}
-          pendingCount={sceneSummary.pendingCount}
-        />
-      )}
-      sceneSelector={(
-        <LedgerSceneSelector
-          activeScene={activeScene}
-          options={LEDGER_SCENE_OPTIONS}
-          onChange={(scene) => setSceneQuery(scene)}
-        />
-      )}
-      content={renderScene()}
-      context={(
-        <LedgerContextPanel
-          scene={activeScene}
-          message={message}
-          entryCount={entries.length}
-          batchCount={batches.length}
-          summaryCount={summary.length}
-          balanceCount={balances.length}
-          journalCount={journal.length}
-          lockedPeriodCount={periods.length}
-          voucherFilter={selectedVoucherId}
-          eventFilter={selectedEventId}
-          journalType={journalType}
-          journalFrom={journalFrom}
-          journalTo={journalTo}
-        />
-      )}
-    />
+    <div style={{ display: "grid", gap: 24 }}>
+      <FinanceFlowBar current="ledger" />
+      <LedgerShell
+        header={<LedgerHeader activeSceneLabel={activeOption.title} />}
+        summary={(
+          <LedgerSceneSummary
+            scene={activeScene}
+            title={sceneSummary.title}
+            description={sceneSummary.description}
+            highlights={sceneSummary.highlights}
+            pendingCount={sceneSummary.pendingCount}
+          />
+        )}
+        sceneSelector={(
+          <LedgerSceneSelector
+            activeScene={activeScene}
+            options={LEDGER_SCENE_OPTIONS}
+            onChange={(scene) => setSceneQuery(scene)}
+          />
+        )}
+        content={renderScene()}
+        context={(
+          <LedgerContextPanel
+            scene={activeScene}
+            message={message}
+            entryCount={entries.length}
+            batchCount={batches.length}
+            summaryCount={summary.length}
+            balanceCount={balances.length}
+            journalCount={journal.length}
+            lockedPeriodCount={periods.length}
+            voucherFilter={selectedVoucherId}
+            eventFilter={selectedEventId}
+            journalType={journalType}
+            journalFrom={journalFrom}
+            journalTo={journalTo}
+          />
+        )}
+      />
+    </div>
   );
 }

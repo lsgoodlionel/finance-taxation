@@ -7,7 +7,29 @@
 
 ---
 
-## 执行进展 · Stage F（更新 2026-07-14，均经磁盘 + typecheck + 单测验证）
+## 执行进展 · Stage G 功能合并与引导（更新 2026-07-14，分支 `codex/v6-stage-g`，未提交）
+
+> 多 agent 并行（3 波共 9 车道），各 agent 在自有模块内构建、主控串行集成 App.tsx/AppLayout.tsx。验证：web typecheck 绿 · web 单测 57/57 · 生产构建通过。**导航 26 → 17 项（达成 ≤17 目标）**。PR #7（stacked on F 的 PR #6）。
+
+| 车道 | 状态 | 落地 |
+|---|---|---|
+| G1 导出与归档中心 | ✅ | `pages/export-center/`（11 文件，10 类导出场景 + 历史）；`/export-center` 路由，`/pdf-export`·`/archive-package` → 301 重定向；导航 2 项并 1 |
+| G2 票据中心 | ✅ | `pages/bills/BillsCenterPage`（3 Tab 包裹 单据/发票/银行，?tab 深链）；`/documents`·`/invoices`·`/banking` → `/bills?tab=` 重定向；「外部系统对接」组撤销、3 项并 1 |
+| G3 inbox-first 工作台 | ✅ | `MyDayPage` 重构 + `pages/inbox/`（待办/风险/审批/AI草稿[占位] 四类卡片）；登录默认落 `/inbox`；`/tasks` 降级出一级导航（路由保留供深链） |
+| G4 工资域合并 | ✅ | `pages/payroll/PayrollDomainPage`（工资管理 + 代发与社保 Tab）；`/payroll/transfer` → `/payroll?tab=transfer`；导航 2 项并 1 |
+| G5 链路条全覆盖 | ✅ | `FinanceFlowBar` 补到总账页（报表页原已有）；闭合凭证过账→报表/总账断点，无新增 stage 枚举 |
+| G6 场景引导 v2 | ✅ | `lib/scene-commands.ts` + CommandPalette「场景」组：发工资/收到发票/要报税/月底结账/导出资料/记一笔 → 直达合并后新路由 |
+| G7 大页拆分 | ✅ | `AssistantPage` 1022 → 334 行 + `pages/assistant/` 13 子文件（全部 <400 行），零行为变更 |
+
+**wave 3 收敛（21→17）**：W3-a 系统中心 `pages/system/SystemHubPage`（设置+计费+反馈 3 Tab，/billing·/feedback → /settings?tab= 重定向，系统组 3→1）；W3-b 合同与往来 `pages/contracts/ContractsDomainPage`（合同+往来 2 Tab，/counterparties → /contracts?tab= 重定向，2→1）；月度结账 /close 移出一级导航（路由保留，入口经 inbox 提醒 + ⌘K「月底结账」场景命令）。
+
+**导航明细（17 项）**：业务入口(4: inbox/assistant/events/驾驶舱) · 经营管理(2: 合同与往来/工资) · 财务运营(5: 票据中心/凭证/总账/报表/导出归档) · 税务(1) · 研发风控(3: 研发/风险/审计) · AI与工具(1: 制度库) · 系统(1: 系统中心)。
+
+**剩余 Stage G 项**：各 Tab 容器直接嵌现有页（含各自 hero 壳层，视觉略嵌套，后续可下沉轻壳）；G3 AI 草稿卡为 Stage H 占位；E2E 更新（旧路由重定向、新容器页）。
+
+---
+
+## 执行进展 · Stage F（更新 2026-07-14，已提交 PR #6，均经磁盘 + typecheck + 单测 + 真实 PG 验证）
 
 > 本节记录真实落地状态，供接力追溯。基线较下方蓝图已推进：Stage F 后端接线 + 前端消费 + F5 调度 + F9 校验机制已完成；F8 出设计方案待评审。**当前全部改动未提交（工作区待 commit）**，`typecheck:v2` 绿、API 单测 **328/328** 绿、路由构建冒烟通过。
 

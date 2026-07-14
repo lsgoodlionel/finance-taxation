@@ -1,7 +1,8 @@
 /**
- * 我的一天 · 统一待办收件箱（P0-3）
+ * 我的一天 · 统一收件箱工作台（G3 inbox-first）
  * route: /inbox
- * 聚合全模块待处理事项，一键直达。打开系统先看「今天要干什么」。
+ * 聚合四类待办卡片：待办任务 / 风险预警 / 审批请求 / AI 草稿（Stage H 占位）。
+ * 打开系统先看「今天要干什么」，点卡片直达对应中心处理。
  */
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -10,11 +11,23 @@ import {
   ReloadOutlined, RightOutlined, FireOutlined, InboxOutlined, CalendarOutlined,
 } from "@ant-design/icons";
 import { toast } from "sonner";
+import type { RiskFinding, WorkflowRun } from "@finance-taxation/domain-model";
 import { PageHeader } from "../components/ui/PageHeader";
-import { getInbox, getSetupStatus, getTaxDeadlines, type InboxItem, type SetupItem, type TaxDeadline } from "../lib/api";
+import {
+  getInbox, getSetupStatus, getTaxDeadlines, listRiskFindings, listTasks, listWorkflowRuns,
+  type InboxItem, type SetupItem, type TaxDeadline,
+} from "../lib/api";
 import { usePeriod } from "../lib/period-context";
+import { InboxTasksCard } from "./inbox/InboxTasksCard";
+import { InboxRiskCard } from "./inbox/InboxRiskCard";
+import { InboxApprovalsCard } from "./inbox/InboxApprovalsCard";
+import { InboxAiDraftsCard } from "./inbox/InboxAiDraftsCard";
+import type { TaskWithOverdue } from "./inbox/inbox-helpers";
 
 const { Text } = Typography;
+
+// 已由「待办任务」专属卡片覆盖，通用列表中不再重复展示
+const TASK_INBOX_KEYS = new Set(["overdue_tasks", "todo_tasks"]);
 
 export function MyDayPage() {
   const navigate = useNavigate();
@@ -22,19 +35,30 @@ export function MyDayPage() {
   const [totalPending, setTotalPending] = useState(0);
   const [setup, setSetup] = useState<{ items: SetupItem[]; doneCount: number; total: number; ready: boolean } | null>(null);
   const [deadlines, setDeadlines] = useState<TaxDeadline[]>([]);
+  const [tasks, setTasks] = useState<TaskWithOverdue[]>([]);
+  const [riskFindings, setRiskFindings] = useState<RiskFinding[]>([]);
+  const [approvalRuns, setApprovalRuns] = useState<WorkflowRun[]>([]);
   const [loading, setLoading] = useState(true);
   const { period } = usePeriod();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, setupData, dl] = await Promise.all([
-        getInbox(), getSetupStatus().catch(() => null), getTaxDeadlines(period).catch(() => null),
+      const [data, setupData, dl, taskData, riskData, runData] = await Promise.all([
+        getInbox(),
+        getSetupStatus().catch(() => null),
+        getTaxDeadlines(period).catch(() => null),
+        listTasks().catch(() => null),
+        listRiskFindings().catch(() => null),
+        listWorkflowRuns({ state: "awaiting_authorization" }).catch(() => null),
       ]);
       setItems(data.items);
       setTotalPending(data.totalPending);
       setSetup(setupData);
       setDeadlines(dl?.deadlines ?? []);
+      setTasks(taskData?.items ?? []);
+      setRiskFindings(riskData?.items ?? []);
+      setApprovalRuns(runData?.items ?? []);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -44,15 +68,18 @@ export function MyDayPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const active = items.filter((i) => i.count > 0);
-  const urgent = active.filter((i) => i.tone === "warning");
+  const otherItems = items.filter((i) => i.count > 0 && !TASK_INBOX_KEYS.has(i.key));
+  const otherUrgent = otherItems.filter((i) => i.tone === "warning");
+  const overdueTaskCount = tasks.filter((t) => t.isOverdue).length;
+  const openHighRiskCount = riskFindings.filter((f) => f.status === "open" && f.severity === "high").length;
+  const urgentTotal = overdueTaskCount + openHighRiskCount + otherUrgent.reduce((s, i) => s + i.count, 0);
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
       <section className="v3-hero-shell">
         <PageHeader
           title="我的一天"
-          subtitle="全模块待办一处汇总，按优先级处理，点卡片直达对应中心。"
+          subtitle="收件箱一处汇总待办任务、风险预警、审批请求与 AI 草稿，按优先级处理，点卡片直达对应中心。"
           actions={(
             <Space>
               <Button icon={<CalendarOutlined />} onClick={() => navigate("/close")}>月度结账</Button>
@@ -119,47 +146,60 @@ export function MyDayPage() {
 
       <section className="v3-section-shell" data-tone="accent">
         <Row gutter={16} align="middle">
-          <Col span={8}><Statistic title="待办总数" value={totalPending} prefix={<InboxOutlined />} /></Col>
-          <Col span={8}><Statistic title="紧急（逾期/风险）" value={urgent.reduce((s, i) => s + i.count, 0)}
-            prefix={<FireOutlined />} valueStyle={{ color: urgent.length ? "#dc2626" : "#16a34a" }} /></Col>
-          <Col span={8}><Statistic title="待办类别" value={active.length} suffix={`/ ${items.length}`} /></Col>
+          <Col span={6}><Statistic title="待办总数" value={totalPending} prefix={<InboxOutlined />} /></Col>
+          <Col span={6}><Statistic title="紧急（逾期/高危风险）" value={urgentTotal}
+            prefix={<FireOutlined />} valueStyle={{ color: urgentTotal ? "#dc2626" : "#16a34a" }} /></Col>
+          <Col span={6}><Statistic title="待审批事项" value={approvalRuns.length}
+            valueStyle={{ color: approvalRuns.length ? "#d97706" : undefined }} /></Col>
+          <Col span={6}><Statistic title="其他模块待办类别" value={otherItems.length} suffix={`/ ${items.length}`} /></Col>
         </Row>
       </section>
 
       {loading ? (
         <div style={{ padding: 40, textAlign: "center" }}><Spin /></div>
-      ) : active.length === 0 ? (
-        <Card style={{ borderRadius: 12 }}>
-          <Empty description="太棒了，当前没有待办事项 🎉" />
-        </Card>
       ) : (
         <>
-          {urgent.length > 0 && (
+          {urgentTotal > 0 && (
             <Alert type="warning" showIcon
-              message={`有 ${urgent.reduce((s, i) => s + i.count, 0)} 项紧急待办（${urgent.map((i) => i.label).join("、")}），建议优先处理。`} />
+              message={`有 ${urgentTotal} 项紧急待办，建议优先处理逾期任务与高危风险。`} />
           )}
-          <section className="v3-section-shell">
-            <Row gutter={[16, 16]}>
-              {active.map((it) => (
-                <Col key={it.key} xs={24} sm={12} lg={8}>
-                  <Card hoverable style={{ borderRadius: 12, borderLeft: `3px solid ${it.tone === "warning" ? "#dc2626" : "#2563eb"}` }}
-                    styles={{ body: { padding: "16px 18px" } }}
-                    onClick={() => navigate(it.actionPath)}>
-                    <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                      <Space style={{ justifyContent: "space-between", width: "100%" }}>
-                        <Text strong>{it.label}</Text>
-                        <Tag color={it.tone === "warning" ? "error" : "blue"}>{it.count}</Tag>
+
+          <InboxTasksCard tasks={tasks} loading={loading} />
+          <InboxRiskCard findings={riskFindings} loading={loading} />
+          <InboxApprovalsCard runs={approvalRuns} loading={loading} />
+          <InboxAiDraftsCard />
+
+          {otherItems.length > 0 && (
+            <section className="v3-section-shell">
+              <Text strong style={{ display: "block", marginBottom: 10 }}>📌 其他模块待办</Text>
+              <Row gutter={[16, 16]}>
+                {otherItems.map((it) => (
+                  <Col key={it.key} xs={24} sm={12} lg={8}>
+                    <Card hoverable style={{ borderRadius: 12, borderLeft: `3px solid ${it.tone === "warning" ? "#dc2626" : "#2563eb"}` }}
+                      styles={{ body: { padding: "16px 18px" } }}
+                      onClick={() => navigate(it.actionPath)}>
+                      <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                        <Space style={{ justifyContent: "space-between", width: "100%" }}>
+                          <Text strong>{it.label}</Text>
+                          <Tag color={it.tone === "warning" ? "error" : "blue"}>{it.count}</Tag>
+                        </Space>
+                        <Text type="secondary" style={{ fontSize: 12 }}>{it.hint}</Text>
+                        <Button type="link" size="small" style={{ padding: 0 }}>
+                          前往处理 <RightOutlined />
+                        </Button>
                       </Space>
-                      <Text type="secondary" style={{ fontSize: 12 }}>{it.hint}</Text>
-                      <Button type="link" size="small" style={{ padding: 0 }}>
-                        前往处理 <RightOutlined />
-                      </Button>
-                    </Space>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          </section>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            </section>
+          )}
+
+          {totalPending === 0 && tasks.length === 0 && riskFindings.length === 0 && approvalRuns.length === 0 && (
+            <Card style={{ borderRadius: 12 }}>
+              <Empty description="太棒了，当前没有待办事项 🎉" />
+            </Card>
+          )}
         </>
       )}
     </div>
