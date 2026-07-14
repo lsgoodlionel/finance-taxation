@@ -1,7 +1,13 @@
 import type { ServerResponse } from "node:http";
 import type { ApiRequest } from "../types.js";
 import { requireAuth, requireAnyPermission, requirePermission } from "../middleware/auth.js";
+import { json } from "../utils/http.js";
+import { validateObject } from "../utils/validate.js";
+import { env } from "../config/env.js";
+import { withTenantRequest } from "../db/tenant.js";
 import type { Router, RoutePermission } from "./router.js";
+
+const BODY_METHODS = new Set(["POST", "PUT", "PATCH"]);
 
 /**
  * Resolve a request against the router and, if matched, enforce the route's
@@ -31,6 +37,22 @@ export async function dispatch(
     return true;
   }
   if (route.permission && !(await enforcePermission(route.permission, req, res))) {
+    return true;
+  }
+  if (route.bodySchema && BODY_METHODS.has(method)) {
+    const result = validateObject(req.body, route.bodySchema);
+    if (!result.ok) {
+      json(res, 400, { error: "请求参数校验失败", details: result.errors });
+      return true;
+    }
+  }
+
+  // F8: run authenticated non-streaming handlers inside a per-request tenant
+  // transaction so Postgres RLS scopes every query. Gated by env (off by
+  // default) and only when the request is authenticated with a companyId.
+  const companyId = req.auth?.companyId;
+  if (env.tenantRlsEnabled && route.auth && companyId && !route.streaming) {
+    await withTenantRequest(companyId, () => Promise.resolve(route.handler(req, res, params)));
     return true;
   }
 

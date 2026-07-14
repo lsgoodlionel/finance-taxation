@@ -207,6 +207,7 @@ export function ReportsShellContainer() {
           cashFlow={cashFlow}
           diff={diff}
           chairmanSummary={chairmanSummary}
+          defaultPeriod={`${year}-${String(month).padStart(2, "0")}`}
         />
       )}
     />

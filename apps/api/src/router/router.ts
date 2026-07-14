@@ -1,6 +1,7 @@
 import type { ServerResponse } from "node:http";
 import type { PermissionKey } from "@finance-taxation/domain-model";
 import type { ApiRequest } from "../types.js";
+import type { ObjectSchema } from "../utils/validate.js";
 
 /**
  * Minimal, dependency-free router for the hand-rolled node:http server.
@@ -39,6 +40,19 @@ export interface RouteDef {
   auth?: boolean;
   /** Require a permission (or any-of a set) after authentication. */
   permission?: RoutePermission;
+  /**
+   * Optional declarative body validation (F9). When set on a POST/PUT/PATCH
+   * route, dispatch validates `req.body` against it and returns 400 before the
+   * handler runs. Does not mutate the body — handlers keep reading req.body.
+   */
+  bodySchema?: ObjectSchema;
+  /**
+   * F8: streaming/SSE or large-download route. When tenant RLS is enabled these
+   * are NOT wrapped in a per-request tenant transaction (a stream cannot hold a
+   * transaction connection for its whole duration); such handlers must scope
+   * tenant reads themselves via `withTenantContext`.
+   */
+  streaming?: boolean;
 }
 
 export interface RouteMatch {

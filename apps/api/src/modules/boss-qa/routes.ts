@@ -1,5 +1,6 @@
 import type { ServerResponse } from "node:http";
 import { query } from "../../db/client.js";
+import { runTenantScoped } from "../../db/tenant.js";
 import { json } from "../../utils/http.js";
 import { streamChat, isAiConfigured } from "../../services/ai.js";
 import type { ChatMessage } from "../../services/ai.js";
@@ -144,7 +145,8 @@ export async function bossChat(req: ApiRequest, res: ServerResponse): Promise<vo
     return;
   }
 
-  const ctx = await loadBossContext(req.auth.companyId);
+  // 取数阶段进入租户上下文（RLS 启用时），读完释放连接再流式输出。
+  const ctx = await runTenantScoped(req.auth.companyId, () => loadBossContext(req.auth!.companyId));
   const systemPrompt = buildBossSystemPrompt(ctx);
 
   await streamChat(res, systemPrompt, messages, req.auth.companyId);

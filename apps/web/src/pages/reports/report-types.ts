@@ -12,7 +12,8 @@ export type ReportsWorkbenchView =
   | "profitStatement"
   | "cashFlow"
   | "diff"
-  | "chairman";
+  | "chairman"
+  | "budgetVariance";
 
 export type ReportsStatus = {
   tone: "info" | "success" | "error";

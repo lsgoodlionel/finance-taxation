@@ -18,14 +18,14 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import {
   AuditOutlined, PlusOutlined, SafetyOutlined, CameraOutlined, SyncOutlined,
-  CheckCircleOutlined, WarningOutlined, ClockCircleOutlined,
+  CheckCircleOutlined, WarningOutlined, ClockCircleOutlined, ImportOutlined,
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 import type { RcFile } from "antd/es/upload";
 import {
   listInvoices, createInvoice, verifyInvoice, ocrInvoice, deleteInvoice, generateInvoiceVoucher,
-  type Invoice,
+  parseEInvoice, type Invoice, type EInvoicePayload,
 } from "../../lib/api";
 
 const { Text } = Typography;
@@ -52,6 +52,10 @@ export function InvoicesPage() {
   const [ocrText, setOcrText]       = useState("");
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrResult, setOcrResult]   = useState<Record<string, unknown> | null>(null);
+  const [eInvoiceOpen, setEInvoiceOpen]       = useState(false);
+  const [eInvoiceText, setEInvoiceText]       = useState("");
+  const [eInvoiceLoading, setEInvoiceLoading] = useState(false);
+  const [eInvoiceErrors, setEInvoiceErrors]   = useState<string[] | null>(null);
   const [form] = Form.useForm();
   const [directionFilter, setDirectionFilter] = useState<"input" | "output" | "">("");
 
@@ -181,6 +185,51 @@ export function InvoicesPage() {
     return false;
   }
 
+  function closeEInvoiceModal() {
+    setEInvoiceOpen(false);
+    setEInvoiceText("");
+    setEInvoiceErrors(null);
+  }
+
+  async function handleImportEInvoice() {
+    if (!eInvoiceText.trim()) { toast.error("请粘贴数电票 JSON 内容"); return; }
+    let raw: Record<string, unknown>;
+    try {
+      raw = JSON.parse(eInvoiceText) as Record<string, unknown>;
+    } catch {
+      toast.error("JSON 格式不正确，请检查粘贴内容");
+      return;
+    }
+
+    const payload: EInvoicePayload = {
+      invoiceNumber: String(raw.invoiceNumber ?? ""),
+      issueDate: String(raw.issueDate ?? ""),
+      sellerTaxNo: String(raw.sellerTaxNo ?? ""),
+      buyerTaxNo: String(raw.buyerTaxNo ?? ""),
+      amount: Number(raw.amount),
+      tax: Number(raw.tax),
+      total: Number(raw.total),
+      direction: raw.direction === "output" ? "output" : raw.direction === "input" ? "input" : undefined,
+    };
+
+    setEInvoiceLoading(true);
+    setEInvoiceErrors(null);
+    try {
+      const result = await parseEInvoice(payload);
+      if (result.ok) {
+        toast.success(`数电票导入成功${result.invoiceId ? "：" + result.invoiceId : ""}`);
+        closeEInvoiceModal();
+        await load();
+      } else {
+        setEInvoiceErrors(result.errors && result.errors.length > 0 ? result.errors : ["数电票校验未通过，请检查字段内容"]);
+      }
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setEInvoiceLoading(false);
+    }
+  }
+
   const pendingCount   = invoices.filter(i => i.verify_status === "pending").length;
   const verifiedCount  = invoices.filter(i => i.verify_status === "verified").length;
   const invalidCount   = invoices.filter(i => i.verify_status === "invalid").length;
@@ -260,6 +309,7 @@ export function InvoicesPage() {
           subtitle="管理进销项发票，验真防假，关联经营事项"
           actions={(
             <Space>
+              <Button icon={<ImportOutlined />} onClick={() => setEInvoiceOpen(true)}>导入数电票</Button>
               <Button icon={<CameraOutlined />} onClick={() => setOcrOpen(true)}>OCR 识别</Button>
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>手动录入</Button>
               <Button icon={<SyncOutlined />} onClick={() => void load()} />
@@ -433,6 +483,41 @@ export function InvoicesPage() {
           rows={5}
           style={{ fontSize: 12 }}
         />
+      </Modal>
+
+      {/* Import e-invoice (数电票) modal */}
+      <Modal
+        title={<Space><ImportOutlined />导入数电票</Space>}
+        open={eInvoiceOpen}
+        onOk={() => void handleImportEInvoice()}
+        onCancel={closeEInvoiceModal}
+        okText="解析并导入"
+        cancelText="取消"
+        confirmLoading={eInvoiceLoading}
+        width={560}
+      >
+        <Alert type="info" showIcon style={{ marginBottom: 12 }}
+          message="粘贴数电票结构化 JSON，字段包含 invoiceNumber、issueDate、sellerTaxNo、buyerTaxNo、amount、tax、total，direction 可选（input 进项 / output 销项）" />
+        <Input.TextArea
+          value={eInvoiceText}
+          onChange={e => { setEInvoiceText(e.target.value); setEInvoiceErrors(null); }}
+          placeholder={'{\n  "invoiceNumber": "25332000000012345678",\n  "issueDate": "2026-07-10",\n  "sellerTaxNo": "91330000MA2XXXXXXX",\n  "buyerTaxNo": "91330000MA2YYYYYYY",\n  "amount": 1000.00,\n  "tax": 130.00,\n  "total": 1130.00,\n  "direction": "input"\n}'}
+          rows={10}
+          style={{ fontSize: 12, fontFamily: "monospace" }}
+        />
+        {eInvoiceErrors && (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginTop: 12 }}
+            message="数电票校验未通过"
+            description={(
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {eInvoiceErrors.map(err => <li key={err}>{err}</li>)}
+              </ul>
+            )}
+          />
+        )}
       </Modal>
     </div>
   );
