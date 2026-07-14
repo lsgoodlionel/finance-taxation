@@ -9,7 +9,18 @@ test("listVoucherTemplates returns the expected built-in keys", () => {
   const templates = listVoucherTemplates();
   assert.deepEqual(
     templates.map((item) => item.key),
-    ["sales", "procurement", "expense", "payroll", "asset"]
+    [
+      "sales",
+      "procurement",
+      "expense",
+      "payroll",
+      "asset",
+      "financing-equity",
+      "financing-loan",
+      "rnd",
+      "tax-income",
+      "tax-surcharge"
+    ]
   );
 });
 

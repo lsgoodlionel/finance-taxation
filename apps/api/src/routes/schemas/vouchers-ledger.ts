@@ -31,7 +31,7 @@ export const vouchersLedgerBodySchemas: Record<string, ObjectSchema> = {
       type: "string",
       required: true,
       min: 1,
-      enum: ["sales", "procurement", "expense", "payroll", "asset"]
+      enum: ["sales", "procurement", "expense", "payroll", "asset", "financing-equity", "financing-loan", "rnd", "tax-income", "tax-surcharge"]
     },
     amount: { type: "string", required: true, min: 1 },
     businessEventId: { type: "string", required: true, min: 1 },
