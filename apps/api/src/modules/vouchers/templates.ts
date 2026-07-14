@@ -108,6 +108,71 @@ const templates: VoucherTemplateDefinition[] = [
         line("tpl-asset-2", "确认应付账款", "2202", "应付账款", "0.00", value)
       ];
     }
+  },
+  {
+    key: "financing-equity",
+    label: "股东出资/增资到账",
+    description: "借银行存款，贷实收资本。与 015 迁移真实分录（vch-002）口径一致。",
+    voucherType: "receipt",
+    buildLines(amount) {
+      const value = money(amount);
+      return [
+        line("tpl-financing-equity-1", "确认股东出资到账", "1002", "银行存款", value, "0.00"),
+        line("tpl-financing-equity-2", "确认实收资本", "4001", "实收资本", "0.00", value)
+      ];
+    }
+  },
+  {
+    key: "financing-loan",
+    label: "银行借款到账",
+    description: "借银行存款，贷短期借款。与 015 迁移真实分录（vch-016）口径一致；如为一年期以上借款，请人工调整为长期借款科目。",
+    voucherType: "receipt",
+    buildLines(amount) {
+      const value = money(amount);
+      return [
+        line("tpl-financing-loan-1", "确认借款到账", "1002", "银行存款", value, "0.00"),
+        line("tpl-financing-loan-2", "确认短期借款", "2001", "短期借款", "0.00", value)
+      ];
+    }
+  },
+  {
+    key: "rnd",
+    label: "研发支出（费用化）",
+    description: "借研发费用，贷银行存款。与 015 迁移真实分录（vch-009，委外研发首期款）口径一致；资本化研发投入请人工转入无形资产。",
+    voucherType: "payment",
+    buildLines(amount) {
+      const value = money(amount);
+      return [
+        line("tpl-rnd-1", "确认研发费用", "6401", "研发费用", value, "0.00"),
+        line("tpl-rnd-2", "确认研发支出付款", "1002", "银行存款", "0.00", value)
+      ];
+    }
+  },
+  {
+    key: "tax-income",
+    label: "企业所得税计提/预缴",
+    description: "借所得税费用，贷应交税费-企业所得税。",
+    voucherType: "accrual",
+    buildLines(amount) {
+      const value = money(amount);
+      return [
+        line("tpl-tax-income-1", "计提企业所得税", "6801", "所得税费用", value, "0.00"),
+        line("tpl-tax-income-2", "确认应交税费-企业所得税", "2221", "应交税费-企业所得税", "0.00", value)
+      ];
+    }
+  },
+  {
+    key: "tax-surcharge",
+    label: "印花税等税金及附加计提",
+    description: "借税金及附加，贷应交税费。覆盖印花税、城建税、教育费附加等场景；增值税、个人所得税代扣代缴涉及既有负债结转，不在此模板覆盖范围内。",
+    voucherType: "accrual",
+    buildLines(amount) {
+      const value = money(amount);
+      return [
+        line("tpl-tax-surcharge-1", "计提税金及附加", "6403", "税金及附加", value, "0.00"),
+        line("tpl-tax-surcharge-2", "确认应交税费", "2221", "应交税费", "0.00", value)
+      ];
+    }
   }
 ];
 
