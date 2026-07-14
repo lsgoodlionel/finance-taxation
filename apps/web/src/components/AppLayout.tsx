@@ -74,7 +74,6 @@ const navItems = [
       { key: "/inbox", icon: <InboxOutlined />, label: "我的一天" },
       { key: "/assistant", icon: <RobotOutlined />, label: "AI 财税助手" },
       { key: "/events", icon: <UnorderedListOutlined />, label: "经营事项总线" },
-      { key: "/tasks", icon: <CheckSquareOutlined />, label: "任务中心" },
       { key: "/dashboard/chairman", icon: <DashboardOutlined />, label: "董事长驾驶舱" },
       { key: "/close", icon: <CheckCircleOutlined />, label: "月度结账" },
     ],
@@ -87,7 +86,6 @@ const navItems = [
       { key: "/contracts", icon: <FileTextOutlined />, label: "合同管理" },
       { key: "/counterparties", icon: <TeamOutlined />, label: "往来单位" },
       { key: "/payroll", icon: <TeamOutlined />, label: "工资管理" },
-      { key: "/payroll/transfer", icon: <BankOutlined />, label: "工资代发与社保" },
     ],
   },
   {
@@ -95,11 +93,11 @@ const navItems = [
     label: "财务运营",
     type: "group" as const,
     children: [
-      { key: "/documents", icon: <FolderOpenOutlined />, label: "单据中心" },
+      { key: "/bills", icon: <ProfileOutlined />, label: "票据中心" },
       { key: "/vouchers", icon: <AuditOutlined />, label: "凭证中心" },
       { key: "/ledger", icon: <BarChartOutlined />, label: "总账中心" },
       { key: "/reports", icon: <LineChartOutlined />, label: "财务报表" },
-      { key: "/archive-package", icon: <FolderOpenOutlined />, label: "财税资料包" },
+      { key: "/export-center", icon: <ExportOutlined />, label: "导出与归档" },
     ],
   },
   {
@@ -121,21 +119,11 @@ const navItems = [
     ],
   },
   {
-    key: "g-integration",
-    label: "外部系统对接",
-    type: "group" as const,
-    children: [
-      { key: "/invoices", icon: <ProfileOutlined />, label: "发票台账" },
-      { key: "/banking",  icon: <BankOutlined />,    label: "银行管理" },
-    ],
-  },
-  {
     key: "g-tools",
     label: "AI 与工具",
     type: "group" as const,
     children: [
       { key: "/knowledge", icon: <BookOutlined />, label: "制度库" },
-      { key: "/pdf-export", icon: <ExportOutlined />, label: "PDF 导出" },
     ],
   },
   {
