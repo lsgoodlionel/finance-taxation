@@ -5,6 +5,7 @@
  * 支持多对接类型（顶部切换）：
  *   - invoice_verify 发票验真（local / etax / baiwang / nuonuo / custom）
  *   - bank_api       银行直连（manual / cmb / ccb / custom）
+ *   - notification   企业通知（none / feishu / wework）—— 凭证字段标签按类型自适应
  *
  * 通用能力：切换服务商、填写 API Key / Secret / AppId / Endpoint、测试连接、查看状态。
  */
@@ -16,6 +17,7 @@ import {
 import {
   CheckCircleOutlined, CloseCircleOutlined, QuestionCircleOutlined,
   ApiOutlined, SafetyOutlined, LinkOutlined, ExperimentOutlined, BankOutlined,
+  NotificationOutlined,
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import {
@@ -28,7 +30,7 @@ const { Text, Link } = Typography;
 
 const PLACEHOLDER_MASKED = "••••••••";
 
-type ConfigType = "invoice_verify" | "bank_api";
+type ConfigType = "invoice_verify" | "bank_api" | "notification";
 
 interface ConfigTypeMeta {
   label: string;
@@ -53,7 +55,36 @@ const CONFIG_TYPE_META: Record<ConfigType, ConfigTypeMeta> = {
     endpointPlaceholder: "https://api.bank.example.com/enterprise",
     endpointHint: "POST 接口：流水 {accountNo,dateFrom,dateTo}→{statements:[...]}；代发 {lines:[...]}→{ok,ref}",
   },
+  notification: {
+    label: "企业通知",
+    defaultProvider: "none",
+    title: "企业通知渠道配置",
+    endpointPlaceholder: "https://open.feishu.cn/open-apis/...",
+    endpointHint: "自定义通知渠道的回调/推送地址（飞书/企业微信官方渠道通常无需填写）",
+  },
 };
+
+/** 凭证字段（apiKey / apiSecret / appId）在不同对接类型下的标签与说明文案 */
+interface CredentialFieldLabel {
+  text: string;
+  tooltip: string;
+}
+
+const NOTIFICATION_FIELD_LABELS: Record<"apiKey" | "apiSecret" | "appId", CredentialFieldLabel> = {
+  appId:     { text: "App ID",     tooltip: "飞书 / 企业微信开放平台的应用 App ID" },
+  apiSecret: { text: "App Secret", tooltip: "与 App ID 配套的应用密钥，用于换取访问令牌" },
+  apiKey:    { text: "默认接收人（open_id/user_id）", tooltip: "测试消息与默认通知的接收人 open_id 或 user_id" },
+};
+
+const DEFAULT_FIELD_LABELS: Record<"apiKey" | "apiSecret" | "appId", CredentialFieldLabel> = {
+  apiKey:    { text: "API Key",           tooltip: "服务商提供的 API 密钥 / 接入令牌" },
+  apiSecret: { text: "API Secret",        tooltip: "与 API Key 配套的密钥，用于请求签名" },
+  appId:     { text: "App ID / 应用编号", tooltip: "开放平台应用管理中的 appId" },
+};
+
+function getCredentialFieldLabel(configType: ConfigType, field: "apiKey" | "apiSecret" | "appId"): CredentialFieldLabel {
+  return configType === "notification" ? NOTIFICATION_FIELD_LABELS[field] : DEFAULT_FIELD_LABELS[field];
+}
 
 interface IntegrationSettingsTabProps {
   companyId?: string;
@@ -160,6 +191,7 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
         options={[
           { label: <Space><SafetyOutlined />发票验真</Space>, value: "invoice_verify" },
           { label: <Space><BankOutlined />银行直连</Space>, value: "bank_api" },
+          { label: <Space><NotificationOutlined />企业通知</Space>, value: "notification" },
         ]}
       />
 
@@ -195,6 +227,15 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
           type="info" showIcon icon={<BankOutlined />}
           message="银行 API 直连"
           description="配置后可自动拉取银行流水并触发对账，以及通过 API 推送工资代发指令。未配置（手工模式）时继续使用 CSV 流水导入与网银上传代发文件。"
+        />
+      )}
+
+      {/* 企业通知能力说明（仅通知类型）*/}
+      {configType === "notification" && (
+        <Alert
+          type="info" showIcon icon={<NotificationOutlined />}
+          message="企业通知渠道"
+          description="飞书：填 App ID + App Secret + 默认接收人；测试将验证鉴权连通。企业微信连通测试待实现。"
         />
       )}
 
@@ -265,37 +306,37 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
 
           {meta?.requiresApiKey && (
             <Form.Item name="apiKey" label={
-              <Space><span>API Key</span>
-                <Tooltip title="服务商提供的 API 密钥 / 接入令牌">
+              <Space><span>{getCredentialFieldLabel(configType, "apiKey").text}</span>
+                <Tooltip title={getCredentialFieldLabel(configType, "apiKey").tooltip}>
                   <QuestionCircleOutlined style={{ color: "#94a3b8" }} />
                 </Tooltip>
               </Space>
             }>
-              <Input.Password placeholder={config?.apiKey ? PLACEHOLDER_MASKED : "请输入 API Key"} style={{ maxWidth: 360 }} autoComplete="off" />
+              <Input.Password placeholder={config?.apiKey ? PLACEHOLDER_MASKED : `请输入${getCredentialFieldLabel(configType, "apiKey").text}`} style={{ maxWidth: 360 }} autoComplete="off" />
             </Form.Item>
           )}
 
           {meta?.requiresApiSecret && (
             <Form.Item name="apiSecret" label={
-              <Space><span>API Secret</span>
-                <Tooltip title="与 API Key 配套的密钥，用于请求签名">
+              <Space><span>{getCredentialFieldLabel(configType, "apiSecret").text}</span>
+                <Tooltip title={getCredentialFieldLabel(configType, "apiSecret").tooltip}>
                   <QuestionCircleOutlined style={{ color: "#94a3b8" }} />
                 </Tooltip>
               </Space>
             }>
-              <Input.Password placeholder={config?.apiSecret ? PLACEHOLDER_MASKED : "请输入 API Secret"} style={{ maxWidth: 360 }} autoComplete="off" />
+              <Input.Password placeholder={config?.apiSecret ? PLACEHOLDER_MASKED : `请输入${getCredentialFieldLabel(configType, "apiSecret").text}`} style={{ maxWidth: 360 }} autoComplete="off" />
             </Form.Item>
           )}
 
           {meta?.requiresAppId && (
             <Form.Item name="appId" label={
-              <Space><span>App ID / 应用编号</span>
-                <Tooltip title="开放平台应用管理中的 appId">
+              <Space><span>{getCredentialFieldLabel(configType, "appId").text}</span>
+                <Tooltip title={getCredentialFieldLabel(configType, "appId").tooltip}>
                   <QuestionCircleOutlined style={{ color: "#94a3b8" }} />
                 </Tooltip>
               </Space>
             }>
-              <Input placeholder={config?.appId ? PLACEHOLDER_MASKED : "请输入 App ID"} style={{ maxWidth: 360 }} autoComplete="off" />
+              <Input placeholder={config?.appId ? PLACEHOLDER_MASKED : `请输入${getCredentialFieldLabel(configType, "appId").text}`} style={{ maxWidth: 360 }} autoComplete="off" />
             </Form.Item>
           )}
 
@@ -325,9 +366,12 @@ export function IntegrationSettingsTab(_props: IntegrationSettingsTabProps) {
 
         <Divider style={{ margin: "16px 0" }} />
         <Text type="secondary" style={{ fontSize: 12 }}>
-          {configType === "invoice_verify"
-            ? "提示：local 本地规则无需联网；接入国税/百望/诺诺需对应平台凭证。敏感字段保存后以掩码显示，留空则保留原值。"
-            : "提示：manual 手工模式无需配置；招行/建行直连需企业网银证书与开放平台签约。敏感字段保存后以掩码显示，留空则保留原值。"}
+          {configType === "invoice_verify" &&
+            "提示：local 本地规则无需联网；接入国税/百望/诺诺需对应平台凭证。敏感字段保存后以掩码显示，留空则保留原值。"}
+          {configType === "bank_api" &&
+            "提示：manual 手工模式无需配置；招行/建行直连需企业网银证书与开放平台签约。敏感字段保存后以掩码显示，留空则保留原值。"}
+          {configType === "notification" &&
+            "提示：none 表示不启用通知渠道；飞书需在开放平台创建企业自建应用获取 App ID / Secret。敏感字段保存后以掩码显示，留空则保留原值。"}
         </Text>
       </Card>
     </Space>

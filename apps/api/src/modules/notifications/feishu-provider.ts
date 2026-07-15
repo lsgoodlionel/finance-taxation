@@ -85,6 +85,16 @@ export class FeishuNotificationProvider implements NotificationProvider {
     return this.cache.token;
   }
 
+  /** 连接测试：仅验证 App ID/Secret 能换取 tenant_access_token（不发消息）。 */
+  async validateCredentials(): Promise<{ ok: boolean; message: string }> {
+    try {
+      await this.tenantAccessToken();
+      return { ok: true, message: "飞书鉴权成功：tenant_access_token 获取正常。" };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
   async send(message: NotificationMessage, opts?: { receiveId?: string }): Promise<NotificationResult> {
     const receiveId = opts?.receiveId ?? this.config.defaultReceiveId;
     if (!receiveId) {
