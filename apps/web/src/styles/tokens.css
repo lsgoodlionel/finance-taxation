@@ -36,3 +36,9 @@
   line-height: var(--v7-guided-nav-item-height) !important;
   font-size: var(--v7-guided-nav-font-size) !important;
 }
+
+/* V7 L4 表格密度：仅紧凑档收紧 antd 单元格 padding，舒适档保持 antd 默认 */
+.v3-table-shell[data-density="compact"] .ant-table-cell {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}

@@ -6,7 +6,7 @@ import {
 } from "@ant-design/icons";
 import type { VoucherDetail, VoucherTemplate } from "../../lib/api";
 import { VOUCHER_STATUS_LABELS, VOUCHER_TYPE_LABELS, useI18n } from "../../lib/i18n";
-import { BalanceIndicator } from "./BalanceIndicator";
+import { ValidationHintPanel } from "./ValidationHintPanel";
 
 const { Text, Title } = Typography;
 
@@ -162,8 +162,8 @@ export function VoucherDetailPanel({
         </Button>
       </Space>
 
-      {/* Validation result */}
-      {validation && <BalanceIndicator result={validation} />}
+      {/* Validation result with repair hints */}
+      {validation && <ValidationHintPanel result={validation} lines={detail.lines} />}
 
       {/* Action buttons */}
       {!isPosted && (

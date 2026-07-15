@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Row, Col, Card, Button, Space, Typography, Alert, Skeleton } from "antd";
+import { Row, Col, Card, Button, Space, Typography, Alert, Skeleton, Modal } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import type { Voucher } from "@finance-taxation/domain-model";
@@ -19,6 +19,13 @@ import { WorkflowRuntimeCard } from "../components/workflow/WorkflowRuntimeCard"
 import { VouchersList } from "./vouchers/VouchersList";
 import { VoucherDetailPanel } from "./vouchers/VoucherDetailPanel";
 import { VoucherCreateModal } from "./vouchers/VoucherCreateModal";
+import { BatchBar } from "./vouchers/BatchBar";
+import { useVoucherBatch } from "./vouchers/useVoucherBatch";
+import { buildValidationHints } from "./vouchers/validation-hints";
+import {
+  filterVouchersByTab, formatVoucherCode, resolveNextAction, voucherAmount, type VoucherTab,
+} from "./vouchers/voucher-actions";
+import { useListHotkeys } from "../lib/use-list-hotkeys";
 import { useAccessUser } from "../features/runtime/useAccessUser";
 import { deriveVoucherRuntimeSummary } from "../features/runtime/workflow-runtime";
 import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
@@ -73,7 +80,14 @@ export function VouchersPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [runtimeActionKey, setRuntimeActionKey] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<VoucherTab>("all");
   const accessUser = useAccessUser();
+
+  const visibleVouchers = useMemo(
+    () => filterVouchersByTab(vouchers, activeTab),
+    [vouchers, activeTab]
+  );
+  const batch = useVoucherBatch({ vouchers, onCompleted: () => refresh() });
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
 
@@ -132,6 +146,89 @@ export function VouchersPage() {
     } catch (err) {
       toast.error((err as Error).message);
     }
+  }
+
+  // ── Keyboard hotkeys (j/k/x/a/Enter) ──────────────────────────────────────
+  function withVisibleVoucher(action: (voucher: Voucher) => void) {
+    return (index: number) => {
+      const voucher = visibleVouchers[index];
+      if (voucher) action(voucher);
+    };
+  }
+
+  const { activeIndex, setActiveIndex } = useListHotkeys({
+    itemCount: visibleVouchers.length,
+    isEnabled: !loading && !modalOpen && !batch.running,
+    onToggle: withVisibleVoucher((voucher) => batch.toggleChecked(voucher.id)),
+    onPrimary: withVisibleVoucher((voucher) => void runNextAction(voucher)),
+    onOpen: withVisibleVoucher((voucher) => void handleSelect(voucher.id)),
+  });
+  const activeVoucherId = activeIndex >= 0 ? visibleVouchers[activeIndex]?.id ?? null : null;
+
+  function handleTabChange(tab: VoucherTab) {
+    setActiveTab(tab);
+    setActiveIndex(-1);
+    batch.clearChecked();
+  }
+
+  function handleRowClick(id: string) {
+    const index = visibleVouchers.findIndex((voucher) => voucher.id === id);
+    if (index >= 0) setActiveIndex(index);
+    void handleSelect(id);
+  }
+
+  // ── Smart next action (a key): draft → 校验+审核, review_required → 过账 ────
+  async function runValidateAndApprove(voucher: Voucher) {
+    setUpdating(true);
+    try {
+      const result = await validateVoucher(voucher.id);
+      setValidation(result);
+      if (!result.valid) {
+        const firstHint = buildValidationHints({ ...result, lines: voucher.lines })[0];
+        toast.error(firstHint ? firstHint.problem : "借贷校验未通过，请检查分录");
+        return;
+      }
+      await approveVoucher(voucher.id);
+      await refresh(voucher.id);
+      toast.success("借贷校验通过，凭证已审核");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setUpdating(false);
+    }
+  }
+
+  function confirmAndPost(voucher: Voucher) {
+    // 过账影响总账和报表：键盘触发也必须二次确认
+    Modal.confirm({
+      title: "确认过账该凭证？",
+      okText: "确认过账",
+      cancelText: "取消",
+      content: `凭证 ${formatVoucherCode(voucher.id)}（¥${voucherAmount(voucher).toFixed(2)}）过账后将正式记入总账，影响总账和财务报表。`,
+      onOk: async () => {
+        try {
+          await postVoucher(voucher.id);
+          await refresh(voucher.id);
+          toast.success("凭证已过账，将影响总账和报表");
+        } catch (err) {
+          toast.error((err as Error).message);
+        }
+      },
+    });
+  }
+
+  async function runNextAction(voucher: Voucher) {
+    const action = resolveNextAction(voucher.status);
+    if (action === "none") {
+      toast.info("该凭证已过账，流程完结，无需操作");
+      return;
+    }
+    await handleSelect(voucher.id);
+    if (action === "validate_approve") {
+      await runValidateAndApprove(voucher);
+      return;
+    }
+    confirmAndPost(voucher);
   }
 
   // ── Validate ──────────────────────────────────────────────────────────────
@@ -331,13 +428,35 @@ export function VouchersPage() {
             <Col xs={24} lg={13}>
               <Card
                 title={<Space><Text strong>凭证对象</Text></Space>}
+                extra={(
+                  <Text type="secondary" style={{ fontSize: 11 }}>
+                    快捷键：j/k 移动 · Enter 打开 · x 勾选 · a 下一步
+                  </Text>
+                )}
                 style={{ borderRadius: 12 }}
                 styles={{ body: { padding: "0 0 8px" } }}
               >
+                <div style={{ padding: "8px 12px 0" }}>
+                  <BatchBar
+                    checkedCount={batch.checkedIds.length}
+                    approvableCount={batch.approvableCount}
+                    postableCount={batch.postableCount}
+                    running={batch.running}
+                    progress={batch.progress}
+                    onBatchApprove={batch.startBatchApprove}
+                    onBatchPost={batch.startBatchPost}
+                    onClear={batch.clearChecked}
+                  />
+                </div>
                 <VouchersList
                   vouchers={vouchers}
                   selectedId={selectedId}
-                  onSelect={id => void handleSelect(id)}
+                  activeId={activeVoucherId}
+                  activeTab={activeTab}
+                  checkedIds={batch.checkedIds}
+                  onTabChange={handleTabChange}
+                  onSelect={handleRowClick}
+                  onCheckedChange={batch.replaceChecked}
                 />
               </Card>
             </Col>

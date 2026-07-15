@@ -1,11 +1,15 @@
 /**
  * 收件箱 · 单条 AI 草稿行
  * 从 InboxAiDraftsCard 拆出，展示单条草稿的摘要/分级/分录明细与批准驳回操作。
+ * V7 Stage L：批量勾选 Checkbox、键盘高亮态、受控展开（Enter 热键）、
+ * 借贷合计校验（借=贷 ✓）与来源事项回溯链接。
  */
-import { Button, Collapse, Input, Popconfirm, Space, Table, Tag, Typography } from "antd";
+import type { CSSProperties } from "react";
+import { Button, Checkbox, Collapse, Input, Popconfirm, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, LinkOutlined } from "@ant-design/icons";
 import type { CloseDraft, CloseDraftLine } from "../../lib/api";
+import { computeDraftTotals, formatCny, toAmount } from "./draft-batch";
 
 const { Text } = Typography;
 
@@ -29,8 +33,8 @@ function balancedTag(balanced: boolean | null) {
 // 后端把 debit/credit 序列化为「元」字符串（如 "1000.00"）。防御性转数字，避免
 // 对字符串调用 .toFixed 抛错（H-2）。
 function formatYuan(v: number | string): string {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) && n > 0 ? `¥${n.toFixed(2)}` : "—";
+  const n = toAmount(v);
+  return n > 0 ? formatCny(n) : "—";
 }
 
 const LINE_COLUMNS: ColumnsType<CloseDraftLine> = [
@@ -40,6 +44,17 @@ const LINE_COLUMNS: ColumnsType<CloseDraftLine> = [
   { title: "贷方", dataIndex: "credit", key: "credit", align: "right", render: formatYuan },
 ];
 
+/** 借贷合计校验展示：借 X = 贷 Y ✓ / ✗ */
+function DraftTotalsCheck({ lines }: { lines: readonly CloseDraftLine[] }) {
+  const totals = computeDraftTotals(lines);
+  return (
+    <Text type={totals.isBalanced ? "success" : "danger"} style={{ fontSize: 11 }}>
+      借 {formatCny(totals.debit)} {totals.isBalanced ? "=" : "≠"} 贷 {formatCny(totals.credit)}{" "}
+      {totals.isBalanced ? "✓" : "✗"}
+    </Text>
+  );
+}
+
 interface InboxAiDraftItemProps {
   draft: CloseDraft;
   reason: string;
@@ -47,32 +62,71 @@ interface InboxAiDraftItemProps {
   acting: "approve" | "reject" | null;
   onApprove: () => void;
   onReject: () => void;
+  isSelected: boolean;
+  onSelectedChange: (checked: boolean) => void;
+  /** 键盘 j/k 高亮态：左侧蓝条 + 浅底。 */
+  isActive: boolean;
+  /** 分录明细展开态（受控，Enter 热键切换）。 */
+  isExpanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+  /** 来源事项回溯：跳转 /events 深链。 */
+  onOpenSourceEvent: () => void;
 }
 
-export function InboxAiDraftItem({ draft, reason, onReasonChange, acting, onApprove, onReject }: InboxAiDraftItemProps) {
+function containerStyle(isActive: boolean): CSSProperties {
+  return {
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: isActive ? "1px solid rgba(37,99,235,0.45)" : "1px solid rgba(20,40,60,0.08)",
+    borderLeft: isActive ? "4px solid #2563eb" : "4px solid rgba(37,99,235,0.25)",
+    background: isActive ? "#eff6ff" : "transparent",
+    transition: "background 0.15s ease, border-color 0.15s ease",
+  };
+}
+
+export function InboxAiDraftItem({
+  draft, reason, onReasonChange, acting, onApprove, onReject,
+  isSelected, onSelectedChange, isActive, isExpanded, onExpandedChange, onOpenSourceEvent,
+}: InboxAiDraftItemProps) {
   return (
-    <div
-      style={{
-        padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(20,40,60,0.08)",
-        borderLeft: "3px solid #2563eb",
-      }}
-    >
+    <div style={containerStyle(isActive)} data-testid="inbox-ai-draft-item" data-active={isActive || undefined}>
       <Space direction="vertical" size={6} style={{ width: "100%" }}>
         <Space wrap size={6}>
+          <Checkbox
+            checked={isSelected}
+            onChange={(e) => onSelectedChange(e.target.checked)}
+            aria-label={`勾选草稿：${draft.summary}`}
+          />
           <Text strong style={{ fontSize: 13 }}>{draft.summary}</Text>
           {proposalLevelTag(draft.proposalLevel)}
           {balancedTag(draft.balanced)}
         </Space>
-        <Text type="secondary" style={{ fontSize: 11 }}>
-          事项 {draft.businessEventId} · 凭证类型 {draft.voucherType}
-        </Text>
+        <Space wrap size={6}>
+          <Text type="secondary" style={{ fontSize: 11 }}>
+            事项 {draft.businessEventId} · 凭证类型 {draft.voucherType}
+          </Text>
+          <Button
+            type="link" size="small" icon={<LinkOutlined />}
+            style={{ fontSize: 11, padding: 0, height: "auto" }}
+            onClick={onOpenSourceEvent}
+          >
+            来源事项
+          </Button>
+        </Space>
 
         <Collapse
           ghost
           size="small"
+          activeKey={isExpanded ? ["lines"] : []}
+          onChange={(keys) => onExpandedChange(keys.length > 0)}
           items={[{
             key: "lines",
-            label: `查看分录明细（${draft.lines.length} 条）`,
+            label: (
+              <Space size={8} wrap>
+                <span>{`查看分录明细（${draft.lines.length} 条）`}</span>
+                <DraftTotalsCheck lines={draft.lines} />
+              </Space>
+            ),
             children: (
               <Table
                 dataSource={draft.lines}
