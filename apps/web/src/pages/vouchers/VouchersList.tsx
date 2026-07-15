@@ -1,30 +1,42 @@
+import type { CSSProperties } from "react";
 import { Table, Tag, Tabs, Typography, Empty } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { Voucher, VoucherStatus } from "@finance-taxation/domain-model";
-import { VOUCHER_STATUS_LABELS, VOUCHER_TYPE_LABELS, useI18n } from "../../lib/i18n";
+import { VOUCHER_TYPE_LABELS, useI18n } from "../../lib/i18n";
+import { VoucherStatusFlow } from "./VoucherStatusFlow";
+import { filterVouchersByTab, type VoucherTab } from "./voucher-actions";
 
 const { Text } = Typography;
 
-const STATUS_COLOR: Record<VoucherStatus, string> = {
-  draft:            "default",
-  review_required:  "warning",
-  posted:           "success",
-};
-
-const TAB_ITEMS: { key: VoucherStatus | "all"; label: string }[] = [
-  { key: "all",            label: "全部" },
-  { key: "draft",          label: "草稿" },
+const TAB_ITEMS: { key: VoucherTab; label: string }[] = [
+  { key: "all",             label: "全部" },
+  { key: "draft",           label: "草稿" },
   { key: "review_required", label: "待审核" },
-  { key: "posted",         label: "已过账" },
+  { key: "posted",          label: "已过账" },
 ];
 
 interface VouchersListProps {
   vouchers: Voucher[];
   selectedId: string | null;
+  /** 键盘 j/k 高亮的凭证。 */
+  activeId?: string | null;
+  activeTab: VoucherTab;
+  checkedIds: string[];
+  onTabChange: (tab: VoucherTab) => void;
   onSelect: (id: string) => void;
+  onCheckedChange: (ids: string[]) => void;
 }
 
-export function VouchersList({ vouchers, selectedId, onSelect }: VouchersListProps) {
+export function VouchersList({
+  vouchers,
+  selectedId,
+  activeId,
+  activeTab,
+  checkedIds,
+  onTabChange,
+  onSelect,
+  onCheckedChange,
+}: VouchersListProps) {
   const { t } = useI18n();
 
   const columns: ColumnsType<Voucher> = [
@@ -40,31 +52,35 @@ export function VouchersList({ vouchers, selectedId, onSelect }: VouchersListPro
       ),
     },
     {
-      title: "类型", dataIndex: "voucherType", key: "type", width: 90,
+      title: "类型", dataIndex: "voucherType", key: "type", width: 78,
       render: (v: string) => <Tag style={{ fontSize: 11 }}>{t(VOUCHER_TYPE_LABELS, v)}</Tag>,
     },
     {
-      title: "状态", dataIndex: "status", key: "status", width: 90,
-      render: (status: VoucherStatus) => (
-        <Tag color={STATUS_COLOR[status]} style={{ fontSize: 11 }}>
-          {t(VOUCHER_STATUS_LABELS, status)}
-        </Tag>
-      ),
+      title: "状态流转", dataIndex: "status", key: "status", width: 168,
+      render: (status: VoucherStatus) => <VoucherStatusFlow status={status} />,
     },
     {
-      title: "关联事项", dataIndex: "businessEventId", key: "event", width: 130,
-      render: (v: string) => v ? <Text type="secondary" style={{ fontSize: 11 }}>{v.slice(0, 8)}</Text> : "—",
-    },
-    {
-      title: "创建日期", dataIndex: "createdAt", key: "createdAt", width: 110,
+      title: "创建日期", dataIndex: "createdAt", key: "createdAt", width: 96,
       render: (v: string) => <Text style={{ fontSize: 12 }}>{v?.slice(0, 10)}</Text>,
     },
   ];
+
+  function rowStyle(record: Voucher): CSSProperties {
+    if (record.id === activeId) {
+      return { cursor: "pointer", background: "rgba(37,99,235,0.12)", boxShadow: "inset 3px 0 0 #2563eb" };
+    }
+    if (record.id === selectedId) {
+      return { cursor: "pointer", background: "rgba(37,99,235,0.05)" };
+    }
+    return { cursor: "pointer" };
+  }
 
   return (
     <Tabs
       size="small"
       style={{ marginBottom: 0 }}
+      activeKey={activeTab}
+      onChange={(key) => onTabChange(key as VoucherTab)}
       items={TAB_ITEMS.map(tab => ({
         key: tab.key,
         label: (
@@ -79,15 +95,20 @@ export function VouchersList({ vouchers, selectedId, onSelect }: VouchersListPro
         ),
         children: (
           <Table
-            dataSource={tab.key === "all" ? vouchers : vouchers.filter(v => v.status === tab.key)}
+            dataSource={filterVouchersByTab(vouchers, tab.key)}
             columns={columns}
             rowKey="id"
             size="small"
             pagination={{ pageSize: 15, hideOnSinglePage: true, size: "small" }}
             locale={{ emptyText: <Empty description="暂无凭证" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
             rowClassName={record => record.id === selectedId ? "ant-table-row-selected" : ""}
+            rowSelection={{
+              selectedRowKeys: checkedIds,
+              columnWidth: 36,
+              onChange: (keys) => onCheckedChange(keys.map(String)),
+            }}
             onRow={record => ({
-              style: { cursor: "pointer", background: record.id === selectedId ? "rgba(37,99,235,0.05)" : undefined },
+              style: rowStyle(record),
               onClick: () => onSelect(record.id),
             })}
           />

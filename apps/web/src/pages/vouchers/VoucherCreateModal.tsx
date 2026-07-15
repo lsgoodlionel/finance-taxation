@@ -1,6 +1,7 @@
 import { Modal, Form, Select, Input, Typography, Alert, Space } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import type { VoucherTemplate } from "../../lib/api";
+import { VALIDATION_GUIDE_ITEMS } from "./validation-hints";
 
 const { Text } = Typography;
 
@@ -92,6 +93,22 @@ export function VoucherCreateModal({
           <Input placeholder="凭证摘要，留空则使用模板默认摘要" />
         </Form.Item>
       </Form>
+      <div
+        style={{
+          borderRadius: 8,
+          background: "#f8fafc",
+          border: "1px solid #e2e8f0",
+          padding: "8px 12px",
+          fontSize: 12,
+          color: "#64748b",
+          lineHeight: 1.8,
+        }}
+      >
+        <Text strong style={{ fontSize: 12, color: "#475569" }}>生成后借贷校验不过怎么办：</Text>
+        {VALIDATION_GUIDE_ITEMS.map(item => (
+          <div key={item.problem}>· {item.problem}：{item.advice}</div>
+        ))}
+      </div>
     </Modal>
   );
 }
