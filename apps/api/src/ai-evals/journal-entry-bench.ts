@@ -3,9 +3,13 @@
  *
  * 量化 suggestAccountingEntry() 的分类准确率，作为 M4「自动记账 ≥80%」的验收门。
  * 纯函数、无 DB、无网络：黄金集取材于 STARTUP_YEAR1_SIMULATION.md 的 28 个首年场景
- * 及 migrations/015_startup_year1_simulation.sql 的 business_events 真实记录，
- * 覆盖 sales / procurement / expense / payroll / asset / invoice 六个已支持模板类型，
- * 以及缺金额、未知事项类型、无模板真实类型（general/financing/rnd/tax）等边界情况。
+ * 及 migrations/015_startup_year1_simulation.sql 的 business_events / voucher_lines 真实记录，
+ * 覆盖 sales / procurement / expense / payroll / asset / rnd 七个直接按事项类型映射的模板，
+ * 以及 invoice（按标题关键词推断进项/销项方向）、financing（按标题区分股东出资 vs 银行借款）、
+ * tax（按标题区分企业所得税计提 vs 印花税等税金及附加计提）三类需子分类推断的模板；
+ * 并保留 general（真正的杂项事项，无单一标准处理）、增值税/个人所得税（涉及既有负债结转或
+ * 代扣代缴，无法从标题+金额可靠推断科目）、缺金额、未知事项类型等边界情况，验证其正确地
+ * 判定为 needsReview 而非被错误地套用模板。
  */
 
 import {
@@ -141,18 +145,118 @@ export const GOLDEN_CASES: GoldenCase[] = [
     expectBalanced: true,
   },
 
-  // ── invoice（进项发票入账符合当前模板设计；销项发票误判为已知局限，标注红线）──
+  // ── invoice（按标题关键词推断进项/销项方向；也可通过 event.direction 显式指定）──
   {
-    name: "供应商增值税专用发票入账（进项，符合设计）",
+    name: "供应商增值税专用发票入账（进项，标题推断）",
     event: { id: "evt-inv-001", type: "invoice", title: "供应商增值税专用发票入账", amount: 22000 },
     expectedTemplateKey: "procurement",
     expectBalanced: true,
   },
   {
-    name: "开具销项发票确认收入（已知局限：invoice 类型恒按采购入账）",
+    name: "开具销项发票确认收入（销项，标题推断）",
     event: { id: "evt-inv-002", type: "invoice", title: "开具销项发票确认收入", amount: 53000 },
     expectedTemplateKey: "sales",
     expectBalanced: true,
+  },
+  {
+    name: "发票事项显式指定 direction=output（跳过标题推断）",
+    event: {
+      id: "evt-inv-003",
+      type: "invoice",
+      title: "客户C发票",
+      amount: 8000,
+      direction: "output",
+    },
+    expectedTemplateKey: "sales",
+    expectBalanced: true,
+  },
+  {
+    name: "发票事项显式指定 direction=input（跳过标题推断）",
+    event: {
+      id: "evt-inv-004",
+      type: "invoice",
+      title: "供应商D发票",
+      amount: 9000,
+      direction: "input",
+    },
+    expectedTemplateKey: "procurement",
+    expectBalanced: true,
+  },
+  {
+    name: "发票方向完全无法判断，保守按进项处理（needsReview 兜底）",
+    event: { id: "evt-inv-005", type: "invoice", title: "待分类发票", amount: 4300 },
+    expectedTemplateKey: "procurement",
+    expectBalanced: true,
+    expectNeedsReview: true,
+  },
+
+  // ── financing（借标题区分股东出资/增资 vs 银行借款，二者会计处理截然不同）──
+  {
+    name: "股东货币出资到账（出资→financing-equity，evt-002）",
+    event: { id: "evt-002", type: "financing", title: "股东货币出资到账", amount: 500000 },
+    expectedTemplateKey: "financing-equity",
+    expectBalanced: true,
+    expectNeedsReview: true,
+  },
+  {
+    name: "招商银行流动资金贷款到账（借款→financing-loan，evt-016）",
+    event: { id: "evt-016", type: "financing", title: "招商银行流动资金贷款到账", amount: 1000000 },
+    expectedTemplateKey: "financing-loan",
+    expectBalanced: true,
+    expectNeedsReview: true,
+  },
+  {
+    name: "融资事项标题无法区分出资/借款，保持人工判断",
+    event: { id: "evt-fin-003", type: "financing", title: "过桥资金安排跟进", amount: 50000 },
+    expectedTemplateKey: null,
+    expectBalanced: true,
+    expectNeedsReview: true,
+  },
+
+  // ── rnd（费用化研发投入，直接按事项类型映射；对齐 015 迁移真实分录 vch-009）──
+  {
+    name: "委外研发首期款支付（rnd→rnd 模板，evt-009）",
+    event: { id: "evt-009", type: "rnd", title: "委外研发首期款支付", amount: 120000 },
+    expectedTemplateKey: "rnd",
+    expectBalanced: true,
+    expectNeedsReview: true,
+  },
+  {
+    name: "阿里云服务器及SaaS工具订阅费（rnd→rnd 模板，evt-004）",
+    event: { id: "evt-004", type: "rnd", title: "阿里云服务器及SaaS工具订阅费", amount: 36000 },
+    expectedTemplateKey: "rnd",
+    expectBalanced: true,
+    expectNeedsReview: true,
+  },
+
+  // ── tax（借标题区分企业所得税计提 vs 印花税等税金及附加计提；增值税/个税结转场景保持人工判断）──
+  {
+    name: "企业所得税季度预缴（所得税→tax-income，evt-024）",
+    event: { id: "evt-024", type: "tax", title: "2026年第一季度企业所得税预缴", amount: 7500 },
+    expectedTemplateKey: "tax-income",
+    expectBalanced: true,
+    expectNeedsReview: true,
+  },
+  {
+    name: "合同印花税申报缴纳（印花税→tax-surcharge，evt-021）",
+    event: { id: "evt-021", type: "tax", title: "合同印花税申报缴纳", amount: 1040 },
+    expectedTemplateKey: "tax-surcharge",
+    expectBalanced: true,
+    expectNeedsReview: true,
+  },
+  {
+    name: "增值税月报申报（涉及既有销项税额结转，无法从标题+金额可靠推断科目，evt-019）",
+    event: { id: "evt-019", type: "tax", title: "2026年4月增值税月报申报", amount: 8320 },
+    expectedTemplateKey: null,
+    expectBalanced: true,
+    expectNeedsReview: true,
+  },
+  {
+    name: "个人所得税扣缴申报（本质是员工薪酬代扣而非公司费用，无法套用模板，evt-020）",
+    event: { id: "evt-020", type: "tax", title: "2026年4月个人所得税扣缴申报", amount: 3850 },
+    expectedTemplateKey: null,
+    expectBalanced: true,
+    expectNeedsReview: true,
   },
 
   // ── 边界：真实首年场景中存在、但当前无模板覆盖的事项类型（应正确判定为需人工复核）──
@@ -164,22 +268,8 @@ export const GOLDEN_CASES: GoldenCase[] = [
     expectNeedsReview: true,
   },
   {
-    name: "股东货币出资到账（financing 无模板，evt-002）",
-    event: { id: "evt-002", type: "financing", title: "股东货币出资到账", amount: 500000 },
-    expectedTemplateKey: null,
-    expectBalanced: true,
-    expectNeedsReview: true,
-  },
-  {
-    name: "委外研发首期款支付（rnd 无模板，evt-009）",
-    event: { id: "evt-009", type: "rnd", title: "委外研发首期款支付", amount: 120000 },
-    expectedTemplateKey: null,
-    expectBalanced: true,
-    expectNeedsReview: true,
-  },
-  {
-    name: "2026年4月增值税月报申报（tax 无模板，evt-019）",
-    event: { id: "evt-019", type: "tax", title: "2026年4月增值税月报申报", amount: 8320 },
+    name: "政府补助到账（general 类型内部治理混杂，仍保持人工判断，evt-018）",
+    event: { id: "evt-018", type: "general", title: "浦东新区科技型中小企业创业补贴", amount: 100000 },
     expectedTemplateKey: null,
     expectBalanced: true,
     expectNeedsReview: true,
