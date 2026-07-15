@@ -2,58 +2,51 @@ import { useState, useEffect, Suspense } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { RouteFallback } from "./RouteFallback";
 import {
-  Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid, Badge, Breadcrumb,
+  Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid, Badge, Breadcrumb, Segmented,
+  type MenuProps,
 } from "antd";
 import {
-  RobotOutlined, UnorderedListOutlined, CheckSquareOutlined, DashboardOutlined, CheckCircleOutlined, InboxOutlined, SearchOutlined,
-  FileTextOutlined, TeamOutlined, FolderOpenOutlined, AuditOutlined, BarChartOutlined,
-  LineChartOutlined, CalculatorOutlined, ExperimentOutlined, AlertOutlined, FileSearchOutlined,
-  BookOutlined, ExportOutlined, SettingOutlined, PoweroffOutlined, SafetyOutlined, MenuOutlined, CrownOutlined, BulbOutlined,
-  BankOutlined, ProfileOutlined,
+  SearchOutlined, PoweroffOutlined, SafetyOutlined, MenuOutlined,
 } from "@ant-design/icons";
-import { AUTH_EXPIRED_EVENT, getStoredToken, getCurrentUser, login, logoutSession, getInbox } from "../lib/api";
+import { AUTH_EXPIRED_EVENT, getStoredToken, getCurrentUser, login, logoutSession, getInbox, getMenu } from "../lib/api";
 import { GlobalPeriodPicker } from "./GlobalPeriodPicker";
 import { CommandPalette, useCommandPalette } from "./CommandPalette";
+import { LOGIN_GATE_SUBTITLE, SIDEBAR_BRAND_SUBTITLE } from "../lib/entry-guidance";
+import { useWorkspaceMode, type WorkspaceMode } from "../lib/workspace-mode";
+import {
+  buildBreadcrumb, filterNavByAllowedRoutes, guidedNavItems, proNavItems,
+  type NavEntry, type NavLeaf,
+} from "../lib/nav-filter";
 
 type NavBadges = Record<string, number>;
 
-/** 根据当前路由从导航树推导面包屑 [分组, 页面]。 */
-function buildBreadcrumb(pathname: string): { group: string; page: string } | null {
-  let best: { group: string; page: string; len: number } | null = null;
-  for (const group of navItems) {
-    for (const child of group.children ?? []) {
-      const key = child.key;
-      if (pathname === key || pathname.startsWith(key + "/")) {
-        if (!best || key.length > best.len) {
-          best = { group: group.label, page: typeof child.label === "string" ? child.label : key, len: key.length };
-        }
-      }
-    }
-  }
-  return best ? { group: best.group, page: best.page } : null;
+/** guided 模式侧栏副标题：面向老板的白话口径。 */
+const GUIDED_SIDEBAR_SUBTITLE = "看经营、问 AI、办审批，一个入口全搞定";
+
+/** 待办数量贴到叶子项 label 上（红色 Badge）。 */
+function decorateLeaf(item: NavLeaf, badges: NavBadges): NavLeaf {
+  const count = badges[item.key] ?? 0;
+  if (count <= 0) return item;
+  return {
+    ...item,
+    label: (
+      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8 }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
+        <Badge count={count} size="small" overflowCount={99}
+          style={{ backgroundColor: "#dc2626", boxShadow: "none" }} />
+      </span>
+    ),
+  };
 }
 
-/** 把待办数量贴到对应导航项的 label 上（红色 Badge）。 */
-function decorateNav(items: typeof navItems, badges: NavBadges) {
-  return items.map((group) => ({
-    ...group,
-    children: group.children?.map((child) => {
-      const count = badges[child.key] ?? 0;
-      if (count <= 0) return child;
-      return {
-        ...child,
-        label: (
-          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8 }}>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{child.label}</span>
-            <Badge count={count} size="small" overflowCount={99}
-              style={{ backgroundColor: "#dc2626", boxShadow: "none" }} />
-          </span>
-        ),
-      };
-    }),
-  }));
+/** 支持分组（pro）与扁平（guided）两种导航结构的角标装饰。 */
+function decorateNav(items: readonly NavEntry[], badges: NavBadges): NavEntry[] {
+  return items.map((item) =>
+    item.children
+      ? { ...item, children: item.children.map((child) => decorateLeaf(child, badges)) }
+      : decorateLeaf(item, badges)
+  );
 }
-import { LOGIN_GATE_SUBTITLE, SIDEBAR_BRAND_SUBTITLE } from "../lib/entry-guidance";
 
 const { Sider, Content } = Layout;
 const { Text } = Typography;
@@ -64,75 +57,6 @@ interface User {
   displayName: string;
   roleIds: string[];
 }
-
-const navItems = [
-  {
-    key: "g-entry",
-    label: "业务入口",
-    type: "group" as const,
-    children: [
-      { key: "/inbox", icon: <InboxOutlined />, label: "我的一天" },
-      { key: "/assistant", icon: <RobotOutlined />, label: "AI 财税助手" },
-      { key: "/events", icon: <UnorderedListOutlined />, label: "经营事项总线" },
-      { key: "/dashboard/chairman", icon: <DashboardOutlined />, label: "董事长驾驶舱" },
-    ],
-  },
-  {
-    key: "g-mgmt",
-    label: "经营管理",
-    type: "group" as const,
-    children: [
-      { key: "/contracts", icon: <FileTextOutlined />, label: "合同与往来" },
-      { key: "/payroll", icon: <TeamOutlined />, label: "工资管理" },
-    ],
-  },
-  {
-    key: "g-finance",
-    label: "财务运营",
-    type: "group" as const,
-    children: [
-      { key: "/bills", icon: <ProfileOutlined />, label: "票据中心" },
-      { key: "/vouchers", icon: <AuditOutlined />, label: "凭证中心" },
-      { key: "/ledger", icon: <BarChartOutlined />, label: "总账中心" },
-      { key: "/reports", icon: <LineChartOutlined />, label: "财务报表" },
-      { key: "/export-center", icon: <ExportOutlined />, label: "导出与归档" },
-    ],
-  },
-  {
-    key: "g-tax",
-    label: "税务人力",
-    type: "group" as const,
-    children: [
-      { key: "/tax", icon: <CalculatorOutlined />, label: "税务中心" },
-    ],
-  },
-  {
-    key: "g-risk",
-    label: "研发风控",
-    type: "group" as const,
-    children: [
-      { key: "/rnd", icon: <ExperimentOutlined />, label: "研发辅助账" },
-      { key: "/risk", icon: <AlertOutlined />, label: "风险勾稽" },
-      { key: "/audit", icon: <FileSearchOutlined />, label: "审计日志" },
-    ],
-  },
-  {
-    key: "g-tools",
-    label: "AI 与工具",
-    type: "group" as const,
-    children: [
-      { key: "/knowledge", icon: <BookOutlined />, label: "制度库" },
-    ],
-  },
-  {
-    key: "g-sys",
-    label: "系统",
-    type: "group" as const,
-    children: [
-      { key: "/settings", icon: <SettingOutlined />, label: "系统中心" },
-    ],
-  },
-];
 
 function LoginGate({ onLogin }: { onLogin: (user: User) => void }) {
   const [loading, setLoading] = useState(false);
@@ -216,17 +140,43 @@ function LoginGate({ onLogin }: { onLogin: (user: User) => void }) {
 
 const { useBreakpoint } = Grid;
 
+/** 双轨侧栏配色：guided 浅色（老板端），pro 深色（专业端）。 */
+function sidebarPalette(isGuided: boolean) {
+  if (isGuided) {
+    return {
+      bg: "#f8fafc",
+      divider: "1px solid #e2e8f0",
+      brandTitle: "#0f172a",
+      brandSub: "#64748b",
+      userName: "#1e293b",
+      userMeta: "#94a3b8",
+    };
+  }
+  return {
+    bg: "#0f172a",
+    divider: "1px solid rgba(255,255,255,0.07)",
+    brandTitle: "#f1f5f9",
+    brandSub: "#475569",
+    userName: "#e2e8f0",
+    userMeta: "#475569",
+  };
+}
+
 export function AppLayout() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [badges, setBadges] = useState<NavBadges>({});
+  // null = 未加载或菜单接口失败：降级放行全部导航（filterNavByAllowedRoutes 对 null 直通）
+  const [allowedRoutes, setAllowedRoutes] = useState<ReadonlySet<string> | null>(null);
+  const { mode, setMode, initFromRoles } = useWorkspaceMode();
   const cmd = useCommandPalette();
   const navigate = useNavigate();
   const location = useLocation();
   const screens = useBreakpoint();
   const isMobile = !screens.lg;
+  const isGuided = mode === "guided";
 
   // 拉取待办数量，贴成导航角标（登录后 + 切换路由时刷新）
   useEffect(() => {
@@ -250,14 +200,30 @@ export function AppLayout() {
     return () => { cancelled = true; };
   }, [user, location.pathname]);
 
+  // J2：登录后拉取 RBAC 菜单，得到可见路由集合；失败降级显示全部
+  useEffect(() => {
+    if (!user) { setAllowedRoutes(null); return; }
+    let cancelled = false;
+    void getMenu()
+      .then((data) => {
+        if (cancelled) return;
+        setAllowedRoutes(new Set(data.items.map((item) => item.route)));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAllowedRoutes(null); // 降级：不把用户锁在空导航里，页面级权限仍由后端兜底
+      });
+    return () => { cancelled = true; };
+  }, [user]);
+
   useEffect(() => {
     const token = getStoredToken();
     if (!token) { setChecking(false); return; }
     getCurrentUser()
-      .then(u => setUser(u as User))
+      .then(u => { initFromRoles((u as User).roleIds); setUser(u as User); })
       .catch(() => {})
       .finally(() => setChecking(false));
-  }, []);
+  }, [initFromRoles]);
 
   useEffect(() => {
     function handleAuthExpired() {
@@ -286,7 +252,11 @@ export function AppLayout() {
     );
   }
 
-  if (!user) return <LoginGate onLogin={setUser} />;
+  if (!user) {
+    return (
+      <LoginGate onLogin={(u) => { initFromRoles(u.roleIds); setUser(u); }} />
+    );
+  }
 
   const initials = (user.displayName || user.username || "U").slice(0, 2).toUpperCase();
   const roleLabel =
@@ -294,13 +264,31 @@ export function AppLayout() {
     user.roleIds.includes("role-finance-director") || user.roleIds.includes("cfo") ? "财务总监" :
     user.roleIds.includes("role-accountant") || user.roleIds.includes("accountant") ? "会计" : "成员";
 
+  const palette = sidebarPalette(isGuided);
+  const baseNav = isGuided ? guidedNavItems : proNavItems;
+  const visibleNav = decorateNav(filterNavByAllowedRoutes(baseNav, allowedRoutes), badges);
+
+  const modeSwitcher = (block: boolean) => (
+    <Segmented
+      size="small"
+      block={block}
+      value={mode}
+      onChange={(value) => setMode(value as WorkspaceMode)}
+      options={[
+        { label: "引导模式", value: "guided" },
+        { label: "专业模式", value: "pro" },
+      ]}
+      aria-label="工作区模式切换"
+    />
+  );
+
   // Shared sidebar content for both desktop Sider and mobile Drawer
-  const sidebarContent = (showFull: boolean) => (
-    <div style={{ background: "#0f172a", height: "100%", display: "flex", flexDirection: "column" }}>
+  const sidebarContent = (showFull: boolean, withModeSwitcher = false) => (
+    <div style={{ background: palette.bg, height: "100%", display: "flex", flexDirection: "column" }}>
       {/* Brand */}
       <div style={{
         padding: showFull ? "18px 16px 14px" : "18px 0 14px",
-        borderBottom: "1px solid rgba(255,255,255,0.07)",
+        borderBottom: palette.divider,
         textAlign: showFull ? "left" : "center",
       }}>
         <div style={{
@@ -313,24 +301,32 @@ export function AppLayout() {
         </div>
         {showFull && (
           <>
-            <div style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>
+            <div style={{ color: palette.brandTitle, fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>
               Finance Taxation
             </div>
-            <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>
-              {SIDEBAR_BRAND_SUBTITLE}
+            <div style={{ color: palette.brandSub, fontSize: 11, marginTop: 2 }}>
+              {isGuided ? GUIDED_SIDEBAR_SUBTITLE : SIDEBAR_BRAND_SUBTITLE}
             </div>
           </>
         )}
       </div>
 
+      {/* 模式切换（移动端抽屉内） */}
+      {withModeSwitcher && (
+        <div style={{ padding: "12px 16px", borderBottom: palette.divider }}>
+          {modeSwitcher(true)}
+        </div>
+      )}
+
       {/* Navigation */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: isGuided ? "var(--v7-guided-space) 0" : "6px 0" }}>
         <Menu
           mode="inline"
-          theme="dark"
+          theme={isGuided ? "light" : "dark"}
+          className={isGuided ? "v7-guided-nav" : undefined}
           selectedKeys={[location.pathname]}
-          style={{ background: "transparent", border: "none", fontSize: 13 }}
-          items={decorateNav(navItems, badges)}
+          style={{ background: "transparent", border: "none", fontSize: isGuided ? "var(--v7-guided-nav-font-size)" : 13 }}
+          items={visibleNav as MenuProps["items"]}
           inlineCollapsed={!showFull}
           onClick={({ key }) => {
             navigate(key);
@@ -343,7 +339,7 @@ export function AppLayout() {
       {/* User footer */}
       <div style={{
         padding: showFull ? "10px 14px" : "10px 0",
-        borderTop: "1px solid rgba(255,255,255,0.07)",
+        borderTop: palette.divider,
         display: "flex", alignItems: "center", gap: 8,
         justifyContent: showFull ? "flex-start" : "center",
       }}>
@@ -357,10 +353,10 @@ export function AppLayout() {
         {showFull && (
           <>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: "#e2e8f0", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ color: palette.userName, fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {user.displayName || user.username}
               </div>
-              <div style={{ color: "#475569", fontSize: 11 }}>{roleLabel}</div>
+              <div style={{ color: palette.userMeta, fontSize: 11 }}>{roleLabel}</div>
             </div>
             <Button
               type="text"
@@ -369,7 +365,7 @@ export function AppLayout() {
               onClick={handleLogout}
               aria-label="退出登录"
               title="退出登录"
-              style={{ color: "#475569", padding: "0 4px" }}
+              style={{ color: palette.userMeta, padding: "0 4px" }}
             />
           </>
         )}
@@ -415,10 +411,10 @@ export function AppLayout() {
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           width={256}
-          styles={{ body: { padding: 0, background: "#0f172a" }, header: { display: "none" } }}
+          styles={{ body: { padding: 0, background: palette.bg }, header: { display: "none" } }}
           aria-label="导航抽屉"
         >
-          {sidebarContent(true)}
+          {sidebarContent(true, true)}
         </Drawer>
 
         <Content style={{ padding: "16px" }}>
@@ -437,10 +433,11 @@ export function AppLayout() {
         collapsible
         collapsed={collapsed}
         onCollapse={setCollapsed}
+        theme={isGuided ? "light" : "dark"}
         width={224}
         collapsedWidth={64}
         style={{
-          background: "#0f172a",
+          background: palette.bg,
           boxShadow: "2px 0 8px rgba(0,0,0,0.15)",
           overflow: "hidden",
           height: "100vh",
@@ -453,7 +450,7 @@ export function AppLayout() {
       </Sider>
 
       <Layout style={{ marginLeft: collapsed ? 64 : 224, transition: "margin-left 0.2s", background: "#f1f5f9", minHeight: "100vh" }}>
-        {/* Top bar with global period picker */}
+        {/* Top bar with mode switcher + global period picker */}
         <div style={{
           position: "sticky", top: 0, zIndex: 50,
           background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)",
@@ -461,7 +458,7 @@ export function AppLayout() {
           padding: "10px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
         }}>
           {(() => {
-            const bc = buildBreadcrumb(location.pathname);
+            const bc = buildBreadcrumb(proNavItems, location.pathname);
             return (
               <Breadcrumb
                 items={bc ? [{ title: bc.group }, { title: bc.page }] : [{ title: "首页" }]}
@@ -470,6 +467,7 @@ export function AppLayout() {
             );
           })()}
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {modeSwitcher(false)}
           <button
             onClick={() => cmd.setOpen(true)}
             aria-label="全局搜索"

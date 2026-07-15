@@ -9,6 +9,8 @@ import {
   runEventRiskCheck
 } from "../lib/api";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
+import { HelpPanel } from "../components/ui/HelpPanel";
+import { LevelLegend, RISK_SEVERITY_LEVELS } from "../components/ui/LevelLegend";
 import { useI18n, RISK_PRIORITY_LABELS, RISK_SEVERITY_LABELS, RISK_STATUS_LABELS } from "../lib/i18n";
 import { buildRiskClosureTargetChain, normalizeDrilldownState } from "./drilldown";
 import {
@@ -28,46 +30,28 @@ import { TaxConsistencyPanel } from "./risk/TaxConsistencyPanel";
 import { readRiskUrlState, writeRiskUrlState, type RiskViewFilter } from "./risk/risk-url-state";
 import { writeAuditUrlState } from "./audit/audit-url-state";
 
-function RiskHelpModal({ onClose }: { onClose: () => void }) {
+function RiskHelpPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ background: "#fff", borderRadius: "16px", padding: "28px 32px", maxWidth: "560px", width: "92%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>风险勾稽中心 · 业务关系与操作说明</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "#9aa5b4" }}>✕</button>
-        </div>
-        <div style={{ display: "grid", gap: "14px", fontSize: "13.5px", lineHeight: 1.75 }}>
-          <div style={{ background: "rgba(79,142,247,0.06)", borderRadius: "10px", padding: "14px 16px", border: "1px solid rgba(79,142,247,0.2)" }}>
-            <strong>相关页面的关系</strong><br />
-            <strong>经营事项页</strong>给出业务背景，<strong>任务中心</strong>推进执行，<strong>单据中心</strong>和<strong>凭证中心</strong>提供依据，<strong>税务中心</strong>提供申报结果。<strong>风险勾稽中心</strong>负责从这些页面中找出不一致、不完整或不合规的问题，并跟踪关闭。
-          </div>
-          <div><strong>标准业务流程</strong>
-            <ol style={{ margin: "6px 0 0 18px", padding: 0 }}>
-              <li>系统基于事项、任务、单据、凭证、税务结果生成风险检查线索</li>
-              <li>在本页执行风险检查，生成风险发现</li>
-              <li>根据发现回到上游页面整改</li>
-              <li>整改完成后在本页关闭风险并记录复盘</li>
-            </ol>
-          </div>
-          <div><strong>本页负责什么</strong>
-            <div>这里不产生原始业务资料，也不直接记账申报，而是做横向核查。重点是发现“该做没做、该有没补、口径不一致、申报不完整”的问题，并推动闭环。</div>
-          </div>
-          <div><strong>风险严重级别</strong>
-            <div style={{ display: "grid", gap: "4px", marginTop: "6px" }}>
-              {[["致命", "#dc2626", "重大合规违规，必须立即处理"], ["高危", "#d97706", "存在较高财税风险，建议优先整改"], ["中危", "#2563eb", "存在潜在风险，建议关注并评估"], ["低危", "#6c7a89", "轻微问题，酌情处理"]].map(([label, color, desc]) => (
-                <div key={label} style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
-                  <span style={{ color, fontWeight: 700, minWidth: "32px" }}>{label}</span>
-                  <span>{desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ background: "rgba(255,165,0,0.08)", borderRadius: "8px", padding: "10px 14px", fontSize: "12.5px", color: "#b45309" }}>
-            ⚠️ 风险页不负责直接修复问题。发现风险后，应回到事项、任务、单据、凭证或税务页面完成整改，再回来关闭风险。
-          </div>
-        </div>
-      </div>
-    </div>
+    <HelpPanel
+      open={open}
+      title="风险勾稽中心 · 业务关系与操作说明"
+      onClose={onClose}
+      relations={(
+        <>
+          <strong>经营事项页</strong>给出业务背景，<strong>任务中心</strong>推进执行，<strong>单据中心</strong>和<strong>凭证中心</strong>提供依据，<strong>税务中心</strong>提供申报结果。<strong>风险勾稽中心</strong>负责从这些页面中找出不一致、不完整或不合规的问题，并跟踪关闭。
+        </>
+      )}
+      workflowSteps={[
+        "系统基于事项、任务、单据、凭证、税务结果生成风险检查线索",
+        "在本页执行风险检查，生成风险发现",
+        "根据发现回到上游页面整改",
+        "整改完成后在本页关闭风险并记录复盘"
+      ]}
+      responsibility="这里不产生原始业务资料，也不直接记账申报，而是做横向核查。重点是发现“该做没做、该有没补、口径不一致、申报不完整”的问题，并推动闭环。"
+      caution="风险页不负责直接修复问题。发现风险后，应回到事项、任务、单据、凭证或税务页面完成整改，再回来关闭风险。"
+    >
+      <LevelLegend title="风险严重级别" items={RISK_SEVERITY_LEVELS} />
+    </HelpPanel>
   );
 }
 
@@ -242,7 +226,7 @@ export function RiskPage() {
 
   return (
     <section style={{ display: "grid", gap: "20px" }}>
-      {showHelp ? <RiskHelpModal onClose={() => setShowHelp(false)} /> : null}
+      <RiskHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
       <RiskPageShell
         header={
           <Fragment>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LedgerEntry, LedgerPostingBatch } from "@finance-taxation/domain-model";
 import { FinanceFlowBar } from "../components/FinanceFlowBar";
+import { HelpPanel, HelpTriggerButton } from "../components/ui/HelpPanel";
 import {
   getCashJournal,
   getLedgerBalances,
@@ -85,6 +86,48 @@ function buildSceneSummary(
   }
 }
 
+const LEDGER_SCENE_GUIDE: readonly (readonly [string, string])[] = [
+  ["科目汇总", "按科目查看累计借贷发生额，先总览全账覆盖范围，再决定往哪里钻取"],
+  ["科目余额", "查看各科目当前余额结构，适合月结前复核，发现异常科目后再追分录"],
+  ["日记账", "按现金 / 银行账户查看每日资金流水，用于核对钱的实际收付"],
+  ["分录与批次", "查看每笔过账形成的会计分录和过账批次，可按凭证号或事项号过滤定位来源"],
+  ["期间锁账", "把已结账的月份锁定（或解锁），防止旧账被继续过账或篡改"]
+] as const;
+
+function LedgerHelpPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <HelpPanel
+      open={open}
+      title="总账中心 · 业务关系与操作说明"
+      onClose={onClose}
+      relations={(
+        <>
+          <strong>凭证中心</strong>审核过账后，分录进入<strong>总账中心</strong>按科目归集；总账是<strong>财务报表</strong>的直接数据来源，也为<strong>税务申报</strong>和<strong>归档审计</strong>提供账务依据。
+        </>
+      )}
+      workflowSteps={[
+        "凭证在凭证中心审核并过账",
+        "过账批次进入总账，按科目形成分录和余额",
+        "在本页复核科目汇总、余额和资金日记账",
+        "月结完成后对账期执行锁账，保护已结账数据",
+        "总账数据流向报表、税务和归档"
+      ]}
+      responsibility="这里是全公司账务的结果页：汇总所有已过账凭证，按科目展示发生额、余额和资金流水，并管理会计期间的锁账与解锁。"
+      caution="总账数据只能通过凭证过账形成，不能在本页直接修改。发现错账应回到凭证中心处理；已锁账期间需先解锁（反结账）并会留下审计记录。"
+    >
+      <div>
+        <strong>五个场景各是什么</strong>
+        {LEDGER_SCENE_GUIDE.map(([scene, description]) => (
+          <div key={scene} style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+            <span style={{ fontWeight: 600, minWidth: "76px" }}>{scene}</span>
+            <span style={{ color: "#4d5d6c" }}>{description}</span>
+          </div>
+        ))}
+      </div>
+    </HelpPanel>
+  );
+}
+
 export function LedgerPage() {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [batches, setBatches] = useState<LedgerPostingBatch[]>([]);
@@ -101,6 +144,7 @@ export function LedgerPage() {
   const [newPeriod, setNewPeriod] = useState("");
   const [periodOp, setPeriodOp] = useState<string | null>(null);
   const [sceneQuery, setSceneQuery] = useQueryState("ledgerTab", "summary");
+  const [showHelp, setShowHelp] = useState(false);
   const activeScene = isLedgerSceneKey(sceneQuery) ? sceneQuery : "summary";
 
   useEffect(() => {
@@ -299,8 +343,16 @@ export function LedgerPage() {
   return (
     <div style={{ display: "grid", gap: 24 }}>
       <FinanceFlowBar current="ledger" />
+      <LedgerHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
       <LedgerShell
-        header={<LedgerHeader activeSceneLabel={activeOption.title} />}
+        header={(
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <HelpTriggerButton onClick={() => setShowHelp(true)} label="查看总账中心操作说明" />
+            </div>
+            <LedgerHeader activeSceneLabel={activeOption.title} />
+          </div>
+        )}
         summary={(
           <LedgerSceneSummary
             scene={activeScene}

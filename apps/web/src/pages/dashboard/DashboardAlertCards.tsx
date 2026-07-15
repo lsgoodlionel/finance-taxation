@@ -4,12 +4,13 @@ import {
 } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import type { DashboardData } from "../../lib/api";
+import { Term } from "../../components/ui/Term";
 
 const { Text } = Typography;
 
 interface AlertSection {
   key: string;
-  title: string;
+  title: React.ReactNode;
   icon: React.ReactNode;
   color: string;
   borderColor: string;
@@ -25,7 +26,7 @@ export function DashboardAlertCards({ riskBoard, queues }: DashboardAlertCardsPr
   const sections: AlertSection[] = [
     {
       key: "approvals",
-      title: `待审批凭证（${queues.approvals}）`,
+      title: <>待审批<Term k="voucher">凭证</Term>（{queues.approvals}）</>,
       icon: <FileTextOutlined />,
       color: "#d97706",
       borderColor: "#fde68a",

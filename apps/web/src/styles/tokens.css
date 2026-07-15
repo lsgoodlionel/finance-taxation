@@ -1,7 +1,8 @@
 :root {
-  --v3-color-primary: #4f8ef7;
-  --v3-color-primary-hover: #3b7df0;
-  --v3-color-primary-soft: rgba(79, 142, 247, 0.1);
+  /* 主色与 main.tsx Antd 主题（colorPrimary #2563eb）统一，衍生色随之联动 */
+  --v3-color-primary: #2563eb;
+  --v3-color-primary-hover: #1d4ed8;
+  --v3-color-primary-soft: rgba(37, 99, 235, 0.1);
   --v3-color-success: #10b981;
   --v3-color-warning: #f59e0b;
   --v3-color-danger: #dc2626;
@@ -22,4 +23,16 @@
   --v3-radius-xl: 16px;
   --v3-shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.08);
   --v3-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+
+  /* V7 guided 双轨：引导模式导航密度（老板端更大字号 / 更高触达面积） */
+  --v7-guided-nav-font-size: 15px;
+  --v7-guided-nav-item-height: 44px;
+  --v7-guided-space: 20px;
+}
+
+/* V7 guided 侧栏：消费上面的 density token（局部类，避免动 global.css） */
+.v7-guided-nav .ant-menu-item {
+  height: var(--v7-guided-nav-item-height) !important;
+  line-height: var(--v7-guided-nav-item-height) !important;
+  font-size: var(--v7-guided-nav-font-size) !important;
 }

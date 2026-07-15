@@ -2,6 +2,7 @@ import { lazy } from "react";
 import { Navigate, RouterProvider, createBrowserRouter, useLocation } from "react-router-dom";
 import { LanguageProvider } from "./lib/i18n";
 import { PeriodProvider } from "./lib/period-context";
+import { WorkspaceModeProvider, useWorkspaceMode } from "./lib/workspace-mode";
 import { AppLayout } from "./components/AppLayout";
 import { LEGACY_ENTRY_ALIASES } from "./lib/entry-guidance";
 
@@ -13,6 +14,15 @@ import { LEGACY_ENTRY_ALIASES } from "./lib/entry-guidance";
 function RedirectWithState({ to }: { to: string }) {
   const location = useLocation();
   return <Navigate to={to} replace state={location.state} />;
+}
+
+/**
+ * V7 双轨：首页按工作区模式分流。
+ * guided → 董事长驾驶舱（临时落点，Stage K 将建 /home），pro → 我的一天。
+ */
+function ModeAwareIndexRedirect() {
+  const { mode } = useWorkspaceMode();
+  return <Navigate to={mode === "guided" ? "/dashboard/chairman" : "/inbox"} replace />;
 }
 
 // Route-level code splitting: each page loads as its own chunk on demand.
@@ -42,7 +52,7 @@ const router = createBrowserRouter([
     path: "/",
     element: <AppLayout />,
     children: [
-      { index: true, element: <Navigate to="/inbox" replace /> },
+      { index: true, element: <ModeAwareIndexRedirect /> },
       { path: "inbox", element: <MyDayPage /> },
       { path: "dashboard/chairman", element: <ChairmanDashboardPage /> },
       { path: "close", element: <MonthEndClosePage /> },
@@ -85,7 +95,9 @@ export function App() {
   return (
     <LanguageProvider>
       <PeriodProvider>
-        <RouterProvider router={router} />
+        <WorkspaceModeProvider>
+          <RouterProvider router={router} />
+        </WorkspaceModeProvider>
       </PeriodProvider>
     </LanguageProvider>
   );

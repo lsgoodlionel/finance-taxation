@@ -11,10 +11,23 @@ import {
   CheckCircleFilled, ClockCircleFilled, ExclamationCircleFilled,
   MinusCircleOutlined, RightOutlined,
 } from "@ant-design/icons";
+import { Term } from "../../components/ui/Term";
 import { CLOSE_STEP_LINKS } from "./closeStepLinks";
 import type { ClosePlanOverall, ClosePlanStepStatus, ClosePlanView } from "./closePlanTypes";
 
 const { Text } = Typography;
+
+/** 8 个结账步骤名词的术语化标题（按 step.key 匹配，未命中时回退后端 label）。 */
+const STEP_TERM_TITLES: Record<string, ReactNode> = {
+  sweep_unposted: <>清理未<Term k="posting">过账</Term>事项</>,
+  depreciation: <><Term k="accrual">计提</Term><Term k="depreciation">折旧</Term></>,
+  accrual_review: <><Term k="accrual-basis">权责发生制</Term>调整复核</>,
+  tax_consistency: <><Term k="invoice-tax-consistency">票税一致性</Term>核对</>,
+  close_income: <Term k="close-income">结转损益</Term>,
+  snapshot: <>生成<Term k="period-snapshot">期末财务快照</Term></>,
+  filing_draft: <>生成<Term k="working-paper">申报底稿</Term></>,
+  archive: <><Term k="archive">归档</Term><Term k="period-lock">锁账</Term></>,
+};
 
 const STATUS_META: Record<ClosePlanStepStatus, { color: string; label: string; icon: ReactNode }> = {
   done:      { color: "success",    label: "已完成",   icon: <CheckCircleFilled style={{ color: "#16a34a" }} /> },
@@ -57,7 +70,7 @@ export function ClosePlanBoard({ plan }: ClosePlanBoardProps) {
             icon: meta.icon,
             title: (
               <Space>
-                <span style={{ fontWeight: isNext ? 600 : 400 }}>{step.label}</span>
+                <span style={{ fontWeight: isNext ? 600 : 400 }}>{STEP_TERM_TITLES[step.key] ?? step.label}</span>
                 <Tag color={meta.color}>{meta.label}</Tag>
                 {isNext && <Tag color="blue">下一步</Tag>}
               </Space>
