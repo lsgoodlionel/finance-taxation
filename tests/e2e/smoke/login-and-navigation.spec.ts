@@ -9,6 +9,30 @@ test("chairman can enter the application", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("chairman without stored mode lands on the guided dashboard", async ({ page }) => {
+  // V7 双轨：未手动选择过模式时，董事长角色默认进入引导模式，
+  // 首页分流到经营驾驶舱（Stage K 将替换为 /home 老板工作台）。
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.localStorage.removeItem("finance-taxation-v2-token");
+    window.localStorage.removeItem("finance-taxation-v2-refresh-token");
+    window.localStorage.removeItem("ft.workspace-mode");
+  });
+  await page.goto("/");
+  await page.getByLabel("用户名").fill("v4_chairman");
+  await page.getByLabel("密码").fill("V4-test-123456");
+  await page.getByRole("button", { name: "登 录" }).click();
+
+  await expect(page.getByRole("heading", { name: "董事长驾驶舱" })).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/dashboard\/chairman(?:[?#]|$)/);
+  // 存在「专业模式」切换入口（桌面在顶栏；窄视口收纳在导航抽屉内）
+  const drawerTrigger = page.getByRole("button", { name: "打开导航菜单" });
+  if (await drawerTrigger.isVisible().catch(() => false)) {
+    await drawerTrigger.click();
+  }
+  await expect(page.getByText("专业模式").first()).toBeVisible();
+});
+
 test("expired session returns to the login gate", async ({ page }) => {
   await loginAs(page, "chairman");
   await page.evaluate(() => {

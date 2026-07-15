@@ -30,6 +30,10 @@ export async function loginAs(page: Page, role: V4Role): Promise<void> {
     await page.evaluate(() => {
       window.localStorage.removeItem("finance-taxation-v2-token");
       window.localStorage.removeItem("finance-taxation-v2-refresh-token");
+      // V7 双轨：基线套件统一在专业模式下运行（否则 chairman 默认进引导模式、
+      // 落点变为 /dashboard/chairman，既有导航断言不再匹配）。引导模式的默认
+      // 行为由 login-and-navigation.spec.ts 的专项用例覆盖。
+      window.localStorage.setItem("ft.workspace-mode", "pro");
     });
     await page.goto("/");
     await page.getByLabel("用户名").fill(user.username);
