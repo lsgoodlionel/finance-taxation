@@ -23,6 +23,7 @@ import { RiskKpiCards } from "./risk/RiskKpiCards";
 import { RiskPageShell } from "./risk/RiskPageShell";
 import { RiskResolutionWorkbench } from "./risk/RiskResolutionWorkbench";
 import { RiskWorkbenchHeader } from "./risk/RiskWorkbenchHeader";
+import { AnomalyScanPanel } from "./risk/AnomalyScanPanel";
 import { TaxConsistencyPanel } from "./risk/TaxConsistencyPanel";
 import { readRiskUrlState, writeRiskUrlState, type RiskViewFilter } from "./risk/risk-url-state";
 import { writeAuditUrlState } from "./audit/audit-url-state";
@@ -319,6 +320,7 @@ export function RiskPage() {
         timeline={<RiskClosureTimeline selectedFindingId={selectedFinding?.id ?? ""} records={closureRecords} />}
       />
       <TaxConsistencyPanel />
+      <AnomalyScanPanel />
     </section>
   );
 }

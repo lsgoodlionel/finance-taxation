@@ -22,7 +22,13 @@
 1. `suggestAccountingEntry` **所有分支恒 `needsReview:true`** → 经 draft-proposal 真实路径 level 永远 = manual（符合「入账必经人批准」，但当前无「高置信可自动生成草稿」路径）。
 2. 28 首年场景中 general/financing/rnd/tax 四类（约 53%）**无分录模板** → 恒返回 null+needsReview。已支持类型分类准确率 95.8%，但按真实类型分布的「全自动覆盖率」约 46%。→ 后续应**增强 accounting-agent 覆盖更多类型 + 区分进项/销项发票**，而非调低门槛。
 
-**Stage H 剩余（高风险，需 PR + SME 评审）**：H1→草稿凭证入 `event_voucher_drafts` 队列 + inbox 草稿卡（G3 占位）接线；H2→月结向导 HTTP 端点 + 逐步批准驱动（结转/快照/归档串联，全程 hash 链留痕 F2）；H4→接 HTTP + inbox 预警卡 + 与风险勾稽合流；accounting-agent 类型覆盖增强。
+**wave 2 后端接线（分支 `codex/v6-stage-h-wave2`，PR 待评审，未合）**：draft-then-approve 后端闭环已落地并经真实 PG 验证——
+- H1: migration 040 扩草稿表 + `close-drafts.routes.ts`（`POST /api/close/drafts/generate` 为未入账事项生成草稿 · `GET /api/close/drafts` · `POST /api/close/drafts/:id/approve` **只生成 status='draft' 凭证、服务端重算借贷平衡、绝不过账** · `/reject`）。
+- H2: `GET /api/ledger/close-plan?period=` 汇总真实事实 → buildClosePlan（只读）。
+- H4: `GET /api/anomaly/scan?period=` 拉真实 ledger/invoices → runAnomalyScan（只读）。
+- 验证: typecheck 绿 · API 单测 378/378 · **DB 集成 22/22**（含 close-drafts 端到端：approve 产 draft 凭证 posted_at=null、借贷平衡、状态流转）。
+
+**Stage H 剩余**：前端消费（inbox 草稿卡接 `/api/close/drafts` + 逐项批准 · 月结向导接 close-plan · 异常预警卡接 anomaly 并与风险勾稽合流）；结转/快照/归档由月结向导逐步批准驱动 + hash 链留痕；accounting-agent 类型覆盖增强（general/financing/rnd/tax）+ 区分进销项发票。**approve→post 的最终入账仍走既有 `/vouchers/:id/post` 双门，AI 全程不过账。**
 
 ---
 

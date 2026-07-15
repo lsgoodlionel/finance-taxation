@@ -2321,3 +2321,93 @@ export async function registerWebhook(input: { event_type: string; target_url: s
     { method: "POST", body: JSON.stringify(input) }
   );
 }
+
+// ── Stage H wave2：AI 月结 draft-then-approve / 月结编排 / 异常扫描 ──
+
+export interface CloseDraftLine {
+  summary: string;
+  accountCode: string;
+  accountName: string;
+  // 后端以「元」字符串序列化金额（如 "1000.00"）；前端展示时转数字。
+  debit: number | string;
+  credit: number | string;
+}
+
+export interface CloseDraft {
+  id: string;
+  businessEventId: string;
+  voucherType: string;
+  summary: string;
+  proposalLevel: "auto" | "suggest" | "manual" | null;
+  balanced: boolean | null;
+  status: string;
+  rationale?: string | null;
+  lines: CloseDraftLine[];
+}
+
+/** 列出 AI 生成的草稿凭证（默认待处理），供 inbox 逐项批准。 */
+export async function getCloseDrafts(status = "draft") {
+  return request<{ items: CloseDraft[]; total: number }>(
+    `/api/close/drafts?status=${encodeURIComponent(status)}`
+  );
+}
+
+/** 为某属期未入账事项批量生成草稿凭证提案。 */
+export async function generateCloseDrafts(period: string) {
+  return request<{ generated: number; skipped: number; drafts: CloseDraft[] }>(
+    "/api/close/drafts/generate",
+    { method: "POST", body: JSON.stringify({ period }) }
+  );
+}
+
+/** 批准草稿 → 生成 draft 状态凭证（仍需经既有过账流入账），返回凭证 id。 */
+export async function approveCloseDraft(id: string) {
+  return request<{ ok: boolean; voucherId: string }>(`/api/close/drafts/${id}/approve`, {
+    method: "POST"
+  });
+}
+
+export async function rejectCloseDraft(id: string, reason?: string) {
+  return request<{ ok: boolean }>(`/api/close/drafts/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reason })
+  });
+}
+
+export type CloseWizardStepStatus = "blocked" | "ready" | "in_review" | "done";
+
+export interface CloseWizardStep {
+  key: string;
+  label: string;
+  status: CloseWizardStepStatus;
+  blockingReason?: string;
+}
+
+export interface CloseWizardPlan {
+  steps: CloseWizardStep[];
+  nextActionableStep: string | null;
+  overall: "not_started" | "in_progress" | "blocked" | "completed";
+}
+
+/** 月结编排：某属期各步骤状态机（只读）。区别于 getCloseStatus 的旧 checklist。 */
+export async function getClosePlan(period: string) {
+  return request<{ period: string; plan: CloseWizardPlan }>(
+    `/api/ledger/close-plan?period=${encodeURIComponent(period)}`
+  );
+}
+
+export interface AnomalyFinding {
+  kind: string;
+  severity: "info" | "warning" | "alert";
+  title: string;
+  detail: string;
+  refs: string[];
+}
+
+/** 规则型异常扫描（重复付款/断号发票/周末大额/税负突变）。 */
+export async function getAnomalyScan(period?: string) {
+  const qs = period ? `?period=${encodeURIComponent(period)}` : "";
+  return request<{ findings: AnomalyFinding[]; total: number; bySeverity: Record<string, number> }>(
+    `/api/anomaly/scan${qs}`
+  );
+}
