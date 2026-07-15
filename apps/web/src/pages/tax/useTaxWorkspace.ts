@@ -1,0 +1,388 @@
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import type {
+  CorporateIncomeTaxPreparation,
+  IndividualIncomeTaxMaterial,
+  StampAndSurtaxSummary,
+  TaxRuleProfile,
+  TaxFilingBatch,
+  TaxItem,
+  TaxpayerProfile,
+  VatWorkingPaper
+} from "@finance-taxation/domain-model";
+import { useQueryState } from "../../hooks/useQueryState";
+import { normalizeDrilldownState } from "../drilldown";
+import {
+  archiveTaxFilingBatch,
+  createTaxpayerProfile,
+  getCorporateIncomeTaxPreparation,
+  getIndividualIncomeTaxMaterials,
+  getStampAndSurtaxSummary,
+  getTaxFilingBatchDetail,
+  getTaxPrintableHtml,
+  getTaxRuleProfile,
+  getVatWorkingPaper,
+  listTaxFilingBatches,
+  listTaxItems,
+  listTaxpayerProfiles,
+  reviewTaxFilingBatch,
+  submitTaxFilingBatch,
+  validateTaxFilingBatch
+} from "../../lib/api";
+import type { TaxMaterialKey } from "./TaxMaterialsPanel";
+import type { TaxBatchDetail, TaxNotice } from "./taxTypes";
+import { useAccessUser } from "../../features/runtime/useAccessUser";
+import { deriveTaxRuntimeSummary } from "../../features/runtime/workflow-runtime";
+import { useWorkflowRuntimeSummary } from "../../features/runtime/useWorkflowRuntimeSummary";
+
+function isMaterialKey(value: string): value is TaxMaterialKey {
+  return value === "vat" || value === "iit" || value === "stamp" || value === "cit";
+}
+
+function openPrintableHtml(html: string) {
+  const printableWindow = window.open("", "_blank", "noopener,noreferrer");
+  if (!printableWindow) {
+    throw new Error("无法打开打印窗口");
+  }
+  printableWindow.document.open();
+  printableWindow.document.write(html);
+  printableWindow.document.close();
+}
+
+export function useTaxWorkspace() {
+  const location = useLocation();
+  const navState = normalizeDrilldownState(location.state);
+  const navEventId = navState.businessEventId ?? null;
+  const navTaxItemId = navState.taxItemId ?? null;
+  const [selectedBatchState, setSelectedBatchState] = useQueryState("batch", "");
+  const [activeMaterialState, setActiveMaterialState] = useQueryState("material", "vat");
+  const activeMaterial = isMaterialKey(activeMaterialState) ? activeMaterialState : "vat";
+
+  const [items, setItems] = useState<TaxItem[]>([]);
+  const [batches, setBatches] = useState<TaxFilingBatch[]>([]);
+  const [profiles, setProfiles] = useState<TaxpayerProfile[]>([]);
+  const [selectedBatchDetail, setSelectedBatchDetail] = useState<TaxBatchDetail | null>(null);
+  const [validation, setValidation] = useState<{ valid: boolean; issues: string[]; itemCount: number } | null>(null);
+  const [ruleProfile, setRuleProfile] = useState<(TaxRuleProfile & { filingPeriod: string }) | null>(null);
+  const [vatPaper, setVatPaper] = useState<VatWorkingPaper | null>(null);
+  const [incomeTaxPreparation, setIncomeTaxPreparation] = useState<CorporateIncomeTaxPreparation | null>(null);
+  const [iitMaterials, setIitMaterials] = useState<IndividualIncomeTaxMaterial | null>(null);
+  const [stampAndSurtax, setStampAndSurtax] = useState<StampAndSurtaxSummary | null>(null);
+  const [vatFilingPeriod, setVatFilingPeriod] = useState("2026-05");
+  const [iitFilingPeriod, setIitFilingPeriod] = useState("2026-05");
+  const [stampFilingPeriod, setStampFilingPeriod] = useState("2026-Q2");
+  const [incomeTaxPeriod, setIncomeTaxPeriod] = useState("2026-Q2");
+  const [reviewForm, setReviewForm] = useState({
+    reviewResult: "approved" as "approved" | "rejected",
+    reviewNotes: ""
+  });
+  const [archiveForm, setArchiveForm] = useState({
+    archiveLabel: "",
+    archiveNotes: ""
+  });
+  const [profileForm, setProfileForm] = useState({
+    taxpayerType: "general_vat" as "general_vat" | "small_scale" | "general_simplified",
+    effectiveFrom: "2026-05-01",
+    notes: ""
+  });
+  const [notice, setNotice] = useState<TaxNotice>({
+    tone: "info",
+    message: "正在准备税务数据。"
+  });
+  const [showHelp, setShowHelp] = useState(false);
+  const [vatWizardOpen, setVatWizardOpen] = useState(false);
+  const [runtimeActionKey, setRuntimeActionKey] = useState<string | null>(null);
+  const accessUser = useAccessUser();
+
+  useEffect(() => {
+    async function bootstrap() {
+      try {
+        const [itemsPayload, batchesPayload, profilesPayload] = await Promise.all([
+          listTaxItems(navEventId ? { businessEventId: navEventId } : undefined),
+          listTaxFilingBatches(),
+          listTaxpayerProfiles()
+        ]);
+        setItems(itemsPayload.items);
+        setBatches(batchesPayload.items);
+        setProfiles(profilesPayload.items);
+
+        const nextBatchId = selectedBatchState || batchesPayload.items[0]?.id || "";
+        if (nextBatchId) {
+          if (selectedBatchState !== nextBatchId) {
+            setSelectedBatchState(nextBatchId);
+          }
+          setSelectedBatchDetail(await getTaxFilingBatchDetail(nextBatchId));
+        } else {
+          setSelectedBatchDetail(null);
+        }
+
+        setNotice({
+          tone: "info",
+          message: `${navEventId ? `当前事项 ${navEventId}：` : navTaxItemId ? `当前税务事项 ${navTaxItemId}：` : ""}已加载 ${itemsPayload.total} 条税务事项，${batchesPayload.total} 个申报批次。`
+        });
+      } catch (error) {
+        setNotice({
+          tone: "error",
+          message: (error as Error).message
+        });
+      }
+    }
+
+    void bootstrap();
+  }, [navEventId, navTaxItemId, selectedBatchState]);
+
+  async function refreshBatches(batchId?: string) {
+    const batchesPayload = await listTaxFilingBatches();
+    setBatches(batchesPayload.items);
+    const targetId = batchId || selectedBatchState || batchesPayload.items[0]?.id || "";
+    if (!targetId) {
+      setSelectedBatchDetail(null);
+      return;
+    }
+    if (selectedBatchState !== targetId) {
+      setSelectedBatchState(targetId);
+    }
+    setSelectedBatchDetail(await getTaxFilingBatchDetail(targetId));
+  }
+
+  async function handleSelectBatch(batchId: string) {
+    setValidation(null);
+    setSelectedBatchState(batchId);
+    setSelectedBatchDetail(await getTaxFilingBatchDetail(batchId));
+  }
+
+  async function handleCreateProfile() {
+    try {
+      await createTaxpayerProfile(profileForm);
+      const profilesPayload = await listTaxpayerProfiles();
+      setProfiles(profilesPayload.items);
+      const rulePayload = await getTaxRuleProfile("增值税", profileForm.effectiveFrom);
+      setRuleProfile(rulePayload);
+      setVatFilingPeriod(rulePayload.filingPeriod);
+      setNotice({ tone: "success", message: "已保存纳税人口径并刷新税率规则。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleResolveRuleProfile() {
+    try {
+      const payload = await getTaxRuleProfile("增值税", profileForm.effectiveFrom);
+      setRuleProfile(payload);
+      setVatFilingPeriod(payload.filingPeriod);
+      setNotice({ tone: "success", message: "已解析增值税规则。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleValidateBatch() {
+    if (!selectedBatchDetail) {
+      return;
+    }
+    const result = await validateTaxFilingBatch(selectedBatchDetail.id);
+    setValidation(result);
+    setNotice({
+      tone: result.valid ? "success" : "warning",
+      message: result.valid
+        ? `批次 ${selectedBatchDetail.id} 校验通过。`
+        : `批次 ${selectedBatchDetail.id} 校验未通过。`
+    });
+  }
+
+  async function handleSubmitBatch() {
+    if (!selectedBatchDetail) {
+      return;
+    }
+    try {
+      await submitTaxFilingBatch(selectedBatchDetail.id);
+      await refreshBatches(selectedBatchDetail.id);
+      setNotice({ tone: "success", message: `批次 ${selectedBatchDetail.id} 已提交。` });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleReviewBatch() {
+    if (!selectedBatchDetail) {
+      return;
+    }
+    try {
+      const detail = await reviewTaxFilingBatch(selectedBatchDetail.id, reviewForm);
+      setSelectedBatchDetail(detail);
+      setReviewForm((current) => ({ ...current, reviewNotes: "" }));
+      setNotice({ tone: "success", message: `批次 ${selectedBatchDetail.id} 已完成复核。` });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleArchiveBatch() {
+    if (!selectedBatchDetail) {
+      return;
+    }
+    try {
+      const detail = await archiveTaxFilingBatch(selectedBatchDetail.id, archiveForm);
+      setSelectedBatchDetail(detail);
+      await refreshBatches(selectedBatchDetail.id);
+      setArchiveForm((current) => ({ ...current, archiveNotes: "" }));
+      setNotice({ tone: "success", message: `批次 ${selectedBatchDetail.id} 已留档。` });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleGenerateVat() {
+    try {
+      const payload = await getVatWorkingPaper(vatFilingPeriod);
+      setVatPaper(payload);
+      setNotice({ tone: "success", message: "已生成增值税底稿。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handlePrintVat() {
+    try {
+      const html = await getTaxPrintableHtml("vat", vatFilingPeriod);
+      openPrintableHtml(html);
+      setNotice({ tone: "success", message: "已打开增值税底稿打印版。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleGenerateIit() {
+    try {
+      const payload = await getIndividualIncomeTaxMaterials(iitFilingPeriod);
+      setIitMaterials(payload);
+      setNotice({ tone: "success", message: "已生成个税申报资料。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleGenerateStamp() {
+    try {
+      const payload = await getStampAndSurtaxSummary(stampFilingPeriod);
+      setStampAndSurtax(payload);
+      setNotice({ tone: "success", message: "已汇总印花税与附加税事项。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handleGenerateCit() {
+    try {
+      const payload = await getCorporateIncomeTaxPreparation(incomeTaxPeriod);
+      setIncomeTaxPreparation(payload);
+      setNotice({ tone: "success", message: "已生成企业所得税预缴与汇算准备。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  async function handlePrintCit() {
+    try {
+      const html = await getTaxPrintableHtml("corporate_income_tax", incomeTaxPeriod);
+      openPrintableHtml(html);
+      setNotice({ tone: "success", message: "已打开企业所得税打印版。" });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    }
+  }
+
+  const selectedBatchLabel = selectedBatchDetail
+    ? `${selectedBatchDetail.taxType} · ${selectedBatchDetail.filingPeriod}`
+    : batches.find((item) => item.id === selectedBatchState)?.id || "";
+  const localRuntimeSummary = deriveTaxRuntimeSummary(
+    items,
+    batches,
+    selectedBatchDetail,
+    profiles,
+    accessUser?.roleIds ?? []
+  );
+  const runtimeSummary = useWorkflowRuntimeSummary(
+    "tax",
+    {
+      batchId: (selectedBatchDetail?.id ?? selectedBatchState) || undefined,
+      businessEventId: navEventId ?? undefined
+    },
+    localRuntimeSummary
+  );
+
+  async function handleRuntimeAction(action: NonNullable<typeof runtimeSummary.actions>[number]) {
+    if (action.key !== "retry-tax-review" || !action.params?.batchId) {
+      return;
+    }
+    setRuntimeActionKey(action.key);
+    try {
+      const detail = await reviewTaxFilingBatch(action.params.batchId, {
+        reviewResult: "approved",
+        reviewNotes: "runtime quick retry"
+      });
+      setSelectedBatchDetail(detail);
+      await refreshBatches(action.params.batchId);
+      setNotice({ tone: "success", message: `批次 ${action.params.batchId} 已重新复核。` });
+    } catch (error) {
+      setNotice({ tone: "error", message: (error as Error).message });
+    } finally {
+      setRuntimeActionKey(null);
+    }
+  }
+
+  return {
+    navEventId,
+    navTaxItemId,
+    selectedBatchState,
+    activeMaterial,
+    setActiveMaterialState,
+    items,
+    batches,
+    profiles,
+    selectedBatchDetail,
+    validation,
+    ruleProfile,
+    vatPaper,
+    incomeTaxPreparation,
+    iitMaterials,
+    stampAndSurtax,
+    vatFilingPeriod,
+    setVatFilingPeriod,
+    iitFilingPeriod,
+    setIitFilingPeriod,
+    stampFilingPeriod,
+    setStampFilingPeriod,
+    incomeTaxPeriod,
+    setIncomeTaxPeriod,
+    reviewForm,
+    setReviewForm,
+    archiveForm,
+    setArchiveForm,
+    profileForm,
+    setProfileForm,
+    notice,
+    setNotice,
+    showHelp,
+    setShowHelp,
+    vatWizardOpen,
+    setVatWizardOpen,
+    runtimeActionKey,
+    runtimeSummary,
+    selectedBatchLabel,
+    handleSelectBatch,
+    handleCreateProfile,
+    handleResolveRuleProfile,
+    handleValidateBatch,
+    handleSubmitBatch,
+    handleReviewBatch,
+    handleArchiveBatch,
+    handleGenerateVat,
+    handlePrintVat,
+    handleGenerateIit,
+    handleGenerateStamp,
+    handleGenerateCit,
+    handlePrintCit,
+    handleRuntimeAction
+  };
+}
