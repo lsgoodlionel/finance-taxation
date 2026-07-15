@@ -7,7 +7,8 @@ import { useNavigate } from "react-router-dom";
 import { Modal, Input, List, Tag, Typography, Empty, Spin } from "antd";
 import { SearchOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { globalSearch, type SearchResult } from "../lib/api";
-import { filterSceneCommands, type SceneCommand } from "../lib/scene-commands";
+import { filterSceneCommands, sceneCommandDescription, type SceneCommand } from "../lib/scene-commands";
+import { useWorkspaceMode } from "../lib/workspace-mode";
 
 const { Text } = Typography;
 
@@ -18,6 +19,7 @@ const TYPE_COLOR: Record<string, string> = {
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
+  const { mode } = useWorkspaceMode();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,8 +57,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     navigate(cmd.path);
   }, [navigate, onClose]);
 
-  // 场景命令：按当前输入词过滤，未输入时展示全部（置顶常用入口）
-  const sceneMatches = useMemo(() => filterSceneCommands(q), [q]);
+  // 场景命令：按当前输入词 + 工作区模式过滤，未输入时展示全部（置顶常用入口）
+  const sceneMatches = useMemo(() => filterSceneCommands(q, mode), [q, mode]);
 
   return (
     <Modal open={open} onCancel={onClose} footer={null} closable={false} width={600}
@@ -87,7 +89,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   <List.Item.Meta
                     avatar={<ThunderboltOutlined style={{ color: "#faad14" }} />}
                     title={<span>{cmd.label}</span>}
-                    description={<Text type="secondary" style={{ fontSize: 12 }}>{cmd.description}</Text>}
+                    description={
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {sceneCommandDescription(cmd, mode)}
+                      </Text>
+                    }
                   />
                   <Tag color="orange">场景</Tag>
                 </List.Item>

@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import React, { type ReactNode } from "react";
 import { Empty, Typography } from "antd";
 
 const { Text } = Typography;

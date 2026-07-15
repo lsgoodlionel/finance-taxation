@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { getCurrentUser, getCompanyProfile } from "../lib/api";
 import { useChatSessions } from "../lib/useChatSessions";
 import { useDrawer } from "../hooks/useDrawer";
@@ -49,6 +50,19 @@ export function AssistantPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // V7 K1：老板工作台「问 AI」经 navigate state 带入初始问题，自动填入输入框（仅生效一次）。
+  const location = useLocation();
+  const initialPromptApplied = useRef(false);
+  useEffect(() => {
+    if (initialPromptApplied.current) return;
+    const state = location.state as { initialPrompt?: unknown } | null;
+    const prompt = typeof state?.initialPrompt === "string" ? state.initialPrompt.trim() : "";
+    if (!prompt) return;
+    initialPromptApplied.current = true;
+    setInput(prompt);
+    setStatus("已带入您的问题，按回车或点击发送即可。");
+  }, [location.state]);
   const ocrPreview = ocrPreviewDrawer.value;
   const setOcrPreview = (next: OcrPreview | null) => {
     if (next) {

@@ -18,11 +18,11 @@ function RedirectWithState({ to }: { to: string }) {
 
 /**
  * V7 双轨：首页按工作区模式分流。
- * guided → 董事长驾驶舱（临时落点，Stage K 将建 /home），pro → 我的一天。
+ * guided → 老板工作台 /home，pro → 我的一天 /inbox。
  */
 function ModeAwareIndexRedirect() {
   const { mode } = useWorkspaceMode();
-  return <Navigate to={mode === "guided" ? "/dashboard/chairman" : "/inbox"} replace />;
+  return <Navigate to={mode === "guided" ? "/home" : "/inbox"} replace />;
 }
 
 // Route-level code splitting: each page loads as its own chunk on demand.
@@ -36,6 +36,8 @@ const SystemHubPage = lazy(() => import("./pages/system/SystemHubPage").then((m)
 const PayrollDomainPage = lazy(() => import("./pages/payroll/PayrollDomainPage").then((m) => ({ default: m.PayrollDomainPage })));
 const MonthEndClosePage = lazy(() => import("./pages/MonthEndClosePage").then((m) => ({ default: m.MonthEndClosePage })));
 const MyDayPage = lazy(() => import("./pages/MyDayPage").then((m) => ({ default: m.MyDayPage })));
+const HomePage = lazy(() => import("./pages/home").then((m) => ({ default: m.HomePage })));
+const QuickEntryPage = lazy(() => import("./pages/quick-entry").then((m) => ({ default: m.QuickEntryPage })));
 const EventsPage = lazy(() => import("./pages/EventsPage").then((m) => ({ default: m.EventsPage })));
 const LedgerPage = lazy(() => import("./pages/LedgerPage").then((m) => ({ default: m.LedgerPage })));
 const ReportsPage = lazy(() => import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })));
@@ -53,6 +55,9 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { index: true, element: <ModeAwareIndexRedirect /> },
+      // K1/K2 引导模式：老板工作台 + 记一笔向导
+      { path: "home", element: <HomePage /> },
+      { path: "quick-entry", element: <QuickEntryPage /> },
       { path: "inbox", element: <MyDayPage /> },
       { path: "dashboard/chairman", element: <ChairmanDashboardPage /> },
       { path: "close", element: <MonthEndClosePage /> },

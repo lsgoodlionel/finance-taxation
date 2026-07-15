@@ -1,0 +1,1 @@
+export { QuickEntryPage } from "./QuickEntryPage";

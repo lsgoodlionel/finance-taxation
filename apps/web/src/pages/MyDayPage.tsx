@@ -18,6 +18,8 @@ import {
   type InboxItem, type SetupItem, type TaxDeadline,
 } from "../lib/api";
 import { usePeriod } from "../lib/period-context";
+import { buildOnboardingChecklist } from "../lib/onboarding-checklist";
+import { useWorkspaceMode } from "../lib/workspace-mode";
 import { InboxTasksCard } from "./inbox/InboxTasksCard";
 import { InboxRiskCard } from "./inbox/InboxRiskCard";
 import { InboxApprovalsCard } from "./inbox/InboxApprovalsCard";
@@ -40,6 +42,7 @@ export function MyDayPage() {
   const [approvalRuns, setApprovalRuns] = useState<WorkflowRun[]>([]);
   const [loading, setLoading] = useState(true);
   const { period } = usePeriod();
+  const { mode } = useWorkspaceMode();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,6 +71,9 @@ export function MyDayPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // 快速开始 checklist：按工作区模式分内容（pro=后端 setup 清单，guided=白话三件事）
+  const checklist = buildOnboardingChecklist(setup, mode);
+
   const otherItems = items.filter((i) => i.count > 0 && !TASK_INBOX_KEYS.has(i.key));
   const otherUrgent = otherItems.filter((i) => i.tone === "warning");
   const overdueTaskCount = tasks.filter((t) => t.isOverdue).length;
@@ -89,15 +95,17 @@ export function MyDayPage() {
         />
       </section>
 
-      {setup && !setup.ready && (
+      {checklist && !checklist.ready && (
         <section className="v3-section-shell" data-tone="muted">
           <Space direction="vertical" size={10} style={{ width: "100%" }}>
             <Space style={{ justifyContent: "space-between", width: "100%" }}>
-              <Text strong>🚀 快速开始（{setup.doneCount}/{setup.total} 已完成）</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>完成基础配置后即可顺畅跑通日常财税</Text>
+              <Text strong>🚀 快速开始（{checklist.doneCount}/{checklist.total} 已完成）</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {mode === "guided" ? "花几分钟做完这三件事，就能上手了" : "完成基础配置后即可顺畅跑通日常财税"}
+              </Text>
             </Space>
             <Row gutter={[12, 12]}>
-              {setup.items.map((s) => (
+              {checklist.items.map((s) => (
                 <Col key={s.key} xs={24} sm={12} lg={8}>
                   <div onClick={() => !s.done && navigate(s.actionPath)}
                     style={{

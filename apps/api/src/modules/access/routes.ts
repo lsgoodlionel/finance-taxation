@@ -31,6 +31,9 @@ const GROUP_SYS = { groupKey: "g-sys", groupLabel: "系统" } as const;
  * 但流程卡片等深链仍用本接口的 route 集合做权限判断，删掉会误伤旧深链。
  */
 const ALL_MENU_ITEMS: readonly MenuItem[] = [
+  // V7 K1/K2 引导模式专属入口：老板工作台 + 记一笔（同样人人可用）
+  { key: "home", label: "今天", route: "/home", permissionKey: "tasks.view", ...GROUP_ENTRY },
+  { key: "quick-entry", label: "记一笔", route: "/quick-entry", permissionKey: "tasks.view", ...GROUP_ENTRY },
   { key: "inbox", label: "我的一天", route: "/inbox", permissionKey: "tasks.view", ...GROUP_ENTRY },
   { key: "assistant", label: "AI 财税助手", route: "/assistant", permissionKey: "tasks.view", ...GROUP_ENTRY },
   { key: "events", label: "经营事项总线", route: "/events", permissionKey: "events.view", ...GROUP_ENTRY },

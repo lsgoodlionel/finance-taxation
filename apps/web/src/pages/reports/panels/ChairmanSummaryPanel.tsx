@@ -1,14 +1,23 @@
 import React from "react";
 import type { ChairmanReportSummary } from "@finance-taxation/domain-model";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { useWorkspaceMode } from "../../../lib/workspace-mode";
 
 type ChairmanSummaryPanelProps = {
   summary: ChairmanReportSummary | null;
 };
 
 export function ChairmanSummaryPanel({ summary }: ChairmanSummaryPanelProps) {
+  const { mode } = useWorkspaceMode();
+
   if (!summary) {
-    return (
+    // guided 用户不理解「快照」：给白话解释与下一步；pro 保留原操作指引。
+    return mode === "guided" ? (
+      <EmptyState
+        title="这期的经营摘要还没准备好"
+        description="需要财务同事先保存一次报表快照，之后进入本页会自动为您生成白话摘要。"
+      />
+    ) : (
       <EmptyState
         title="尚未生成老板摘要"
         description="先在左侧选择一个快照，再点击“生成老板摘要”。"
