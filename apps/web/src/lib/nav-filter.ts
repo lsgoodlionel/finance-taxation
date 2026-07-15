@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import {
   AlertOutlined, AuditOutlined, BarChartOutlined, BookOutlined, CalculatorOutlined,
-  DashboardOutlined, ExperimentOutlined, ExportOutlined, FileSearchOutlined, FileTextOutlined,
+  DashboardOutlined, ExperimentOutlined, ExportOutlined, FileSearchOutlined, FileTextOutlined, FormOutlined,
   InboxOutlined, LineChartOutlined, ProfileOutlined, RobotOutlined, SettingOutlined,
   TeamOutlined, UnorderedListOutlined,
 } from "@ant-design/icons";
@@ -91,12 +91,16 @@ export const proNavItems: readonly NavEntry[] = [
 
 /** guided 模式：面向老板的白话极简导航（扁平、≤6 项），同样经权限过滤。 */
 export const guidedNavItems: readonly NavEntry[] = [
-  { key: "/dashboard/chairman", icon: createElement(DashboardOutlined), label: "今日概览" },
+  { key: "/home", icon: createElement(DashboardOutlined), label: "今天" },
   { key: "/assistant", icon: createElement(RobotOutlined), label: "问 AI" },
+  { key: "/quick-entry", icon: createElement(FormOutlined), label: "记一笔" },
   { key: "/events", icon: createElement(UnorderedListOutlined), label: "我的事项" },
   { key: "/inbox", icon: createElement(InboxOutlined), label: "审批与待办" },
   { key: "/reports", icon: createElement(LineChartOutlined), label: "经营报告" },
 ];
+
+/** guided 专属路由（不出现在 pro 导航，但同样受后端 menu 权限过滤）。 */
+export const GUIDED_ONLY_ROUTES: readonly string[] = ["/home", "/quick-entry"];
 
 /**
  * 按后端返回的可见路由集合过滤导航（保持原顺序，不修改入参）：

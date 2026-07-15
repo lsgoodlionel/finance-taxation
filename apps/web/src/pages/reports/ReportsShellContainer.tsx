@@ -11,16 +11,23 @@ import {
   getProfitStatementReport,
   listReportSnapshots
 } from "../../lib/api";
+import { useWorkspaceMode } from "../../lib/workspace-mode";
 import { ReportsHeader } from "./ReportsHeader";
 import { ReportsHelpPanel } from "./ReportsHelpPanel";
 import { ReportsShell } from "./ReportsShell";
 import { ReportsSidebar } from "./ReportsSidebar";
 import { ReportsWorkbench } from "./ReportsWorkbench";
 import type { BundleKind, ReportsStatus, ReportsWorkbenchView } from "./report-types";
-import { defaultReportsView, getWorkbenchViewLabel, resolveBundlePeriodLabel } from "./reports-helpers";
+import {
+  getWorkbenchViewLabel,
+  pickLatestSnapshotId,
+  resolveBundlePeriodLabel,
+  resolveInitialReportsView
+} from "./reports-helpers";
 
 export function ReportsShellContainer() {
   const navigate = useNavigate();
+  const { mode } = useWorkspaceMode();
   const [periodType, setPeriodType] = useState<"month" | "quarter" | "year">("month");
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(5);
@@ -33,7 +40,7 @@ export function ReportsShellContainer() {
   const [toSnapshotId, setToSnapshotId] = useState("");
   const [diff, setDiff] = useState<Awaited<ReturnType<typeof getReportDiff>> | null>(null);
   const [chairmanSummary, setChairmanSummary] = useState<Awaited<ReturnType<typeof getChairmanReportSummary>> | null>(null);
-  const [activeView, setActiveView] = useState<ReportsWorkbenchView>(defaultReportsView);
+  const [activeView, setActiveView] = useState<ReportsWorkbenchView>(() => resolveInitialReportsView(mode));
   const [showHelp, setShowHelp] = useState(false);
   const [status, setStatus] = useState<ReportsStatus>({
     tone: "info",
@@ -43,7 +50,14 @@ export function ReportsShellContainer() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        await loadReports();
+        const loadedSnapshots = await loadReports();
+        // V7 K3：guided 模式自动用最新快照生成老板摘要，先讲结论再谈报表。
+        if (mode === "guided") {
+          const latestSnapshotId = pickLatestSnapshotId(loadedSnapshots);
+          if (latestSnapshotId) {
+            await generateSummaryFor(latestSnapshotId, "已为您准备好本期白话经营摘要。");
+          }
+        }
       } catch (error) {
         setStatus({
           tone: "error",
@@ -72,6 +86,7 @@ export function ReportsShellContainer() {
       tone: "success",
       message: `已更新 ${bs.periodLabel} 财务三表。`
     });
+    return snapshotsPayload.items;
   }
 
   async function saveSnapshot() {
@@ -114,14 +129,14 @@ export function ReportsShellContainer() {
     }
   }
 
-  async function generateSummary() {
+  async function generateSummaryFor(snapshotId: string, successMessage: string) {
     try {
-      const payload = await getChairmanReportSummary(toSnapshotId || fromSnapshotId);
+      const payload = await getChairmanReportSummary(snapshotId);
       setChairmanSummary(payload);
       setActiveView("chairman");
       setStatus({
         tone: "success",
-        message: "已生成老板口径摘要。"
+        message: successMessage
       });
     } catch (error) {
       setStatus({
@@ -129,6 +144,10 @@ export function ReportsShellContainer() {
         message: (error as Error).message
       });
     }
+  }
+
+  async function generateSummary() {
+    await generateSummaryFor(toSnapshotId || fromSnapshotId, "已生成老板口径摘要。");
   }
 
   async function openPrintable() {
@@ -180,6 +199,7 @@ export function ReportsShellContainer() {
       )}
       sidebar={(
         <ReportsSidebar
+          mode={mode}
           periodType={periodType}
           year={year}
           month={month}

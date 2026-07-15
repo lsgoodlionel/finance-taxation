@@ -29,6 +29,7 @@ import { buildProcessFlowPageContext } from "../features/process-flow/page-conte
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 import { PageHeader } from "../components/ui/PageHeader";
 import { HelpPanel, HelpTriggerButton } from "../components/ui/HelpPanel";
+import { NextStepBar } from "../components/ui/NextStepBar";
 import { PageSkeleton } from "../components/ui/PageSkeleton";
 import { ResultBanner } from "../components/ui/ResultBanner";
 import { useQueryState } from "../hooks/useQueryState";
@@ -621,6 +622,14 @@ export function EventsPage() {
         )}
           </EventDetailPanel>
         )}
+      />
+      <NextStepBar
+        current="事项已记录，财务会接着处理（无需您盯着每一步）"
+        next={[
+          { label: "看进展", path: "/tasks", hint: "看这件事后续的处理任务走到哪一步了" },
+          { label: "传票据", path: "/bills", hint: "有发票、收据、回单就传上来，财务处理更快" },
+          { label: "问 AI", path: "/assistant", hint: "不确定下一步做什么？用大白话直接问" },
+        ]}
       />
     </>
   );

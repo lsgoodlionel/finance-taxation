@@ -1,4 +1,5 @@
 import {
+  GUIDED_ONLY_ROUTES,
   buildBreadcrumb,
   filterNavByAllowedRoutes,
   guidedNavItems,
@@ -54,13 +55,17 @@ assert(proNavItems.length === 7, "expected 7 pro nav groups");
 const proLeafCount = proNavItems.reduce((count, group) => count + (group.children?.length ?? 0), 0);
 assert(proLeafCount === 17, "expected 17 pro nav leaves");
 
-// guided 导航常量：扁平且 ≤6 项，路由必须是 pro 导航的子集
+// guided 导航常量：扁平且 ≤6 项，路由必须是 pro 导航或 guided 专属路由清单的成员
 assert(guidedNavItems.length <= 6, "expected guided nav to stay minimal");
 const proRoutes = new Set(proNavItems.flatMap((group) => (group.children ?? []).map((child) => child.key)));
 for (const item of guidedNavItems) {
   assert(!item.children, "expected guided nav to be flat");
-  assert(proRoutes.has(item.key), `expected guided route ${item.key} to exist in pro nav`);
+  assert(
+    proRoutes.has(item.key) || GUIDED_ONLY_ROUTES.includes(item.key),
+    `expected guided route ${item.key} to exist in pro nav or GUIDED_ONLY_ROUTES`
+  );
 }
+assert(GUIDED_ONLY_ROUTES.includes("/home") && GUIDED_ONLY_ROUTES.includes("/quick-entry"), "expected guided-only routes to cover /home and /quick-entry");
 
 // 面包屑：最长前缀匹配
 const bc = buildBreadcrumb(proNavItems, "/dashboard/chairman");

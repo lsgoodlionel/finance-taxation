@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Typography, Row, Col, Card, Statistic, Space, Tag, Skeleton } from "antd";
+import { Typography, Row, Col, Card, Collapse, Statistic, Space, Tag, Skeleton } from "antd";
 import {
   CheckCircleOutlined, ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import { getDashboardChairman, type DashboardData } from "../lib/api";
 import { CHAIRMAN_DASHBOARD_SUBTITLE } from "../lib/entry-guidance";
+import { useWorkspaceMode } from "../lib/workspace-mode";
 import { PageSkeleton } from "../components/ui/PageSkeleton";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Term } from "../components/ui/Term";
@@ -126,6 +127,8 @@ function ProfitSummaryCard({ profitOverview }: { profitOverview: DashboardData["
 }
 
 export function ChairmanDashboardPage() {
+  const { mode } = useWorkspaceMode();
+  const isGuided = mode === "guided";
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -150,11 +153,11 @@ export function ChairmanDashboardPage() {
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
-      {/* Hero header */}
+      {/* Hero header：guided 用白话「经营报告」口径，pro 保留专业驾驶舱 */}
       <section className="v3-hero-shell">
         <PageHeader
-          title="董事长驾驶舱"
-          subtitle={CHAIRMAN_DASHBOARD_SUBTITLE}
+          title={isGuided ? "经营报告" : "董事长驾驶舱"}
+          subtitle={isGuided ? "公司赚不赚钱、钱够不够用、有没有风险，这一页讲清楚。" : CHAIRMAN_DASHBOARD_SUBTITLE}
           actions={(
             <Space>
               <Tag icon={<CheckCircleOutlined />} color="success">系统正常</Tag>
@@ -182,12 +185,28 @@ export function ChairmanDashboardPage() {
         <CashForecastCard />
       </section>
 
-      {/* Profit + AI summary */}
+      {/* Profit + AI summary：guided 把凭证/批次等黑话统计折叠进「财务细节」 */}
       <section className="v3-section-shell" data-tone="muted">
-        <Row gutter={[16, 16]}>
-          <Col xs={24} lg={12}><ProfitSummaryCard profitOverview={data.profitOverview} /></Col>
-          <Col xs={24} lg={12}><AiSummaryCard aiSummary={data.aiSummary} /></Col>
-        </Row>
+        {isGuided ? (
+          <Row gutter={[16, 16]}>
+            <Col span={24}><ProfitSummaryCard profitOverview={data.profitOverview} /></Col>
+            <Col span={24}>
+              <Collapse
+                ghost
+                items={[{
+                  key: "finance-detail",
+                  label: "财务细节（凭证、申报等专业统计，想看再展开）",
+                  children: <AiSummaryCard aiSummary={data.aiSummary} />
+                }]}
+              />
+            </Col>
+          </Row>
+        ) : (
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={12}><ProfitSummaryCard profitOverview={data.profitOverview} /></Col>
+            <Col xs={24} lg={12}><AiSummaryCard aiSummary={data.aiSummary} /></Col>
+          </Row>
+        )}
       </section>
 
       {/* Alerts */}

@@ -9,6 +9,24 @@ const REPORT_TYPE_LABELS: Record<ReportSnapshot["reportType"], string> = {
 
 export const defaultReportsView: ReportsWorkbenchView = "balanceSheet";
 
+/** V7 K3：guided 模式进报表页默认落「老板摘要」，pro 保持三表工作台。 */
+export function resolveInitialReportsView(mode: "guided" | "pro"): ReportsWorkbenchView {
+  return mode === "guided" ? "chairman" : defaultReportsView;
+}
+
+/** 取最新快照（按 snapshotDate 降序，ISO 字符串可直接比较），无快照返回 null。 */
+export function pickLatestSnapshotId(
+  snapshots: readonly Pick<ReportSnapshot, "id" | "snapshotDate">[]
+): string | null {
+  if (snapshots.length === 0) {
+    return null;
+  }
+  const latest = snapshots.reduce((best, candidate) =>
+    candidate.snapshotDate > best.snapshotDate ? candidate : best
+  );
+  return latest.id;
+}
+
 export function formatSnapshotLabel(input: Pick<ReportSnapshot, "reportType" | "periodLabel">): string {
   return `${input.periodLabel} ${REPORT_TYPE_LABELS[input.reportType]}`;
 }
