@@ -12,6 +12,7 @@ import {
   listReportSnapshots
 } from "../../lib/api";
 import { ReportsHeader } from "./ReportsHeader";
+import { ReportsHelpPanel } from "./ReportsHelpPanel";
 import { ReportsShell } from "./ReportsShell";
 import { ReportsSidebar } from "./ReportsSidebar";
 import { ReportsWorkbench } from "./ReportsWorkbench";
@@ -33,6 +34,7 @@ export function ReportsShellContainer() {
   const [diff, setDiff] = useState<Awaited<ReturnType<typeof getReportDiff>> | null>(null);
   const [chairmanSummary, setChairmanSummary] = useState<Awaited<ReturnType<typeof getChairmanReportSummary>> | null>(null);
   const [activeView, setActiveView] = useState<ReportsWorkbenchView>(defaultReportsView);
+  const [showHelp, setShowHelp] = useState(false);
   const [status, setStatus] = useState<ReportsStatus>({
     tone: "info",
     message: "正在准备财务报表。"
@@ -165,12 +167,15 @@ export function ReportsShellContainer() {
   }
 
   return (
+    <>
+    <ReportsHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
     <ReportsShell
       header={(
         <ReportsHeader
           activeViewLabel={getWorkbenchViewLabel(activeView)}
           onNavigateToExportCenter={() => navigate("/pdf-export")}
           onNavigateToTax={() => navigate("/tax")}
+          onOpenHelp={() => setShowHelp(true)}
         />
       )}
       sidebar={(
@@ -211,6 +216,7 @@ export function ReportsShellContainer() {
         />
       )}
     />
+    </>
   );
 }
 

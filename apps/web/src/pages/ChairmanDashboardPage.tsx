@@ -7,6 +7,7 @@ import { getDashboardChairman, type DashboardData } from "../lib/api";
 import { CHAIRMAN_DASHBOARD_SUBTITLE } from "../lib/entry-guidance";
 import { PageSkeleton } from "../components/ui/PageSkeleton";
 import { PageHeader } from "../components/ui/PageHeader";
+import { Term } from "../components/ui/Term";
 import { DashboardKpiCards } from "./dashboard/DashboardKpiCards";
 import { DashboardTrendChart } from "./dashboard/DashboardTrendChart";
 import { DashboardPieChart } from "./dashboard/DashboardPieChart";
@@ -28,11 +29,19 @@ function AiSummaryCard({ aiSummary }: { aiSummary: DashboardData["aiSummary"] })
     >
       <Row gutter={[0, 8]}>
         {[
-          { label: "当天新建事项", value: aiSummary.newEvents },
-          { label: "当天已过账凭证", value: aiSummary.postedVouchers },
-          { label: "待提交税务批次", value: aiSummary.pendingTaxBatches },
-        ].map(({ label, value }) => (
-          <Col key={label} span={24}>
+          { key: "newEvents", label: "当天新建事项" as React.ReactNode, value: aiSummary.newEvents },
+          {
+            key: "postedVouchers",
+            label: <>当天已<Term k="posting">过账</Term><Term k="voucher">凭证</Term></> as React.ReactNode,
+            value: aiSummary.postedVouchers,
+          },
+          {
+            key: "pendingTaxBatches",
+            label: <>待提交<Term k="filing-batch">税务批次</Term></> as React.ReactNode,
+            value: aiSummary.pendingTaxBatches,
+          },
+        ].map(({ key, label, value }) => (
+          <Col key={key} span={24}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Text type="secondary" style={{ fontSize: 13 }}>{label}</Text>
               <Text strong style={{ fontSize: 15 }}>{value}</Text>

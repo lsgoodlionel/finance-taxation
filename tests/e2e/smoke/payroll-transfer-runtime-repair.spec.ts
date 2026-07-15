@@ -36,6 +36,13 @@ test("/payroll/transfer shows mocked runtime repair entry and can compensate bat
     });
   });
 
+  await page.route("**/api/access/menu", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ items: [] })
+    });
+  });
+
   await page.route("**/api/inbox", async (route) => {
     await route.fulfill({
       contentType: "application/json",

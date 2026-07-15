@@ -1,14 +1,16 @@
 import React from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { HelpTriggerButton } from "../../components/ui/HelpPanel";
 import { buildResultPageSubtitle } from "../../lib/entry-guidance";
 
 type ReportsHeaderProps = {
   activeViewLabel: string;
   onNavigateToExportCenter: () => void;
   onNavigateToTax: () => void;
+  onOpenHelp?: () => void;
 };
 
-export function ReportsHeader({ activeViewLabel, onNavigateToExportCenter, onNavigateToTax }: ReportsHeaderProps) {
+export function ReportsHeader({ activeViewLabel, onNavigateToExportCenter, onNavigateToTax, onOpenHelp }: ReportsHeaderProps) {
   return (
     <PageHeader
       title="财务报表中心"
@@ -25,6 +27,7 @@ export function ReportsHeader({ activeViewLabel, onNavigateToExportCenter, onNav
           <button className="btn btn-outline" onClick={onNavigateToExportCenter}>
             前往 PDF 导出中心
           </button>
+          {onOpenHelp ? <HelpTriggerButton onClick={onOpenHelp} label="查看财务报表中心操作说明" /> : null}
         </div>
       )}
     />

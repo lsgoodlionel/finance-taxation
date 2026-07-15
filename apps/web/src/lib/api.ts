@@ -351,8 +351,14 @@ export async function logoutSession() {
 
 export { describePageLoadError, isAuthRequiredError } from "./request-errors";
 
+/** V7 J2：菜单项带上与前端侧栏一致的分组元数据。 */
+export interface MenuNodeWithGroup extends MenuNode {
+  groupKey: string;
+  groupLabel: string;
+}
+
 export async function getMenu() {
-  return request<{ items: MenuNode[] }>("/api/access/menu");
+  return request<{ items: MenuNodeWithGroup[] }>("/api/access/menu");
 }
 
 export async function listEvents() {
