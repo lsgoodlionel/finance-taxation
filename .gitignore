@@ -16,3 +16,14 @@ artifacts/v4/**/*.trace
 .superpowers/
 .DS_Store
 artifacts/v4/baseline/ops-sources/evidence/
+
+# ── 密钥与本地凭证（严禁提交真实值）──────────────────────────────
+# 真实环境变量与本地填充文件
+**/.env
+**/.env.local
+**/.env.docker.local
+**/.env.*.local
+# 本地凭证存放目录：只提交 README 与 *.example.md 模板，其余（含真实凭证）忽略
+secrets/*
+!secrets/README.md
+!secrets/*.example.md

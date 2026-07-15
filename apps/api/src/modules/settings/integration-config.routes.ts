@@ -19,6 +19,7 @@ import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { testInvoiceVerifyProvider } from "../invoices/invoice-verify.js";
 import { BANK_API_PROVIDERS, testBankApiProvider } from "../banking/bank-api.js";
+import { testNotificationProvider } from "../notifications/config-test.js";
 
 // ── 内置提供商信息 ─────────────────────────────────────────────────────────────
 
@@ -134,6 +135,34 @@ function rowToDto(row: IntegrationConfigRow, masked = true) {
   };
 }
 
+export const NOTIFICATION_PROVIDERS: ProviderMeta[] = [
+  {
+    id: "none",
+    name: "不启用",
+    description: "不发送企业通知。",
+    requiresApiKey: false, requiresApiSecret: false, requiresAppId: false, requiresEndpoint: false,
+    docsUrl: "", freeQuota: "-",
+  },
+  {
+    id: "feishu",
+    name: "飞书 / Lark（自建应用）",
+    description: "App ID + App Secret → tenant_access_token → 发送消息/审批。App ID 填「应用 ID」、App Secret 填「应用密钥」、接收人填 open_id/user_id。需在飞书后台开启机器人能力并配 im:message 权限。",
+    requiresApiKey: true,        // 复用为「默认接收人 open_id」
+    requiresApiSecret: true,     // App Secret
+    requiresAppId: true,         // App ID
+    requiresEndpoint: false,
+    docsUrl: "https://open.feishu.cn/document/server-docs/im-v1/message/create",
+    freeQuota: "5 QPS/用户",
+  },
+  {
+    id: "wework",
+    name: "企业微信（自建应用）",
+    description: "CorpId 填「App ID」、应用 Secret 填「App Secret」。连通性测试待实现，凭证格式已就绪。",
+    requiresApiKey: true, requiresApiSecret: true, requiresAppId: true, requiresEndpoint: false,
+    docsUrl: "https://developer.work.weixin.qq.com/", freeQuota: "-",
+  },
+];
+
 export async function listIntegrationConfigs(req: ApiRequest, res: ServerResponse): Promise<void> {
   const cid = req.auth!.companyId;
   const rows = await query<IntegrationConfigRow>(
@@ -158,9 +187,17 @@ export async function listIntegrationConfigs(req: ApiRequest, res: ServerRespons
       lastTestOk: null, lastTestAt: null, lastTestMsg: null, updatedAt: "",
     });
   }
+  if (!configMap.has("notification")) {
+    configMap.set("notification", {
+      configType: "notification", provider: "none",
+      apiKey: null, apiSecret: null, appId: null, endpointUrl: null,
+      extraConfig: {}, enabled: true,
+      lastTestOk: null, lastTestAt: null, lastTestMsg: null, updatedAt: "",
+    });
+  }
   json(res, 200, {
     items: Array.from(configMap.values()),
-    providers: { invoice_verify: INVOICE_VERIFY_PROVIDERS, bank_api: BANK_API_PROVIDERS },
+    providers: { invoice_verify: INVOICE_VERIFY_PROVIDERS, bank_api: BANK_API_PROVIDERS, notification: NOTIFICATION_PROVIDERS },
   });
 }
 
@@ -174,8 +211,9 @@ export async function getIntegrationConfig(
   );
   const providers = configType === "invoice_verify" ? INVOICE_VERIFY_PROVIDERS
     : configType === "bank_api" ? BANK_API_PROVIDERS
+    : configType === "notification" ? NOTIFICATION_PROVIDERS
     : [];
-  const defaultProvider = configType === "bank_api" ? "manual" : "local";
+  const defaultProvider = configType === "bank_api" ? "manual" : configType === "notification" ? "none" : "local";
   json(res, 200, {
     config: row ? rowToDto(row) : { configType, provider: defaultProvider, enabled: true },
     providers,
@@ -264,7 +302,7 @@ export async function testIntegrationConfig(
 ): Promise<void> {
   const cid = req.auth!.companyId;
 
-  if (configType !== "invoice_verify" && configType !== "bank_api") {
+  if (configType !== "invoice_verify" && configType !== "bank_api" && configType !== "notification") {
     json(res, 400, { error: `${configType} 类型的测试暂未支持` }); return;
   }
 
@@ -273,24 +311,20 @@ export async function testIntegrationConfig(
     [cid, configType],
   );
 
-  const defaultProvider = configType === "bank_api" ? "manual" : "local";
+  const defaultProvider = configType === "bank_api" ? "manual" : configType === "notification" ? "none" : "local";
   const provider = row?.provider ?? defaultProvider;
+  const creds = {
+    apiKey:      row?.api_key      ?? null,
+    apiSecret:   row?.api_secret   ?? null,
+    appId:       row?.app_id       ?? null,
+    endpointUrl: row?.endpoint_url ?? null,
+    extraConfig: (row?.extra_config as Record<string, string>) ?? {},
+  };
   const result = configType === "bank_api"
-    ? await testBankApiProvider({
-        provider,
-        apiKey:      row?.api_key      ?? null,
-        apiSecret:   row?.api_secret   ?? null,
-        appId:       row?.app_id       ?? null,
-        endpointUrl: row?.endpoint_url ?? null,
-        extraConfig: (row?.extra_config as Record<string, string>) ?? {},
-      })
-    : await testInvoiceVerifyProvider({
-        provider,
-        apiKey:      row?.api_key      ?? null,
-        apiSecret:   row?.api_secret   ?? null,
-        appId:       row?.app_id       ?? null,
-        endpointUrl: row?.endpoint_url ?? null,
-      });
+    ? await testBankApiProvider({ provider, ...creds })
+    : configType === "notification"
+    ? await testNotificationProvider({ provider, ...creds })
+    : await testInvoiceVerifyProvider({ provider, apiKey: creds.apiKey, apiSecret: creds.apiSecret, appId: creds.appId, endpointUrl: creds.endpointUrl });
 
   // 更新测试结果
   if (row) {
