@@ -22,6 +22,7 @@ import { listCompanyDocuments } from "../documents/routes.js";
 import { listCompanyTaxItems } from "../tax/routes.js";
 import { listCompanyVouchers } from "../vouchers/routes.js";
 import { json } from "../../utils/http.js";
+import { uniqueId } from "../../utils/id.js";
 import { writeAudit } from "../../services/audit.js";
 import { buildGeneratedTasksForEvent } from "./task-chain.js";
 import { buildContractRevenueBundle } from "./contract-revenue-rules.js";
@@ -1273,7 +1274,7 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
   const body = req.body as CreateBusinessEventInput;
   const now = new Date().toISOString();
   const next: BusinessEvent = {
-    id: `evt-${Date.now()}`,
+    id: uniqueId("evt"),
     companyId: req.auth!.companyId,
     type: body.type,
     title: body.title,

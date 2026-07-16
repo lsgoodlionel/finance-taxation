@@ -117,12 +117,19 @@ interface GeneratedDraftSummary {
   lineCount: number;
 }
 
-/** 对单个经营事项套用纯核心 buildDraftProposalFromSuggestion，落库草稿 + 分录行。 */
+/**
+ * 对单个经营事项套用纯核心 buildDraftProposalFromSuggestion，落库草稿 + 分录行。
+ *
+ * 草稿 id 固定为 `close-draft-${eventId}`：同属期两请求并发 generate 时，
+ * findEligibleEvents 与本插入非原子，双方都可能走到这里。以
+ * `on conflict (id) do nothing` 让后到者静默落空（返回 null，计入 skipped），
+ * 而不是撞主键 500；分录行仅在草稿真正插入时才写，避免残留孤儿行。
+ */
 async function insertDraftProposal(
   companyId: string,
   event: EligibleEventRow,
   runId: string
-): Promise<GeneratedDraftSummary> {
+): Promise<GeneratedDraftSummary | null> {
   const forAccounting: EventForAccounting = {
     id: event.id,
     type: event.type,
@@ -136,14 +143,18 @@ async function insertDraftProposal(
   const draftId = `close-draft-${event.id}`;
   const now = new Date().toISOString();
 
-  await withTransaction(async (client) => {
-    await client.query(
+  const inserted = await withTransaction(async (client) => {
+    const draftInsert = await client.query(
       `insert into event_voucher_drafts (
          id, company_id, business_event_id, voucher_type, status, summary,
          proposal_level, balanced, rationale, source, generated_run_id, created_at
-       ) values ($1,$2,$3,$4,'draft',$5,$6,$7,$8,'ai_close',$9,$10::timestamptz)`,
+       ) values ($1,$2,$3,$4,'draft',$5,$6,$7,$8,'ai_close',$9,$10::timestamptz)
+       on conflict (id) do nothing`,
       [draftId, companyId, event.id, suggestion.voucherType, event.title, proposal.level, proposal.balanced, proposal.rationale, runId, now]
     );
+    if (draftInsert.rowCount === 0) {
+      return false;
+    }
     for (const [index, line] of proposal.lines.entries()) {
       await client.query(
         `insert into voucher_draft_lines (
@@ -152,8 +163,12 @@ async function insertDraftProposal(
         [`${draftId}-line-${index + 1}`, draftId, line.summary, line.accountCode, line.accountName, line.debit, line.credit, index]
       );
     }
+    return true;
   });
 
+  if (!inserted) {
+    return null;
+  }
   return { businessEventId: event.id, draftId, level: proposal.level, balanced: proposal.balanced, lineCount: proposal.lines.length };
 }
 
@@ -168,13 +183,20 @@ export async function generateCloseDrafts(req: ApiRequest, res: ServerResponse):
 
   const candidates = await findEligibleEvents(companyId, body.period);
   const toGenerate = candidates.filter((row) => !row.has_draft);
-  const skipped = candidates.length - toGenerate.length;
   const runId = `close-gen-${companyId}-${Date.now()}`;
 
   const drafts: GeneratedDraftSummary[] = [];
+  let conflictSkipped = 0;
   for (const event of toGenerate) {
-    drafts.push(await insertDraftProposal(companyId, event, runId));
+    const summary = await insertDraftProposal(companyId, event, runId);
+    if (summary) {
+      drafts.push(summary);
+    } else {
+      // 并发的另一个 generate 已为该事项落库草稿 → 与查询时已有草稿同等计入 skipped
+      conflictSkipped += 1;
+    }
   }
+  const skipped = candidates.length - toGenerate.length + conflictSkipped;
 
   writeAudit({
     companyId,
