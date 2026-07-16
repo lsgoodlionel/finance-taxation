@@ -124,6 +124,11 @@ test("createExportJob reuses the same opened job and keeps a single persisted ob
     assert.equal(Number(counts.rows[0]?.jobs ?? 0), 1);
     assert.equal(Number(counts.rows[0]?.archives ?? 0), 1);
 
+    // writeAudit 经由 per-company 串行 hash-chain 队列异步落库，与本查询存在竞态
+    // （CI 实际偶发只见 'create' 缺 'reuse'）。先 drain 队列再断言，
+    // 与 transfer.integration.test.ts 的做法一致。
+    const { drainAuditQueues } = await import("../../services/audit.js");
+    await drainAuditQueues();
     const auditCapture = createResponseCapture();
     await listAuditLogs(
       {
