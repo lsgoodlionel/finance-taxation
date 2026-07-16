@@ -1,6 +1,8 @@
 // 财税工作台 Service Worker（E3 PWA）。
 // 策略：导航请求 network-first + 离线回退到已缓存的应用外壳；静态资源 stale-while-revalidate。
-const CACHE = "ft-shell-v1";
+// v2：/v2/ 接口纳入不缓存名单（修复前 /v2 曾被 SPA fallback 污染为 HTML 并被本 SW
+// 永久缓存）；升版本号促使 activate 清掉所有旧缓存，老客户端刷新即自愈。
+const CACHE = "ft-shell-v2";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -22,9 +24,9 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") {
     return;
   }
-  // API 请求不缓存（保证数据实时、避免陈旧财务数据）。
+  // API 请求不缓存（保证数据实时、避免陈旧财务数据）；/v2/ 前缀接口同理。
   const url = new URL(request.url);
-  if (url.pathname.startsWith("/api/")) {
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/v2/")) {
     return;
   }
 
