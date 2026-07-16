@@ -124,20 +124,29 @@ test("createExportJob reuses the same opened job and keeps a single persisted ob
     assert.equal(Number(counts.rows[0]?.jobs ?? 0), 1);
     assert.equal(Number(counts.rows[0]?.archives ?? 0), 1);
 
-    const auditCapture = createResponseCapture();
-    await listAuditLogs(
-      {
-        method: "GET",
-        url: `/api/audit/logs?resourceType=export_job&resourceId=${firstCreated.body?.job.id}&limit=10`,
-        auth: createAuthContext()
-      } as ApiRequest,
-      auditCapture.response
-    );
-    const auditList = auditCapture.readJson<{
-      items: Array<{ action: string; resourceId: string | null }>;
-    }>();
+    // writeAudit 是 fire-and-forget（services/audit.ts:query(...).catch()），审计插入
+    // 与本查询存在竞态，偶发只查到 'create' 而 'reuse' 未落库。与下方 updateExportJobStatus
+    // 用例同款轮询直到两条审计动作齐全，消除该 flaky（审计不阻塞业务，测试侧等待收敛）。
+    let auditItems: Array<{ action: string; resourceId: string | null }> = [];
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const auditCapture = createResponseCapture();
+      await listAuditLogs(
+        {
+          method: "GET",
+          url: `/api/audit/logs?resourceType=export_job&resourceId=${firstCreated.body?.job.id}&limit=10`,
+          auth: createAuthContext()
+        } as ApiRequest,
+        auditCapture.response
+      );
+      const auditList = auditCapture.readJson<{
+        items: Array<{ action: string; resourceId: string | null }>;
+      }>();
+      auditItems = auditList.body?.items ?? [];
+      if (auditItems.length >= 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
     assert.deepEqual(
-      auditList.body?.items.map((item) => item.action),
+      auditItems.map((item) => item.action),
       ["reuse", "create"]
     );
 
