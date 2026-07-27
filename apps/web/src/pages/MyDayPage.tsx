@@ -4,7 +4,7 @@
  * 聚合四类待办卡片：待办任务 / 风险预警 / 审批请求 / AI 草稿（Stage H 占位）。
  * 打开系统先看「今天要干什么」，点卡片直达对应中心处理。
  */
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Row, Col, Button, Tag, Space, Typography, Statistic, Alert, Spin, Empty } from "antd";
 import {
@@ -107,20 +107,25 @@ export function MyDayPage() {
             <Row gutter={[12, 12]}>
               {checklist.items.map((s) => (
                 <Col key={s.key} xs={24} sm={12} lg={8}>
-                  <div onClick={() => !s.done && navigate(s.actionPath)}
+                  <button
+                    type="button"
+                    disabled={s.done}
+                    onClick={() => !s.done && navigate(s.actionPath)}
+                    aria-label={`${s.done ? "已完成" : "待办"}：${s.label}${s.hint ? `，${s.hint}` : ""}`}
                     style={{
                       display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
+                      width: "100%", textAlign: "left", font: "inherit",
                       borderRadius: 10, border: "1px solid rgba(20,40,60,0.08)",
                       background: s.done ? "rgba(22,163,74,0.06)" : "#fff",
                       cursor: s.done ? "default" : "pointer", opacity: s.done ? 0.75 : 1,
                     }}>
-                    <span style={{ fontSize: 16 }}>{s.done ? "✅" : "⬜"}</span>
+                    <span aria-hidden="true" style={{ fontSize: 16 }}>{s.done ? "✅" : "⬜"}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <Text strong={!s.done} delete={s.done} style={{ fontSize: 13 }}>{s.label}</Text>
-                      {!s.done && <div style={{ fontSize: 11, color: "#94a3b8" }}>{s.hint}</div>}
+                      {!s.done && <div style={{ fontSize: 11, color: "#64748b" }}>{s.hint}</div>}
                     </div>
-                    {!s.done && <RightOutlined style={{ color: "#94a3b8", fontSize: 11 }} />}
-                  </div>
+                    {!s.done && <RightOutlined aria-hidden="true" style={{ color: "#64748b", fontSize: 11 }} />}
+                  </button>
                 </Col>
               ))}
             </Row>
@@ -164,7 +169,9 @@ export function MyDayPage() {
       </section>
 
       {loading ? (
-        <div style={{ padding: 40, textAlign: "center" }}><Spin /></div>
+        <div role="status" aria-live="polite" aria-label="收件箱加载中" style={{ padding: 40, textAlign: "center" }}>
+          <Spin />
+        </div>
       ) : (
         <>
           {urgentTotal > 0 && (
@@ -183,17 +190,22 @@ export function MyDayPage() {
               <Row gutter={[16, 16]}>
                 {otherItems.map((it) => (
                   <Col key={it.key} xs={24} sm={12} lg={8}>
-                    <Card hoverable style={{ borderRadius: 12, borderLeft: `3px solid ${it.tone === "warning" ? "#dc2626" : "#2563eb"}` }}
-                      styles={{ body: { padding: "16px 18px" } }}
-                      onClick={() => navigate(it.actionPath)}>
+                    <Card style={{ borderRadius: 12, borderLeft: `3px solid ${it.tone === "warning" ? "#dc2626" : "#2563eb"}` }}
+                      styles={{ body: { padding: "16px 18px" } }}>
                       <Space direction="vertical" size={6} style={{ width: "100%" }}>
                         <Space style={{ justifyContent: "space-between", width: "100%" }}>
                           <Text strong>{it.label}</Text>
                           <Tag color={it.tone === "warning" ? "error" : "blue"}>{it.count}</Tag>
                         </Space>
                         <Text type="secondary" style={{ fontSize: 12 }}>{it.hint}</Text>
-                        <Button type="link" size="small" style={{ padding: 0 }}>
-                          前往处理 <RightOutlined />
+                        <Button
+                          type="link"
+                          size="small"
+                          style={{ padding: 0 }}
+                          onClick={() => navigate(it.actionPath)}
+                          aria-label={`前往处理：${it.label}`}
+                        >
+                          前往处理 <RightOutlined aria-hidden="true" />
                         </Button>
                       </Space>
                     </Card>

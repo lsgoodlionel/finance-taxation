@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { RouteFallback } from "./RouteFallback";
 import {
@@ -149,16 +149,20 @@ function sidebarPalette(isGuided: boolean) {
       brandTitle: "#0f172a",
       brandSub: "#64748b",
       userName: "#1e293b",
-      userMeta: "#94a3b8",
+      // a11y：#94a3b8 对浅色侧栏背景仅约 2.6:1，不满足 WCAG 1.4.3 的 4.5:1；
+      // #64748b 对白色系背景约 4.76:1。
+      userMeta: "#64748b",
     };
   }
   return {
     bg: "#0f172a",
     divider: "1px solid rgba(255,255,255,0.07)",
     brandTitle: "#f1f5f9",
-    brandSub: "#475569",
+    // a11y：深色侧栏背景（#0f172a）下 #475569 仅约 3.75:1，不满足正文 4.5:1；
+    // #94a3b8 对深色背景约 6.97:1。
+    brandSub: "#94a3b8",
     userName: "#e2e8f0",
-    userMeta: "#475569",
+    userMeta: "#94a3b8",
   };
 }
 
@@ -478,7 +482,7 @@ export function AppLayout() {
             }}>
             <SearchOutlined />
             <span style={{ flex: 1, textAlign: "left" }}>搜索…</span>
-            <kbd style={{ fontSize: 11, color: "#94a3b8", border: "1px solid #e2e8f0", borderRadius: 4, padding: "0 5px", background: "#fff" }}>⌘K</kbd>
+            <kbd style={{ fontSize: 11, color: "#64748b", border: "1px solid #e2e8f0", borderRadius: 4, padding: "0 5px", background: "#fff" }}>⌘K</kbd>
           </button>
           <GlobalPeriodPicker />
           </div>

@@ -35,6 +35,7 @@ export function AssistantHeaderBar({
           <div style={{ display: "flex", gap: "8px" }}>
             <button
               onClick={onToggleHistory}
+              aria-pressed={showHistory}
               style={{
                 background: showHistory ? "#1e2a37" : "#eef0f3",
                 color: showHistory ? "#fff" : sessionsCount > 0 ? "#1e2a37" : "#bcc5ce",
@@ -63,6 +64,7 @@ export function AssistantHeaderBar({
               <button
                 onClick={onToggleViewMode}
                 title={isOpMode ? "切换到决策视角" : "切换到操作视角"}
+                aria-pressed={isOpMode}
                 style={{
                   display: "flex", alignItems: "center", gap: "6px",
                   padding: "4px 12px", borderRadius: "20px", border: "none", cursor: "pointer",
@@ -72,7 +74,7 @@ export function AssistantHeaderBar({
                   transition: "all 0.2s"
                 }}
               >
-                {isOpMode ? "⚙ 操作视角" : "📊 决策视角"}
+                <span aria-hidden="true">{isOpMode ? "⚙" : "📊"}</span> {isOpMode ? "操作视角" : "决策视角"}
                 <span style={{ fontSize: "10px", opacity: 0.7 }}>（点击切换）</span>
               </button>
             )}
@@ -85,18 +87,25 @@ export function AssistantHeaderBar({
               </span>
             )}
           </div>
-        <div style={{ color: "#6c7a89", fontSize: "13px", marginTop: "6px" }}>{status}</div>
+        <div role="status" aria-live="polite" style={{ color: "#6c7a89", fontSize: "13px", marginTop: "6px" }}>{status}</div>
         {uploadPhase && (
           <div style={{ marginTop: "6px", width: "260px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#4f8ef7", marginBottom: "3px" }}>
-                <span>
+                <span role="status" aria-live="polite">
                   {uploadPhase.phase === "reading" && "读取文件"}
                   {uploadPhase.phase === "uploading" && "上传中"}
                   {uploadPhase.phase === "ai" && "AI 识别中"}
                 </span>
-                <span>{uploadPhase.pct}%</span>
+                <span aria-hidden="true">{uploadPhase.pct}%</span>
               </div>
-              <div style={{ height: "5px", background: "#e8ecf0", borderRadius: "3px", overflow: "hidden" }}>
+              <div
+                role="progressbar"
+                aria-label="文件上传与识别进度"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={uploadPhase.pct}
+                style={{ height: "5px", background: "#e8ecf0", borderRadius: "3px", overflow: "hidden" }}
+              >
                 <div style={{
                   height: "100%",
                   width: `${uploadPhase.pct}%`,

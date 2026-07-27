@@ -6,6 +6,7 @@
 import React, { useCallback, useState } from "react";
 import { message } from "antd";
 import { approveCloseDraft, rejectCloseDraft } from "../../lib/api";
+import { announce } from "../../lib/live-announcer";
 import { buildPendingCards, takeTopPending } from "./home-helpers";
 import { useHomeData } from "./useHomeData";
 import { HomePageView } from "./HomePageView";
@@ -25,9 +26,12 @@ export function HomePage() {
     try {
       await approveCloseDraft(draftId);
       void message.success("已批准，财务复核后就会正式入账");
+      announce("已批准，财务复核后就会正式入账");
       await reloadDrafts();
     } catch (err) {
-      void message.error(getErrorMessage(err, "批准没有成功，请稍后再试"));
+      const msg = getErrorMessage(err, "批准没有成功，请稍后再试");
+      void message.error(msg);
+      announce(msg, true);
     } finally {
       setActing(null);
     }
@@ -38,9 +42,12 @@ export function HomePage() {
     try {
       await rejectCloseDraft(draftId);
       void message.success("已驳回，这笔不会入账");
+      announce("已驳回，这笔不会入账");
       await reloadDrafts();
     } catch (err) {
-      void message.error(getErrorMessage(err, "驳回没有成功，请稍后再试"));
+      const msg = getErrorMessage(err, "驳回没有成功，请稍后再试");
+      void message.error(msg);
+      announce(msg, true);
     } finally {
       setActing(null);
     }

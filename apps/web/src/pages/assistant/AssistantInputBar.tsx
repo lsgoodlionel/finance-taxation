@@ -53,12 +53,13 @@ export function AssistantInputBar({
             accept="image/*,application/pdf"
             style={{ display: "none" }}
             disabled={ocrLoading || sending}
+            aria-label="上传发票/回单/收据（PDF 直接识别，支持图片格式）"
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) onPickFile(file);
             }}
           />
-          {ocrLoading ? "⏳" : "📎"}
+          <span aria-hidden="true">{ocrLoading ? "⏳" : "📎"}</span>
         </label>
       )}
       <textarea
@@ -66,6 +67,7 @@ export function AssistantInputBar({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={onKeyDown}
         rows={2}
+        aria-label={isOperationMode ? "描述经营事项或财税问题" : "向 AI 助手提问"}
         placeholder={isOperationMode
           ? "描述经营事项、报销内容等，或点击 📎 上传凭证图片/PDF 直接识别（Enter 发送）"
           : "直接提问财务经营问题（Enter 发送，Shift+Enter 换行）"}

@@ -238,6 +238,7 @@ import { verifyAuditChain } from "../services/audit.js";
 import { automationDecisionRoute, automationThresholdsRoute } from "../modules/ai-agents/governance.routes.js";
 import { createApiKey, listApiKeys, revokeApiKey, registerWebhook } from "../modules/open-api/credentials.routes.js";
 import { listJobs, enqueueJob } from "../modules/jobs/routes.js";
+import { listNotificationDeliveries } from "../modules/notifications/routes.js";
 import { BODY_SCHEMAS } from "./body-schemas.js";
 
 const healthHandler: RouteHandler = async (_req, res) => {
@@ -1053,7 +1054,11 @@ const routes: RouteDef[] = [
   // F5 调度任务队列（可观测 + 手动入队）
   { method: "GET", path: "/api/jobs", auth: true, permission: "workflow.view", handler: listJobs },
   { method: "POST", path: "/api/jobs", auth: true, permission: "workflow.manage", handler: enqueueJob,
-    bodySchema: { kind: { type: "string", required: true, min: 1 } } }
+    bodySchema: { kind: { type: "string", required: true, min: 1 } } },
+
+  // K5 通知投递可观测：即发即忘的通知失败不进业务响应，这里给出渠道状态与最近投递记录
+  { method: "GET", path: "/api/notifications/deliveries", auth: true, permission: "settings.manage",
+    handler: listNotificationDeliveries }
 ];
 
 export function createAppRouter(): Router {

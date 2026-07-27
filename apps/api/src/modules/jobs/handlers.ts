@@ -7,6 +7,8 @@
 
 import { query } from "../../db/client.js";
 import { writeAudit } from "../../services/audit.js";
+import { notify } from "../notifications/dispatch.js";
+import { buildOverdueTasksNotification } from "../notifications/events.js";
 
 export interface JobContext {
   id: string;
@@ -38,6 +40,8 @@ async function overdueTaskScan(ctx: JobContext): Promise<void> {
         resourceType: "task",
         changes: { overdue, jobId: ctx.id }
       });
+      // 每家公司汇总一条即发即忘通知；投递失败不会让本次调度任务失败重试。
+      notify(buildOverdueTasksNotification({ companyId: row.company_id, overdue }));
     }
   }
 }

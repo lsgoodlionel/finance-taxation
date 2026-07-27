@@ -20,6 +20,7 @@ import { writeAudit } from "../../services/audit.js";
 import { testInvoiceVerifyProvider } from "../invoices/invoice-verify.js";
 import { BANK_API_PROVIDERS, testBankApiProvider } from "../banking/bank-api.js";
 import { testNotificationProvider } from "../notifications/config-test.js";
+import { clearCompanyChannelCache } from "../notifications/company-channel.js";
 
 // ── 内置提供商信息 ─────────────────────────────────────────────────────────────
 
@@ -288,6 +289,11 @@ export async function upsertIntegrationConfig(
     resourceType: "integration_config",
     changes: { provider: body.provider, enabled: body.enabled },
   });
+
+  if (configType === "notification") {
+    // 通知渠道按公司缓存 60s；保存后立即失效，让设置页改动马上生效。
+    clearCompanyChannelCache();
+  }
 
   const updated = await queryOne<IntegrationConfigRow>(
     "SELECT * FROM integration_configs WHERE company_id=$1 AND config_type=$2", [cid, configType],

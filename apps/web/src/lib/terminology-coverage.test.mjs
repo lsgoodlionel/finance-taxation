@@ -25,9 +25,8 @@ import { TERMINOLOGY } from "./terminology.ts";
  * 2) 再剥离模板字符串——导出用的 HTML 字符串模板里同样有 >文字< 结构，
  *    但它不是 JSX，无法挂 <Term>；
  * 3) 再剥离 <Term ...>...</Term> 与 <Term ... /> 整块——已治理的部分不该复报；
- * 4) 再剥离 <button>/<Button> 的标签文本——Term 触发器本身是 tabIndex=0 +
- *    role="button" 的可聚焦元素，嵌进按钮里会构成 nested interactive，
- *    比缺一条释义更糟，因此按钮文案按设计不纳入强制范围；
+ * 4) 再剥离 <button>/<Button> 的标签文本——按钮文案按设计不纳入强制范围，理由见
+ *    下方「按钮豁免」小节；
  * 5) 只在「JSX 文本节点」中匹配，即 `>`/`}` 与 `<`/`{` 之间、且不含大括号与各类
  *    引号的片段。属性值（title="过账"）、普通字符串常量
  *    （message.success("过账成功")）因含引号被排除——它们本来也承载不了组件。
@@ -41,22 +40,37 @@ const WEB_SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCAN_DIRS = ["pages", "components"];
 
 /**
+ * 按钮豁免（第 4 条剥离规则）的理由——V9 复核结论：继续豁免。
+ *
+ * Term 已提供非交互变体（interactive={false}，见 components/ui/Term.tsx），
+ * 技术上按钮内也能挂，但对按钮不划算：
+ * 1) 按钮的无障碍名称由内容计算。非交互变体靠视觉隐藏文本传递释义，挂进按钮会把
+ *    名称从「AI 审计勾稽」撑成一整段定义；表格行内重复渲染的按钮更会逐行复读。
+ *    按钮名称应当短促、以动作为主。
+ * 2) 唯一剩下的指针通道也不成立：按钮上的任何点按都会触发副作用（过账、归档、
+ *    调用 AI），用户没法「点一下只看释义」。Tabs 标签能用非交互变体，正是因为切换
+ *    页签是幂等导航，没有副作用。
+ * 3) 定位不同：按钮讲「做什么」，术语释义讲「这是什么」，后者属于周边正文。
+ *
+ * 那按钮里的术语靠什么让用户拿到释义？靠同页正文——本规则是「文件 × 术语」粒度，
+ * 只要同文件正文里对该词挂过一次 <Term>，按钮处的同一个词即视为已解释。
+ * 现状核查：去掉本豁免会新增 13 个文件违规（TasksPage、AuditWorkbenchHeader、
+ * BatchBar 等），且这些词多半只出现在按钮上、正文并无解释——这是文案缺口，
+ * 后续应当在按钮周边补一句说明并在那里挂 <Term>，而不是把定义塞进按钮名称。
+ */
+
+/**
  * 存量违规文件白名单（file-level）。
  *
  * 规则：逐页消化后必须从此表移除；新增文件一律不得入表。
  * 若某文件已治理干净却仍留在表里，本测试同样会失败，保证白名单只减不增。
- * 行末注释记录当前仍缺释义的术语，便于认领与排期。
+ *
+ * V9 起为空：存量已清零，任何未挂释义的术语都会直接让测试失败。
  */
-const LEGACY_UNCOVERED_FILES = [
-  // 勾稽：全文仅出现在 Tabs 标签「风险勾稽」内。Tabs 标签本身是 role="tab" 的可聚焦
-  // 元素，而 Term 触发器是 tabIndex=0 + role="button"，嵌进去会构成 nested
-  // interactive——与本测试豁免 <button> 文案同一条理由。该文件其余术语（凭证）已治理，
-  // 且风险页签正文没有承载「勾稽」的说明性文字可供改挂，故保留豁免。
-  "pages/contracts/ContractDrawer.tsx" // 勾稽（Tabs 标签，见上）
-];
+const LEGACY_UNCOVERED_FILES = [];
 
 /** 白名单预算：只减不增。想放宽必须同时改大这个数字，让扩容在代码评审里显形。 */
-const LEGACY_BUDGET = 1;
+const LEGACY_BUDGET = 0;
 
 /** JSX 文本节点：`>`/`}` 与 `<`/`{` 之间，且不含大括号、引号、反引号的片段。 */
 const JSX_TEXT_PATTERN = /[>}]([^<>{}"'`]*)[<{]/g;
@@ -197,7 +211,12 @@ test("检测器自检：裸术语被检出、已挂释义与非 JSX 文本不误
   assert.deepEqual(
     probe("const A = () => <Button>查看凭证</Button>;"),
     [],
-    "按钮文案按设计不纳入强制范围"
+    "按钮文案按设计不纳入强制范围（理由见文件头「按钮豁免」）"
+  );
+  assert.deepEqual(
+    probe('const A = () => <Tabs items={[{ label: <span>风险<Term k="reconciliation" interactive={false}>勾稽</Term></span> }]} />;'),
+    [],
+    "带额外属性的 <Term>（如非交互变体）同样要被识别为已覆盖"
   );
   assert.deepEqual(
     probe("const A = () => <p>当前分录数：{count}</p>;"),

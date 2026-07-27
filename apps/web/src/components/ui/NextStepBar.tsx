@@ -44,7 +44,7 @@ export function NextStepBarContent({ current, next }: NextStepBarProps) {
       <Text strong style={{ fontSize: 13 }}>{current}</Text>
       {next.length > 0 && (
         <>
-          <RightOutlined style={{ fontSize: 10, color: "#94a3b8" }} />
+          <RightOutlined aria-hidden="true" style={{ fontSize: 10, color: "#94a3b8" }} />
           <Text type="secondary" style={{ fontSize: 12 }}>下一步：</Text>
           <span style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {next.map((action) => (

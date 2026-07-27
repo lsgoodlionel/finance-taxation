@@ -42,12 +42,12 @@ export function AssistantChatMessages({
 
       <div style={{ ...panelBg, flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
         {messages.length === 0 && (
-          <div style={{ textAlign: "center", color: "#aab5c0", fontSize: "14px", marginTop: "60px" }}>
-            <div style={{ fontSize: "40px", marginBottom: "12px" }}>💬</div>
+          <div style={{ textAlign: "center", color: "#64748b", fontSize: "14px", marginTop: "60px" }}>
+            <div aria-hidden="true" style={{ fontSize: "40px", marginBottom: "12px" }}>💬</div>
             <div>{isOpMode ? "描述您的经营事项或财税问题" : "直接提问财务经营问题"}</div>
             <div style={{ fontSize: "12px", marginTop: "6px" }}>
               {isOpMode
-                ? "可文字描述，也可点击 📎 上传发票/回单/收据（支持 PDF 直接识别，无需转图）"
+                ? "可文字描述，也可点击「上传」图标上传发票/回单/收据（支持 PDF 直接识别，无需转图）"
                 : "我会基于实时财务数据给出简洁结论和行动建议"}
             </div>
           </div>
@@ -72,7 +72,10 @@ export function AssistantChatMessages({
               border: msg.role === "assistant" ? "1px solid rgba(20,40,60,0.08)" : "none"
             }}>
               {msg.content === "" ? (
-                <span style={{ color: "#aab5c0", fontStyle: "italic" }}>正在思考...</span>
+                // role="status"：AI 正在生成回复，屏幕阅读器用户需要被告知，不能只靠视觉动效
+                <span role="status" aria-live="polite" style={{ color: "#64748b", fontStyle: "italic" }}>
+                  正在思考...
+                </span>
               ) : (
                 <span dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
               )}

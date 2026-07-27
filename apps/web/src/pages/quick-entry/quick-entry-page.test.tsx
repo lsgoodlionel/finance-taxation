@@ -94,6 +94,12 @@ assert(confirmHtml.includes("确认记下这笔账"), "expected primary submit a
 assert(confirmHtml.includes("上一步"), "expected back action");
 assert(!confirmHtml.includes("借方"), "expected no debit/credit jargon in confirm step");
 
+// a11y 护栏：确认页字段用 Typography.Text 做视觉标签、非原生 <label>，
+// 必须靠 aria-label 补上程序化关联，否则屏幕阅读器 Tab 到控件时听不到字段名。
+assert(confirmHtml.includes('aria-label="这是笔什么账？"'), "expected type select to expose its plain-language label via aria-label");
+assert(confirmHtml.includes('aria-label="多少钱？（元）"'), "expected amount input to expose its plain-language label via aria-label");
+assert(confirmHtml.includes('aria-label="发生日期"'), "expected date input to keep its existing, more specific aria-label");
+
 // 创建失败：保留内容并给出重试按钮
 const failedHtml = render(
   makeController({
@@ -135,6 +141,8 @@ assert(
 assert(doneHtml.includes("再记一笔"), "expected repeat action");
 assert(doneHtml.includes("回今日"), "expected go-home action");
 assert(doneHtml.includes("看这笔的进展"), "expected go-detail action");
+// a11y：向导切到「完成」态是关键状态变化，需 role="status" 播报给屏幕阅读器用户
+assert(doneHtml.includes('role="status"'), "expected the done-step result to be announced via role=status");
 
 // 草稿生成失败（如员工无 ledger.post 权限恒 403）→ 改中性文案，不得宣称已生成草稿
 const doneFailedHtml = render(

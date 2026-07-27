@@ -18,6 +18,8 @@ import type { ApiRequest } from "../../../types.js";
 import { query, queryOne, withTransaction } from "../../../db/client.js";
 import { json } from "../../../utils/http.js";
 import { writeAudit } from "../../../services/audit.js";
+import { notify } from "../../notifications/dispatch.js";
+import { buildCloseDraftsNotification } from "../../notifications/events.js";
 import { suggestAccountingEntry, type EventForAccounting } from "../accounting-agent.js";
 import { buildDraftProposalFromSuggestion } from "./draft-proposal.js";
 import {
@@ -213,6 +215,9 @@ export async function generateCloseDrafts(req: ApiRequest, res: ServerResponse):
     resourceId: body.period,
     changes: { generated: drafts.length, skipped, runId }
   });
+
+  // 按批次汇总推送一条（不按草稿逐条推）；本次未生成草稿时构造函数返回 null，自动跳过。
+  notify(buildCloseDraftsNotification({ companyId, period: body.period, generated: drafts.length }));
 
   json(res, 200, { generated: drafts.length, skipped, drafts });
 }

@@ -2,6 +2,7 @@
  * 收件箱 · 待办任务卡片
  * 逾期任务优先展示，点击直达 /tasks。
  */
+import React from "react";
 import { Button, Empty, Space, Spin, Tag, Typography } from "antd";
 import { RightOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -52,11 +53,14 @@ export function InboxTasksCard({ tasks, loading }: InboxTasksCardProps) {
       ) : (
         <Space direction="vertical" size={8} style={{ width: "100%", marginTop: 10 }}>
           {sorted.slice(0, MAX_VISIBLE).map((task) => (
-            <div
+            <button
               key={task.id}
+              type="button"
               onClick={() => navigate("/tasks")}
+              aria-label={`${task.title}，${formatDueLabel(task.dueAt)}${task.isOverdue ? "，已逾期" : ""}，前往任务中心处理`}
               style={{
                 display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
+                width: "100%", textAlign: "left", font: "inherit", background: "#fff",
                 borderRadius: 8, border: "1px solid rgba(20,40,60,0.08)",
                 borderLeft: `3px solid ${task.isOverdue ? "#dc2626" : "#2563eb"}`,
                 cursor: "pointer",
@@ -64,14 +68,14 @@ export function InboxTasksCard({ tasks, loading }: InboxTasksCardProps) {
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Text strong style={{ fontSize: 13 }}>{task.title}</Text>
-                <div style={{ fontSize: 11, color: "#94a3b8" }}>{formatDueLabel(task.dueAt)}</div>
+                <div style={{ fontSize: 11, color: "#64748b" }}>{formatDueLabel(task.dueAt)}</div>
               </div>
               {task.isOverdue && <Tag color="error">逾期</Tag>}
               <Tag color={task.priority === "critical" || task.priority === "high" ? "orange" : "default"}>
                 {taskPriorityShortLabel(task.priority)}
               </Tag>
-              <RightOutlined style={{ color: "#94a3b8", fontSize: 11 }} />
-            </div>
+              <RightOutlined aria-hidden="true" style={{ color: "#64748b", fontSize: 11 }} />
+            </button>
           ))}
           {sorted.length > MAX_VISIBLE && (
             <Text type="secondary" style={{ fontSize: 12 }}>

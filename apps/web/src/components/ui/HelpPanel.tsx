@@ -1,5 +1,9 @@
-import React, { type CSSProperties, type ReactNode } from "react";
+import React, { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { QuestionCircleOutlined } from "@ant-design/icons";
+
+/** 面板内可获得焦点的元素选择器（用于 Tab 循环焦点陷阱）。 */
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * V7 J4 统一帮助面板：跟随既有各页 HelpModal 的浮层形态，
@@ -72,17 +76,59 @@ export function HelpPanel({
   caution,
   children
 }: HelpPanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  // a11y：打开时把焦点移进面板并记住触发元素；Tab 时把焦点困在面板内
+  // （避免漏到背景页面）；Escape 关闭；关闭时把焦点还给触发元素。
+  useEffect(() => {
+    if (!open) return undefined;
+    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panelRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const container = panelRef.current;
+      if (!container) return;
+      const focusable = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocusedRef.current?.focus();
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
     <div style={OVERLAY_STYLE} onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
-      <div style={PANEL_STYLE} onClick={(event) => event.stopPropagation()}>
+      <div ref={panelRef} tabIndex={-1} style={PANEL_STYLE} onClick={(event) => event.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>{title}</h3>
           <button
             onClick={onClose}
             aria-label="关闭说明"
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "#9aa5b4" }}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px", color: "#64748b" }}
           >
             ✕
           </button>

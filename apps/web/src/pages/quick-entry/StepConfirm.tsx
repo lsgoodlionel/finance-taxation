@@ -2,7 +2,7 @@
  * 第 2 步「确认」：白话摘要卡 + 内联可改字段 + 缺发票黄色提醒。
  * 字段沿用 events 6 字段模型，但标签全部白话；创建失败保留内容可重试。
  */
-import React from "react";
+import React, { cloneElement, isValidElement } from "react";
 import { Alert, Button, Card, Input, Select, Typography } from "antd";
 import { QUICK_TYPE_OPTIONS, buildSummaryText, DEFAULT_DEPARTMENT } from "./entry-rules";
 import { canSubmit } from "./wizard-state";
@@ -10,11 +10,20 @@ import type { QuickEntryController } from "./types";
 
 const FIELD_STYLE: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 4 };
 
+/**
+ * 字段行：视觉上用 Typography.Text 展示白话标签，但它不是原生 <label>，
+ * 与后面的控件（尤其 antd Select，无法可靠地用 htmlFor 关联）没有程序化关联——
+ * 屏幕阅读器用户 Tab 到控件时听不到「这是笔什么账？」这类标签（WCAG 2.2 · SC 1.3.1 / 4.1.2）。
+ * 这里给唯一子控件补一个 aria-label（已自带更具体 aria-label 的控件不覆盖）。
+ */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const control = isValidElement<{ "aria-label"?: string }>(children)
+    ? cloneElement(children, { "aria-label": children.props["aria-label"] ?? label })
+    : children;
   return (
     <div style={FIELD_STYLE}>
       <Typography.Text type="secondary">{label}</Typography.Text>
-      {children}
+      {control}
     </div>
   );
 }

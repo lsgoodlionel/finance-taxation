@@ -4,7 +4,7 @@
  * 自带数据加载（/api/setup/status + localStorage 本地标记），供 /home 老板工作台挂载。
  * 仅 guided 模式渲染；三件事全部完成后自动隐藏。
  */
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Typography } from "antd";
 import { RightOutlined } from "@ant-design/icons";
@@ -53,7 +53,9 @@ export function GuidedQuickStartCard() {
         <button
           key={item.key}
           type="button"
+          disabled={item.done}
           onClick={() => !item.done && navigate(item.actionPath)}
+          aria-label={`${item.done ? "已完成" : "待办"}：${item.label}${item.hint ? `，${item.hint}` : ""}`}
           style={{
             display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
             borderRadius: 10, border: "1px solid rgba(20,40,60,0.08)", textAlign: "left",
@@ -61,14 +63,14 @@ export function GuidedQuickStartCard() {
             cursor: item.done ? "default" : "pointer", opacity: item.done ? 0.75 : 1,
           }}
         >
-          <span style={{ fontSize: 16 }}>{item.done ? "✅" : "⬜"}</span>
+          <span aria-hidden="true" style={{ fontSize: 16 }}>{item.done ? "✅" : "⬜"}</span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <Text strong={!item.done} delete={item.done} style={{ fontSize: 13 }}>{item.label}</Text>
             {!item.done && (
-              <span style={{ display: "block", fontSize: 11, color: "#94a3b8" }}>{item.hint}</span>
+              <span style={{ display: "block", fontSize: 11, color: "#64748b" }}>{item.hint}</span>
             )}
           </span>
-          {!item.done && <RightOutlined style={{ color: "#94a3b8", fontSize: 11 }} />}
+          {!item.done && <RightOutlined aria-hidden="true" style={{ color: "#64748b", fontSize: 11 }} />}
         </button>
       ))}
     </Card>

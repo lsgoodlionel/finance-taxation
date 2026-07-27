@@ -1,3 +1,9 @@
+# 固定项目名：容器名由项目名决定，而项目名默认取目录名（FT → ft），
+# 与主栈 docker-compose.yml 撞成同一组 ft-db-1/ft-api-1/ft-web-1 —— 直接跑
+# `docker compose -f docker-compose.test.yml up` 会把主栈顶掉（实际发生过）。
+# 写死后即使漏带 `-p` 也不会互相污染；package.json 的脚本仍显式带 -p，二者一致。
+name: finance-taxation-v4-test
+
 services:
   db:
     image: postgres:17-alpine

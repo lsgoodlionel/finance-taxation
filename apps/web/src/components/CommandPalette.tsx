@@ -2,13 +2,14 @@
  * 全局搜索 / 命令面板（P1-4）
  * ⌘K / Ctrl+K 打开，跨事项/合同/发票/凭证/员工/任务/单据搜索并直达。
  */
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal, Input, List, Tag, Typography, Empty, Spin } from "antd";
 import { SearchOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { globalSearch, type SearchResult } from "../lib/api";
 import { filterSceneCommands, sceneCommandDescription, type SceneCommand } from "../lib/scene-commands";
 import { useWorkspaceMode } from "../lib/workspace-mode";
+import { activateOnEnterOrSpace } from "../lib/a11y";
 
 const { Text } = Typography;
 
@@ -76,18 +77,22 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       <div style={{ maxHeight: 420, overflowY: "auto", padding: 8 }}>
         {sceneMatches.length > 0 && (
           <div style={{ marginBottom: 4 }}>
-            <div style={{ padding: "6px 12px 2px", fontSize: 12, color: "#94a3b8" }}>场景</div>
+            <div style={{ padding: "6px 12px 2px", fontSize: 12, color: "#64748b" }}>场景</div>
             <List
               size="small"
               dataSource={sceneMatches}
               renderItem={(cmd) => (
                 <List.Item
                   onClick={() => goScene(cmd)}
+                  onKeyDown={activateOnEnterOrSpace(() => goScene(cmd))}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`场景：${cmd.label}`}
                   style={{ cursor: "pointer", borderRadius: 8, padding: "8px 12px" }}
                   className="cmd-result-item"
                 >
                   <List.Item.Meta
-                    avatar={<ThunderboltOutlined style={{ color: "#faad14" }} />}
+                    avatar={<ThunderboltOutlined aria-hidden="true" style={{ color: "#faad14" }} />}
                     title={<span>{cmd.label}</span>}
                     description={
                       <Text type="secondary" style={{ fontSize: 12 }}>
@@ -104,7 +109,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         {loading ? (
           <div style={{ padding: 32, textAlign: "center" }}><Spin /></div>
         ) : q.trim().length === 0 ? (
-          <div style={{ padding: 24, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
+          <div style={{ padding: 24, textAlign: "center", color: "#64748b", fontSize: 13 }}>
             输入关键词开始搜索 · 支持名称 / 编号 / 摘要
           </div>
         ) : results.length === 0 ? (
@@ -116,6 +121,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             renderItem={(r) => (
               <List.Item
                 onClick={() => go(r)}
+                onKeyDown={activateOnEnterOrSpace(() => go(r))}
+                role="button"
+                tabIndex={0}
+                aria-label={`${r.typeLabel}：${r.label}`}
                 style={{ cursor: "pointer", borderRadius: 8, padding: "8px 12px" }}
                 className="cmd-result-item"
               >
