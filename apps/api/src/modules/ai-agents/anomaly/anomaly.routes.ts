@@ -14,6 +14,11 @@ import type { ApiRequest } from "../../../types.js";
 import { query } from "../../../db/client.js";
 import { json } from "../../../utils/http.js";
 import {
+  COST_ACCOUNT_PREFIX,
+  NON_OPERATING_EXPENSE_PREFIX,
+  REVENUE_ACCOUNT_PREFIXES
+} from "../../reports/profit-accounts.js";
+import {
   runAnomalyScan,
   type AnomalyFinding,
   type AnomalyScanInput,
@@ -26,7 +31,20 @@ import {
 const PERIOD_LABEL = /^\d{4}-\d{2}$/;
 const DEFAULT_LOOKBACK_DAYS = 90;
 const TAX_BURDEN_LOOKBACK_MONTHS = 6;
-const REVENUE_PREFIXES = ["6001", "6051", "6111", "6301"];
+
+/** 收入科目前缀，与 reports/profit-accounts.ts 同源，避免两侧口径漂移。 */
+export const REVENUE_PREFIXES: string[] = [...REVENUE_ACCOUNT_PREFIXES];
+
+/**
+ * 与收入前缀重叠、但实为成本/费用的科目：主营业务成本 6001c 落在 `6001%` 里，
+ * 管理费用 6301e 落在 `6301%` 里。SQL 用 like 匹配前缀，必须显式排除，否则
+ * 税负率分母（营业收入）被成本与管理费用冲减而偏小，税负率虚高、误报异常。
+ */
+export const REVENUE_EXCLUDED_PREFIXES: string[] = [
+  COST_ACCOUNT_PREFIX,
+  NON_OPERATING_EXPENSE_PREFIX
+];
+
 const TAX_PAYABLE_PREFIX = "2221";
 const BANK_ACCOUNT_PREFIX = "1002";
 const MS_PER_DAY = 86_400_000;
@@ -137,18 +155,30 @@ async function fetchWeekendAmountEntries(companyId: string, range: DateRange): P
 /** 税负率环比所需的账期序列：按月汇总应交税费（2221%）贷方净额 / 营业收入科目贷方净额 */
 async function fetchTaxBurdenPeriods(companyId: string, endPeriod: string): Promise<TaxBurdenPeriodInput[]> {
   const startPeriod = shiftPeriodLabel(endPeriod, -(TAX_BURDEN_LOOKBACK_MONTHS - 1));
-  const revenueLikeClauses = REVENUE_PREFIXES.map((_, i) => `account_code like $${i + 3}`).join(" or ");
-  const startParamIndex = REVENUE_PREFIXES.length + 3;
+  const revenueIncludeClauses = REVENUE_PREFIXES.map((_, i) => `account_code like $${i + 3}`).join(" or ");
+  const excludeOffset = REVENUE_PREFIXES.length + 3;
+  const revenueExcludeClauses = REVENUE_EXCLUDED_PREFIXES.map(
+    (_, i) => `account_code not like $${i + excludeOffset}`
+  ).join(" and ");
+  const startParamIndex = excludeOffset + REVENUE_EXCLUDED_PREFIXES.length;
   const rows = await query<{ period: string; tax: string; revenue: string }>(
     `select to_char(entry_date, 'YYYY-MM') as period,
             sum(case when account_code like $2 then credit - debit else 0 end) as tax,
-            sum(case when ${revenueLikeClauses} then credit - debit else 0 end) as revenue
+            sum(case when (${revenueIncludeClauses}) and (${revenueExcludeClauses})
+                     then credit - debit else 0 end) as revenue
      from ledger_entries
      where company_id = $1
        and to_char(entry_date, 'YYYY-MM') between $${startParamIndex} and $${startParamIndex + 1}
      group by period
      order by period`,
-    [companyId, `${TAX_PAYABLE_PREFIX}%`, ...REVENUE_PREFIXES.map((p) => `${p}%`), startPeriod, endPeriod]
+    [
+      companyId,
+      `${TAX_PAYABLE_PREFIX}%`,
+      ...REVENUE_PREFIXES.map((p) => `${p}%`),
+      ...REVENUE_EXCLUDED_PREFIXES.map((p) => `${p}%`),
+      startPeriod,
+      endPeriod
+    ]
   );
   return rows.map((r) => ({
     period: r.period,

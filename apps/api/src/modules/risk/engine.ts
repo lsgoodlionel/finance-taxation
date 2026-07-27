@@ -12,6 +12,25 @@ import type {
 import { resolveContractRevenueScenario } from "../events/contract-revenue-rules.js";
 import { resolvePurchaseExpenseScenario } from "../events/purchase-expense-rules.js";
 import { resolveTravelExpenseScenario } from "../events/travel-expense-rules.js";
+import { classifyProfitAccount } from "../reports/profit-accounts.js";
+
+/**
+ * 销售口径的收入科目前缀：主营业务收入 6001 与其他业务收入 6051。
+ * 投资收益 6111 / 营业外收入 6301 不属于销售收入，不纳入销售类风险判定。
+ */
+const SALES_REVENUE_PREFIXES = ["6001", "6051"];
+
+/**
+ * 判定一条总账分录是否为「已入账的销售收入」。
+ *
+ * 只按前缀判断会踩本系统的编码重叠约定：主营业务成本 6001c 也以 `6001` 开头，
+ * 一张只有成本分录的凭证会被误读成「收入已入账」，进而误报缺失增值税事项等风险。
+ * 因此在前缀命中之外，再用利润表口径的权威分类器 classifyProfitAccount 复核一次。
+ */
+function isSalesRevenueEntry(accountCode: string): boolean {
+  const matchesSalesPrefix = SALES_REVENUE_PREFIXES.some((prefix) => accountCode.startsWith(prefix));
+  return matchesSalesPrefix && classifyProfitAccount(accountCode) === "revenue";
+}
 
 interface RiskEvaluationInput {
   now: string;
@@ -67,9 +86,7 @@ export function evaluateRiskFindings(input: RiskEvaluationInput): RiskFinding[] 
   const eventTaxItems = input.taxItems.filter((item) => item.businessEventId === event.id);
   const eventTasks = input.tasks.filter((task) => task.businessEventId === event.id);
 
-  const hasRevenuePosted = eventLedgerEntries.some((entry) =>
-    entry.accountCode.startsWith("6001") || entry.accountCode.startsWith("6051")
-  );
+  const hasRevenuePosted = eventLedgerEntries.some((entry) => isSalesRevenueEntry(entry.accountCode));
   if (event.type === "sales" && hasRevenuePosted && !eventTaxItems.some(isVatTaxItem)) {
     findings.push(
       buildFinding(

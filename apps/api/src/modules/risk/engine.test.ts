@@ -122,6 +122,70 @@ test("evaluateRiskFindings emits sales and execution findings for the current ev
   assert.equal(findings.some((item) => item.ruleCode === "OVERDUE_BLOCKED_TASK"), true);
 });
 
+test("evaluateRiskFindings does not treat a cost-only voucher as posted revenue", () => {
+  // Arrange：主营业务成本 6001c 与主营业务收入 6001 前缀重叠，纯前缀判定会把
+  // 只有成本分录的凭证误读成「收入已入账」，凭空报出缺失增值税事项等销售类风险。
+  const salesEvent: BusinessEvent = {
+    id: "evt-sales-cost-only",
+    companyId: "cmp-1",
+    type: "sales",
+    title: "结转销售成本",
+    description: "",
+    department: "销售部",
+    ownerId: "u1",
+    occurredOn: "2026-05-15",
+    amount: "800.00",
+    currency: "CNY",
+    status: "posted",
+    source: "manual",
+    createdAt: "2026-05-15T00:00:00.000Z",
+    updatedAt: "2026-05-15T00:00:00.000Z"
+  };
+
+  // Act
+  const findings = evaluateRiskFindings({
+    now: "2026-05-15T12:00:00.000Z",
+    event: salesEvent,
+    events: [salesEvent],
+    tasks: [] as Task[],
+    taxItems: [],
+    taxFilingBatches: [],
+    generatedDocuments: [],
+    generatedDocumentsAll: [],
+    vouchers: [] as Voucher[],
+    ledgerEntries: [
+      {
+        id: "le-cost",
+        companyId: "cmp-1",
+        voucherId: "v-cost",
+        businessEventId: "evt-sales-cost-only",
+        entryDate: "2026-05-15",
+        summary: "结转成本",
+        accountCode: "6001c",
+        accountName: "主营业务成本",
+        debit: "800.00",
+        credit: "0.00",
+        source: "voucher_posting",
+        postedAt: "2026-05-15T00:00:00.000Z"
+      }
+    ] as LedgerEntry[],
+    rndProjects: [] as RndProject[]
+  });
+
+  // Assert：所有以 hasRevenuePosted 为前提的销售类规则都不应触发
+  const salesRuleCodes = [
+    "SALES_WITHOUT_VAT_ITEM",
+    "SALES_WITHOUT_CONTRACT_DOCUMENT",
+    "SALES_WITHOUT_RECEIPT_EVIDENCE"
+  ];
+  const triggered = findings.filter((item) => salesRuleCodes.includes(item.ruleCode));
+  assert.deepEqual(
+    triggered.map((item) => item.ruleCode),
+    [],
+    "主营业务成本 6001c 被误判为已入账收入"
+  );
+});
+
 test("evaluateRiskFindings emits R&D project finding for the current rnd event", () => {
   const rndEvent: BusinessEvent = {
     id: "evt-rnd",
