@@ -304,7 +304,9 @@ test("deliver: provider 在超时判负后才 reject，不得产生 unhandledRej
     name: "late-rejecter",
     send: () =>
       new Promise<NotificationResult>((_resolve, reject) => {
-        setTimeout(() => reject(new Error("late failure")), 40).unref?.();
+        // 同样不 unref：unref 的 timer 不算活跃句柄，事件循环空转时不会触发，
+        // 这条「迟到的 reject」就永远等不来，断言也就失去意义。
+        setTimeout(() => reject(new Error("late failure")), 40);
       })
   };
   const unhandled: unknown[] = [];

@@ -122,8 +122,10 @@ async function sendWithTimeout(
 
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
+    // 不要 unref：finally 里必定 clearTimeout，本就不会阻止进程退出；而 unref 后
+    // 该 timer 不再算活跃句柄，当 provider 永不 settle 时事件循环会被判定为空转，
+    // race 永远等不到超时（node 22 的 test runner 下表现为整个测试文件失败）。
     timer = setTimeout(() => reject(new Error(`通知发送超时（${timeoutMs}ms）`)), timeoutMs);
-    timer.unref?.();
   });
   try {
     return await Promise.race([sending, timeout]);
