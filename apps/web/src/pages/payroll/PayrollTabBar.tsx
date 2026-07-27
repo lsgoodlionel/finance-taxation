@@ -21,6 +21,7 @@ export function PayrollTabBar({ activeTab, onChange }: PayrollTabBarProps) {
           key={tab.key}
           className="v3-tab-bar__button"
           data-active={activeTab === tab.key}
+          aria-pressed={activeTab === tab.key}
           onClick={() => onChange(tab.key)}
         >
           {tab.label}

@@ -10,6 +10,8 @@ import { listCompanyTaxFilingBatches, listCompanyTaxItems } from "../tax/routes.
 import { listCompanyLedgerEntries, listCompanyVouchers } from "../vouchers/routes.js";
 import { evaluateRiskFindings } from "./engine.js";
 import { scoreRiskFindings } from "./scoring.js";
+import { notify } from "../notifications/dispatch.js";
+import { buildRiskAlertNotification } from "../notifications/events.js";
 
 interface RiskFindingRow {
   id: string;
@@ -120,11 +122,17 @@ export async function runEventRiskCheck(req: ApiRequest, res: ServerResponse, ev
     rndProjects
   }));
 
+  // 本次删除掉的旧 finding id。finding id 是确定性的（ruleCode-eventId），据此只对
+  // 「本次新出现」的高风险推送。取自事务内的 delete...returning 而非事务外的 select：
+  // 并发重复扫描时后一个事务会阻塞在行锁上，拿到的是前一个事务提交后的真实快照，
+  // 因此不会两个请求都把同一条风险判成「新增」而重复打扰。
+  let knownFindingIds: string[] = [];
   await withTransaction(async (client) => {
-    await client.query("delete from risk_findings where company_id = $1 and business_event_id = $2", [
-      companyId,
-      eventId
-    ]);
+    const removed = await client.query<{ id: string }>(
+      "delete from risk_findings where company_id = $1 and business_event_id = $2 returning id",
+      [companyId, eventId]
+    );
+    knownFindingIds = removed.rows.map((row) => row.id);
     for (const finding of findings) {
       await client.query(
         `
@@ -149,6 +157,21 @@ export async function runEventRiskCheck(req: ApiRequest, res: ServerResponse, ev
       );
     }
   });
+
+  // 即发即忘：通知失败不影响风险扫描结果的返回。
+  notify(
+    buildRiskAlertNotification({
+      companyId,
+      eventLabel: event.title,
+      findings: findings.map((item) => ({
+        id: item.id,
+        severity: item.severity,
+        title: item.title,
+        businessEventId: item.businessEventId
+      })),
+      knownFindingIds
+    })
+  );
 
   return json(res, 200, { items: findings, total: findings.length });
 }

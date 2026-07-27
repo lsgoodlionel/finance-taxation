@@ -15,6 +15,8 @@ import {
   listVoucherTemplates
 } from "./templates.js";
 import { writeAudit } from "../../services/audit.js";
+import { notify } from "../notifications/dispatch.js";
+import { buildVoucherApprovalNotification } from "../notifications/events.js";
 import { isPeriodLocked } from "../ledger/routes.js";
 import { validateWorkflowAuthorization } from "../workflows/authorization.js";
 import { buildWorkflowCommandExecution, buildWorkflowRun, markWorkflowCommandStatus } from "../workflows/commands.js";
@@ -629,6 +631,16 @@ export async function approveVoucher(req: ApiRequest, res: ServerResponse, vouch
     resourceLabel: target.summary,
     changes: { before: { status: target.status }, after: { status: "review_required" } }
   });
+  // 送审即发即忘通知复核人；过账是本次审批的结果，不再重复推送。
+  notify(
+    buildVoucherApprovalNotification({
+      companyId: req.auth!.companyId,
+      voucherId,
+      summary: target.summary,
+      submittedBy: req.auth!.username,
+      businessEventId: target.businessEventId ?? null
+    })
+  );
   return json(res, 200, updated);
 }
 

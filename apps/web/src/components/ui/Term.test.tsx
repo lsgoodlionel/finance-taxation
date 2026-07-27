@@ -24,6 +24,35 @@ assert(
   "expected pro mode aria-label to carry term and explanation"
 );
 
+// ── V9 非交互变体：不制造嵌套可聚焦元素，但释义仍进入无障碍树 ───────────────
+const staticHtml = renderToStaticMarkup(
+  createElement(Term, { k: "reconciliation", interactive: false }, "勾稽")
+);
+assert(staticHtml.includes("勾稽"), "expected non-interactive mode to render the original term");
+assert(staticHtml.includes("dashed"), "expected non-interactive mode to keep the underline hint");
+assert(
+  !staticHtml.includes('tabindex="0"'),
+  "expected non-interactive mode to stay out of the tab order (no nested interactive)"
+);
+assert(
+  !staticHtml.includes('role="button"'),
+  "expected non-interactive mode to expose no interactive role"
+);
+assert(
+  staticHtml.includes("：把不同来源的数据互相核对"),
+  "expected non-interactive mode to carry the explanation as accessible text"
+);
+assert(
+  !staticHtml.includes("cursor:help"),
+  "expected non-interactive mode to inherit the container cursor"
+);
+// 隐藏文本必须留在无障碍树里：只做视觉隐藏，不得 display:none / visibility:hidden。
+assert(staticHtml.includes("clip:rect(0, 0, 0, 0)"), "expected visually-hidden clip technique");
+assert(
+  !staticHtml.includes("display:none") && !staticHtml.includes("visibility:hidden"),
+  "expected explanation to remain in the accessibility tree"
+);
+
 // ── 自闭合用法 <Term k="..." />：回退渲染词条原词 ────────────────────────────
 const selfClosingHtml = renderToStaticMarkup(createElement(Term, { k: "journal-entry" }));
 assert(selfClosingHtml.includes("分录"), "expected self-closing usage to render entry term");
@@ -44,6 +73,13 @@ assert(!missHtml.includes("dashed"), "expected unknown key to skip term styling"
 const guidedHtml = renderToStaticMarkup(
   createElement(WorkspaceModeProvider, null, createElement(Term, { k: "posting" }, "过账"))
 );
+const guidedStaticHtml = renderToStaticMarkup(
+  createElement(
+    WorkspaceModeProvider,
+    null,
+    createElement(Term, { k: "posting", interactive: false }, "过账")
+  )
+);
 delete (globalThis as Record<string, unknown>).window;
 assert(guidedHtml.includes("记入正式账本"), "expected guided mode to render plain wording");
 assert(guidedHtml.includes("（过账）"), "expected guided mode to annotate original term");
@@ -52,6 +88,20 @@ assert(guidedHtml.includes('tabindex="0"'), "expected guided term trigger to be 
 assert(
   guidedHtml.includes('aria-label="记入正式账本（过账）：'),
   "expected guided aria-label to carry plain wording, original term and explanation"
+);
+
+// ── guided 的白话括注在非交互变体下保持一致 ─────────────────────────────────
+assert(
+  guidedStaticHtml.includes("记入正式账本") && guidedStaticHtml.includes("（过账）"),
+  "expected non-interactive mode to keep guided plain wording and annotation"
+);
+assert(
+  !guidedStaticHtml.includes('tabindex="0"'),
+  "expected guided non-interactive mode to stay out of the tab order"
+);
+assert(
+  guidedStaticHtml.includes("：把审核通过的凭证正式记入公司账本"),
+  "expected guided non-interactive mode to carry the explanation as accessible text"
 );
 
 // ── 未命中词条不应引入多余的可聚焦节点 ─────────────────────────────────────

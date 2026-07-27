@@ -2,6 +2,7 @@
  * 收件箱 · 审批请求卡片
  * 展示等待授权（awaiting_authorization）的工作流运行，点击直达对应模块。
  */
+import React from "react";
 import { Button, Empty, Space, Spin, Tag, Typography } from "antd";
 import { RightOutlined, AuditOutlined, SolutionOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -50,26 +51,29 @@ export function InboxApprovalsCard({ runs, loading }: InboxApprovalsCardProps) {
       ) : (
         <Space direction="vertical" size={8} style={{ width: "100%", marginTop: 10 }}>
           {runs.slice(0, MAX_VISIBLE).map((run) => (
-            <div
+            <button
               key={run.id}
+              type="button"
               onClick={() => navigate(resourceTypePath(run.resourceType))}
+              aria-label={`待授权：${run.resourceLabel || resourceTypeLabel(run.resourceType)}，发起人 ${run.initiatorName || "系统"}，前往处理`}
               style={{
                 display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
+                width: "100%", textAlign: "left", font: "inherit", background: "#fff",
                 borderRadius: 8, border: "1px solid rgba(20,40,60,0.08)",
                 borderLeft: "3px solid #d97706",
                 cursor: "pointer",
               }}
             >
-              <AuditOutlined style={{ color: "#d97706" }} />
+              <AuditOutlined aria-hidden="true" style={{ color: "#d97706" }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Text strong style={{ fontSize: 13 }}>{run.resourceLabel || resourceTypeLabel(run.resourceType)}</Text>
-                <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                <div style={{ fontSize: 11, color: "#64748b" }}>
                   {resourceTypeLabel(run.resourceType)} · 发起人 {run.initiatorName || "系统"}
                 </div>
               </div>
               <Tag color="warning">待授权</Tag>
-              <RightOutlined style={{ color: "#94a3b8", fontSize: 11 }} />
-            </div>
+              <RightOutlined aria-hidden="true" style={{ color: "#64748b", fontSize: 11 }} />
+            </button>
           ))}
           {runs.length > MAX_VISIBLE && (
             <Text type="secondary" style={{ fontSize: 12 }}>

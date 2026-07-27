@@ -1291,14 +1291,17 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
     companyId: req.auth!.companyId,
     type: body.type,
     title: body.title,
-    description: body.description,
-    department: body.department,
+    // description/department/source 在表上是 NOT NULL 但有默认值；直传 undefined
+    // 会被驱动写成 NULL 而撞约束（表现为 500）。这三项对用户是选填，故在此兜底
+    // 补上与建表默认值一致的空串/占位，让「不填」真的等于「用默认」。
+    description: body.description ?? "",
+    department: body.department ?? "",
     ownerId: req.auth!.userId,
     occurredOn: body.occurredOn,
     amount: body.amount,
     currency: body.currency || "CNY",
     status: "draft",
-    source: body.source,
+    source: body.source ?? "manual",
     contractId: body.contractId ?? null,
     counterpartyId: null,
     projectId: null,

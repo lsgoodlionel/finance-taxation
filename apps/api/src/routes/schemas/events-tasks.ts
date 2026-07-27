@@ -20,12 +20,15 @@ import type { ObjectSchema } from "../../utils/validate.js";
  * - POST /api/tasks/:id/remind — remindTask never reads req.body.
  */
 export const eventsTasksBodySchemas: Record<string, ObjectSchema> = {
+  // type / title / occurredOn 在 business_events 上是 NOT NULL 且无默认值：
+  // 不标 required 时缺字段会一路打到数据库约束，用户拿到的是 500 而非 400。
+  // 其余 NOT NULL 但有默认值的列（description/department/source）由 handler 兜底。
   "POST /api/events": {
-    type: { type: "string" },
-    title: { type: "string" },
+    type: { type: "string", required: true, min: 1, max: 60 },
+    title: { type: "string", required: true, min: 1, max: 200 },
     description: { type: "string" },
     department: { type: "string" },
-    occurredOn: { type: "string" },
+    occurredOn: { type: "string", required: true, min: 1, max: 40 },
     currency: { type: "string" },
     source: { type: "string" }
     // amount, contractId: nullable in CreateBusinessEventInput — omitted.

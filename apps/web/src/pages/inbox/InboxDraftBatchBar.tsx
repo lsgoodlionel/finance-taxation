@@ -3,7 +3,7 @@
  * 从 InboxAiDraftsCard 拆出：显示「已选 N 条 · 合计金额 X」与批量批准/驳回入口，
  * 批量执行期间展示进度（3/8…）。批准仅生成 draft 凭证，不越权过账。
  */
-import { useState, type CSSProperties } from "react";
+import React, { useState, type CSSProperties } from "react";
 import { Button, Input, Popconfirm, Progress, Space, Typography } from "antd";
 import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
 import { formatCny } from "./draft-batch";
@@ -36,12 +36,17 @@ export function InboxDraftBatchBar({
       ? Math.round((running.done / running.total) * PERCENT_FULL)
       : PERCENT_FULL;
     return (
-      <div style={barStyle} data-testid="inbox-draft-batch-bar">
+      <div style={barStyle} data-testid="inbox-draft-batch-bar" role="status" aria-live="polite" aria-atomic="true">
         <Space size={10} style={{ width: "100%" }}>
           <Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>
             批量{running.action === "approve" ? "批准" : "驳回"}中 {running.done}/{running.total}…
           </Text>
-          <Progress percent={percent} size="small" style={{ flex: 1, minWidth: 120, margin: 0 }} />
+          <Progress
+            percent={percent}
+            size="small"
+            style={{ flex: 1, minWidth: 120, margin: 0 }}
+            aria-label={`批量${running.action === "approve" ? "批准" : "驳回"}进度`}
+          />
         </Space>
       </div>
     );

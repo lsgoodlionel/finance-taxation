@@ -4,7 +4,7 @@
  * V7 Stage L：批量勾选 Checkbox、键盘高亮态、受控展开（Enter 热键）、
  * 借贷合计校验（借=贷 ✓）与来源事项回溯链接。
  */
-import type { CSSProperties } from "react";
+import React, { type CSSProperties } from "react";
 import { Button, Checkbox, Collapse, Input, Popconfirm, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { CheckOutlined, CloseOutlined, LinkOutlined } from "@ant-design/icons";

@@ -18,8 +18,9 @@ export function LedgerSceneSelector({ activeScene, options, onChange }: LedgerSc
             onClick={() => onChange(option.key)}
             className="v3-scene-card"
             data-active={active}
+            aria-pressed={active}
           >
-            <span style={{ fontSize: "22px" }}>{option.emoji}</span>
+            <span aria-hidden="true" style={{ fontSize: "22px" }}>{option.emoji}</span>
             <strong style={{ fontSize: "14px" }}>{option.title}</strong>
             <span style={{ fontSize: "12px", lineHeight: 1.5, opacity: active ? 0.88 : 0.72 }}>{option.description}</span>
           </button>

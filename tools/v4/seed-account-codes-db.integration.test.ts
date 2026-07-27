@@ -40,6 +40,14 @@ const ACCOUNT_CODE_TABLES = ["ledger_entries", "voucher_lines", "voucher_draft_l
 
 const KNOWN_ACCOUNT_CODES = new Set(CHART_OF_ACCOUNTS.map((account) => account.code));
 
+/**
+ * 可记账的叶子科目。父级科目（isLeaf=false）不可入账：按前缀汇总时会与子科目
+ * 重复计量，且科目选择器只列叶子（accounts/routes.ts），父级在 UI 上根本选不到。
+ */
+const LEAF_ACCOUNT_CODES = new Set(
+  CHART_OF_ACCOUNTS.filter((account) => account.isLeaf).map((account) => account.code)
+);
+
 const admin = new pg.Pool({ connectionString: databaseUrl });
 let reachable = false;
 
@@ -131,6 +139,28 @@ for (const table of ACCOUNT_CODE_TABLES) {
       `${table} 出现未在 CHART_OF_ACCOUNTS 登记的科目码；` +
         "报表按科目码取数，未登记的码会被静默丢弃（金额恒为 0）。" +
         `请改用 chart-of-accounts.ts 的编码，勿沿用国标 2006 编号：${JSON.stringify(unknown)}`
+    );
+  });
+}
+
+for (const table of ACCOUNT_CODE_TABLES) {
+  test(`${table} 中不存在记账到非叶子科目的分录`, async (t) => {
+    if (!reachable) {
+      t.skip(`skipped: cannot reach ${databaseUrl}`);
+      return;
+    }
+
+    // 只看已登记的码：未登记的码由上一组测试负责，这里不重复报同一个问题。
+    const nonLeaf = (await readCodes(table)).filter(
+      (row) => KNOWN_ACCOUNT_CODES.has(row.account_code) && !LEAF_ACCOUNT_CODES.has(row.account_code)
+    );
+
+    assert.deepEqual(
+      nonLeaf,
+      [],
+      `${table} 出现记账到父级科目的分录；父级与子科目会重复计量，` +
+        "且科目选择器只列叶子科目（用户在 UI 上选不到父级）。" +
+        `请改记到具体的叶子科目：${JSON.stringify(nonLeaf)}`
     );
   });
 }

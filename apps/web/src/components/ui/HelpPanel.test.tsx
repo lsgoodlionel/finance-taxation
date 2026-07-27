@@ -37,6 +37,11 @@ assert(fullHtml.includes("风险严重级别"), "expected custom node (LevelLege
 assert(fullHtml.includes("致命"), "expected level legend items to render");
 assert(fullHtml.includes("关闭说明"), "expected close button aria label");
 
+// ── a11y：焦点管理 — 面板容器需可编程聚焦（tabIndex=-1），配合 useEffect 里的
+// 焦点转移 / Tab 循环 / Escape 关闭 / 焦点归还（渲染为静态标记时无法执行 effect，
+// 这里只锁定支撑该行为的静态属性，避免被后续改动误删）───────────────────────
+assert(fullHtml.includes('tabindex="-1"'), "expected panel container to be programmatically focusable (tabIndex=-1)");
+
 // ── 每段可选：省略的段落不渲染标题 ───────────────────────────────────────────
 const minimalHtml = renderToStaticMarkup(
   createElement(HelpPanel, {

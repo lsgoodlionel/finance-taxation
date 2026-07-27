@@ -110,7 +110,13 @@ export function ContractDrawer({ detail, open, onClose, onCloseContract, onOpenE
     },
     {
       key: "risk",
-      label: <Space size={4}><AlertOutlined />风险勾稽</Space>,
+      // Tabs 标签本身是 role="tab" 的可聚焦元素，故用 Term 的非交互变体挂释义，
+      // 避免可聚焦元素嵌套；释义通过视觉隐藏文本并入该 tab 的无障碍名称。
+      label: (
+        <Space size={4}>
+          <AlertOutlined />风险<Term k="reconciliation" interactive={false}>勾稽</Term>
+        </Space>
+      ),
       children: (
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           {relatedTasks.filter(t => t.status === "blocked").length > 0 ? (

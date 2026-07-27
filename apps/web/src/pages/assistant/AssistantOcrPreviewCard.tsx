@@ -46,7 +46,7 @@ export function AssistantOcrPreviewCard({ ocrPreview, onClear }: AssistantOcrPre
       </div>
       <button
         onClick={onClear}
-        style={{ background: "none", border: "none", cursor: "pointer", color: "#9aa5b4", fontSize: "16px", flexShrink: 0, padding: "0 4px" }}
+        style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", fontSize: "16px", flexShrink: 0, padding: "0 4px" }}
         title="清除"
       >
         ✕

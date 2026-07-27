@@ -2,6 +2,7 @@
  * 收件箱 · 风险预警卡片
  * 展示未关闭的高危/致命风险发现，点击直达 /risk。
  */
+import React from "react";
 import { Button, Empty, Space, Spin, Tag, Typography } from "antd";
 import { RightOutlined, SafetyCertificateOutlined, WarningOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -62,28 +63,31 @@ export function InboxRiskCard({ findings, loading }: InboxRiskCardProps) {
       ) : (
         <Space direction="vertical" size={8} style={{ width: "100%", marginTop: 10 }}>
           {open.slice(0, MAX_VISIBLE).map((finding) => (
-            <div
+            <button
               key={finding.id}
+              type="button"
               onClick={() => navigate("/risk")}
+              aria-label={`${t(RISK_SEVERITY_LABELS, finding.severity)}风险：${finding.title}，前往风险中心处理`}
               style={{
                 display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
+                width: "100%", textAlign: "left", font: "inherit", background: "#fff",
                 borderRadius: 8, border: "1px solid rgba(20,40,60,0.08)",
                 borderLeft: `3px solid ${SEVERITY_COLOR[finding.severity] ?? "#6c7a89"}`,
                 cursor: "pointer",
               }}
             >
-              <WarningOutlined style={{ color: SEVERITY_COLOR[finding.severity] ?? "#6c7a89" }} />
+              <WarningOutlined aria-hidden="true" style={{ color: SEVERITY_COLOR[finding.severity] ?? "#6c7a89" }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Text strong style={{ fontSize: 13 }}>{finding.title}</Text>
-                <div style={{ fontSize: 11, color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: 11, color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {finding.detail}
                 </div>
               </div>
               <Tag color={finding.severity === "high" ? "error" : finding.severity === "medium" ? "blue" : "default"}>
                 {t(RISK_SEVERITY_LABELS, finding.severity)}
               </Tag>
-              <RightOutlined style={{ color: "#94a3b8", fontSize: 11 }} />
-            </div>
+              <RightOutlined aria-hidden="true" style={{ color: "#64748b", fontSize: 11 }} />
+            </button>
           ))}
           {open.length > MAX_VISIBLE && (
             <Text type="secondary" style={{ fontSize: 12 }}>

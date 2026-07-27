@@ -24,14 +24,14 @@ export function AssistantSessionList({
   onDelete
 }: AssistantSessionListProps) {
   if (groups.length === 0) {
-    return <div style={{ color: "#aab5c0", fontSize: "13px", textAlign: "center", padding: "16px 0" }}>暂无历史记录</div>;
+    return <div style={{ color: "#64748b", fontSize: "13px", textAlign: "center", padding: "16px 0" }}>暂无历史记录</div>;
   }
 
   return (
     <>
       {groups.map((group) => (
         <div key={group.label} style={{ marginBottom: "12px" }}>
-          <div style={{ fontSize: "11px", color: "#aab5c0", fontWeight: 600, letterSpacing: "0.5px", marginBottom: "6px" }}>
+          <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, letterSpacing: "0.5px", marginBottom: "6px" }}>
             {group.label}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -40,6 +40,14 @@ export function AssistantSessionList({
                 key={session.id}
                 onMouseEnter={() => onHover(session.id)}
                 onMouseLeave={() => onHover(null)}
+                onFocus={() => onHover(session.id)}
+                onBlur={(event) => {
+                  // 只在焦点真正离开这一行时才收起「删除」按钮，避免从「打开」
+                  // Tab 到「删除」按钮时按钮先被隐藏、导致键盘用户永远够不到它。
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    onHover(null);
+                  }
+                }}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   padding: "8px 10px", borderRadius: "8px", cursor: "pointer",
@@ -49,24 +57,34 @@ export function AssistantSessionList({
                   transition: "background 0.15s"
                 }}
               >
-                <div onClick={() => onLoad(session.id)} style={{ flex: 1, overflow: "hidden" }}>
+                <button
+                  type="button"
+                  onClick={() => onLoad(session.id)}
+                  aria-current={activeId === session.id ? "true" : undefined}
+                  aria-label={`${activeId === session.id ? "当前对话：" : ""}${session.title}，${session.messages.length / 2 | 0} 轮对话`}
+                  style={{
+                    flex: 1, overflow: "hidden", background: "none", border: "none",
+                    textAlign: "left", font: "inherit", cursor: "pointer", padding: 0
+                  }}
+                >
                   <div style={{
                     fontSize: "13px", color: "#1e2a37", fontWeight: activeId === session.id ? 600 : 400,
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
                   }}>
-                    {activeId === session.id && "● "}{session.title}
+                    {activeId === session.id && <span aria-hidden="true">● </span>}{session.title}
                   </div>
-                  <div style={{ fontSize: "11px", color: "#aab5c0", marginTop: "2px" }}>
+                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
                     {new Date(session.updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
                     {" · "}{session.messages.length / 2 | 0} 轮对话
                   </div>
-                </div>
+                </button>
                 {hoveredSession === session.id && (
                   <button
                     onClick={(event) => {
                       event.stopPropagation();
                       onDelete(session.id);
                     }}
+                    aria-label={`删除对话：${session.title}`}
                     style={{
                       background: "none", border: "none", cursor: "pointer",
                       color: "#c0392b", fontSize: "12px", padding: "2px 6px",

@@ -4,7 +4,7 @@
  * 键盘热键（j/k/x/a/Enter）+ 借贷合计校验 + 来源事项回溯。
  * 批准（含批量）仅生成 draft 状态凭证，仍需在凭证中心走既有过账流程，不越权过账。
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert, Button, Checkbox, DatePicker, Dropdown, Empty, Space, Spin, Tag, Typography, message,
 } from "antd";
@@ -16,6 +16,7 @@ import {
 } from "../../lib/api";
 import { usePeriod } from "../../lib/period-context";
 import { useListHotkeys } from "../../lib/use-list-hotkeys";
+import { announce } from "../../lib/live-announcer";
 import { InboxAiDraftItem } from "./InboxAiDraftItem";
 import { InboxDraftBatchBar, type BatchRunState } from "./InboxDraftBatchBar";
 import {
@@ -85,10 +86,14 @@ export function InboxAiDraftsCard() {
     setGenerating(true);
     try {
       const res = await generateCloseDrafts(period);
-      void message.success(`已生成 ${res.generated} 条草稿，跳过 ${res.skipped} 条`);
+      const summary = `已生成 ${res.generated} 条草稿，跳过 ${res.skipped} 条`;
+      void message.success(summary);
+      announce(summary);
       await load();
     } catch (err) {
-      void message.error(getErrorMessage(err, "生成草稿失败"));
+      const msg = getErrorMessage(err, "生成草稿失败");
+      void message.error(msg);
+      announce(msg, true);
     } finally {
       setGenerating(false);
     }
@@ -99,9 +104,12 @@ export function InboxAiDraftsCard() {
     try {
       await approveCloseDraft(id);
       void message.success("已生成草稿凭证，待过账");
+      announce("已批准该草稿，生成草稿凭证待过账");
       setDrafts((prev) => prev.filter((d) => d.id !== id));
     } catch (err) {
-      void message.error(getErrorMessage(err, "批准草稿失败"));
+      const msg = getErrorMessage(err, "批准草稿失败");
+      void message.error(msg);
+      announce(msg, true);
     } finally {
       setActing(null);
     }
@@ -112,6 +120,7 @@ export function InboxAiDraftsCard() {
     try {
       await rejectCloseDraft(id, rejectReasons[id]?.trim() || undefined);
       void message.success("已驳回该草稿");
+      announce("已驳回该草稿");
       setDrafts((prev) => prev.filter((d) => d.id !== id));
       setRejectReasons((prev) => {
         const next = { ...prev };
@@ -119,7 +128,9 @@ export function InboxAiDraftsCard() {
         return next;
       });
     } catch (err) {
-      void message.error(getErrorMessage(err, "驳回草稿失败"));
+      const msg = getErrorMessage(err, "驳回草稿失败");
+      void message.error(msg);
+      announce(msg, true);
     } finally {
       setActing(null);
     }
@@ -145,10 +156,14 @@ export function InboxAiDraftsCard() {
     const summary = summarizeBatchResult(action === "approve" ? "批准" : "驳回", result);
     if (result.failed.length > 0) {
       void message.warning(summary);
+      announce(summary, true);
     } else if (action === "approve") {
-      void message.success(`${summary}（均为草稿凭证，待过账）`);
+      const okSummary = `${summary}（均为草稿凭证，待过账）`;
+      void message.success(okSummary);
+      announce(okSummary);
     } else {
       void message.success(summary);
+      announce(summary);
     }
     await load();
   }, [drafts, selectedIds, load]);
