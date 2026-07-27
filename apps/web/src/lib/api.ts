@@ -1028,7 +1028,10 @@ export interface DashboardData {
   profitOverview: {
     revenue: string;
     cost: string;
+    /** 期间费用合计，不含所得税费用。 */
     expense: string;
+    /** 所得税费用。revenue - cost - expense - incomeTax = netProfit。 */
+    incomeTax: string;
     grossProfit: string;
     netProfit: string;
     grossMargin: string;

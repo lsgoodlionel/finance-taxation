@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "npm run typecheck:src && npm run typecheck:integration",
+    "typecheck:src": "tsc -p tsconfig.json --noEmit",
+    "typecheck:integration": "tsc -p tsconfig.integration.json",
     "test": "npm run test:unit",
     "test:unit": "tsx --test --test-concurrency=1 $(find src -name '*.test.ts' ! -name '*.integration.test.ts')",
     "test:integration": "tsx --test --test-concurrency=1 $(find src -name '*.integration.test.ts')",

@@ -512,8 +512,12 @@ export interface ProfitStatementReport {
     revenue: string;
     cost: string;
     grossProfit: string;
+    /** 期间费用合计，**不含所得税费用**。grossProfit - expenses = totalProfit。 */
     expenses: string;
+    /** 利润总额（税前）：按企业会计准则不扣除所得税费用。 */
     totalProfit: string;
+    /** 所得税费用（6801）。totalProfit - incomeTax = netProfit。 */
+    incomeTax: string;
     netProfit: string;
   };
 }

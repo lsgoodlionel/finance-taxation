@@ -154,7 +154,7 @@ const dashboard: DashboardData = {
   ],
   queues: { approvals: 0, blockedTasks: 0, overdueTasks: 0 },
   profitOverview: {
-    revenue: "300,000.00", cost: "150,000.00", expense: "30,000.00",
+    revenue: "300,000.00", cost: "150,000.00", expense: "30,000.00", incomeTax: "0.00",
     grossProfit: "150,000.00", netProfit: "120,000.00", grossMargin: "50.0%", netMargin: "40.0%"
   },
   riskBoard: { approvals: [], blockedTasks: [], overdueTasks: [], riskEvents: [] },

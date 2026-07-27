@@ -50,7 +50,10 @@ test("buildTravelExpenseBundle generates standard travel chain with required tra
   );
   assert.deepEqual(bundle.taxMappings.map((item) => item.taxType), ["增值税", "企业所得税"]);
   assert.equal(bundle.voucherDrafts[0]?.status, "review_required");
-  assert.equal(bundle.voucherDrafts[0]?.lines[0]?.accountCode, "6601");
+  // 差旅费落 6301e04（管理费用-差旅费）。此前断言的 6601 是「职工薪酬（成本）」，
+  // 与分录上写的科目名「销售费用-差旅费」既不同码也不同义。
+  assert.equal(bundle.voucherDrafts[0]?.lines[0]?.accountCode, "6301e04");
+  assert.equal(bundle.voucherDrafts[0]?.lines[0]?.accountName, "管理费用-差旅费");
 });
 
 test("resolveTravelExpenseScenario marks missing hotel invoice and suppresses transport-hotel VAT deduction", () => {

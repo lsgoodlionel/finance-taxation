@@ -7,6 +7,7 @@ import { streamChat, ocrImage, isAiConfigured } from "../../services/ai.js";
 import type { ChatMessage } from "../../services/ai.js";
 import type { ApiRequest } from "../../types.js";
 import { buildDeterministicAssistantReply, buildDeterministicOcrText } from "./fallback.js";
+import { summarizeProfitTotals } from "../reports/profit-accounts.js";
 
 const BOSS_ROLES = new Set(["role-chairman", "role-finance-director"]);
 const TEST_ASSISTANT_FALLBACK = process.env.NODE_ENV === "test";
@@ -214,17 +215,18 @@ async function loadBossContext(companyId: string) {
     [companyId, currentMonth + "-01"]
   );
 
-  const revenueThisMonth = monthLedger
-    .filter((e) => e.account_code.startsWith("6001") || e.account_code.startsWith("6002"))
-    .reduce((acc, e) => acc + Number(e.credit || 0) - Number(e.debit || 0), 0);
-
-  const expenseThisMonth = monthLedger
-    .filter((e) =>
-      e.account_code.startsWith("6601") ||
-      e.account_code.startsWith("6602") ||
-      e.account_code.startsWith("6603")
-    )
-    .reduce((acc, e) => acc + Number(e.debit || 0) - Number(e.credit || 0), 0);
+  // 与 boss-qa 一样改走 reports/profit-accounts.ts 的共用口径：旧的 6001/6002 收入、
+  // 6601/6602/6603 费用前缀里，6002/6602/6603 在本系统科目表中不存在，6601 是职工薪酬
+  // 而非销售费用，销售费用 6201 / 管理费用 6301e / 财务费用 6401 全部被漏计。
+  const monthTotals = summarizeProfitTotals(
+    monthLedger.map((e) => ({
+      accountCode: e.account_code,
+      debit: e.debit,
+      credit: e.credit
+    }))
+  );
+  const revenueThisMonth = monthTotals.revenue;
+  const expenseThisMonth = monthTotals.cost + monthTotals.expense;
 
   const riskEventCount = eventsRes.filter((e) => e.status === "blocked").length;
   const pendingTaskCount = Number(pendingTasksRes[0]?.cnt ?? 0);

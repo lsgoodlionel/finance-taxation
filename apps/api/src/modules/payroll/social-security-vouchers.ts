@@ -31,10 +31,16 @@ export interface SocialSecurityVoucherDraft {
   lines: VoucherDraftLineInput[];
 }
 
+/**
+ * 科目取自 accounts/chart-of-accounts.ts，全部为叶子科目。
+ * 此前 expense 用表外科目 6602、payable 用非叶子的 2211，落账即污染报表口径。
+ * 单位承担的社保与公积金分挂 22110102 / 22110103 两个明细，便于社保稽核对账。
+ */
 const ACCOUNTS = {
-  expense:      { code: "6602", name: "管理费用" },
-  payable:      { code: "2211", name: "应付职工薪酬" },
-  bank:         { code: "1002", name: "银行存款" },
+  expense:         { code: "6301e01",  name: "管理费用-工资" },
+  socialPayable:   { code: "22110102", name: "应付职工薪酬-社保（单位）" },
+  housingPayable:  { code: "22110103", name: "应付职工薪酬-公积金（单位）" },
+  bank:            { code: "1002",     name: "银行存款" },
 } as const;
 
 function fmt(n: number): string {
@@ -84,8 +90,8 @@ export function buildSocialSecurityVouchers(
     const lines: VoucherDraftLineInput[] = [];
     if (ssEmployer > 0) lines.push(line(`${summary.period} 计提社保（单位）`, ACCOUNTS.expense, ssEmployer, 0));
     if (hfEmployer > 0) lines.push(line(`${summary.period} 计提公积金（单位）`, ACCOUNTS.expense, hfEmployer, 0));
-    if (ssEmployer > 0) lines.push(line(`${summary.period} 应付社保（单位）`, ACCOUNTS.payable, 0, ssEmployer));
-    if (hfEmployer > 0) lines.push(line(`${summary.period} 应付公积金（单位）`, ACCOUNTS.payable, 0, hfEmployer));
+    if (ssEmployer > 0) lines.push(line(`${summary.period} 应付社保（单位）`, ACCOUNTS.socialPayable, 0, ssEmployer));
+    if (hfEmployer > 0) lines.push(line(`${summary.period} 应付公积金（单位）`, ACCOUNTS.housingPayable, 0, hfEmployer));
     drafts.push({
       key: "social_security_accrual",
       voucherType: "accrual",
@@ -98,8 +104,8 @@ export function buildSocialSecurityVouchers(
   const ssTotal = round2(ssEmployer + ssEmployee);
   const hfTotal = round2(hfEmployer + hfEmployee);
   const paymentLines: VoucherDraftLineInput[] = [];
-  if (ssTotal > 0) paymentLines.push(line(`${summary.period} 缴纳社保（单位+个人）`, ACCOUNTS.payable, ssTotal, 0));
-  if (hfTotal > 0) paymentLines.push(line(`${summary.period} 缴纳公积金（单位+个人）`, ACCOUNTS.payable, hfTotal, 0));
+  if (ssTotal > 0) paymentLines.push(line(`${summary.period} 缴纳社保（单位+个人）`, ACCOUNTS.socialPayable, ssTotal, 0));
+  if (hfTotal > 0) paymentLines.push(line(`${summary.period} 缴纳公积金（单位+个人）`, ACCOUNTS.housingPayable, hfTotal, 0));
   paymentLines.push(line(`${summary.period} 三险一金缴款`, ACCOUNTS.bank, 0, paymentTotal));
   drafts.push({
     key: "social_security_payment",

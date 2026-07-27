@@ -1,4 +1,5 @@
-import { useState } from "react";
+// 显式引入 React：Node 下的 SSR 单测走 classic JSX transform，缺它会 ReferenceError。
+import React, { useState } from "react";
 import { Segmented, Table, Typography, Tag } from "antd";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -42,6 +43,7 @@ export function ProfitStatementPanel({ report }: Props) {
     { name: "营业成本", value: parseAmt(totals.cost) },
     { name: "毛利润", value: parseAmt(totals.grossProfit) },
     { name: "期间费用", value: parseAmt(totals.expenses) },
+    { name: "所得税费用", value: parseAmt(totals.incomeTax) },
     { name: "净利润", value: parseAmt(totals.netProfit) },
   ];
 
@@ -76,11 +78,13 @@ export function ProfitStatementPanel({ report }: Props) {
     { label: "毛利润", amount: totals.grossProfit, kind: "highlight" },
     { label: "期间费用", amount: totals.expenses, kind: "neutral" },
     { label: "利润总额", amount: totals.totalProfit, kind: "neutral" },
+    // 所得税费用只在利润总额之后扣减一次，这一行解释了利润总额到净利润的落差。
+    { label: "所得税费用", amount: totals.incomeTax, kind: "neutral" },
     { label: "净利润", amount: totals.netProfit, kind: "highlight" },
   ] as const;
 
   const barFill = (v: number, name: string) => {
-    if (name === "营业成本" || name === "期间费用") return "#f87171";
+    if (name === "营业成本" || name === "期间费用" || name === "所得税费用") return "#f87171";
     return v < 0 ? "#dc2626" : "#2563eb";
   };
 

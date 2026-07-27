@@ -5,6 +5,7 @@ import { json } from "../../utils/http.js";
 import { streamChat, isAiConfigured } from "../../services/ai.js";
 import type { ChatMessage } from "../../services/ai.js";
 import type { ApiRequest } from "../../types.js";
+import { summarizeProfitTotals } from "../reports/profit-accounts.js";
 
 interface FinancialContext {
   companyName: string;
@@ -96,13 +97,19 @@ async function loadBossContext(companyId: string): Promise<FinancialContext> {
     [companyId, currentMonth + "-01"]
   );
 
-  const revenueThisMonth = monthLedger
-    .filter((e) => e.account_code.startsWith("6001") || e.account_code.startsWith("6002"))
-    .reduce((acc, e) => acc + Number(e.credit || 0) - Number(e.debit || 0), 0);
-
-  const expenseThisMonth = monthLedger
-    .filter((e) => e.account_code.startsWith("6601") || e.account_code.startsWith("6602") || e.account_code.startsWith("6603"))
-    .reduce((acc, e) => acc + Number(e.debit || 0) - Number(e.credit || 0), 0);
+  // 收入/费用一律走 reports/profit-accounts.ts 的共用口径，与利润表、驾驶舱同源。
+  // 此前这里按 6001/6002 取收入、6601/6602/6603 取费用：6002/6602/6603 在本系统科目表
+  // 里根本不存在，6601 是职工薪酬而非销售费用，销售费用 6201、管理费用 6301e、
+  // 财务费用 6401、税金及附加 6101 全部漏计，老板看到的「本月花了多少」长期偏低。
+  const monthTotals = summarizeProfitTotals(
+    monthLedger.map((e) => ({
+      accountCode: e.account_code,
+      debit: e.debit,
+      credit: e.credit
+    }))
+  );
+  const revenueThisMonth = monthTotals.revenue;
+  const expenseThisMonth = monthTotals.cost + monthTotals.expense;
 
   const riskEventCount = eventsRes.filter((e) => e.status === "blocked").length;
   const pendingTaskCount = Number(pendingTasksRes[0]?.cnt ?? 0);

@@ -254,5 +254,44 @@ test("buildDashboardSnapshot net profit matches the formal profit statement for 
   assert.equal(snapshot.profitOverview.cost, statement.totals.cost);
   assert.equal(snapshot.profitOverview.expense, statement.totals.expenses);
   assert.equal(snapshot.profitOverview.grossProfit, statement.totals.grossProfit);
+  assert.equal(snapshot.profitOverview.incomeTax, statement.totals.incomeTax);
   assert.equal(snapshot.profitOverview.netProfit, statement.totals.netProfit);
+});
+
+test("buildDashboardSnapshot exposes 所得税费用 separately from 期间费用", () => {
+  // Arrange：期间费用 100（6201）与所得税费用 60（6801）必须分列，否则前端
+  // 拿 revenue - cost - expense 当利润会虚高一个税额，饼图分块之和也少一块。
+  const entries: LedgerEntry[] = [
+    ledgerEntry({ id: "le-1", accountCode: "6001", credit: "1000.00" }),
+    ledgerEntry({ id: "le-2", accountCode: "6001c", debit: "400.00" }),
+    ledgerEntry({ id: "le-3", accountCode: "6201", debit: "100.00" }),
+    ledgerEntry({ id: "le-4", accountCode: "6801", debit: "60.00" })
+  ];
+
+  // Act
+  const { profitOverview } = snapshotFor(entries, { startDate: "2026-05-01", endDate: "2026-05-31" });
+
+  // Assert
+  assert.equal(profitOverview.expense, "100");
+  assert.equal(profitOverview.incomeTax, "60");
+  assert.equal(profitOverview.netProfit, "440");
+  // 饼图不变式：成本 + 费用 + 所得税 + 净利 = 营业收入
+  const slices = ["cost", "expense", "incomeTax", "netProfit"] as const;
+  const sliceSum = slices.reduce((sum, key) => sum + Number(profitOverview[key]), 0);
+  assert.equal(sliceSum, Number(profitOverview.revenue));
+});
+
+test("buildDashboardSnapshot reports zero 所得税费用 when the period has no 6801 entries", () => {
+  // Arrange
+  const entries: LedgerEntry[] = [
+    ledgerEntry({ id: "le-1", accountCode: "6001", credit: "1000.00" }),
+    ledgerEntry({ id: "le-2", accountCode: "6001c", debit: "400.00" })
+  ];
+
+  // Act
+  const { profitOverview } = snapshotFor(entries, { startDate: "2026-05-01", endDate: "2026-05-31" });
+
+  // Assert
+  assert.equal(profitOverview.incomeTax, "0");
+  assert.equal(profitOverview.netProfit, "600");
 });

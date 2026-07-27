@@ -1,0 +1,25 @@
+{
+  // 集成测试单独成一个 TS 项目，目的是让它们**参与类型检查**，而不是像以前
+  // 那样被逐个文件名塞进主项目的 exclude 名单里躲开检查。
+  //
+  // 为什么不能并入主项目：集成测试通过 `await import("../../../../../tools/v4/...")`
+  // 复用建库与播种脚本，而 tools/v4 归属仓库根 package.json（无 `"type": "module"`），
+  // 在主项目的 `module: NodeNext` 下会被判定为 CommonJS，`import.meta` 报 TS1470；
+  // 那些脚本之间又用 `.ts` 后缀互相 import，需要 allowImportingTsExtensions。
+  //
+  // 这里沿用 tools/v4/tsconfig.json 的同一套模块设置，与被引用方保持一致。
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "types": [
+      "node"
+    ],
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*.integration.test.ts"
+  ]
+}

@@ -109,6 +109,7 @@ const reportsHtml = renderToStaticMarkup(createElement(ExportReportsPanel, {
         grossProfit: "50.00",
         expenses: "10.00",
         totalProfit: "40.00",
+        incomeTax: "0.00",
         netProfit: "40.00"
       }
     },

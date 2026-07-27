@@ -153,14 +153,19 @@ function documentStatus(documentType: string, scenario: PurchaseExpenseScenario)
   return "required" as const;
 }
 
+/**
+ * 借方科目必须取 accounts/chart-of-accounts.ts 的叶子科目。
+ * 本系统销售费用是 6201（6601 是「职工薪酬（成本）」，此前误当销售费用用），
+ * 管理费用是 6301e 系列，6301e 本身非叶子，通用场景落 6301e07。
+ */
 function expenseDebitAccount(classification: PurchaseExpenseClassification) {
   switch (classification) {
     case "sales_expense":
-      return { code: "6601", name: "销售费用" };
+      return { code: "6201", name: "销售费用" };
     case "fixed_asset":
       return { code: "1601", name: "固定资产" };
     default:
-      return { code: "6602", name: "管理费用" };
+      return { code: "6301e07", name: "管理费用-其他" };
   }
 }
 

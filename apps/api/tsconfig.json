@@ -11,10 +11,11 @@
   "include": [
     "src"
   ],
+  // 集成测试改由 tsconfig.integration.json 检查（它们 import 了 tools/v4，与本
+  // 项目的 NodeNext 模块解析不兼容，理由见该文件注释）。用模式而非逐个文件名
+  // 排除：新增集成测试会自动落入独立项目，不会再悄悄漏掉类型检查。
+  // `npm run typecheck` 两个项目一起跑，覆盖面不减。
   "exclude": [
-    "src/modules/exports/routes.integration.test.ts",
-    "src/modules/payroll/transfer.integration.test.ts",
-    "src/modules/ai-agents/close/close-drafts.integration.test.ts",
-    "src/modules/dashboard/routes.integration.test.ts"
+    "src/**/*.integration.test.ts"
   ]
 }
