@@ -3,6 +3,7 @@ import {
   RiseOutlined, FallOutlined, BankOutlined, SafetyOutlined,
 } from "@ant-design/icons";
 import type { DashboardData } from "../../lib/api";
+import { hasTrendComparison } from "./kpi-trend";
 
 const { Text } = Typography;
 
@@ -48,7 +49,11 @@ export function DashboardKpiCards({ data }: DashboardKpiCardsProps) {
                 />
                 <div style={{ marginTop: 6 }}>
                   <TrendTag trend={card.trend} />
-                  <Text type="secondary" style={{ fontSize: 11, marginLeft: 6 }}>环比上月</Text>
+                  {/* 风险卡没有历史快照、无法还原上期未关闭数，后端返回「—」；
+                      此时不能挂「环比上月」，否则又是一句系统给不出的承诺。 */}
+                  {hasTrendComparison(card.trend) ? (
+                    <Text type="secondary" style={{ fontSize: 11, marginLeft: 6 }}>环比上月</Text>
+                  ) : null}
                 </div>
               </div>
               <div style={{

@@ -1,4 +1,5 @@
 import React from "react";
+import { Term } from "../../components/ui/Term";
 
 type SuggestedEvent = {
   type: string;
@@ -58,7 +59,7 @@ export function AssistantSuggestedEventsCard({
           </ul>
         )}
         <div style={{ fontSize: "12px", color: "#6c7a89", marginTop: "6px" }}>
-          确认后将分别自动生成执行任务和凭证草稿，由 <strong>{approverRoleLabel}</strong> 审核过账
+          确认后将分别自动生成执行任务和<Term k="voucher">凭证</Term>草稿，由 <strong>{approverRoleLabel}</strong> 审核<Term k="posting">过账</Term>
         </div>
       </div>
       <div style={{ display: "flex", gap: "8px", flexShrink: 0, paddingTop: "2px" }}>

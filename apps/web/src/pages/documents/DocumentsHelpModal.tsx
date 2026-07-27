@@ -1,5 +1,6 @@
 import React from "react";
 import { HelpPanel } from "../../components/ui/HelpPanel";
+import { Term } from "../../components/ui/Term";
 
 export function DocumentsHelpModal({ onClose }: { onClose: () => void }) {
   return (
@@ -9,7 +10,7 @@ export function DocumentsHelpModal({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       relations={(
         <>
-          <strong>任务中心</strong>负责告诉谁去做、先做什么；<strong>单据中心</strong>负责沉淀原始资料、业务单据和附件；<strong>凭证中心</strong>负责把单据转成正式会计凭证并过账。标准顺序通常是：<strong>事项分析 → 任务分发 → 单据补齐 → 凭证审核过账</strong>。
+          <strong>任务中心</strong>负责告诉谁去做、先做什么；<strong>单据中心</strong>负责沉淀原始资料、业务单据和附件；<strong><Term k="voucher">凭证</Term>中心</strong>负责把单据转成正式会计凭证并<Term k="posting">过账</Term>。标准顺序通常是：<strong>事项分析 → 任务分发 → 单据补齐 → 凭证审核过账</strong>。
         </>
       )}
       workflowSteps={[

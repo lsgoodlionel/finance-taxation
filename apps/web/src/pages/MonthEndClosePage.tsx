@@ -33,7 +33,7 @@ function CloseHelpPanel({ open, onClose }: { open: boolean; onClose: () => void 
       onClose={onClose}
       relations={(
         <>
-          <strong>凭证中心</strong>的凭证审核过账、<strong>票据</strong>齐备后，才能开始<strong>月度结账</strong>；结账完成的数据流向<strong>财务报表</strong>、<strong>税务申报</strong>与<strong>归档审计</strong>。
+          <strong><Term k="voucher">凭证</Term>中心</strong>的凭证审核过账、<strong>票据</strong>齐备后，才能开始<strong>月度结账</strong>；结账完成的数据流向<strong>财务报表</strong>、<strong>税务申报</strong>与<strong>归档审计</strong>。
         </>
       )}
       workflowSteps={[

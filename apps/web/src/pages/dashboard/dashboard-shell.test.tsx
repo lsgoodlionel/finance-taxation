@@ -72,3 +72,15 @@ function trendColor(t: string): string {
 okDash(trendColor("+12.5%") === "success", "positive trend → success");
 okDash(trendColor("-3.2%")  === "error",   "negative trend → error");
 okDash(trendColor("持平")   === "default", "neutral trend → default");
+
+// ─── 环比文案是否可标注（后端给不出环比时不得挂「环比上月」）────────────────────
+
+import { hasTrendComparison } from "./kpi-trend";
+
+okDash(hasTrendComparison("+1,300") === true, "有环比差额 → 可标注环比上月");
+okDash(hasTrendComparison("-500") === true, "负向环比 → 可标注环比上月");
+okDash(hasTrendComparison("持平") === true, "持平是真实环比结论 → 可标注");
+okDash(hasTrendComparison("—") === false, "风险卡无历史快照 → 不得标注环比上月");
+okDash(hasTrendComparison("无上期数据") === false, "首期无上期 → 不得标注环比上月");
+okDash(hasTrendComparison("暂无数据") === false, "无账目数据 → 不得标注环比上月");
+okDash(hasTrendComparison("  ") === false, "空白值 → 不得标注环比上月");

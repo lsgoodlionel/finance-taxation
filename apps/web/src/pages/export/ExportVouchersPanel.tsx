@@ -1,6 +1,7 @@
 import React from "react";
 import type { Voucher } from "@finance-taxation/domain-model";
 import { DataTableShell } from "../../components/ui/DataTableShell";
+import { Term } from "../../components/ui/Term";
 
 type ExportVouchersPanelProps = {
   vouchers: Voucher[];
@@ -40,7 +41,7 @@ export function ExportVouchersPanel({
       )}
     >
       {vouchers.length === 0 ? (
-        <div style={{ color: "#aab5c0", textAlign: "center", padding: "32px" }}>暂无凭证数据</div>
+        <div style={{ color: "#aab5c0", textAlign: "center", padding: "32px" }}>暂无<Term k="voucher">凭证</Term>数据</div>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
           <thead>

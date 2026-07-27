@@ -58,3 +58,34 @@ test("buildCorporateIncomeTaxPreparation estimates prepayment and checklist", ()
   assert.equal(result.adjustmentHints.some((item) => item.includes("业务招待费")), true);
   assert.equal(result.adjustmentHints.some((item) => item.includes("研发加计扣除")), true);
 });
+
+test("buildCorporateIncomeTaxPreparation uses 利润总额 as accounting profit, not 净利润", () => {
+  // Arrange：利润总额 50000，净利润 37500（已扣 12500 所得税费用）
+  const profitStatement: ProfitStatementReport = {
+    periodLabel: "2026 Q2",
+    revenues: [],
+    costsAndExpenses: [],
+    totals: {
+      revenue: "100000",
+      cost: "30000",
+      grossProfit: "70000",
+      expenses: "20000",
+      totalProfit: "50000",
+      netProfit: "37500"
+    }
+  };
+
+  // Act
+  const result = buildCorporateIncomeTaxPreparation({
+    companyId: "cmp-1",
+    filingPeriod: "2026-Q2",
+    profitStatement,
+    taxItems: [],
+    rndSummaries: []
+  });
+
+  // Assert：会计利润取税前的利润总额，否则所得税基数被重复扣税而低估
+  assert.equal(result.accountingProfit, "50000");
+  assert.equal(result.taxableIncomeEstimate, "50000");
+  assert.equal(result.prepaymentTaxEstimate, "12500");
+});

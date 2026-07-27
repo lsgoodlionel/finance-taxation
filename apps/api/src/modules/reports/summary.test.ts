@@ -107,6 +107,52 @@ test("buildProfitStatementReport aggregates revenue, cost, and profit", () => {
   assert.equal(report.totals.netProfit, "700");
 });
 
+test("buildProfitStatementReport keeps income tax out of 营业总成本 and 利润总额", () => {
+  // Arrange：在基础分录上追加一笔所得税费用（借 6801 / 贷 2221）
+  const incomeTaxEntries: LedgerEntry[] = [
+    ...entries,
+    {
+      id: "le-tax-1",
+      companyId: "cmp-1",
+      voucherId: "v-tax",
+      businessEventId: "evt-tax",
+      entryDate: "2026-05-31",
+      summary: "计提所得税",
+      accountCode: "6801",
+      accountName: "所得税费用",
+      debit: "100.00",
+      credit: "0.00",
+      source: "voucher_posting",
+      postedAt: "2026-05-31T01:00:00.000Z"
+    },
+    {
+      id: "le-tax-2",
+      companyId: "cmp-1",
+      voucherId: "v-tax",
+      businessEventId: "evt-tax",
+      entryDate: "2026-05-31",
+      summary: "计提所得税",
+      accountCode: "2221",
+      accountName: "应交税费",
+      debit: "0.00",
+      credit: "100.00",
+      source: "voucher_posting",
+      postedAt: "2026-05-31T01:00:00.000Z"
+    }
+  ];
+
+  // Act
+  const report = buildProfitStatementReport({ periodLabel: "2026-05", entries: incomeTaxEntries });
+
+  // Assert：展示口径 grossProfit - expenses = totalProfit，所得税只在净利润扣一次
+  assert.equal(report.totals.grossProfit, "700");
+  assert.equal(report.totals.expenses, "0");
+  assert.equal(report.totals.totalProfit, "700");
+  assert.equal(report.totals.netProfit, "600");
+  // 6801 金额仍以明细行保留在报表中
+  assert.equal(report.costsAndExpenses.some((line) => line.code === "6801" && line.amount === "100"), true);
+});
+
 test("buildBalanceSheetReport builds assets and equity totals as of end date", () => {
   const report = buildBalanceSheetReport({
     periodLabel: "2026-05",

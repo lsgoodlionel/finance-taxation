@@ -175,6 +175,10 @@ function cardValue(body: DashboardBody, key: string): string {
   return body.cards.find((card) => card.key === key)?.value ?? "";
 }
 
+function cardTrend(body: DashboardBody, key: string): string {
+  return body.cards.find((card) => card.key === key)?.trend ?? "";
+}
+
 test("chairman dashboard scopes the profit overview to the requested accounting period", async () => {
   await prepareDatabase();
 
@@ -253,7 +257,8 @@ test("chairman dashboard keeps the sign of a negative tax position instead of Ma
 
     // 2221 借方余额 500 = 留抵/多缴，不能显示成「要交 500」
     assert.equal(cardValue(dashboard, "tax"), "-500");
-    assert.equal(dashboard.cards.find((card) => card.key === "tax")?.trend, "-500");
+    // 上期（2026-04）没有 2221 分录 → 上期税负 0，环比 = -500 − 0
+    assert.equal(cardTrend(dashboard, "tax"), "-500");
 
     await closePool();
   } finally {
@@ -284,6 +289,97 @@ test("chairman dashboard riskCount reports open risk-engine findings, not blocke
 
     await closePool();
   } finally {
+    await pool.end();
+  }
+});
+
+test("chairman dashboard trend is a real month-over-month delta, not the card value with a sign", async () => {
+  await prepareDatabase();
+
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  try {
+    await seedLedgerFixtures(pool);
+    const { closePool } = await import("../../db/client.js");
+
+    const may = await fetchDashboard("?period=2026-05");
+
+    // 期末余额 2,000（本期 1,300 + 上期 700），上期期末 700 → 环比 +1,300。
+    // 旧的 trendSign 会输出 `+2,000`（余额本身），本断言正是用来钉死这个差别。
+    assert.equal(cardValue(may, "cash"), "2,000");
+    assert.equal(cardTrend(may, "cash"), "+1,300");
+
+    // 应收本期与上期都没有分录 → 余额未变，中性文案而不是 `+0`
+    assert.equal(cardTrend(may, "receivables"), "持平");
+
+    // 风险卡片没有历史快照可比，明确留白而不是把当前计数加个加号
+    assert.equal(cardTrend(may, "risk"), "—");
+
+    await closePool();
+  } finally {
+    await pool.end();
+  }
+});
+
+test("chairman dashboard degrades the trend when the requested period has no prior period data", async () => {
+  await prepareDatabase();
+
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  try {
+    await seedLedgerFixtures(pool);
+    const { closePool } = await import("../../db/client.js");
+
+    // 2026-04 是夹具里最早的有账期间，2026-03 及以前完全没有分录
+    const april = await fetchDashboard("?period=2026-04");
+
+    assert.equal(cardValue(april, "cash"), "700");
+    assert.equal(cardTrend(april, "cash"), "无上期数据");
+    assert.equal(cardTrend(april, "tax"), "无上期数据");
+
+    await closePool();
+  } finally {
+    await pool.end();
+  }
+});
+
+/**
+ * 时区隐患回归：PG `date` 若经 JS Date 往返，UTC+8 下 2026-06-01 会被映射成
+ * 2026-05-31，于是每月 1 号的分录被算进上一期，报表与驾驶舱一起错。
+ * 这里把进程时区切到 Asia/Shanghai 跑同一份数据，验证归期不受时区影响。
+ */
+test("ledger entry dates stay in the correct accounting period under a UTC+8 process time zone", async () => {
+  await prepareDatabase();
+
+  const originalTimeZone = process.env.TZ;
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  try {
+    await seedLedgerFixtures(pool);
+    // 每月 1 号是唯一会被前移到上一期的日子，因此专门造一条 6 月 1 日的收入
+    await pool.query(
+      `insert into ledger_entries (
+         id, company_id, voucher_id, business_event_id, entry_date, summary,
+         account_code, account_name, debit, credit
+       ) values ($1, $2, $3, $4, '2026-06-01'::date, '跨期边界夹具', '6001', '主营业务收入', 0, 2500)`,
+      ["dash-le-tz", COMPANY_ID, VOUCHER_ID, BUSINESS_EVENT_ID]
+    );
+
+    process.env.TZ = "Asia/Shanghai";
+    // 守卫：确认时区切换真的生效，否则本用例会退化成一个恒真断言
+    assert.equal(new Date("2026-06-01T00:00:00Z").getHours(), 8, "TZ=Asia/Shanghai 未生效");
+
+    const { closePool } = await import("../../db/client.js");
+    const june = await fetchDashboard("?period=2026-06");
+    const may = await fetchDashboard("?period=2026-05");
+
+    assert.equal(june.profitOverview.revenue, "2500", "6 月 1 日的收入必须留在 6 月");
+    assert.equal(may.profitOverview.revenue, "1300", "6 月 1 日的收入不得被前移进 5 月");
+
+    await closePool();
+  } finally {
+    if (originalTimeZone === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = originalTimeZone;
+    }
     await pool.end();
   }
 });

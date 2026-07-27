@@ -1,4 +1,5 @@
 import { PageHeader } from "../../components/ui/PageHeader";
+import { Term } from "../../components/ui/Term";
 import { buildResultPageSubtitle } from "../../lib/entry-guidance";
 
 type DocumentsHeaderProps = {
@@ -23,7 +24,7 @@ export function DocumentsHeader({ onOpenHelp }: DocumentsHeaderProps) {
         )}
       />
       <div className="v3-banner" data-tone="info" style={{ fontSize: "13px" }}>
-        先看单据资料完整度（缺附件 / 待审 / 已归档），再从左侧选择单据补齐附件、查看关联事项并归档。
+        先看单据资料完整度（缺附件 / 待审 / 已归档），再从左侧选择单据补齐附件、查看关联事项并<Term k="archive">归档</Term>。
       </div>
     </div>
   );

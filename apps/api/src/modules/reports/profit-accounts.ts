@@ -45,10 +45,15 @@ interface AmountEntry {
 export interface ProfitTotals {
   revenue: number;
   cost: number;
-  /** 成本费用合计（含所得税费用，与正式利润表 totals.expenses 同口径）。 */
+  /**
+   * 期间费用合计，**不含所得税费用**（6801 在 incomeTax 中单列）。
+   * 与正式利润表「营业总成本」同口径：grossProfit - expense = totalProfit。
+   */
   expense: number;
+  /** 所得税费用（6801），只在净利润处扣减一次。 */
   incomeTax: number;
   grossProfit: number;
+  /** 利润总额：按企业会计准则不扣除所得税费用。 */
   totalProfit: number;
   netProfit: number;
 }
@@ -77,8 +82,13 @@ function parseAmount(value: string | null | undefined): number {
 /**
  * 按利润表口径汇总一组分录。
  *
- * netProfit 沿用正式利润表既有算式（totalProfit - incomeTax），确保驾驶舱与
- * /reports 对同一份数据得到完全相同的净利润；两处口径不再各自演化。
+ * 企业会计准则口径（所得税费用 6801 只在净利润处扣一次）：
+ *   营业收入 - 营业成本 - 期间费用等(不含 6801) = 利润总额
+ *   利润总额 - 所得税费用(6801)               = 净利润
+ *
+ * 此前 expense 含 6801，totalProfit 减了一次含税的 expense，netProfit 又减一次
+ * incomeTax，导致有所得税分录时利润总额与净利润双双低估。现在 expense 在累加时
+ * 就把 6801 排除在外，驾驶舱与 /reports 仍共用本函数，「费用」口径不会再分叉。
  */
 export function summarizeProfitTotals(entries: readonly AmountEntry[]): ProfitTotals {
   let revenue = 0;
@@ -98,10 +108,11 @@ export function summarizeProfitTotals(entries: readonly AmountEntry[]): ProfitTo
       continue;
     }
     if (kind === "expense") {
-      expense += signed;
       if (isIncomeTaxAccount(entry.accountCode)) {
         incomeTax += signed;
+        continue;
       }
+      expense += signed;
     }
   }
 

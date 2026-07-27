@@ -18,6 +18,7 @@ import type {
 } from "@finance-taxation/domain-model";
 import type { ApiRequest } from "../../types.js";
 import { query, withTransaction } from "../../db/client.js";
+import { toDateOnly } from "../../db/date-column.js";
 import { listCompanyDocuments } from "../documents/routes.js";
 import { listCompanyTaxItems } from "../tax/routes.js";
 import { listCompanyVouchers } from "../vouchers/routes.js";
@@ -170,7 +171,8 @@ function mapEventRow(row: BusinessEventRow): BusinessEvent {
     description: row.description,
     department: row.department,
     ownerId: row.owner_id,
-    occurredOn: toIsoString(row.occurred_on)?.slice(0, 10) || "",
+    // occurred_on 是 PG `date`：用 toDateOnly 保证结果与运行时时区无关。
+    occurredOn: toDateOnly(row.occurred_on) ?? "",
     amount: toAmountString(row.amount),
     currency: row.currency,
     status: row.status,

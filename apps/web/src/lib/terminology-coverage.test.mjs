@@ -48,30 +48,13 @@ const SCAN_DIRS = ["pages", "components"];
  * 行末注释记录当前仍缺释义的术语，便于认领与排期。
  */
 const LEGACY_UNCOVERED_FILES = [
-  "pages/LedgerPage.tsx", // 凭证、过账、分录、总账、科目、归档
-  "pages/MonthEndClosePage.tsx", // 凭证
   "pages/RiskPage.tsx", // 凭证、勾稽
-  "pages/assistant/AssistantFlowSection.tsx", // 凭证
-  "pages/assistant/AssistantOcrPreviewCard.tsx", // 凭证
-  "pages/assistant/AssistantSuggestedEventsCard.tsx", // 凭证、过账
   "pages/contracts/ContractDrawer.tsx", // 勾稽、凭证
-  "pages/contracts/ContractsWorkbench.tsx", // 归档
   "pages/documents/DocumentAttachments.tsx", // 凭证
   "pages/documents/DocumentFormalView.tsx", // 凭证
   "pages/documents/DocumentRelationsPanel.tsx", // 凭证
-  "pages/documents/DocumentsHeader.tsx", // 归档
-  "pages/documents/DocumentsHelpModal.tsx", // 凭证、过账
-  "pages/export-center/ArchivePackageCard.tsx", // 锁账、归档、凭证
-  "pages/export/ExportArchivePanel.tsx", // 凭证、归档
-  "pages/export/ExportTaxPanel.tsx", // 底稿、增值税、企业所得税
-  "pages/export/ExportVouchersPanel.tsx", // 凭证
   "pages/inbox/InboxAiDraftItem.tsx", // 借贷平衡、凭证
   "pages/inbox/InboxAiDraftsCard.tsx", // 分录
-  "pages/inbox/InboxRiskCard.tsx", // 勾稽
-  "pages/payroll-transfer/SocialSecurityCloseCard.tsx", // 凭证、计提
-  "pages/payroll/PayrollEmployeesSection.tsx", // 凭证
-  "pages/payroll/PayrollRunSection.tsx", // 凭证
-  "pages/reports/ReportsHelpPanel.tsx", // 凭证、过账、总账、三大报表、归档
   "pages/reports/ReportsSidebar.tsx", // 资产负债表
   "pages/reports/panels/BudgetVariancePanel.tsx", // 科目
   "pages/risk/RiskWorkbenchHeader.tsx", // 勾稽
@@ -86,7 +69,7 @@ const LEGACY_UNCOVERED_FILES = [
 ];
 
 /** 白名单预算：只减不增。想放宽必须同时改大这个数字，让扩容在代码评审里显形。 */
-const LEGACY_BUDGET = 35;
+const LEGACY_BUDGET = 18;
 
 /** JSX 文本节点：`>`/`}` 与 `<`/`{` 之间，且不含大括号、引号、反引号的片段。 */
 const JSX_TEXT_PATTERN = /[>}]([^<>{}"'`]*)[<{]/g;

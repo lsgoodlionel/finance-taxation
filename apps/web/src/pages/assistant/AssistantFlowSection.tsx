@@ -1,4 +1,5 @@
 import React from "react";
+import { Term } from "../../components/ui/Term";
 import { ProcessFlowCard } from "../../features/process-flow/ProcessFlowCard";
 import type { ProcessFlowResolvedNode } from "../../features/process-flow/types";
 import type { AssistantFlowContext } from "./types";
@@ -55,7 +56,7 @@ export function AssistantFlowSection({
               <div style={{ marginTop: 4 }}>{currentFlowNode.taxes.join(" / ") || "无"}</div>
             </div>
             <div>
-              <div className="text-muted text-sm">凭证线索</div>
+              <div className="text-muted text-sm"><Term k="voucher">凭证</Term>线索</div>
               <div style={{ marginTop: 4 }}>{currentFlowNode.vouchers.join(" / ") || "无"}</div>
             </div>
             <div>

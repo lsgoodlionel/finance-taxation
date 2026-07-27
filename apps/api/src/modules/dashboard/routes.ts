@@ -6,6 +6,12 @@ import { listCompanyEvents, listCompanyTasks } from "../events/routes.js";
 import { listCompanyRiskFindings } from "../risk/routes.js";
 import { listCompanyTaxFilingBatches } from "../tax/routes.js";
 import { listCompanyLedgerEntries, listCompanyVouchers } from "../vouchers/routes.js";
+import {
+  formatAmount,
+  formatBalanceTrend,
+  NO_TREND_AVAILABLE,
+  previousPeriodEndDate
+} from "./kpi.js";
 import { buildDashboardSnapshot, type DashboardPeriod } from "./summary.js";
 
 const PERIOD_LABEL = /^\d{4}-\d{2}$/;
@@ -17,21 +23,6 @@ function sumAccountBalance(
   return entries
     .filter((e) => e.accountCode.startsWith(accountPrefix))
     .reduce((acc, e) => acc + Number(e.debit || 0) - Number(e.credit || 0), 0);
-}
-
-/**
- * 保留金额符号：此前用 Math.abs 抹掉方向，导致增值税留抵/多缴（2221 借方余额，
- * 税负为负）被显示成「要交 ¥50,000」，方向完全反了。
- */
-function formatAmount(value: number): string {
-  // 归零负零：-0 经 toLocaleString 会输出「-0」，在「本月要交多少税」等卡片上
-  // 读起来像"负的税"，实际只是没有数据/正好为零。
-  const normalized = Object.is(value, -0) ? 0 : value;
-  return normalized.toLocaleString("zh-CN", { maximumFractionDigits: 0 });
-}
-
-function trendSign(value: number): string {
-  return value >= 0 ? `+${formatAmount(value)}` : formatAmount(value);
 }
 
 /**
@@ -81,6 +72,14 @@ export async function handleChairmanDashboard(req: ApiRequest, res: ServerRespon
   const receivablesBalance = sumAccountBalance(asOfEntries, "1122");
   const taxLiability = -sumAccountBalance(asOfEntries, "2221");
 
+  // 真环比：同一套取数函数按「上期期末」再跑一次。上期完全没有分录（公司首个
+  // 有账期间）时取 null，卡片降级为「无上期数据」而不是编一个增长出来。
+  const priorEntries = entriesAsOf(companyEntries, previousPeriodEndDate(period.label));
+  const hasPriorData = priorEntries.length > 0;
+  const priorCashBalance = hasPriorData ? sumAccountBalance(priorEntries, "1002") : null;
+  const priorReceivablesBalance = hasPriorData ? sumAccountBalance(priorEntries, "1122") : null;
+  const priorTaxLiability = hasPriorData ? -sumAccountBalance(priorEntries, "2221") : null;
+
   // riskCount 直接取风险引擎的未关闭发现数（与 /api/risk/findings、/risk 页的
   // 「待处理」口径一致）。此前统计的是 business_events 中 blocked/陈旧 analyzed
   // 的条数，从未调用风险引擎，与 /risk 页数字对不上。
@@ -107,25 +106,30 @@ export async function handleChairmanDashboard(req: ApiRequest, res: ServerRespon
         key: "cash",
         label: "可动用资金",
         value: hasLedgerData ? formatAmount(cashBalance) : "—",
-        trend: hasLedgerData ? trendSign(cashBalance) : "暂无数据"
+        trend: hasLedgerData ? formatBalanceTrend(cashBalance, priorCashBalance) : "暂无数据"
       },
       {
         key: "receivables",
         label: "待回款金额",
         value: hasLedgerData ? formatAmount(receivablesBalance) : "—",
-        trend: hasLedgerData ? trendSign(receivablesBalance) : "暂无数据"
+        trend: hasLedgerData
+          ? formatBalanceTrend(receivablesBalance, priorReceivablesBalance)
+          : "暂无数据"
       },
       {
         key: "tax",
         label: "本月预计税负",
         value: hasLedgerData ? formatAmount(taxLiability) : "—",
-        trend: hasLedgerData ? trendSign(taxLiability) : "暂无数据"
+        trend: hasLedgerData ? formatBalanceTrend(taxLiability, priorTaxLiability) : "暂无数据"
       },
       {
+        // 风险卡片没有环比：risk_findings.status 只有「当前状态」，没有历史快照，
+        // 无法还原「上期期末未关闭数」。与其编一个 `+2`（旧实现就是把当前计数
+        // 加个加号），不如明确留白。
         key: "risk",
         label: "高风险事项",
         value: String(openRiskCount),
-        trend: openRiskCount > 0 ? `+${openRiskCount}` : "0"
+        trend: NO_TREND_AVAILABLE
       }
     ],
     queues: snapshot.queues,

@@ -172,6 +172,9 @@ export function buildProfitStatementReport(input: PeriodInput): ProfitStatementR
       revenue: formatAmount(totals.revenue),
       cost: formatAmount(totals.cost),
       grossProfit: formatAmount(totals.grossProfit),
+      // expense 已不含所得税费用（6801 是利润总额之后的独立项目），故
+      // grossProfit - expenses = totalProfit 在展示上自洽；6801 明细仍保留在
+      // costsAndExpenses 行内，金额不会从报表中消失。
       expenses: formatAmount(totals.expense),
       totalProfit: formatAmount(totals.totalProfit),
       netProfit: formatAmount(totals.netProfit)
