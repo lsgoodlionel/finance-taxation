@@ -7,6 +7,7 @@ import {
 import type { VoucherDetail, VoucherTemplate } from "../../lib/api";
 import { VOUCHER_STATUS_LABELS, VOUCHER_TYPE_LABELS, useI18n } from "../../lib/i18n";
 import { ValidationHintPanel } from "./ValidationHintPanel";
+import { Term } from "../../components/ui/Term";
 
 const { Text, Title } = Typography;
 
@@ -77,7 +78,7 @@ export function VoucherDetailPanel({
     return (
       <div style={{ textAlign: "center", padding: "60px 0", color: "#94a3b8" }}>
         <SafetyCertificateOutlined style={{ fontSize: 32, marginBottom: 12 }} />
-        <div>请选择一张凭证查看详情</div>
+        <div>请选择一张<Term k="voucher">凭证</Term>查看详情</div>
       </div>
     );
   }
@@ -236,7 +237,7 @@ export function VoucherDetailPanel({
         <div style={{ display: "flex", gap: 24, fontSize: 12, color: "#64748b", paddingTop: 8, borderTop: "1px solid #f0f0f0" }}>
           <span>制单：{detail.postingRecords[0]?.postedByName ?? "—"}</span>
           {detail.approvedAt && <span>审核：{detail.approvedAt.slice(0, 10)}</span>}
-          {detail.postedAt   && <span>过账：{detail.postedAt.slice(0, 10)}</span>}
+          {detail.postedAt   && <span><Term k="posting">过账</Term>：{detail.postedAt.slice(0, 10)}</span>}
         </div>
       )}
     </Space>

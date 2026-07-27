@@ -2,6 +2,7 @@ import type { BusinessEvent, RiskFinding } from "@finance-taxation/domain-model"
 import type { DrilldownState } from "../drilldown";
 import type { RiskScopeFilter } from "../risk-scope";
 import type { RiskViewFilter } from "./risk-url-state";
+import { Term } from "../../components/ui/Term";
 
 function panelStyle() {
   return {
@@ -72,7 +73,7 @@ export function RiskWorkbenchHeader({
     <article style={panelStyle()}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
         <div>
-          <h2 style={{ margin: 0 }}>风险勾稽中心</h2>
+          <h2 style={{ margin: 0 }}>风险<Term k="reconciliation">勾稽</Term>中心</h2>
           <div style={{ marginTop: "6px", color: "#6c7a89", fontSize: "13px" }}>{contextLabel}</div>
         </div>
         <button onClick={onShowHelp} title="操作说明" style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid rgba(79,142,247,0.6)", background: "rgba(79,142,247,0.08)", color: "#4f8ef7", fontWeight: 700, fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>?</button>

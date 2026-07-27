@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getCompanyProfile, updateCompanyProfile } from "../../lib/api";
 import type { CompanyProfile } from "../../lib/api";
 import { panelStyle, SectionHeader, FieldRow, inputStyle } from "./settings-ui";
+import { Term } from "../../components/ui/Term";
 
 // ─── Company Tab ──────────────────────────────────────────────────────────────
 
@@ -113,7 +114,7 @@ export function CompanyTab() {
             <option value="role-accountant">会计</option>
           </select>
           <p style={{ margin: "6px 0 0", fontSize: "12px", color: "#9aa5b4" }}>
-            该角色负责审核并最终确认凭证过账。默认为创始人/董事长。
+            该角色负责审核并最终确认<Term k="voucher">凭证</Term><Term k="posting">过账</Term>。默认为创始人/董事长。
           </p>
         </div>
       </FieldRow>

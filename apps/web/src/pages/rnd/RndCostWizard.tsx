@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import type { RndProjectDetail } from "../../lib/api";
 import { createRndCostLine } from "../../lib/api";
 import { COST_TYPE_LABELS, ACCOUNTING_TREATMENT_LABELS, useI18n } from "../../lib/i18n";
+import { Term } from "../../components/ui/Term";
 import type { RndCostLineType, RndAccountingTreatment } from "@finance-taxation/domain-model";
 
 const { Text, Title } = Typography;
@@ -302,7 +303,7 @@ export function RndCostWizard({ open, project, onClose, onComplete }: RndCostWiz
       title={
         <Space>
           <ExperimentOutlined />
-          <span>研发费用归集向导 — {project.name}</span>
+          <span><Term k="rnd-collection">研发费用归集</Term>向导 — {project.name}</span>
         </Space>
       }
       open={open}

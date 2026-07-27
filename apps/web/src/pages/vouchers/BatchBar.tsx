@@ -1,6 +1,7 @@
 import { Button, Progress, Space, Typography } from "antd";
 import { AuditOutlined, SendOutlined } from "@ant-design/icons";
 import type { VoucherBatchProgress } from "./useVoucherBatch";
+import { Term } from "../../components/ui/Term";
 
 const { Text } = Typography;
 
@@ -49,7 +50,7 @@ export function BatchBar({
       }}
     >
       <Space size={12} wrap>
-        <Text strong style={{ fontSize: 13 }}>已选 {checkedCount} 张凭证</Text>
+        <Text strong style={{ fontSize: 13 }}>已选 {checkedCount} 张<Term k="voucher">凭证</Term></Text>
         <Button
           size="small"
           icon={<AuditOutlined />}

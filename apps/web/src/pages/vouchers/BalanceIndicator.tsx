@@ -1,5 +1,6 @@
 import { Alert, Space, Typography } from "antd";
 import { CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import { Term } from "../../components/ui/Term";
 
 const { Text } = Typography;
 
@@ -30,9 +31,9 @@ export function BalanceIndicator({ result }: BalanceIndicatorProps) {
             {result.valid ? "借贷平衡" : "借贷不平衡"}
           </span>
           <Text style={{ fontSize: 12 }}>
-            借方合计 <Text strong>¥{debit.toFixed(2)}</Text>
+            <Term k="debit">借方</Term>合计 <Text strong>¥{debit.toFixed(2)}</Text>
             {"　"}
-            贷方合计 <Text strong>¥{credit.toFixed(2)}</Text>
+            <Term k="credit">贷方</Term>合计 <Text strong>¥{credit.toFixed(2)}</Text>
             {!result.valid && diff > 0 && (
               <Text type="danger">{"　"}差额 ¥{diff.toFixed(2)}</Text>
             )}

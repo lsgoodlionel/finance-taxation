@@ -4,6 +4,7 @@ import {
   ClockCircleOutlined, CheckCircleOutlined,
 } from "@ant-design/icons";
 import type { Contract, Task, GeneratedDocument, TaxItem, Voucher } from "@finance-taxation/domain-model";
+import { Term } from "../../components/ui/Term";
 
 const { Text, Title } = Typography;
 
@@ -158,7 +159,7 @@ export function ContractDrawer({ detail, open, onClose, onCloseContract, onOpenE
               dot: <CheckCircleOutlined style={{ color: "#16a34a" }} />,
               children: (
                 <div>
-                  <Text strong style={{ fontSize: 13 }}>凭证 {v.id.slice(-6).toUpperCase()}</Text>
+                  <Text strong style={{ fontSize: 13 }}><Term k="voucher">凭证</Term> {v.id.slice(-6).toUpperCase()}</Text>
                   <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                     <Tag style={{ fontSize: 11 }}>{v.status}</Tag>
                     <Text type="secondary" style={{ fontSize: 11 }}>{v.createdAt?.slice(0, 10)}</Text>

@@ -2,6 +2,7 @@ import { Modal, Form, Select, Input, Typography, Alert, Space } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import type { VoucherTemplate } from "../../lib/api";
 import { VALIDATION_GUIDE_ITEMS } from "./validation-hints";
+import { Term } from "../../components/ui/Term";
 
 const { Text } = Typography;
 
@@ -37,7 +38,7 @@ export function VoucherCreateModal({
       title={
         <Space>
           <PlusOutlined />
-          <span>按模板生成凭证</span>
+          <span>按模板生成<Term k="voucher">凭证</Term></span>
         </Space>
       }
       open={open}

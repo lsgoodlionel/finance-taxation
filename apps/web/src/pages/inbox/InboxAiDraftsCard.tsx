@@ -22,6 +22,7 @@ import {
   countManualReview, groupDrafts, pruneIds, runSequentialBatch, sumSelectedAmount,
   summarizeBatchResult, toggleId, unionIds, type BatchFailure,
 } from "./draft-batch";
+import { Term } from "../../components/ui/Term";
 
 const { Text } = Typography;
 
@@ -258,7 +259,7 @@ export function InboxAiDraftsCard() {
             <Space direction="vertical" size={2}>
               <Text>暂无待批准草稿</Text>
               <Text type="secondary" style={{ fontSize: 12 }}>
-                点击「生成本期草稿」让 AI 为未入账事项起草分录。
+                点击「生成本期草稿」让 AI 为未入账事项起草<Term k="journal-entry">分录</Term>。
               </Text>
             </Space>
           }

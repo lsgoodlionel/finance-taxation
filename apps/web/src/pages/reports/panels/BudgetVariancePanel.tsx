@@ -4,6 +4,7 @@ import { getBudgetVariance, type BudgetVarianceResult } from "../../../lib/api";
 import { DataTableShell } from "../../../components/ui/DataTableShell";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ResultBanner } from "../../../components/ui/ResultBanner";
+import { Term } from "../../../components/ui/Term";
 
 const { Text } = Typography;
 
@@ -137,7 +138,7 @@ export function BudgetVariancePanel({ defaultPeriod }: BudgetVariancePanelProps)
                 <Tag color={statusMeta?.color}>{statusMeta?.label}</Tag>
               </div>
               <Text type="secondary" style={{ fontSize: 12 }}>
-                科目范围：{result.category.length > 0 ? result.category.join("、") : "默认费用类"}
+                <Term k="account">科目</Term>范围：{result.category.length > 0 ? result.category.join("、") : "默认费用类"}
               </Text>
             </div>
           </div>

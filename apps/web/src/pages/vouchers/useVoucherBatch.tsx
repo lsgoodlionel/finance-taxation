@@ -12,6 +12,7 @@ import {
   voucherAmount,
   type BatchItemResult,
 } from "./voucher-actions";
+import { Term } from "../../components/ui/Term";
 
 const { Text } = Typography;
 
@@ -150,7 +151,7 @@ export function useVoucherBatch({ vouchers, onCompleted }: UseVoucherBatchOption
       cancelText: "取消",
       content: (
         <div style={{ fontSize: 12, display: "grid", gap: 6 }}>
-          <div>过账后将正式记入总账，影响总账和财务报表，不能直接修改：</div>
+          <div><Term k="posting">过账</Term>后将正式记入<Term k="general-ledger">总账</Term>，影响总账和财务报表，不能直接修改：</div>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {postable.map((voucher) => (
               <li key={voucher.id}>
