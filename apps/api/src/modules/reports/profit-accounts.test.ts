@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { generateClosingEntries, PROFIT_ACCOUNT } from "../ledger/closing.js";
 import { classifyProfitAccount, summarizeProfitTotals } from "./profit-accounts.js";
 
 function entry(accountCode: string, debit: string, credit: string) {
   return { accountCode, debit, credit };
+}
+
+/** 把利润表口径的分录聚合成结转损益的科目余额（balance = debit − credit）。 */
+function toAccountBalances(entries: readonly ReturnType<typeof entry>[]) {
+  const balances = new Map<string, number>();
+  for (const item of entries) {
+    const current = balances.get(item.accountCode) || 0;
+    balances.set(item.accountCode, current + Number(item.debit) - Number(item.credit));
+  }
+  return [...balances.entries()].map(([accountCode, balance]) => ({ accountCode, balance }));
 }
 
 test("classifyProfitAccount separates cost and non-operating expense from the revenue prefixes", () => {
@@ -144,6 +155,92 @@ test("summarizeProfitTotals keeps pre-fix results when there is no income tax en
   assert.equal(totals.totalProfit, totals.grossProfit - totals.expense);
   assert.equal(totals.netProfit, totals.totalProfit);
   assert.equal(totals.totalProfit, 800);
+});
+
+test("classifyProfitAccount counts 税金及附加 and every other tax-ish 6xxx code as expense", () => {
+  // tax-surcharge 模板（vouchers/templates.ts）落到 6101「税金及附加」。它必须进
+  // 利润表的 costsAndExpenses 与 totals.expenses，否则这笔费用会在 /reports 与
+  // /home 上凭空消失，而资产负债表的本年利润照扣，两表口径当场分叉。
+  assert.equal(classifyProfitAccount("6101"), "expense");
+  assert.equal(classifyProfitAccount("610101"), "expense");
+  // 6403 这类科目表未登记的编码同样不能掉进 other（历史上曾被 tax-surcharge 模板使用）
+  assert.equal(classifyProfitAccount("6403"), "expense");
+  assert.equal(classifyProfitAccount("6402"), "expense");
+});
+
+test("summarizeProfitTotals keeps 税金及附加 inside the expense bucket", () => {
+  // Arrange：一笔收入 + 一笔 tax-surcharge 模板生成的税金及附加
+  const entries = [entry("6001", "0.00", "1000.00"), entry("6101", "120.00", "0.00")];
+
+  // Act
+  const totals = summarizeProfitTotals(entries);
+
+  // Assert：修复前 6101 归 other，expense 为 0、净利润虚高 120
+  assert.equal(totals.expense, 120);
+  assert.equal(totals.totalProfit, 880);
+  assert.equal(totals.netProfit, 880);
+});
+
+test("profit statement net profit equals the closing entry net profit", () => {
+  // Arrange：覆盖全部易错科目——主营业务成本、税金及附加、管理费用二级科目、
+  // 科目表未登记的 6xxx、所得税费用、未登记的收入子科目，外加资产负债类噪音
+  const entries = [
+    entry("6001", "0.00", "1000.00"),
+    entry("6001001", "0.00", "200.00"),
+    entry("6051", "0.00", "150.00"),
+    entry("6001c", "300.00", "0.00"),
+    entry("6101", "120.00", "0.00"),
+    entry("6301e01", "80.00", "0.00"),
+    entry("6401001", "40.00", "0.00"),
+    entry("6602", "60.00", "0.00"),
+    entry("6403", "25.00", "0.00"),
+    entry("6801", "100.00", "0.00"),
+    entry("1002", "1350.00", "0.00"),
+    entry("222105", "0.00", "120.00")
+  ];
+
+  // Act
+  const totals = summarizeProfitTotals(entries);
+  const closing = generateClosingEntries(toAccountBalances(entries));
+
+  // Assert：利润表净利润 = 结转损益写进 3131 的金额，两表不再分叉
+  assert.equal(totals.netProfit, 1350 - 300 - 325 - 100);
+  assert.equal(closing.netProfit, totals.netProfit);
+  const profitLine = closing.lines.find((line) => line.accountCode === PROFIT_ACCOUNT);
+  assert.equal(profitLine?.credit, totals.netProfit);
+  // 结转凭证仍然借贷平衡，且不把资产负债类科目卷进来
+  const totalDebit = closing.lines.reduce((sum, line) => sum + line.debit, 0);
+  const totalCredit = closing.lines.reduce((sum, line) => sum + line.credit, 0);
+  assert.equal(totalDebit, totalCredit);
+  assert.equal(closing.lines.some((line) => line.accountCode === "1002"), false);
+  assert.equal(closing.lines.some((line) => line.accountCode === "222105"), false);
+});
+
+test("closing entries treat unregistered revenue sub-accounts as revenue, like the profit statement", () => {
+  // Arrange：6001001 未登记在科目主数据里，走收入前缀兜底
+  const entries = [entry("6001001", "0.00", "500.00"), entry("6601", "200.00", "0.00")];
+
+  // Act
+  const totals = summarizeProfitTotals(entries);
+  const closing = generateClosingEntries(toAccountBalances(entries));
+
+  // Assert：旧的精确匹配集合把 6001001 当费用，结转出 −700 的亏损，与利润表的 300 相差一倍收入
+  assert.equal(totals.netProfit, 300);
+  assert.equal(closing.netProfit, 300);
+  const revenueLine = closing.lines.find((line) => line.accountCode === "6001001");
+  assert.deepEqual({ debit: revenueLine?.debit, credit: revenueLine?.credit }, { debit: 500, credit: 0 });
+});
+
+test("closing entries leave production-cost accounts out, matching the profit statement", () => {
+  // 4001/4101 要先结转到主营业务成本才进损益，两侧都必须跳过
+  const entries = [entry("6001", "0.00", "800.00"), entry("4001", "300.00", "0.00")];
+
+  const totals = summarizeProfitTotals(entries);
+  const closing = generateClosingEntries(toAccountBalances(entries));
+
+  assert.equal(totals.netProfit, 800);
+  assert.equal(closing.netProfit, 800);
+  assert.equal(closing.lines.some((line) => line.accountCode === "4001"), false);
 });
 
 test("summarizeProfitTotals ignores balance-sheet accounts and returns zeros for empty input", () => {

@@ -28,7 +28,38 @@ import {
   REVENUE_PREFIXES,
   REVENUE_EXCLUDED_PREFIXES
 } from "../analytics/routes.js";
+import {
+  REVENUE_PREFIXES as CONSISTENCY_REVENUE_PREFIXES,
+  REVENUE_EXCLUDED_PREFIXES as CONSISTENCY_REVENUE_EXCLUDED_PREFIXES
+} from "../tax-integration/consistency.routes.js";
+import {
+  REVENUE_PREFIXES as ANOMALY_REVENUE_PREFIXES,
+  REVENUE_EXCLUDED_PREFIXES as ANOMALY_REVENUE_EXCLUDED_PREFIXES
+} from "../ai-agents/anomaly/anomaly.routes.js";
 import { classifyProfitAccount } from "../reports/profit-accounts.js";
+
+/**
+ * 全部按前缀取数的收入读路径。每新增一个按 `account_code like '6001%'` 之类
+ * 过滤收入的模块，都要接进这张表——否则重叠前缀（6001c / 6301e）会把成本与
+ * 管理费用当作负收入冲减，金额静默偏小且不会有任何报错。
+ */
+const REVENUE_READ_PATHS = [
+  {
+    source: "analytics/routes.ts",
+    include: REVENUE_PREFIXES,
+    exclude: REVENUE_EXCLUDED_PREFIXES
+  },
+  {
+    source: "tax-integration/consistency.routes.ts",
+    include: CONSISTENCY_REVENUE_PREFIXES,
+    exclude: CONSISTENCY_REVENUE_EXCLUDED_PREFIXES
+  },
+  {
+    source: "ai-agents/anomaly/anomaly.routes.ts",
+    include: ANOMALY_REVENUE_PREFIXES,
+    exclude: ANOMALY_REVENUE_EXCLUDED_PREFIXES
+  }
+] as const;
 
 const SAMPLE_AMOUNT = "1000.00";
 
@@ -280,7 +311,10 @@ test("the unknown-event fallback keeps a non-postable placeholder code", () => {
 test("analytics read-path prefixes all resolve to real chart accounts", () => {
   // Arrange：取数侧按前缀过滤，前缀写错不会报错，只会让金额静默漏算
   //（旧的 5601/6602/6603 在科目表里根本不存在，费用长期少计）。
-  const prefixes = [...REVENUE_PREFIXES, ...REVENUE_EXCLUDED_PREFIXES, ...EXPENSE_PREFIXES];
+  const prefixes = [
+    ...REVENUE_READ_PATHS.flatMap((path) => [...path.include, ...path.exclude]),
+    ...EXPENSE_PREFIXES
+  ];
 
   // Act
   const unmatched = prefixes.filter(
@@ -291,20 +325,37 @@ test("analytics read-path prefixes all resolve to real chart accounts", () => {
   assert.deepEqual(unmatched, [], `取数前缀在科目表里没有任何匹配科目：${unmatched.join(", ")}`);
 });
 
-test("analytics revenue and expense prefixes agree with the profit statement classifier", () => {
+test("every revenue read path's prefixes agree with the profit statement classifier", () => {
   // Arrange：取数侧与 reports/profit-accounts.ts 必须同口径，否则
-  // /analytics 与 /reports 会对同一期间给出两个「收入」和两个「费用」。
+  // /analytics、/tax-integration/consistency、/anomaly 会对同一期间
+  // 给出彼此不同的「收入」，而成本 6001c 与管理费用 6301e 会被当成负收入。
   const codes = CHART_OF_ACCOUNTS.map((account) => account.code);
   const matches = (code: string, prefixes: readonly string[]) =>
     prefixes.some((prefix) => code.startsWith(prefix));
 
   // Act：模拟 SQL 的 like 语义——命中收入前缀且未被排除前缀命中
-  const revenueSelected = codes.filter(
-    (code) => matches(code, REVENUE_PREFIXES) && !matches(code, REVENUE_EXCLUDED_PREFIXES)
+  const misclassified = REVENUE_READ_PATHS.flatMap((path) =>
+    codes
+      .filter((code) => matches(code, path.include) && !matches(code, path.exclude))
+      .filter((code) => classifyProfitAccount(code) !== "revenue")
+      .map((code) => `${path.source}: ${code}`)
   );
-  const misclassifiedRevenue = revenueSelected.filter(
-    (code) => classifyProfitAccount(code) !== "revenue"
+
+  // Assert
+  assert.deepEqual(
+    misclassified,
+    [],
+    `被当作收入取数、但利润表口径不是收入的科目：${misclassified.join("; ")}`
   );
+});
+
+test("analytics expense prefixes agree with the profit statement classifier", () => {
+  // Arrange
+  const codes = CHART_OF_ACCOUNTS.map((account) => account.code);
+  const matches = (code: string, prefixes: readonly string[]) =>
+    prefixes.some((prefix) => code.startsWith(prefix));
+
+  // Act
   const expenseSelected = codes.filter((code) => matches(code, EXPENSE_PREFIXES));
   const misclassifiedExpense = expenseSelected.filter(
     (code) => classifyProfitAccount(code) !== "expense"
@@ -312,17 +363,26 @@ test("analytics revenue and expense prefixes agree with the profit statement cla
 
   // Assert
   assert.deepEqual(
-    misclassifiedRevenue,
-    [],
-    `被当作收入取数、但利润表口径不是收入的科目：${misclassifiedRevenue.join(", ")}`
-  );
-  assert.deepEqual(
     misclassifiedExpense,
     [],
     `被当作费用取数、但利润表口径不是费用的科目：${misclassifiedExpense.join(", ")}`
   );
   // 所得税费用 6801 不属于期间费用预算，必须留在 EXPENSE_PREFIXES 之外
   assert.equal(matches("6801", EXPENSE_PREFIXES), false);
+});
+
+test("revenue read paths all exclude the overlapping cost and expense prefixes", () => {
+  // Arrange：排除表漏项时上一条断言仍会挂，但错误信息指向具体科目而非缺失的前缀；
+  // 这里直接钉住「排除表必须含 6001c 与 6301e」，让漏配的修复方向一目了然。
+  const required = ["6001c", "6301e"];
+
+  // Act
+  const missing = REVENUE_READ_PATHS.flatMap((path) =>
+    required.filter((prefix) => !path.exclude.includes(prefix)).map((p) => `${path.source}: ${p}`)
+  );
+
+  // Assert
+  assert.deepEqual(missing, [], `收入取数路径缺少重叠前缀排除项：${missing.join("; ")}`);
 });
 
 test("CHART_OF_ACCOUNTS is internally consistent", () => {
