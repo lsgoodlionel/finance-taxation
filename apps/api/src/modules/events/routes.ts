@@ -345,7 +345,18 @@ function quarterLabel(dateString: string) {
   return `${year}-Q${Math.floor((month - 1) / 3) + 1}`;
 }
 
-function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
+/**
+ * 未知事项类型的兜底凭证草稿占位科目。这不是会计科目，凭证状态恒为 draft，
+ * 必须由人工替换成真实叶子科目后才能过账；科目码护栏测试对它单独放行。
+ */
+export const PENDING_ACCOUNT_CODE = "待定";
+
+/**
+ * 按业务事项类型生成资料/税务/凭证草稿映射。
+ * 导出是为了让科目码护栏测试（vouchers/account-code-guard.test.ts）能直接覆盖
+ * 这里内联的凭证分录——它们和 events/*-rules.ts 一样会落成真实分录。
+ */
+export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
   const amount = event.amount || "0.00";
   const documentMappings: EventDocumentMapping[] = [];
   const taxMappings: EventTaxMapping[] = [];
@@ -496,7 +507,7 @@ function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
           {
             id: makeId("vou-line", event.id, "debit-main"),
             summary: "确认采购/资产",
-            accountCode: event.type === "asset" ? "1601" : "1403",
+            accountCode: event.type === "asset" ? "1601" : "1401",
             accountName: event.type === "asset" ? "固定资产" : "原材料",
             debit: amount,
             credit: "0.00"
@@ -568,8 +579,8 @@ function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
           {
             id: makeId("vou-line", event.id, "debit-expense"),
             summary: "确认费用",
-            accountCode: "6602",
-            accountName: "管理费用",
+            accountCode: "6301e07",
+            accountName: "管理费用-其他",
             debit: amount,
             credit: "0.00"
           },
@@ -641,15 +652,15 @@ function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
             id: makeId("vou-line", event.id, "debit-payroll"),
             summary: "计提工资成本",
             accountCode: "6601",
-            accountName: "职工薪酬",
+            accountName: "职工薪酬（成本）",
             debit: amount,
             credit: "0.00"
           },
           {
             id: makeId("vou-line", event.id, "credit-payroll"),
             summary: "确认应付职工薪酬",
-            accountCode: "2211",
-            accountName: "应付职工薪酬",
+            accountCode: "22110101",
+            accountName: "应付职工薪酬-工资",
             debit: "0.00",
             credit: amount
           }
@@ -700,7 +711,7 @@ function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
           {
             id: makeId("vou-line", event.id, "debit-rnd"),
             summary: "归集研发支出",
-            accountCode: "研发支出",
+            accountCode: "1801001",
             accountName: "研发支出-费用化支出",
             debit: amount,
             credit: "0.00"
@@ -748,7 +759,7 @@ function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
           {
             id: makeId("vou-line", event.id, "debit-general"),
             summary: "待人工补充会计科目",
-            accountCode: "待定",
+            accountCode: PENDING_ACCOUNT_CODE,
             accountName: "待人工确认",
             debit: amount,
             credit: "0.00"
@@ -756,7 +767,7 @@ function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
           {
             id: makeId("vou-line", event.id, "credit-general"),
             summary: "待人工补充对方科目",
-            accountCode: "待定",
+            accountCode: PENDING_ACCOUNT_CODE,
             accountName: "待人工确认",
             debit: "0.00",
             credit: amount

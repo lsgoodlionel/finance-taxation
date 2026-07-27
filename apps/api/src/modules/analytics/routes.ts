@@ -6,8 +6,32 @@ import { forecastCashFlow } from "./cash-forecast.js";
 import { comparePeriods, budgetVariance } from "./period-comparison.js";
 
 const PERIOD_LABEL = /^\d{4}-\d{2}$/;
-const REVENUE_PREFIXES = ["6001", "6051", "6111", "6301"];
-const EXPENSE_PREFIXES = ["5601", "6601", "6602", "6603", "6711"];
+
+/**
+ * 收入科目前缀（主营业务收入 / 其他业务收入 / 投资收益 / 营业外收入），与
+ * reports/profit-accounts.ts 的 REVENUE_ACCOUNT_PREFIXES 同源。
+ */
+export const REVENUE_PREFIXES = ["6001", "6051", "6111", "6301"];
+
+/**
+ * 与收入前缀重叠、但实为费用的科目：主营业务成本 6001c 落在 `6001%` 里，
+ * 管理费用 6301e 落在 `6301%` 里。SQL 用 like 匹配前缀，必须显式排除，
+ * 否则成本与管理费用会被当作负收入冲减营业收入。
+ */
+export const REVENUE_EXCLUDED_PREFIXES = ["6001c", "6301e"];
+
+/**
+ * 默认费用科目前缀：税金及附加 6101、销售费用 6201、管理费用 6301e、
+ * 财务费用 6401、职工薪酬（成本）6601、营业外支出 6711。
+ *
+ * 旧口径写的是 5601/6601/6602/6603/6711——其中 5601/6602/6603 在本系统科目表里
+ * 根本不存在（是国标编码，本系统另有约定），6601 也不是销售费用而是职工薪酬，
+ * 于是「实际发生额」长期漏计销售费用、管理费用与财务费用。
+ *
+ * 不含主营业务成本 6001c 与所得税费用 6801：预算差异比的是期间费用，
+ * 与 reports/profit-accounts.ts 的 `expense` 口径（同样剔除 6801）保持一致。
+ */
+export const EXPENSE_PREFIXES = ["6101", "6201", "6301e", "6401", "6601", "6711"];
 
 /**
  * GET /api/analytics/cash-forecast?periods=3
@@ -37,7 +61,8 @@ export async function cashForecastRoute(req: ApiRequest, res: ServerResponse): P
 
 /**
  * GET /api/analytics/revenue-comparison?current=2026-05&previous=2026-04
- * 收入同比/环比（E1）：比对两个属期的营业收入（6001/6051/6111/6301 的贷方净额）。
+ * 收入同比/环比（E1）：比对两个属期的营业收入（6001/6051/6111/6301 的贷方净额，
+ * 排除前缀重叠的主营业务成本 6001c 与管理费用 6301e）。
  */
 export async function revenueComparisonRoute(req: ApiRequest, res: ServerResponse): Promise<void> {
   const url = new URL(req.url || "/", "http://127.0.0.1");
@@ -49,12 +74,22 @@ export async function revenueComparisonRoute(req: ApiRequest, res: ServerRespons
   }
 
   const revenueFor = async (period: string): Promise<number> => {
-    const likeClauses = REVENUE_PREFIXES.map((_, i) => `account_code like $${i + 3}`).join(" or ");
+    const includeClauses = REVENUE_PREFIXES.map((_, i) => `account_code like $${i + 3}`).join(" or ");
+    const excludeOffset = REVENUE_PREFIXES.length + 3;
+    const excludeClauses = REVENUE_EXCLUDED_PREFIXES.map(
+      (_, i) => `account_code not like $${i + excludeOffset}`
+    ).join(" and ");
     const rows = await query<{ revenue: string }>(
       `select coalesce(sum(credit - debit), 0) as revenue
        from ledger_entries
-       where company_id = $1 and to_char(entry_date, 'YYYY-MM') = $2 and (${likeClauses})`,
-      [req.auth!.companyId, period, ...REVENUE_PREFIXES.map((p) => `${p}%`)]
+       where company_id = $1 and to_char(entry_date, 'YYYY-MM') = $2
+         and (${includeClauses}) and (${excludeClauses})`,
+      [
+        req.auth!.companyId,
+        period,
+        ...REVENUE_PREFIXES.map((p) => `${p}%`),
+        ...REVENUE_EXCLUDED_PREFIXES.map((p) => `${p}%`)
+      ]
     );
     return Number(rows[0]?.revenue ?? 0);
   };
@@ -64,8 +99,9 @@ export async function revenueComparisonRoute(req: ApiRequest, res: ServerRespons
 }
 
 /**
- * GET /api/analytics/budget-variance?period=2026-05&budget=100000&category=5601,6601
- * 预算差异（E1）：比对属期实际发生额（默认费用科目前缀）与传入预算金额。
+ * GET /api/analytics/budget-variance?period=2026-05&budget=100000&category=6201,6301e
+ * 预算差异（E1）：比对属期实际发生额（默认 EXPENSE_PREFIXES 费用科目前缀）与传入预算金额。
+ * category 传入的前缀按科目表口径书写，例如 6201（销售费用）、6301e（管理费用）、6401（财务费用）。
  */
 export async function budgetVarianceRoute(req: ApiRequest, res: ServerResponse): Promise<void> {
   const url = new URL(req.url || "/", "http://127.0.0.1");

@@ -21,6 +21,7 @@ test("buildChairmanReportSummary builds concise boss summary", () => {
         grossProfit: "700",
         expenses: "100",
         totalProfit: "600",
+        incomeTax: "0",
         netProfit: "600"
       }
     },

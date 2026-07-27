@@ -25,7 +25,16 @@ interface DashboardRiskBoard {
 interface DashboardProfitOverview {
   revenue: string;
   cost: string;
+  /** 期间费用合计，**不含所得税费用**（所得税在 incomeTax 中单列）。 */
   expense: string;
+  /**
+   * 所得税费用（6801），只在净利润处扣减一次。
+   *
+   * 前端据此才能把「利润总额 → 净利润」的落差解释清楚，也是费用构成饼图
+   * 「各分块之和 = 营业收入」成立的前提：expense 不含税额，缺了这一块就会
+   * 把税额算进利润里。
+   */
+  incomeTax: string;
   grossProfit: string;
   netProfit: string;
   grossMargin: string;
@@ -82,7 +91,8 @@ export function buildDashboardSnapshot(input: {
     (entry) => entry.entryDate >= input.period.startDate && entry.entryDate <= input.period.endDate
   );
   // 科目口径与正式利润表共用同一纯函数，避免驾驶舱与 /reports 再次漂移。
-  const { revenue, cost, expense, grossProfit, netProfit } = summarizeProfitTotals(periodEntries);
+  const { revenue, cost, expense, incomeTax, grossProfit, netProfit } =
+    summarizeProfitTotals(periodEntries);
 
   const approvals = input.vouchers
     .filter((voucher) => voucher.status === "review_required")
@@ -145,6 +155,7 @@ export function buildDashboardSnapshot(input: {
       revenue: formatWhole(revenue),
       cost: formatWhole(cost),
       expense: formatWhole(expense),
+      incomeTax: formatWhole(incomeTax),
       grossProfit: formatWhole(grossProfit),
       netProfit: formatWhole(netProfit),
       grossMargin: formatRate(grossProfit, revenue),

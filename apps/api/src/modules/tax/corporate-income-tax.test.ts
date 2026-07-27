@@ -14,6 +14,7 @@ test("buildCorporateIncomeTaxPreparation estimates prepayment and checklist", ()
       grossProfit: "70000",
       expenses: "20000",
       totalProfit: "50000",
+      incomeTax: "0",
       netProfit: "50000"
     }
   };
@@ -71,6 +72,7 @@ test("buildCorporateIncomeTaxPreparation uses 利润总额 as accounting profit,
       grossProfit: "70000",
       expenses: "20000",
       totalProfit: "50000",
+      incomeTax: "12500",
       netProfit: "37500"
     }
   };

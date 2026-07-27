@@ -45,14 +45,20 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   { code: "1221",    name: "其他应收款",                 category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "1401",    name: "原材料",                    category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "1403",    name: "库存商品",                  category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
-  { code: "1601",    name: "固定资产",                  category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: false },
+  // 1601 曾被标为 isLeaf: false，但科目表里没有任何 parentCode === "1601" 的子科目，
+  // 于是「固定资产」既不能在科目选择器里被选中（accounts/routes.ts 只列叶子），
+  // 也让固定资产采购凭证挂到一个不可记账的科目上。累计折旧 1602 是平级科目而非子科目，
+  // 因此 1601 本身就是叶子。
+  { code: "1601",    name: "固定资产",                  category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "1602",    name: "累计折旧",                  category: "asset",     direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "1701",    name: "无形资产",                  category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "1702",    name: "累计摊销",                  category: "asset",     direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "1801",    name: "长期待摊费用",               category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
-  // 研发支出
-  { code: "1801001", name: "研发支出-费用化支出",         category: "asset",     direction: "debit", level: 3, parentCode: "1801", isLeaf: true  },
-  { code: "1801002", name: "研发支出-资本化支出",         category: "asset",     direction: "debit", level: 3, parentCode: "1801", isLeaf: true  },
+  // 研发支出。这两个科目此前挂在 1801「长期待摊费用」名下，但它们并不是长期待摊
+  // 费用的明细（名称、用途都不同），而 1801 自身又标着 isLeaf: true——一个叶子科目
+  // 带着子科目，树形展示与「叶子才可记账」的规则同时被破坏。改为独立一级科目。
+  { code: "1801001", name: "研发支出-费用化支出",         category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
+  { code: "1801002", name: "研发支出-资本化支出",         category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   // ─── 负债 ───────────────────────────────────────────────
   { code: "2001",    name: "短期借款",                  category: "liability", direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "2201",    name: "应付票据",                  category: "liability", direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
@@ -61,6 +67,7 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   { code: "2211",    name: "应付职工薪酬",               category: "liability", direction: "credit",level: 1, parentCode: null,   isLeaf: false },
   { code: "22110101",name: "应付职工薪酬-工资",           category: "liability", direction: "credit",level: 3, parentCode: "2211", isLeaf: true  },
   { code: "22110102",name: "应付职工薪酬-社保（单位）",    category: "liability", direction: "credit",level: 3, parentCode: "2211", isLeaf: true  },
+  { code: "22110103",name: "应付职工薪酬-公积金（单位）",   category: "liability", direction: "credit",level: 3, parentCode: "2211", isLeaf: true  },
   { code: "2221",    name: "应交税费",                  category: "liability", direction: "credit",level: 1, parentCode: null,   isLeaf: false },
   { code: "222101",  name: "应交税费-应交增值税（销项）",  category: "liability", direction: "credit",level: 2, parentCode: "2221", isLeaf: true  },
   { code: "222102",  name: "应交税费-应交增值税（进项）",  category: "liability", direction: "debit", level: 2, parentCode: "2221", isLeaf: true  },
@@ -96,6 +103,9 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   { code: "6301e04", name: "管理费用-差旅费",            category: "expense",   direction: "debit", level: 2, parentCode: "6301e",isLeaf: true  },
   { code: "6301e05", name: "管理费用-业务招待费",         category: "expense",   direction: "debit", level: 2, parentCode: "6301e",isLeaf: true  },
   { code: "6301e06", name: "管理费用-研发费用",           category: "expense",   direction: "debit", level: 2, parentCode: "6301e",isLeaf: true  },
+  // 6301e 本身是非叶子，凭证不能挂上去。通用「管理费用」场景（费用报销模板、进项
+  // 发票入账、无法归类的采购报销）此前落在表外科目 6602，现统一落到本明细科目。
+  { code: "6301e07", name: "管理费用-其他",              category: "expense",   direction: "debit", level: 2, parentCode: "6301e",isLeaf: true  },
   { code: "6401",    name: "财务费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: false },
   { code: "6401001", name: "财务费用-利息支出",          category: "expense",   direction: "debit", level: 2, parentCode: "6401", isLeaf: true  },
   { code: "6401002", name: "财务费用-手续费",            category: "expense",   direction: "debit", level: 2, parentCode: "6401", isLeaf: true  },

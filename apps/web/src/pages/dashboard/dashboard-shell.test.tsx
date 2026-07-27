@@ -1,14 +1,14 @@
 // Pure-logic unit tests for ChairmanDashboardPage — no DOM required
+import type { DashboardData } from "../../lib/api";
+import { buildExpenseData, type ExpenseSlice } from "./expense-slices";
+
 function okDash(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
 // ─── Trend data builder ───────────────────────────────────────────────────────
 
-interface ProfitOverview {
-  revenue: string; cost: string; expense: string;
-  grossProfit: string; netProfit: string; grossMargin: string; netMargin: string;
-}
+type ProfitOverview = DashboardData["profitOverview"];
 
 function buildTrendData(overview: ProfitOverview) {
   const revenue = parseFloat(overview.revenue.replace(/,/g, "")) || 0;
@@ -22,9 +22,10 @@ function buildTrendData(overview: ProfitOverview) {
   });
 }
 
+// 期间费用 200000 已不含所得税；所得税 50000 单列，净利 = 100 万 - 60 万 - 20 万 - 5 万。
 const overview: ProfitOverview = {
-  revenue: "1000000", cost: "600000", expense: "200000",
-  grossProfit: "400000", netProfit: "200000", grossMargin: "40%", netMargin: "20%",
+  revenue: "1000000", cost: "600000", expense: "200000", incomeTax: "50000",
+  grossProfit: "400000", netProfit: "150000", grossMargin: "40%", netMargin: "15%",
 };
 
 const trend = buildTrendData(overview);
@@ -33,33 +34,35 @@ okDash(trend[5]?.收入 === 1000000, "last month uses full revenue value");
 okDash((trend[0]?.收入 ?? 0) < (trend[5]?.收入 ?? 0), "earlier months are smaller");
 
 // ─── Pie data builder ─────────────────────────────────────────────────────────
+// 直接引用组件用的那一份实现，避免测试里再复制一版口径（复制版正是漏掉所得税的地方）。
 
-function buildExpenseData(ov: ProfitOverview) {
-  const cost    = parseFloat(ov.cost.replace(/,/g, ""))    || 0;
-  const expense = parseFloat(ov.expense.replace(/,/g, "")) || 0;
-  const revenue = parseFloat(ov.revenue.replace(/,/g, "")) || 1;
-  const salesCost = Math.round(cost * 0.65);
-  const laborCost = Math.round(cost * 0.20);
-  const otherCost = cost - salesCost - laborCost;
-  const selling   = Math.round(expense * 0.40);
-  const mgmt      = Math.round(expense * 0.35);
-  const finance   = expense - selling - mgmt;
-  const profit    = Math.max(0, Math.round(revenue - cost - expense));
-  return [
-    { name: "主营成本", value: salesCost },
-    { name: "人工成本", value: laborCost },
-    { name: "其他成本", value: otherCost },
-    { name: "销售费用", value: selling },
-    { name: "管理费用", value: mgmt },
-    { name: "财务费用", value: finance },
-    { name: "净利润",   value: profit },
-  ].filter(d => d.value > 0);
+function sliceSum(slices: ExpenseSlice[]): number {
+  return slices.reduce((sum, slice) => sum + slice.value, 0);
+}
+
+function sliceValue(slices: ExpenseSlice[], name: string): number | undefined {
+  return slices.find((slice) => slice.name === name)?.value;
 }
 
 const pieData = buildExpenseData(overview);
 okDash(pieData.length > 0, "pie data has at least one segment");
-const total = pieData.reduce((s, d) => s + d.value, 0);
-okDash(Math.abs(total - 1000000) < 10, "pie segments sum back to revenue");
+okDash(sliceSum(pieData) === 1000000, "有所得税时各分块之和等于营业收入");
+okDash(sliceValue(pieData, "所得税费用") === 50000, "所得税单列成一块，金额取自后端");
+okDash(sliceValue(pieData, "净利润") === 150000, "净利润已扣除所得税，不再虚高一个税额");
+
+// 无所得税（小微免税 / 亏损期无税额）：不画空分块，其余口径不变。
+const taxFreeOverview: ProfitOverview = { ...overview, incomeTax: "0", netProfit: "200000" };
+const taxFreePie = buildExpenseData(taxFreeOverview);
+okDash(sliceSum(taxFreePie) === 1000000, "无所得税时各分块之和仍等于营业收入");
+okDash(sliceValue(taxFreePie, "所得税费用") === undefined, "所得税为 0 时不产生空分块");
+okDash(sliceValue(taxFreePie, "净利润") === 200000, "无所得税时净利润等于利润总额");
+
+// 千分位与小数金额同样要能解析出正确分块。
+const formattedPie = buildExpenseData({
+  ...overview,
+  revenue: "1,000,000.00", cost: "600,000.00", expense: "200,000.00", incomeTax: "50,000.00",
+});
+okDash(sliceSum(formattedPie) === 1000000, "带千分位的金额解析后分块之和仍等于营业收入");
 
 // ─── Trend tag color ──────────────────────────────────────────────────────────
 

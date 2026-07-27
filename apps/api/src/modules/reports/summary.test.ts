@@ -148,9 +148,20 @@ test("buildProfitStatementReport keeps income tax out of 营业总成本 and 利
   assert.equal(report.totals.grossProfit, "700");
   assert.equal(report.totals.expenses, "0");
   assert.equal(report.totals.totalProfit, "700");
+  // 所得税单列，前端才能解释「利润总额 700 → 净利润 600」之间的 100 是什么
+  assert.equal(report.totals.incomeTax, "100");
   assert.equal(report.totals.netProfit, "600");
   // 6801 金额仍以明细行保留在报表中
   assert.equal(report.costsAndExpenses.some((line) => line.code === "6801" && line.amount === "100"), true);
+});
+
+test("buildProfitStatementReport reports zero 所得税费用 when the period has no 6801 entries", () => {
+  // Act
+  const report = buildProfitStatementReport({ periodLabel: "2026-05", entries });
+
+  // Assert：无所得税时该口径仍存在且为 0，净利润等于利润总额
+  assert.equal(report.totals.incomeTax, "0");
+  assert.equal(report.totals.netProfit, report.totals.totalProfit);
 });
 
 test("buildBalanceSheetReport builds assets and equity totals as of end date", () => {

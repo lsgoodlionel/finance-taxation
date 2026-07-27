@@ -155,28 +155,30 @@ function buildVoucherLines(event: BusinessEvent, scenario: TravelExpenseScenario
   const hotelAmount = (amount * 0.4).toFixed(2);
   const mealAmount = Math.max(0, amount - Number(transportAmount) - Number(hotelAmount)).toFixed(2);
 
+  // 差旅费在本系统的科目表里是 6301e04（管理费用-差旅费）。此前挂的 6601 是
+  // 「职工薪酬（成本）」，科目名却写「销售费用-差旅费」，码、名、语义三者都不一致。
   return [
     {
       id: `vou-line-${event.id}-transport`,
       summary: "交通差旅费用",
-      accountCode: "6601",
-      accountName: "销售费用-差旅费",
+      accountCode: "6301e04",
+      accountName: "管理费用-差旅费",
       debit: transportAmount,
       credit: "0.00"
     },
     {
       id: `vou-line-${event.id}-hotel`,
       summary: "住宿差旅费用",
-      accountCode: "6601",
-      accountName: "销售费用-差旅费",
+      accountCode: "6301e04",
+      accountName: "管理费用-差旅费",
       debit: hotelAmount,
       credit: "0.00"
     },
     {
       id: `vou-line-${event.id}-meal`,
       summary: scenario.accountingPeriodConflict ? "餐饮及跨期调整待复核" : "餐饮及补贴复核",
-      accountCode: "6601",
-      accountName: "销售费用-差旅费",
+      accountCode: "6301e04",
+      accountName: "管理费用-差旅费",
       debit: mealAmount,
       credit: "0.00"
     },

@@ -65,7 +65,7 @@ const templates: VoucherTemplateDefinition[] = [
     buildLines(amount) {
       const value = money(amount);
       return [
-        line("tpl-procurement-1", "确认采购入库", "1403", "原材料", value, "0.00"),
+        line("tpl-procurement-1", "确认采购入库", "1401", "原材料", value, "0.00"),
         line("tpl-procurement-2", "确认应付账款", "2202", "应付账款", "0.00", value)
       ];
     }
@@ -78,7 +78,7 @@ const templates: VoucherTemplateDefinition[] = [
     buildLines(amount) {
       const value = money(amount);
       return [
-        line("tpl-expense-1", "确认管理费用", "6602", "管理费用", value, "0.00"),
+        line("tpl-expense-1", "确认管理费用", "6301e07", "管理费用-其他", value, "0.00"),
         line("tpl-expense-2", "确认员工垫付款", "2241", "其他应付款", "0.00", value)
       ];
     }
@@ -91,8 +91,8 @@ const templates: VoucherTemplateDefinition[] = [
     buildLines(amount) {
       const value = money(amount);
       return [
-        line("tpl-payroll-1", "计提工资成本", "6601", "职工薪酬", value, "0.00"),
-        line("tpl-payroll-2", "确认应付职工薪酬", "2211", "应付职工薪酬", "0.00", value)
+        line("tpl-payroll-1", "计提工资成本", "6601", "职工薪酬（成本）", value, "0.00"),
+        line("tpl-payroll-2", "确认应付职工薪酬", "22110101", "应付职工薪酬-工资", "0.00", value)
       ];
     }
   },
@@ -118,7 +118,7 @@ const templates: VoucherTemplateDefinition[] = [
       const value = money(amount);
       return [
         line("tpl-financing-equity-1", "确认股东出资到账", "1002", "银行存款", value, "0.00"),
-        line("tpl-financing-equity-2", "确认实收资本", "4001", "实收资本", "0.00", value)
+        line("tpl-financing-equity-2", "确认实收资本", "3001", "实收资本", "0.00", value)
       ];
     }
   },
@@ -143,7 +143,7 @@ const templates: VoucherTemplateDefinition[] = [
     buildLines(amount) {
       const value = money(amount);
       return [
-        line("tpl-rnd-1", "确认研发费用", "6401", "研发费用", value, "0.00"),
+        line("tpl-rnd-1", "确认研发费用", "6301e06", "管理费用-研发费用", value, "0.00"),
         line("tpl-rnd-2", "确认研发支出付款", "1002", "银行存款", "0.00", value)
       ];
     }
@@ -157,20 +157,21 @@ const templates: VoucherTemplateDefinition[] = [
       const value = money(amount);
       return [
         line("tpl-tax-income-1", "计提企业所得税", "6801", "所得税费用", value, "0.00"),
-        line("tpl-tax-income-2", "确认应交税费-企业所得税", "2221", "应交税费-企业所得税", "0.00", value)
+        line("tpl-tax-income-2", "确认应交税费-企业所得税", "222103", "应交税费-应交企业所得税", "0.00", value)
       ];
     }
   },
   {
     key: "tax-surcharge",
     label: "印花税等税金及附加计提",
-    description: "借税金及附加，贷应交税费。覆盖印花税、城建税、教育费附加等场景；增值税、个人所得税代扣代缴涉及既有负债结转，不在此模板覆盖范围内。",
+    description:
+      "借税金及附加（6101），贷应交税费-应交印花税（222105）。应交税费 2221 是非叶子科目，一张凭证只能落到一个明细：城建税、教育费附加请改挂 222106（应交税费-城建税及附加）。增值税、个人所得税代扣代缴涉及既有负债结转，不在此模板覆盖范围内。",
     voucherType: "accrual",
     buildLines(amount) {
       const value = money(amount);
       return [
-        line("tpl-tax-surcharge-1", "计提税金及附加", "6403", "税金及附加", value, "0.00"),
-        line("tpl-tax-surcharge-2", "确认应交税费", "2221", "应交税费", "0.00", value)
+        line("tpl-tax-surcharge-1", "计提税金及附加", "6101", "税金及附加", value, "0.00"),
+        line("tpl-tax-surcharge-2", "确认应交税费-印花税", "222105", "应交税费-应交印花税", "0.00", value)
       ];
     }
   }

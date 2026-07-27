@@ -169,6 +169,8 @@ export function buildProfitStatementReport(input: PeriodInput): ProfitStatementR
       // costsAndExpenses 行内，金额不会从报表中消失。
       expenses: formatAmount(totals.expense),
       totalProfit: formatAmount(totals.totalProfit),
+      // 所得税费用单列，前端才能解释「利润总额 → 净利润」之间的落差。
+      incomeTax: formatAmount(totals.incomeTax),
       netProfit: formatAmount(totals.netProfit)
     }
   };
