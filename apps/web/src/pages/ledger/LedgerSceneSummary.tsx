@@ -1,5 +1,6 @@
 import React from "react";
 import { ResultBanner } from "../../components/ui/ResultBanner";
+import { Term } from "../../components/ui/Term";
 import type { LedgerSceneKey } from "./types";
 
 const SCENE_LABELS: Record<LedgerSceneKey, string> = {
@@ -23,7 +24,7 @@ export function LedgerSceneSummary({ scene, title, description, highlights, pend
     <section style={{ display: "grid", gap: "12px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", flexWrap: "wrap" }}>
         <div className="v3-section-heading" style={{ gap: "6px" }}>
-          <span className="v3-section-kicker">当前总账场景 · {SCENE_LABELS[scene]}</span>
+          <span className="v3-section-kicker">当前<Term k="general-ledger">总账</Term>场景 · {SCENE_LABELS[scene]}</span>
           <h2 className="v3-section-title">{title}</h2>
           <p className="v3-section-description">{description}</p>
         </div>

@@ -20,13 +20,19 @@ import { json } from "../../../utils/http.js";
 import { writeAudit } from "../../../services/audit.js";
 import { suggestAccountingEntry, type EventForAccounting } from "../accounting-agent.js";
 import { buildDraftProposalFromSuggestion } from "./draft-proposal.js";
+import {
+  PENDING_DRAFT_STATUSES,
+  PENDING_STATUS_FILTER,
+  decidedStatusLabel,
+  isPendingDraftStatus
+} from "./draft-status.js";
 
 const PERIOD_LABEL = /^\d{4}-\d{2}$/;
 
 /** 仅本模块生成的草稿参与 AI 草稿队列（M-1：不误纳其它来源的草稿）。 */
 const AI_CLOSE_SOURCE = "ai_close";
 
-/** H-1：并发下草稿状态已被改（非 draft），条件更新未命中时抛出，使事务回滚。 */
+/** H-1：并发下草稿状态已被改（已不在待批集合），条件更新未命中时抛出，使事务回滚。 */
 class DraftStateConflictError extends Error {
   constructor() {
     super("draft state changed concurrently");
@@ -245,7 +251,14 @@ function mapDraftListItem(row: DraftRow, allLines: DraftLineRow[]) {
   };
 }
 
-/** GET /api/close/drafts?status=draft — 列出草稿（含分录明细 + 借贷汇总），供 inbox 消费。 */
+/**
+ * GET /api/close/drafts?status=... — 列出草稿（含分录明细 + 借贷汇总），供 inbox / home 消费。
+ *
+ * status 取值：
+ * - `pending`：待批准并集（'draft' + 'review_required'），inbox/home 应使用此值；
+ * - 其它具体值（如 `draft` / `review_required` / `approved` / `rejected`）：精确匹配；
+ * - 不传：返回本公司全部草稿（保持既有调用方与 E2E 的向后兼容）。
+ */
 export async function listCloseDrafts(req: ApiRequest, res: ServerResponse): Promise<void> {
   const companyId = req.auth!.companyId;
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -253,7 +266,10 @@ export async function listCloseDrafts(req: ApiRequest, res: ServerResponse): Pro
 
   const params: unknown[] = [companyId];
   let where = "where company_id = $1";
-  if (status) {
+  if (status === PENDING_STATUS_FILTER) {
+    params.push([...PENDING_DRAFT_STATUSES]);
+    where += ` and status = any($${params.length}::text[])`;
+  } else if (status) {
     params.push(status);
     where += ` and status = $${params.length}`;
   }
@@ -292,10 +308,6 @@ async function getDraftWithLines(
   return { draft, lines };
 }
 
-function decidedStatusLabel(status: string): string {
-  return status === "approved" ? "批准" : "驳回";
-}
-
 /**
  * 把已通过硬校验的草稿升级为一张 **status='draft'** 的正式 voucher + voucher_lines。
  * 绝不写 'posted'——过账（posted）只能经由既有的 POST /api/vouchers/:id/post 完成。
@@ -323,12 +335,12 @@ async function createApprovedVoucher(
         [`${voucherId}-line-${index + 1}`, voucherId, line.summary, line.account_code, line.account_name, line.debit, line.credit, index]
       );
     }
-    // H-1 竞态守卫：仅当仍为 draft 时落地。若并发 approve/reject 已改状态，rowCount=0
+    // H-1 竞态守卫：仅当仍处于待批状态时落地。若并发 approve/reject 已改状态，rowCount=0
     // → 抛错使本事务（含上面的 voucher/voucher_lines 插入）整体回滚，不留残凭证。
     const updated = await client.query(
       `update event_voucher_drafts set status = 'approved', approved_voucher_id = $1, decided_at = $2::timestamptz
-       where id = $3 and company_id = $4 and status = 'draft'`,
-      [voucherId, now, draft.id, companyId]
+       where id = $3 and company_id = $4 and status = any($5::text[])`,
+      [voucherId, now, draft.id, companyId, [...PENDING_DRAFT_STATUSES]]
     );
     if (updated.rowCount === 0) {
       throw new DraftStateConflictError();
@@ -352,7 +364,7 @@ export async function approveCloseDraft(req: ApiRequest, res: ServerResponse, dr
     return;
   }
   const { draft, lines } = found;
-  if (draft.status !== "draft") {
+  if (!isPendingDraftStatus(draft.status)) {
     json(res, 409, { error: `草稿已${decidedStatusLabel(draft.status)}，不可重复处理` });
     return;
   }
@@ -406,18 +418,18 @@ export async function rejectCloseDraft(req: ApiRequest, res: ServerResponse, dra
     json(res, 404, { error: "草稿不存在" });
     return;
   }
-  if (draft.status !== "draft") {
+  if (!isPendingDraftStatus(draft.status)) {
     json(res, 409, { error: `草稿已${decidedStatusLabel(draft.status)}，不可重复处理` });
     return;
   }
 
   const now = new Date().toISOString();
-  // H-1 竞态守卫：仅当仍为 draft 时驳回（条件更新 + RETURNING）；并发已处理则 409，
+  // H-1 竞态守卫：仅当仍处于待批状态时驳回（条件更新 + RETURNING）；并发已处理则 409，
   // 不无条件覆盖（避免把并发 approved 的草稿错误改回 rejected）。
   const updated = await query<{ id: string }>(
     `update event_voucher_drafts set status = 'rejected', decided_at = $1::timestamptz
-     where id = $2 and company_id = $3 and status = 'draft' returning id`,
-    [now, draftId, companyId]
+     where id = $2 and company_id = $3 and status = any($4::text[]) returning id`,
+    [now, draftId, companyId, [...PENDING_DRAFT_STATUSES]]
   );
   if (updated.length === 0) {
     json(res, 409, { error: "草稿状态已变更，请刷新后重试" });

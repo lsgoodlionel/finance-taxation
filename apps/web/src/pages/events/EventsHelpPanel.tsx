@@ -1,4 +1,5 @@
 import { HelpPanel } from "../../components/ui/HelpPanel";
+import { Term } from "../../components/ui/Term";
 
 export interface EventsHelpPanelProps {
   open: boolean;
@@ -13,7 +14,7 @@ export function EventsHelpPanel({ open, onClose }: EventsHelpPanelProps) {
       onClose={onClose}
       relations={(
         <>
-          <strong>经营事项页</strong>是整个流程的起点，负责记录业务背景和 AI 分析结果。后续会把事项拆到<strong>任务中心</strong>推进执行，沉淀到<strong>单据中心</strong>、<strong>凭证中心</strong>和<strong>税务中心</strong>，最终由<strong>风险勾稽中心</strong>做横向检查和闭环跟踪。
+          <strong>经营事项页</strong>是整个流程的起点，负责记录业务背景和 AI 分析结果。后续会把事项拆到<strong>任务中心</strong>推进执行，沉淀到<strong>单据中心</strong>、<strong><Term k="voucher">凭证</Term>中心</strong>和<strong>税务中心</strong>，最终由<strong>风险<Term k="reconciliation">勾稽</Term>中心</strong>做横向检查和闭环跟踪。
         </>
       )}
       workflowSteps={[

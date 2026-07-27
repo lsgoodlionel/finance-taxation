@@ -3,6 +3,7 @@ import { Table, Typography, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { DataTableShell } from "../../components/ui/DataTableShell";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Term } from "../../components/ui/Term";
 import type { LedgerSummaryItem } from "./types";
 
 const { Text } = Typography;
@@ -139,14 +140,14 @@ export function LedgerSummaryPanel({ items }: LedgerSummaryPanelProps) {
       title={`科目汇总（${treeData.length} 类 / ${items.length} 个科目）`}
       actions={(
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>科目数：{items.length}</span>
-          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>借方累计：{totalDebit}</span>
-          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>贷方累计：{totalCredit}</span>
+          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}><Term k="account">科目</Term>数：{items.length}</span>
+          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}><Term k="debit">借方</Term>累计：{totalDebit}</span>
+          <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}><Term k="credit">贷方</Term>累计：{totalCredit}</span>
         </div>
       )}
     >
       <p className="v3-section-description" style={{ marginBottom: "12px" }}>
-        用于先确认当前总账覆盖范围和累计发生额，再决定是否进一步钻取到余额或明细分录。
+        用于先确认当前<Term k="general-ledger">总账</Term>覆盖范围和累计发生额，再决定是否进一步钻取到余额或明细<Term k="journal-entry">分录</Term>。
       </p>
       <Table<TreeRow>
         dataSource={treeData}

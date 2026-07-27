@@ -2,6 +2,7 @@ import React from "react";
 import type { TaxItem } from "@finance-taxation/domain-model";
 import { useI18n, TAX_STATUS_LABELS } from "../../lib/i18n";
 import { cellStyle, panelStyle } from "./taxStyles";
+import { Term } from "../../components/ui/Term";
 
 export function TaxItemsPanel({
   items,
@@ -20,7 +21,7 @@ export function TaxItemsPanel({
         <div>
           <h3 style={{ margin: 0 }}>税务事项池</h3>
           <p style={{ margin: "8px 0 0", color: "#5c6b7a", lineHeight: 1.7 }}>
-            先确认事项状态和处理意见，再进入右侧申报批次完成校验、复核、申报与留档。
+            先确认事项状态和处理意见，再进入右侧<Term k="filing-batch">申报批次</Term>完成校验、复核、申报与留档。
           </p>
         </div>
         {(navEventId || navTaxItemId) && (

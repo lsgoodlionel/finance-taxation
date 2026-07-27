@@ -3,6 +3,7 @@ import type { ColumnsType } from "antd/es/table";
 import { useQueryState } from "../../hooks/useQueryState";
 import { DataTableShell } from "../../components/ui/DataTableShell";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Term } from "../../components/ui/Term";
 import type { JournalItem } from "./types";
 
 const { Text } = Typography;
@@ -150,7 +151,7 @@ export function LedgerJournalPanel(props: LedgerJournalPanelProps) {
       actions={filterBar}
     >
       <p className="v3-section-description" style={{ marginBottom: "12px" }}>
-        先确认资金账类型和日期范围，再查看现金或银行流水与来源凭证的对应关系。
+        先确认资金账类型和日期范围，再查看现金或银行流水与来源<Term k="voucher">凭证</Term>的对应关系。
       </p>
       {items.length === 0 ? (
         <EmptyState

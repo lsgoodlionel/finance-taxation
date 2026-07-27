@@ -5,6 +5,7 @@ import type {
   TaxFilingBatch,
   Voucher
 } from "@finance-taxation/domain-model";
+import { summarizeProfitTotals } from "../reports/profit-accounts.js";
 
 interface DashboardQueueItem {
   id: string;
@@ -46,10 +47,6 @@ export interface DashboardSnapshot {
   queues: { approvals: number; blockedTasks: number; overdueTasks: number };
 }
 
-function amount(value: string): number {
-  return Number(value || 0);
-}
-
 function formatWhole(value: number): string {
   return Math.round(value).toString();
 }
@@ -63,8 +60,15 @@ function sameDay(iso: string | null | undefined, day: string): boolean {
   return Boolean(iso && iso.slice(0, 10) === day);
 }
 
+/** 驾驶舱盈利概览的会计期间（与 /api/reports 的期间语义一致，闭区间）。 */
+export interface DashboardPeriod {
+  startDate: string;
+  endDate: string;
+}
+
 export function buildDashboardSnapshot(input: {
   now: string;
+  period: DashboardPeriod;
   events: BusinessEvent[];
   tasks: Task[];
   vouchers: Voucher[];
@@ -73,18 +77,12 @@ export function buildDashboardSnapshot(input: {
 }): DashboardSnapshot {
   const day = input.now.slice(0, 10);
 
-  const revenue = input.ledgerEntries
-    .filter((entry) => entry.accountCode === "6001")
-    .reduce((sum, entry) => sum + amount(entry.credit) - amount(entry.debit), 0);
-  const cost = input.ledgerEntries
-    .filter((entry) => entry.accountCode === "6001c")
-    .reduce((sum, entry) => sum + amount(entry.debit) - amount(entry.credit), 0);
-  const expense = input.ledgerEntries
-    .filter((entry) => ["6201", "6301e", "6401"].includes(entry.accountCode))
-    .reduce((sum, entry) => sum + amount(entry.debit) - amount(entry.credit), 0);
-
-  const grossProfit = revenue - cost;
-  const netProfit = revenue - cost - expense;
+  // 盈利概览必须按当前会计期间过滤：此前无期间过滤，「本月净利」实为开业至今累计。
+  const periodEntries = input.ledgerEntries.filter(
+    (entry) => entry.entryDate >= input.period.startDate && entry.entryDate <= input.period.endDate
+  );
+  // 科目口径与正式利润表共用同一纯函数，避免驾驶舱与 /reports 再次漂移。
+  const { revenue, cost, expense, grossProfit, netProfit } = summarizeProfitTotals(periodEntries);
 
   const approvals = input.vouchers
     .filter((voucher) => voucher.status === "review_required")

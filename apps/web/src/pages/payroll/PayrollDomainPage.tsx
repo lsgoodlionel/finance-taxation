@@ -11,6 +11,7 @@ import { useSearchParams } from "react-router-dom";
 import { Tabs } from "antd";
 import type { TabsProps } from "antd";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { ProPageBanner } from "../../components/ui/ProPageBanner";
 import { PayrollPage } from "../PayrollPage";
 import { PayrollTransferPage } from "../PayrollTransferPage";
 
@@ -63,6 +64,10 @@ export function PayrollDomainPage() {
 
   return (
     <div>
+      <ProPageBanner
+        pageName="工资域"
+        plain="算工资、发工资、代扣个税和社保公积金的操作台，口径要和申报对上，通常由财务或人事执行；您一般只需要确认总额并审批。"
+      />
       <PageHeader
         title="工资域"
         subtitle="工资管理与代发、社保关账收纳于一处，按需切换查看与处理。"

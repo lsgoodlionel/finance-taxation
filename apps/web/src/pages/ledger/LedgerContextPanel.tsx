@@ -1,5 +1,6 @@
 import React from "react";
 import { ResultBanner } from "../../components/ui/ResultBanner";
+import { Term } from "../../components/ui/Term";
 import type { LedgerSceneKey } from "./types";
 
 const SCENE_LABELS: Record<LedgerSceneKey, string> = {
@@ -87,7 +88,7 @@ export function LedgerContextPanel(props: LedgerContextPanelProps) {
         </div>
         <div style={{ fontSize: "13px", color: "#4d5d6c", lineHeight: 1.7 }}>
           <div>场景：{SCENE_LABELS[scene]}</div>
-          <div>凭证过滤：{voucherFilter || "全部"}</div>
+          <div><Term k="voucher">凭证</Term>过滤：{voucherFilter || "全部"}</div>
           <div>事项过滤：{eventFilter || "全部"}</div>
           <div>资金账：{journalType === "cash" ? "现金（1001）" : "银行存款（1002）"}</div>
           <div>开始日期：{journalFrom || "未设置"}</div>

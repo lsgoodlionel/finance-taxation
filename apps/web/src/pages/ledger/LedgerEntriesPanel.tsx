@@ -4,6 +4,7 @@ import type { ColumnsType } from "antd/es/table";
 import type { LedgerEntry, LedgerPostingBatch } from "@finance-taxation/domain-model";
 import { DataTableShell } from "../../components/ui/DataTableShell";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Term } from "../../components/ui/Term";
 import { useQueryState } from "../../hooks/useQueryState";
 
 const { Text } = Typography;
@@ -131,7 +132,7 @@ export function LedgerEntriesPanel(props: LedgerEntriesPanelProps) {
     <div style={{ display: "grid", gap: "24px" }}>
       <DataTableShell title="过滤条件">
         <p className="v3-section-description" style={{ marginBottom: "12px" }}>
-          先按凭证编号或事项编号收缩范围，再查看对应过账批次和总账分录。
+          先按<Term k="voucher">凭证</Term>编号或事项编号收缩范围，再查看对应<Term k="posting">过账</Term>批次和<Term k="general-ledger">总账</Term>分录。
         </p>
         <Space wrap size={10}>
           <Input
@@ -192,7 +193,7 @@ export function LedgerEntriesPanel(props: LedgerEntriesPanelProps) {
         title="总账分录"
         actions={(
           <span className="v3-banner" data-tone="info" style={{ padding: "6px 10px", fontSize: "12px" }}>
-            当前分录数：{entries.length}
+            当前<Term k="journal-entry">分录</Term>数：{entries.length}
           </span>
         )}
       >

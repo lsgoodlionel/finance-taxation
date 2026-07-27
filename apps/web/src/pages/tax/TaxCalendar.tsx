@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Card, Badge, Tag, Typography, Row, Col, Tooltip } from "antd";
 import { CheckCircleOutlined, ClockCircleOutlined, WarningOutlined, CalendarOutlined } from "@ant-design/icons";
 import type { TaxFilingBatch } from "@finance-taxation/domain-model";
+import { Term } from "../../components/ui/Term";
 
 const { Text } = Typography;
 
@@ -182,7 +183,7 @@ export function TaxCalendar({ batches, currentPeriod, onStartVatDeclaration }: P
         {obligations.length === 0 && (
           <Col span={24}>
             <Text type="secondary" style={{ fontSize: 13 }}>
-              本月（{period}）无企业所得税等季度申报义务，仅常规月度申报（增值税/个税/印花税）。
+              本月（{period}）无<Term k="cit">企业所得税</Term>等季度申报义务，仅常规月度申报（<Term k="vat">增值税</Term>/个税/<Term k="stamp-duty">印花税</Term>）。
             </Text>
           </Col>
         )}

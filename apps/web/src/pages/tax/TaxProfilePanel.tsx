@@ -1,6 +1,7 @@
 import React from "react";
 import type { TaxpayerProfile, TaxRuleProfile } from "@finance-taxation/domain-model";
 import { actionButtonStyle, cellStyle, panelStyle } from "./taxStyles";
+import { Term } from "../../components/ui/Term";
 
 const TAXPAYER_TYPE_LABELS: Record<TaxProfilePanelProps["profileForm"]["taxpayerType"], string> = {
   general_vat: "一般纳税人",
@@ -104,7 +105,7 @@ export function TaxProfilePanel({
             <div>
               <h3 style={{ margin: 0 }}>税率与期间规则</h3>
               <p style={{ margin: "8px 0 0", color: "#5c6b7a", lineHeight: 1.7 }}>
-                通过当前纳税人口径推导税率、申报频率和默认申报期，供后续批次和底稿复核使用。
+                通过当前纳税人口径推导税率、申报频率和默认申报期，供后续批次和<Term k="working-paper">底稿</Term>复核使用。
               </p>
             </div>
             <button onClick={onResolveRuleProfile} style={actionButtonStyle()}>解析增值税规则</button>

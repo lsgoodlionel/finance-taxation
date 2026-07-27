@@ -15,6 +15,7 @@ import { EVENTS_ENTRY_SUBTITLE } from "../lib/entry-guidance";
 import { PageHeader } from "../components/ui/PageHeader";
 import { HelpTriggerButton } from "../components/ui/HelpPanel";
 import { NextStepBar } from "../components/ui/NextStepBar";
+import { ProPageBanner } from "../components/ui/ProPageBanner";
 import { PageSkeleton } from "../components/ui/PageSkeleton";
 import { ResultBanner } from "../components/ui/ResultBanner";
 import { useQueryState } from "../hooks/useQueryState";
@@ -224,6 +225,10 @@ export function EventsPage() {
   return (
     <>
       <EventsHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
+      <ProPageBanner
+        pageName="经营事项总线"
+        plain="全公司的业务事项都按财务口径登记在这里，字段和状态偏专业，还能看到别人提交的事。只想确认自己那件事办到哪一步，回「今天」页看进展更清楚。"
+      />
       <EventsShell
         header={header}
         banner={message ? <ResultBanner tone="info" message={message} /> : null}

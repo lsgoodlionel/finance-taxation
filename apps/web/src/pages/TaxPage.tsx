@@ -1,4 +1,5 @@
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
+import { ProPageBanner } from "../components/ui/ProPageBanner";
 import { ResultBanner } from "../components/ui/ResultBanner";
 import { TaxBatchesPanel } from "./tax/TaxBatchesPanel";
 import { TaxHeader } from "./tax/TaxHeader";
@@ -80,6 +81,10 @@ export function TaxPage() {
   return (
     <section style={{ display: "grid", gap: "20px" }}>
       {showHelp ? <TaxHelpModal onClose={() => setShowHelp(false)} /> : null}
+      <ProPageBanner
+        pageName="税务中心"
+        plain="这里在算本期各个税种要交多少，并按税局要求准备申报用的底稿和材料，由财务或税务同事按申报期完成。您通常只需要知道「要交多少、什么时候交完」。"
+      />
       <TaxShell
         header={<TaxHeader activeMaterialLabel={MATERIAL_LABELS[activeMaterial]} onOpenHelp={() => setShowHelp(true)} />}
         guidance={<ResultBanner tone={notice.tone} message={notice.message} />}

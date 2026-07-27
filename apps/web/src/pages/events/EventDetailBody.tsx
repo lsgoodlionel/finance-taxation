@@ -15,6 +15,7 @@ import { ProcessFlowCard } from "../../features/process-flow/ProcessFlowCard";
 import { buildProcessFlowPageContext } from "../../features/process-flow/page-context";
 import { resolveProcessFlowContext } from "../../features/process-flow/resolve";
 import { ResultBanner } from "../../components/ui/ResultBanner";
+import { Term } from "../../components/ui/Term";
 import { AiEventInsights } from "./AiEventInsights";
 import { deriveContractRevenueSummary } from "./contract-revenue-summary";
 import { derivePurchaseExceptionSummary } from "./purchase-exception-summary";
@@ -282,7 +283,7 @@ export function EventDetailBody({ detail, selectedEventId }: EventDetailBodyProp
           {/* 凭证草稿 */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-              凭证草稿
+              <Term k="voucher">凭证</Term>草稿
             </div>
             {detail.voucherDrafts.length ? (
               <div style={{ display: "grid", gap: 12 }}>
@@ -295,7 +296,7 @@ export function EventDetailBody({ detail, selectedEventId }: EventDetailBodyProp
                     </div>
                     <table className="data-table">
                       <thead>
-                        <tr><th>摘要</th><th>科目</th><th>借方</th><th>贷方</th></tr>
+                        <tr><th>摘要</th><th><Term k="account">科目</Term></th><th><Term k="debit">借方</Term></th><th><Term k="credit">贷方</Term></th></tr>
                       </thead>
                       <tbody>
                         {v.lines.map((line) => (
@@ -311,7 +312,7 @@ export function EventDetailBody({ detail, selectedEventId }: EventDetailBodyProp
                   </div>
                 ))}
               </div>
-            ) : <p className="text-muted text-sm">暂无凭证草稿</p>}
+            ) : <p className="text-muted text-sm">暂无<Term k="voucher">凭证</Term>草稿</p>}
             {detail.vouchers.length > 0 && (
               <button
                 className="btn btn-outline btn-xs mt-8"

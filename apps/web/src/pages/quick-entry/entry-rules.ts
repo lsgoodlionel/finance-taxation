@@ -44,8 +44,10 @@ export function isInvoiceMissing(type: string, hasAttachment: boolean): boolean 
   return INVOICE_REQUIRED_TYPES.has(type) && !hasAttachment;
 }
 
+// 不承诺「系统会提醒您补传」：补票提醒任务后端尚未实现（MISSING_INVOICE_MARKER 无消费者），
+// 这里只给用户行动提示，不做系统承诺。
 export const MISSING_INVOICE_HINT =
-  "这类支出需要发票才能税前扣除。现在没有也能先记下，稍后我们会提醒您补传。";
+  "这类支出需要发票才能税前扣除。现在没有也能先记下，记得拿到发票后到单据中心补传。";
 
 /** 缺件提醒列表（当前仅发票一种，返回数组便于将来扩展）。 */
 export function buildMissingItems(type: string, hasAttachment: boolean): string[] {

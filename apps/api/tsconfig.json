@@ -13,6 +13,8 @@
   ],
   "exclude": [
     "src/modules/exports/routes.integration.test.ts",
-    "src/modules/payroll/transfer.integration.test.ts"
+    "src/modules/payroll/transfer.integration.test.ts",
+    "src/modules/ai-agents/close/close-drafts.integration.test.ts",
+    "src/modules/dashboard/routes.integration.test.ts"
   ]
 }

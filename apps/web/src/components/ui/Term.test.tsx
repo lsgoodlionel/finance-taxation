@@ -16,6 +16,14 @@ assert(proHtml.includes("dashed"), "expected dashed underline hint in pro mode")
 assert(proHtml.includes("cursor:help"), "expected cursor:help affordance in pro mode");
 assert(!proHtml.includes("记入正式账本"), "expected pro mode to hide plain wording");
 
+// ── V8 D1 可达性：键盘可聚焦 + 读屏可识别 + 释义直接挂在 aria-label 上 ───────
+assert(proHtml.includes('tabindex="0"'), "expected term trigger to be keyboard focusable");
+assert(proHtml.includes('role="button"'), "expected term trigger to expose an interactive role");
+assert(
+  proHtml.includes('aria-label="过账：把审核通过的凭证正式记入公司账本'),
+  "expected pro mode aria-label to carry term and explanation"
+);
+
 // ── 自闭合用法 <Term k="..." />：回退渲染词条原词 ────────────────────────────
 const selfClosingHtml = renderToStaticMarkup(createElement(Term, { k: "journal-entry" }));
 assert(selfClosingHtml.includes("分录"), "expected self-closing usage to render entry term");
@@ -40,3 +48,11 @@ delete (globalThis as Record<string, unknown>).window;
 assert(guidedHtml.includes("记入正式账本"), "expected guided mode to render plain wording");
 assert(guidedHtml.includes("（过账）"), "expected guided mode to annotate original term");
 assert(guidedHtml.includes("dashed"), "expected dashed underline hint in guided mode");
+assert(guidedHtml.includes('tabindex="0"'), "expected guided term trigger to be keyboard focusable");
+assert(
+  guidedHtml.includes('aria-label="记入正式账本（过账）：'),
+  "expected guided aria-label to carry plain wording, original term and explanation"
+);
+
+// ── 未命中词条不应引入多余的可聚焦节点 ─────────────────────────────────────
+assert(!missHtml.includes('tabindex="0"'), "expected unknown key to stay non-interactive");

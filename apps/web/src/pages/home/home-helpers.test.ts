@@ -3,6 +3,7 @@ import {
   buildPendingCards,
   describeRunway,
   estimateCashRunway,
+  formatMoneyCny,
   profitTone,
   riskTone,
   runwayTone,
@@ -46,12 +47,37 @@ assert(fiveMonths.kind === "months" && fiveMonths.months === 5, "expected runway
 const oneDecimal = estimateCashRunway(makeForecast({ expectedOutflow: 50000 }));
 assert(oneDecimal.kind === "months" && oneDecimal.months === 3.3, "expected runway rounded to 1 decimal");
 
-// 净流出 ≤ 0（进的比出的多）→ 现金充足
+// 确有收支数据且净流出 ≤ 0（进的比出的多）→ 现金充足
 assertEqual(estimateCashRunway(makeForecast({ expectedInflow: 50000 })).kind, "ample", "expected ample when net inflow");
 
-// 现金为 0 但仍在净流出 → 0 个月（红灯）
+// 现金为 0 但仍在净流出 → 0 个月（红灯），不得因净流出为负而报绿灯
 const empty = estimateCashRunway(makeForecast({ cashBalance: 0 }));
 assert(empty.kind === "months" && empty.months === 0, "expected zero runway when no cash");
+
+// 现金为负 → 同样 0 个月红灯，即便当期是净流入
+const negativeCash = estimateCashRunway(
+  makeForecast({ cashBalance: -5000, expectedInflow: 50000, expectedOutflow: 1000 })
+);
+assert(negativeCash.kind === "months" && negativeCash.months === 0, "expected zero runway when cash is negative");
+
+// 新公司三项全 0（没有任何收支记录）→ unknown，绝不能判成「现金充足」
+assertEqual(
+  estimateCashRunway(makeForecast({ cashBalance: 0, expectedInflow: 0, expectedOutflow: 0 })).kind,
+  "unknown",
+  "expected unknown when there is no cash-flow data at all"
+);
+// 有现金但完全没有收支记录 → 仍然 unknown（撑多久无从算起）
+assertEqual(
+  estimateCashRunway(makeForecast({ cashBalance: 100000, expectedInflow: 0, expectedOutflow: 0 })).kind,
+  "unknown",
+  "expected unknown when inflow and outflow are both zero"
+);
+// 有流入无流出 → 真的进的比出的多，才允许 ample
+assertEqual(
+  estimateCashRunway(makeForecast({ expectedInflow: 30000, expectedOutflow: 0 })).kind,
+  "ample",
+  "expected ample when there is real inflow and no outflow"
+);
 
 // 数据缺失 → unknown
 assertEqual(estimateCashRunway(null).kind, "unknown", "expected unknown without forecast");
@@ -81,9 +107,24 @@ assertEqual(profitTone("abc", "1%"), "neutral", "unparseable profit should be ne
 // ── runway 白话文案 ──────────────────────────────────────────────────────────
 
 assert(describeRunway({ kind: "ample" }).value === "现金充足", "expected ample plain wording");
-assert(describeRunway({ kind: "unknown" }).value === "暂无法估算", "expected unknown plain wording");
+assert(describeRunway({ kind: "unknown" }).value === "还看不出来", "expected honest unknown wording");
+assert(
+  describeRunway({ kind: "unknown" }).note.includes("还没有收支记录"),
+  "expected unknown note to blame missing records, not the user"
+);
 assert(describeRunway({ kind: "months", months: 5 }).value === "约 5 个月", "expected months plain wording");
 assert(describeRunway({ kind: "months", months: 0 }).value === "0 个月", "expected zero months wording");
+
+// ── 金额白话格式化：千分位 + 大额用「万」 ────────────────────────────────────
+
+assertEqual(formatMoneyCny(-183000), "-¥18.3 万", "expected large negative amount in 万 with sign ahead of ¥");
+assertEqual(formatMoneyCny("120,000.00"), "¥12 万", "expected 万 without trailing zero decimals");
+assertEqual(formatMoneyCny("8,600.00"), "¥8,600.00", "expected thousands separator below 万 threshold");
+assertEqual(formatMoneyCny(99999.5), "¥99,999.50", "expected 2 decimals just below the 万 threshold");
+assertEqual(formatMoneyCny(0), "¥0.00", "expected zero to render as ¥0.00");
+assertEqual(formatMoneyCny(null), null, "expected null for missing value");
+assertEqual(formatMoneyCny(""), null, "expected null for empty string");
+assertEqual(formatMoneyCny("—"), null, "expected null for placeholder dash");
 
 // ── 草稿金额合计（借方合计，字符串防御） ─────────────────────────────────────
 
@@ -134,6 +175,8 @@ assertEqual(at(cards, 2).key, "draft-d2", "expected second draft to keep order")
 assertEqual(at(cards, 3).key, "inbox-tasks", "expected info inbox card last");
 assert(at(cards, 1).title.includes("5,200 元"), "expected draft card title with plain amount");
 assert(at(cards, 1).draftId === "d1", "expected draft card to carry draftId");
+assert(at(cards, 1).balanced === true, "expected draft card to carry balanced flag for visible marking");
+assert(at(cards, 1).proposalLevel === "auto", "expected draft card to carry proposal level for visible marking");
 assert(at(cards, 0).detailPath === "/risk", "expected inbox card to link to its action path");
 
 // ── 前 3 张 + 剩余计数 ───────────────────────────────────────────────────────

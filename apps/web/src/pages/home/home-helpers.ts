@@ -33,9 +33,13 @@ export type RunwayEstimate =
   | { kind: "months"; months: number };
 
 /**
- * 口径：以当期现金流预测为月度代理——
- * 月净流出 = 预计流出 - 预计流入；净流出 ≤ 0 视为「进的比出的多」（ample）；
- * 否则 runway = 现金余额 ÷ 月净流出（保留 1 位小数）。数据缺失 → unknown。
+ * 口径：以当期现金流预测为月度代理。判断顺序按「先证伪、后下结论」排列——
+ * 1) 数据缺失/非数字 → unknown；
+ * 2) 预计流入与流出都为 0（新公司还没有任何收支记录）→ unknown，
+ *    绝不能因为「0 - 0 ≤ 0」就报「进账比花销多」的绿灯；
+ * 3) 现金余额 ≤ 0 → 0 个月（红灯），此时无论收支如何都不允许说「现金充足」；
+ * 4) 确有收支数据且月净流出 ≤ 0 → ample（真的进的比出的多）；
+ * 5) 否则 runway = 现金余额 ÷ 月净流出（保留 1 位小数）。
  */
 export function estimateCashRunway(forecast: CashForecast | null | undefined): RunwayEstimate {
   if (!forecast) return { kind: "unknown" };
@@ -43,9 +47,11 @@ export function estimateCashRunway(forecast: CashForecast | null | undefined): R
   if (![cashBalance, expectedInflow, expectedOutflow].every(Number.isFinite)) {
     return { kind: "unknown" };
   }
+  const hasFlowData = expectedInflow !== 0 || expectedOutflow !== 0;
+  if (!hasFlowData) return { kind: "unknown" };
+  if (cashBalance <= 0) return { kind: "months", months: 0 };
   const monthlyNetOutflow = expectedOutflow - expectedInflow;
   if (monthlyNetOutflow <= 0) return { kind: "ample" };
-  if (cashBalance <= 0) return { kind: "months", months: 0 };
   const months = Math.round((cashBalance / monthlyNetOutflow) * 10) / 10;
   return { kind: "months", months };
 }
@@ -58,18 +64,43 @@ export function runwayTone(estimate: RunwayEstimate): TrafficTone {
   return "bad";
 }
 
-/** 把 runway 估算翻译成白话大数字 + 辅助说明。 */
+/** 把 runway 估算翻译成白话大数字 + 辅助说明（文案必须与真实数据一致，不许替系统吹牛）。 */
 export function describeRunway(estimate: RunwayEstimate): { value: string; note: string } {
   if (estimate.kind === "unknown") {
-    return { value: "暂无法估算", note: "还没有足够的现金流数据，先让财务录几笔账" };
+    return { value: "还看不出来", note: "这个月还没有收支记录，暂时估不出能撑多久" };
   }
   if (estimate.kind === "ample") {
-    return { value: "现金充足", note: "最近进账比花销多，不用担心现金" };
+    return { value: "现金充足", note: "这个月进账比花销多，账上的钱没有被消耗" };
   }
   if (estimate.months <= 0) {
     return { value: "0 个月", note: "账上现金已很紧张，建议马上和财务确认" };
   }
   return { value: `约 ${estimate.months} 个月`, note: "按最近的收支节奏，账上的钱还能撑这么久" };
+}
+
+// ── 金额白话格式化 ───────────────────────────────────────────────────────────
+
+const WAN = 10000;
+/** ≥10 万改用「万」表述：老板一眼看得懂，避免 ¥-183000 这种裸数字。 */
+export const WAN_DISPLAY_THRESHOLD = 100000;
+
+/**
+ * 老板视角金额：≥10 万用「万」（最多 1 位小数），否则千分位保留 2 位小数；
+ * 负数把负号提到 ¥ 之前（-¥18.3 万）。无法解析（null / 空串 / "—" / NaN）返回 null，
+ * 由调用方给降级文案，绝不把解析失败伪装成 ¥0.00。
+ */
+export function formatMoneyCny(value: number | string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const raw = typeof value === "number" ? value : Number(value.replace(/[,¥\s]/g, ""));
+  if (typeof value === "string" && value.replace(/[,¥\s]/g, "") === "") return null;
+  if (!Number.isFinite(raw)) return null;
+  const sign = raw < 0 ? "-" : "";
+  const abs = Math.abs(raw);
+  if (abs >= WAN_DISPLAY_THRESHOLD) {
+    const wan = abs / WAN;
+    return `${sign}¥${wan.toLocaleString("zh-CN", { maximumFractionDigits: 1 })} 万`;
+  }
+  return `${sign}¥${abs.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // ── 待办卡优先级 ─────────────────────────────────────────────────────────────
@@ -91,6 +122,10 @@ export interface PendingCardModel {
   detailPath: string;
   /** 仅 AI 草稿卡携带，用于批准/驳回。 */
   draftId?: string;
+  /** 仅 AI 草稿卡携带：借贷是否平（null = 后端未校验），供卡上可见标记。 */
+  balanced?: boolean | null;
+  /** 仅 AI 草稿卡携带：AI 自动化分级（manual = 低置信，需人工判断）。 */
+  proposalLevel?: CloseDraft["proposalLevel"];
 }
 
 /** 草稿金额 = 借方合计（后端序列化为「元」字符串，防御性转数字）。 */
@@ -119,7 +154,9 @@ function draftCard(draft: CloseDraft): PendingCardModel {
     impact: `事由：${draft.summary}。确认后交财务复核入账，不会直接改动账本。`,
     amount,
     detailPath: "/inbox",
-    draftId: draft.id
+    draftId: draft.id,
+    balanced: draft.balanced,
+    proposalLevel: draft.proposalLevel
   };
 }
 

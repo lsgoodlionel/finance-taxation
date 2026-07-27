@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { LedgerEntry, LedgerPostingBatch } from "@finance-taxation/domain-model";
 import { FinanceFlowBar } from "../components/FinanceFlowBar";
 import { HelpPanel, HelpTriggerButton } from "../components/ui/HelpPanel";
+import { ProPageBanner } from "../components/ui/ProPageBanner";
 import {
   getCashJournal,
   getLedgerBalances,
@@ -342,6 +343,10 @@ export function LedgerPage() {
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
+      <ProPageBanner
+        pageName="总账中心"
+        plain="账本的原始记录：每笔业务记进了哪个科目、什么时候入的账、有没有正式生效，财务在这里查账对账。想知道钱花在哪儿、还剩多少，看「经营报告」或直接问 AI 更快。"
+      />
       <FinanceFlowBar current="ledger" />
       <LedgerHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
       <LedgerShell

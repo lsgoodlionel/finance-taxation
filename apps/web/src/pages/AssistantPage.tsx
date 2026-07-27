@@ -52,17 +52,20 @@ export function AssistantPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // V7 K1：老板工作台「问 AI」经 navigate state 带入初始问题，自动填入输入框（仅生效一次）。
+  // V8 车道 C：⌘K 场景命令只能按 path 跳转、带不了 state，因此同时支持 ?ask= 查询参数深链。
   const location = useLocation();
   const initialPromptApplied = useRef(false);
   useEffect(() => {
     if (initialPromptApplied.current) return;
     const state = location.state as { initialPrompt?: unknown } | null;
-    const prompt = typeof state?.initialPrompt === "string" ? state.initialPrompt.trim() : "";
+    const statePrompt = typeof state?.initialPrompt === "string" ? state.initialPrompt : "";
+    const askParam = new URLSearchParams(location.search).get("ask") ?? "";
+    const prompt = (statePrompt || askParam).trim();
     if (!prompt) return;
     initialPromptApplied.current = true;
     setInput(prompt);
     setStatus("已带入您的问题，按回车或点击发送即可。");
-  }, [location.state]);
+  }, [location.state, location.search]);
   const ocrPreview = ocrPreviewDrawer.value;
   const setOcrPreview = (next: OcrPreview | null) => {
     if (next) {

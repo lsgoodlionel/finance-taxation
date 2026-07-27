@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import type { Voucher } from "@finance-taxation/domain-model";
 import { approveVoucher, postVoucher, validateVoucher } from "../../lib/api";
 import { buildValidationHints } from "./validation-hints";
+import { buildBatchOutcome, buildRefreshFailedMessage } from "./batch-outcome";
 import {
   formatVoucherCode,
   runSequentialBatch,
@@ -92,33 +93,38 @@ export function useVoucherBatch({ vouchers, onCompleted }: UseVoucherBatchOption
   ) {
     setRunning(true);
     setProgress({ label, done: 0, total: items.length });
+    let results: BatchItemResult[] | null = null;
     try {
-      const results = await runSequentialBatch(items, worker, ({ done, total }) =>
+      results = await runSequentialBatch(items, worker, ({ done, total }) =>
         setProgress({ label, done, total })
       );
-      const failed = results.filter((result) => !result.ok);
-      const succeededCount = results.length - failed.length;
-      // 失败项保留勾选，修正后可直接重试
-      setCheckedIds(failed.map((result) => result.id));
-      await onCompleted();
-      const summaryModal = failed.length === 0 ? Modal.success : Modal.warning;
-      summaryModal({
-        title: failed.length === 0
-          ? `${label}完成：成功 ${succeededCount} 张`
-          : `${label}完成：成功 ${succeededCount} 张，失败 ${failed.length} 张`,
-        width: 480,
-        content: renderResultList(results),
-      });
-      if (succeededCount > 0) {
-        toast.success(buildSuccessToast(succeededCount));
-      } else {
-        toast.error(`${label}未成功，请根据失败原因修正后重试`);
-      }
     } catch (error) {
-      toast.error((error as Error).message);
+      // 批量执行本身崩了（非单条失败）：此时没有可信结果，只报错
+      toast.error(error instanceof Error ? error.message : `${label}执行失败，请稍后重试`);
     } finally {
       setRunning(false);
       setProgress(null);
+    }
+    if (!results) return;
+
+    // 失败项保留勾选，修正后可直接重试
+    setCheckedIds(results.filter((result) => !result.ok).map((result) => result.id));
+
+    // 汇总必须无条件展示：服务端已经处理过这批凭证，结果不能因为列表刷新失败而丢失
+    const outcome = buildBatchOutcome(label, results, buildSuccessToast);
+    const summaryModal = outcome.summaryTone === "success" ? Modal.success : Modal.warning;
+    summaryModal({
+      title: outcome.summaryTitle,
+      width: 480,
+      content: renderResultList(results),
+    });
+    toast[outcome.toastKind](outcome.toastMessage);
+
+    // 列表刷新独立于结果呈现：刷新失败只提示手动刷新，不能把「已生效」说成失败
+    try {
+      await onCompleted();
+    } catch {
+      toast.warning(buildRefreshFailedMessage(label));
     }
   }
 

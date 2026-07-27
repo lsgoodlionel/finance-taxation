@@ -15,9 +15,12 @@ import { query, queryOne } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import { buildClosePlan, type ClosePlanInput } from "./close-plan.js";
 import { checkTaxConsistency } from "../tax-integration/consistency.js";
+import { PENDING_DRAFT_STATUSES } from "../ai-agents/close/draft-status.js";
+import { REVENUE_ACCOUNT_PREFIXES } from "../reports/profit-accounts.js";
 
 const PERIOD_LABEL = /^\d{4}-\d{2}$/;
-const REVENUE_PREFIXES = ["6001", "6051", "6111", "6301"];
+/** 收入科目口径统一来自 reports/profit-accounts.ts，避免第三份副本再次漂移。 */
+const REVENUE_PREFIXES = [...REVENUE_ACCOUNT_PREFIXES];
 
 /** 每个 ClosePlanInput 字段的数据来源说明，供前端/排查展示。 */
 const FACT_SOURCES: Record<keyof ClosePlanInput, string> = {
@@ -26,7 +29,7 @@ const FACT_SOURCES: Record<keyof ClosePlanInput, string> = {
   depreciationPosted:
     "当前 schema 无折旧凭证类型/表，无法可靠取得，默认 false（需人工确认或后续接入折旧模块）",
   pendingDraftCount:
-    "event_voucher_drafts：status='draft'，关联 business_events.occurred_on 落在本期；未区分\"权责发生制专属\"草稿，按全部待审草稿计",
+    "event_voucher_drafts：status 属于待批集合（'draft' + 'review_required'，见 ai-agents/close/draft-status.ts），关联 business_events.occurred_on 落在本期；未区分\"权责发生制专属\"草稿，按全部待审草稿计",
   taxConsistencyOverall:
     "复用 tax-integration/consistency.ts 的 checkTaxConsistency：本期无发票记录时为 null；申报数尚未接入，declaredOutputTaxCents/declaredInputTaxCents 占位为 0（与 consistency.routes.ts 一致）",
   taxConsistencyAcknowledged:
@@ -55,8 +58,9 @@ async function loadPendingDraftCount(companyId: string, period: string): Promise
   return count(
     `select count(*)::text n from event_voucher_drafts d
      join business_events e on e.id = d.business_event_id
-     where d.company_id = $1 and to_char(e.occurred_on, 'YYYY-MM') = $2 and d.status = 'draft'`,
-    [companyId, period]
+     where d.company_id = $1 and to_char(e.occurred_on, 'YYYY-MM') = $2
+       and d.status = any($3::text[])`,
+    [companyId, period, [...PENDING_DRAFT_STATUSES]]
   );
 }
 

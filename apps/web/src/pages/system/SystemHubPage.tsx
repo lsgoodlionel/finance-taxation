@@ -13,6 +13,7 @@ import { useSearchParams } from "react-router-dom";
 import { Tabs } from "antd";
 import type { TabsProps } from "antd";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { ProPageBanner } from "../../components/ui/ProPageBanner";
 import { SettingsPage } from "../SettingsPage";
 import { BillingPage } from "../BillingPage";
 import { FeedbackPage } from "../FeedbackPage";
@@ -71,6 +72,10 @@ export function SystemHubPage() {
 
   return (
     <div>
+      <ProPageBanner
+        pageName="系统中心"
+        plain="公司信息、账号权限、开放接口和 AI 设置都在这里改，多数开关会影响全公司的做账口径；除了看订阅计费，改动建议交给财务负责人。"
+      />
       <PageHeader
         title="系统中心"
         subtitle="系统设置、订阅计费、反馈与升级收纳于一处，按需切换查看与处理。"

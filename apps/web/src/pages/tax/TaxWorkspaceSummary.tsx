@@ -1,6 +1,7 @@
 import React from "react";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { miniStatStyle, panelStyle } from "./taxStyles";
+import { Term } from "../../components/ui/Term";
 
 type TaxWorkspaceSummaryProps = {
   itemCount: number;
@@ -25,7 +26,7 @@ export function TaxWorkspaceSummary({
         <div>
           <h3 style={{ margin: 0 }}>税务工作台摘要</h3>
           <p style={{ margin: "8px 0 0", color: "#5c6b7a", lineHeight: 1.7 }}>
-            先确认纳税人口径与税率规则，再复核税务事项和申报批次，最后进入底稿、资料生成与打印。
+            先确认纳税人口径与税率规则，再复核税务事项和<Term k="filing-batch">申报批次</Term>，最后进入<Term k="working-paper">底稿</Term>、资料生成与打印。
           </p>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
@@ -34,7 +35,7 @@ export function TaxWorkspaceSummary({
             <strong style={{ display: "block", marginTop: "8px", fontSize: "24px" }}>{itemCount}</strong>
           </div>
           <div style={miniStatStyle()}>
-            <div style={{ fontSize: "12px", color: "#6c7a89" }}>申报批次</div>
+            <div style={{ fontSize: "12px", color: "#6c7a89" }}><Term k="filing-batch">申报批次</Term></div>
             <strong style={{ display: "block", marginTop: "8px", fontSize: "24px" }}>{batchCount}</strong>
           </div>
           <div style={miniStatStyle()}>

@@ -12,6 +12,7 @@ import { Card, Button, Alert, Spin, Result } from "antd";
 import { ReloadOutlined, ExportOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "../components/ui/PageHeader";
+import { ProPageBanner } from "../components/ui/ProPageBanner";
 import { HelpPanel, HelpTriggerButton } from "../components/ui/HelpPanel";
 import { Term } from "../components/ui/Term";
 import { usePeriod } from "../lib/period-context";
@@ -84,6 +85,10 @@ export function MonthEndClosePage() {
   return (
     <div style={{ display: "grid", gap: 24 }}>
       <CloseHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
+      <ProPageBanner
+        pageName="月度结账"
+        plain="月底把这个月的账封口的流程：清完没入账的单子、计提、结转、最后锁账，前一步没做完后面就一直锁着。这是财务每月的例行工作，您在这里不需要点任何按钮。"
+      />
       <section className="v3-hero-shell">
         <PageHeader
           title={`月度结账 · ${period}`}

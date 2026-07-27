@@ -11,6 +11,7 @@ import {
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { HelpPanel } from "../components/ui/HelpPanel";
 import { LevelLegend, RISK_SEVERITY_LEVELS } from "../components/ui/LevelLegend";
+import { ProPageBanner } from "../components/ui/ProPageBanner";
 import { useI18n, RISK_PRIORITY_LABELS, RISK_SEVERITY_LABELS, RISK_STATUS_LABELS } from "../lib/i18n";
 import { buildRiskClosureTargetChain, normalizeDrilldownState } from "./drilldown";
 import {
@@ -227,6 +228,10 @@ export function RiskPage() {
   return (
     <section style={{ display: "grid", gap: "20px" }}>
       <RiskHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
+      <ProPageBanner
+        pageName="风险中心"
+        plain="系统自动扫出来的账务、税务疑点清单，以及每条疑点的核实和处理记录，财务会逐条销掉。您只需要留意有没有高等级风险一直没人处理。"
+      />
       <RiskPageShell
         header={
           <Fragment>

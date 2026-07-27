@@ -11,6 +11,7 @@ import { useSearchParams } from "react-router-dom";
 import { Tabs } from "antd";
 import type { TabsProps } from "antd";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { ProPageBanner } from "../../components/ui/ProPageBanner";
 import { DocumentsPage } from "../DocumentsPage";
 import { InvoicesPage } from "../invoices/InvoicesPage";
 import { BankingPage } from "../banking/BankingPage";
@@ -69,6 +70,10 @@ export function BillsCenterPage() {
 
   return (
     <div>
+      <ProPageBanner
+        pageName="票据中心"
+        plain="收进来的发票、单据和银行流水都堆在这里，等财务逐张核对、登记入账。"
+      />
       <PageHeader
         title="票据中心"
         subtitle="票据收件箱：单据、发票、银行流水收纳于一处，按需切换查看与处理。"

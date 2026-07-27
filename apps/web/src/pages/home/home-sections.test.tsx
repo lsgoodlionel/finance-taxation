@@ -97,6 +97,53 @@ const emptyHtml = render(
 assert(emptyHtml.includes("今天没有需要您处理的事"), "expected empty state title");
 assert(emptyHtml.includes("看看经营报告"), "expected empty state next action");
 
+// 待办来源接口失败且无卡片：禁止「都安排好了」，必须说读不到 + 给重试
+const failedEmptyHtml = render(
+  createElement(HomePendingSection, {
+    loading: false,
+    cards: [],
+    remaining: 0,
+    acting: null,
+    sourcesFailed: true,
+    onApprove: () => undefined,
+    onReject: () => undefined,
+    onRetry: () => undefined
+  })
+);
+assert(failedEmptyHtml.includes("暂时读取不到待办"), "expected honest failure copy instead of empty state");
+assert(!failedEmptyHtml.includes("都安排好了"), "must not claim everything is handled when a source failed");
+assert(!failedEmptyHtml.includes("今天没有需要您处理的事"), "must not claim there is nothing to do on failure");
+assert(failedEmptyHtml.includes("重新读取"), "expected retry action on failure");
+
+// 部分来源失败但仍有卡片：顶部给出「可能不完整」提醒
+const partialFailedHtml = render(
+  createElement(HomePendingSection, {
+    loading: false,
+    cards,
+    remaining: 0,
+    acting: null,
+    sourcesFailed: true,
+    onApprove: () => undefined,
+    onReject: () => undefined,
+    onRetry: () => undefined
+  })
+);
+assert(partialFailedHtml.includes("下面显示的可能不完整"), "expected partial-failure warning above cards");
+
+// AI 草稿卡的可见风险标记：借贷不平 / AI 低置信
+const riskyCardHtml = render(
+  createElement(HomePendingSection, {
+    loading: false,
+    cards: [{ ...(cards[0] as PendingCardModel), balanced: false, proposalLevel: "manual" }],
+    remaining: 0,
+    acting: null,
+    onApprove: () => undefined,
+    onReject: () => undefined
+  })
+);
+assert(riskyCardHtml.includes("借贷不平"), "expected unbalanced marker on draft card");
+assert(riskyCardHtml.includes("AI 没把握，请人工核对"), "expected low-confidence marker on draft card");
+
 // ── 第二段：4 张白话 KPI + 红绿灯下钻 ────────────────────────────────────────
 const dashboard: DashboardData = {
   cards: [
@@ -122,16 +169,57 @@ const kpiHtml = render(createElement(HomeKpiSection, { loading: false, dashboard
 assert(kpiHtml.includes("现金还能撑多久"), "expected runway card");
 assert(kpiHtml.includes("约 5 个月"), "expected runway estimate value");
 assert(kpiHtml.includes("本月赚了多少"), "expected profit card");
-assert(kpiHtml.includes("¥120,000.00"), "expected profit value");
+assert(kpiHtml.includes("¥12 万"), "expected profit value in 万 with plain formatting");
 assert(kpiHtml.includes("本月要交多少税"), "expected tax card");
-assert(kpiHtml.includes("¥8,600.00"), "expected tax value");
+assert(kpiHtml.includes("¥8,600.00"), "expected tax value with thousands separator");
 assert(kpiHtml.includes("1 个风险"), "expected risk count wording");
 assert(kpiHtml.includes('href="/risk"'), "expected risk drill-down link");
 assert(kpiHtml.includes('href="/tax"'), "expected tax drill-down link");
 
-// 数据缺失 → 白话降级文案
+// 数据缺失（非失败）→ 白话降级文案
 const kpiEmptyHtml = render(createElement(HomeKpiSection, { loading: false, dashboard: null, forecast: null }));
 assert(kpiEmptyHtml.includes("经营数据暂时取不到"), "expected kpi fallback copy");
+
+// 单路数据源失败 → 该卡显示「读取失败」，不得把故障说成「等财务录入本月账目」
+const kpiDashboardFailedHtml = render(
+  createElement(HomeKpiSection, { loading: false, dashboard: null, forecast, dashboardFailed: true })
+);
+assert(kpiDashboardFailedHtml.includes("读取失败"), "expected failure value on dashboard-backed cards");
+assert(
+  !kpiDashboardFailedHtml.includes("等财务录入本月账目后就能看到"),
+  "must not blame the user for an API failure"
+);
+assert(kpiDashboardFailedHtml.includes("约 5 个月"), "expected the healthy forecast card to still render");
+
+// 现金流预测失败 → 现金卡读取失败，不得出现「还没有足够的现金流数据，先让财务录几笔账」
+const kpiForecastFailedHtml = render(
+  createElement(HomeKpiSection, { loading: false, dashboard, forecast: null, forecastFailed: true })
+);
+assert(kpiForecastFailedHtml.includes("读取失败"), "expected failure value on the runway card");
+assert(!kpiForecastFailedHtml.includes("现金充足"), "must not claim ample cash when the forecast failed");
+
+// 两路都失败 → 整段说明读不到 + 重试
+const kpiAllFailedHtml = render(
+  createElement(HomeKpiSection, {
+    loading: false,
+    dashboard: null,
+    forecast: null,
+    dashboardFailed: true,
+    forecastFailed: true,
+    onRetry: () => undefined
+  })
+);
+assert(kpiAllFailedHtml.includes("经营数据暂时读取不到"), "expected honest all-failed copy");
+assert(kpiAllFailedHtml.includes("重新读取"), "expected retry action when everything failed");
+
+// 零数据现金流（新公司三项全 0）→ 绝不给绿灯「现金充足」
+const zeroForecast: CashForecast = {
+  cashBalance: 0, expectedInflow: 0, expectedOutflow: 0,
+  projectedBalance: 0, salaryNeed: 0, canPaySalary: true, gap: 0, verdict: "ok"
+};
+const kpiZeroHtml = render(createElement(HomeKpiSection, { loading: false, dashboard, forecast: zeroForecast }));
+assert(!kpiZeroHtml.includes("现金充足"), "must not show green ample light on all-zero cash-flow data");
+assert(kpiZeroHtml.includes("还看不出来"), "expected honest unknown runway copy on zero data");
 
 // ── 第三段：问 AI 输入框 + 4 张场景卡 ────────────────────────────────────────
 const askHtml = render(createElement(HomeAskSection));
