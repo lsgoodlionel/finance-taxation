@@ -6,6 +6,7 @@ import type {
   VatWorkingPaper
 } from "@finance-taxation/domain-model";
 import { actionButtonStyle, cellStyle, miniStatStyle, panelStyle } from "./taxStyles";
+import { Term } from "../../components/ui/Term";
 
 export type TaxMaterialKey = "vat" | "iit" | "stamp" | "cit";
 
@@ -75,9 +76,9 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
     <article style={panelStyle()}>
       <div style={{ display: "grid", gap: "16px" }}>
         <div>
-          <h3 style={{ margin: 0 }}>税务资料与底稿</h3>
+          <h3 style={{ margin: 0 }}>税务资料与<Term k="working-paper">底稿</Term></h3>
           <p style={{ margin: "8px 0 0", color: "#5c6b7a", lineHeight: 1.7 }}>
-            先切换资料视图，再生成对应底稿或准备稿；打印动作保留在已生成结果之后，避免空打印。
+            先切换资料视图，再生成对应<Term k="working-paper">底稿</Term>或准备稿；打印动作保留在已生成结果之后，避免空打印。
           </p>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
@@ -116,10 +117,10 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
                   <div style={{ lineHeight: 1.8 }}>
                     <div>纳税人口径：{TAXPAYER_TYPE_LABELS[vatPaper.taxpayerType] ?? vatPaper.taxpayerType}</div>
                     <div>申报期：{vatPaper.filingPeriod}</div>
-                    <div>销项税额：{vatPaper.outputTaxAmount}</div>
-                    <div>进项税额：{vatPaper.inputTaxAmount}</div>
+                    <div><Term k="output-vat">销项税额</Term>：{vatPaper.outputTaxAmount}</div>
+                    <div><Term k="input-vat">进项税额</Term>：{vatPaper.inputTaxAmount}</div>
                     <div>简易计税额：{vatPaper.simplifiedTaxAmount}</div>
-                    <div>应纳增值税：{vatPaper.payableVatAmount}</div>
+                    <div>应纳<Term k="vat">增值税</Term>：{vatPaper.payableVatAmount}</div>
                   </div>
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", minWidth: "720px", borderCollapse: "collapse" }}>
@@ -147,7 +148,7 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
                   </div>
                 </>
               ) : (
-                <p style={{ margin: 0, color: "#6c7a89" }}>尚未生成增值税底稿。</p>
+                <p style={{ margin: 0, color: "#6c7a89" }}>尚未生成<Term k="vat">增值税</Term><Term k="working-paper">底稿</Term>。</p>
               )}
             </div>
           )}
@@ -183,8 +184,8 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
               {stampAndSurtax ? (
                 <div style={{ lineHeight: 1.8 }}>
                   <div>申报期：{stampAndSurtax.filingPeriod}</div>
-                  <div>印花税事项数：{stampAndSurtax.stampDutyItems.length}</div>
-                  <div>附加税事项数：{stampAndSurtax.surtaxItems.length}</div>
+                  <div><Term k="stamp-duty">印花税</Term>事项数：{stampAndSurtax.stampDutyItems.length}</div>
+                  <div><Term k="surtax">附加税</Term>事项数：{stampAndSurtax.surtaxItems.length}</div>
                   <ul style={{ paddingLeft: "20px", marginBottom: 0 }}>
                     {stampAndSurtax.notes.map((item) => (
                       <li key={item}>{item}</li>
@@ -192,7 +193,7 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
                   </ul>
                 </div>
               ) : (
-                <p style={{ margin: 0, color: "#6c7a89" }}>尚未汇总印花税与附加税事项。</p>
+                <p style={{ margin: 0, color: "#6c7a89" }}>尚未汇总<Term k="stamp-duty">印花税</Term>与<Term k="surtax">附加税</Term>事项。</p>
               )}
             </div>
           )}
@@ -224,7 +225,7 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
                   </ul>
                 </div>
               ) : (
-                <p style={{ margin: 0, color: "#6c7a89" }}>尚未生成企业所得税预缴与汇算准备。</p>
+                <p style={{ margin: 0, color: "#6c7a89" }}>尚未生成<Term k="cit">企业所得税</Term>预缴与汇算准备。</p>
               )}
             </div>
           )}

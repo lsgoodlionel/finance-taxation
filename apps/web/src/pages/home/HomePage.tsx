@@ -17,7 +17,7 @@ function getErrorMessage(err: unknown, fallback: string): string {
 }
 
 export function HomePage() {
-  const { drafts, inboxItems, dashboard, forecast, loading, error, reload, reloadDrafts } = useHomeData();
+  const { drafts, inboxItems, dashboard, forecast, failures, loading, error, reload, reloadDrafts } = useHomeData();
   const [acting, setActing] = useState<PendingActing>(null);
 
   const handleApprove = useCallback(async (draftId: string) => {
@@ -55,6 +55,7 @@ export function HomePage() {
       pendingCards={top}
       pendingRemaining={remaining}
       acting={acting}
+      failures={failures}
       dashboard={dashboard}
       forecast={forecast}
       onApprove={(id) => void handleApprove(id)}

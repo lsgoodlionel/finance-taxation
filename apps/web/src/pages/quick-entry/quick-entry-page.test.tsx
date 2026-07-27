@@ -85,7 +85,11 @@ const confirmHtml = render(
 assert(confirmHtml.includes("日常花销 800 元"), "expected plain summary card");
 assert(confirmHtml.includes("对方：远大公司"), "expected counterparty in summary");
 assert(confirmHtml.includes("缺发票提醒"), "expected missing invoice alert title");
-assert(confirmHtml.includes("稍后我们会提醒您补传"), "expected missing invoice hint body");
+assert(confirmHtml.includes("记得拿到发票后到单据中心补传"), "expected actionable missing-invoice hint");
+assert(
+  !confirmHtml.includes("我们会提醒您补传"),
+  "must not promise an automatic reminder that the backend does not send"
+);
 assert(confirmHtml.includes("确认记下这笔账"), "expected primary submit action");
 assert(confirmHtml.includes("上一步"), "expected back action");
 assert(!confirmHtml.includes("借方"), "expected no debit/credit jargon in confirm step");
@@ -109,15 +113,50 @@ assert(failedHtml.includes("没记上，内容已帮您留着"), "expected retry
 assert(failedHtml.includes("重试：确认记下"), "expected retry button label");
 
 // ── 第 3 步：白话总结 + 三个去向按钮 ─────────────────────────────────────────
+// 草稿确实生成成功 → 才可以说「已经生成了分录草稿」
 const doneHtml = render(
   makeController({
     step: "done",
-    result: { eventId: "evt-1", taskCount: 3, missingInvoice: true, uploadWarning: null }
+    result: {
+      eventId: "evt-1", taskCount: 3, missingInvoice: true, uploadWarning: null,
+      draftStatus: "generated", draftCount: 1
+    }
   })
 );
 assert(doneHtml.includes("已记下！"), "expected success title");
 assert(doneHtml.includes("财务会把它记进账本"), "expected plain next-step explanation");
+assert(doneHtml.includes("我们已经生成了"), "expected draft claim only when generation succeeded");
 assert(doneHtml.includes("补上才能税前扣除"), "expected missing invoice reminder on done page");
+assert(doneHtml.includes("记得拿到发票后到单据中心补传"), "expected actionable missing-invoice wording");
+assert(
+  !doneHtml.includes("我们会提醒您补传"),
+  "must not promise an automatic missing-invoice reminder"
+);
 assert(doneHtml.includes("再记一笔"), "expected repeat action");
 assert(doneHtml.includes("回今日"), "expected go-home action");
 assert(doneHtml.includes("看这笔的进展"), "expected go-detail action");
+
+// 草稿生成失败（如员工无 ledger.post 权限恒 403）→ 改中性文案，不得宣称已生成草稿
+const doneFailedHtml = render(
+  makeController({
+    step: "done",
+    result: {
+      eventId: "evt-2", taskCount: 0, missingInvoice: false, uploadWarning: null,
+      draftStatus: "failed", draftCount: 0
+    }
+  })
+);
+assert(doneFailedHtml.includes("财务会为这笔安排入账"), "expected neutral wording when draft generation failed");
+assert(!doneFailedHtml.includes("我们已经生成了"), "must not claim a draft was generated when it was not");
+
+// 接口成功但 0 条草稿 → 同样不得宣称已生成
+const doneNoneHtml = render(
+  makeController({
+    step: "done",
+    result: {
+      eventId: "evt-3", taskCount: 0, missingInvoice: false, uploadWarning: null,
+      draftStatus: "none", draftCount: 0
+    }
+  })
+);
+assert(!doneNoneHtml.includes("我们已经生成了"), "must not claim a draft was generated when zero were created");

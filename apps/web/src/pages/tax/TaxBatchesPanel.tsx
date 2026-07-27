@@ -5,6 +5,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { useI18n, REVIEW_RESULT_LABELS, TAX_BATCH_STATUS_LABELS, TAX_STATUS_LABELS } from "../../lib/i18n";
 import type { TaxBatchDetail } from "./taxTypes";
 import { actionButtonStyle, cellStyle, panelStyle } from "./taxStyles";
+import { Term } from "../../components/ui/Term";
 
 type ValidationResult = { valid: boolean; issues: string[]; itemCount: number } | null;
 
@@ -62,7 +63,7 @@ export function TaxBatchesPanel({
   return (
     <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
       <article style={panelStyle()}>
-        <h3 style={{ marginTop: 0 }}>申报批次列表</h3>
+        <h3 style={{ marginTop: 0 }}><Term k="filing-batch">申报批次</Term>列表</h3>
         <p style={{ margin: "0 0 12px", color: "#5c6b7a", lineHeight: 1.7 }}>
           用批次承接税务事项，固定复核、提交与留档顺序，避免把申报动作散落在不同材料块中。
         </p>

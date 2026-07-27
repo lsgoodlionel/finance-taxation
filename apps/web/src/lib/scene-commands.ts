@@ -46,8 +46,10 @@ export const SCENE_COMMANDS: SceneCommand[] = [
   {
     key: "scene-trace-money",
     label: "查一笔钱去哪了",
-    description: "按时间顺序翻流水账，看每一笔钱的来龙去脉",
-    path: "/ledger?ledgerTab=journal",
+    description: "把要查的那笔钱说给 AI，它去账里翻，翻完用大白话回你",
+    // guided 落点刻意不指向 /ledger 序时账：那是术语密度最高的专业页，老板进去只会被劝退。
+    // 改为带着问题直达 AI 助手（?ask= 由 AssistantPage 预填进输入框）。
+    path: "/assistant?ask=" + encodeURIComponent("帮我查一笔钱去哪了：请说明这笔支出的时间、金额和对方是谁"),
     keywords: ["查钱", "钱去哪了", "流水", "序时账", "查一笔", "去向", "journal"],
     modes: ["guided"],
   },

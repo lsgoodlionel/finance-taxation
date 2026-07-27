@@ -33,6 +33,21 @@ export function computeDraftTotals(lines: readonly CloseDraftLine[]): DraftTotal
 }
 
 /**
+ * 需要人工额外把关的草稿：借贷不平（balanced === false）或 AI 低置信（proposalLevel === "manual"）。
+ * 用于在批量批准前给出可见提示，避免用户在看不到风险的情况下一键批准。
+ */
+export function needsManualReview(
+  draft: Pick<CloseDraft, "balanced" | "proposalLevel">
+): boolean {
+  return draft.balanced === false || draft.proposalLevel === "manual";
+}
+
+/** 统计需要人工把关的草稿条数。 */
+export function countManualReview(drafts: readonly CloseDraft[]): number {
+  return drafts.filter(needsManualReview).length;
+}
+
+/**
  * 同类分组键：凭证类型 + 排序去重后的科目代码组合。
  * CloseDraft 无 templateKey 字段，voucherType + 科目对是可用的最稳定分组维度。
  */

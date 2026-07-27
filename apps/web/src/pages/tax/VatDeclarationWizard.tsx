@@ -12,6 +12,7 @@ import type { VatWorkingPaper, TaxFilingBatch } from "@finance-taxation/domain-m
 import {
   getVatWorkingPaper, submitTaxFilingBatch, reviewTaxFilingBatch,
 } from "../../lib/api";
+import { Term } from "../../components/ui/Term";
 
 const BATCH_STATUS_LABELS: Record<string, string> = {
   draft: "草稿",
@@ -108,7 +109,7 @@ export function VatDeclarationWizard({
               </Descriptions.Item>
               <Descriptions.Item label="申报期间">{batch.filingPeriod}</Descriptions.Item>
               <Descriptions.Item label="税种">
-                <Tag color="blue">增值税（VAT）</Tag>
+                <Tag color="blue"><Term k="vat">增值税</Term>（VAT）</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="当前状态">
                 <Tag color={batch.status === "submitted" || batch.status === "archived" ? "success" : "default"}>
@@ -133,7 +134,7 @@ export function VatDeclarationWizard({
       title: "核对确认",
       icon: <AuditOutlined />,
       content: loadingPaper ? (
-        <div style={{ textAlign: "center", padding: "40px 0", color: "#94a3b8" }}>正在加载工作底稿…</div>
+        <div style={{ textAlign: "center", padding: "40px 0", color: "#94a3b8" }}>正在加载工作<Term k="working-paper">底稿</Term>…</div>
       ) : paper ? (
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
           <Alert
@@ -155,7 +156,7 @@ export function VatDeclarationWizard({
             </Col>
           </Row>
           <div style={{ padding: "14px 16px", borderRadius: 8, background: "#fffbeb", border: "1px solid #fde68a" }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>应缴增值税（可修改）</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>应缴<Term k="vat">增值税</Term>（可修改）</Text>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
               <Text style={{ fontSize: 16 }}>¥</Text>
               <Input
@@ -257,7 +258,7 @@ export function VatDeclarationWizard({
       title={
         <Space>
           <CalculatorOutlined />
-          <span>增值税申报向导 — {filingPeriod}</span>
+          <span><Term k="vat">增值税</Term>申报向导 — {filingPeriod}</span>
         </Space>
       }
       open={open}

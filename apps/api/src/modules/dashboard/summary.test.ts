@@ -7,7 +7,36 @@ import type {
   TaxFilingBatch,
   Voucher
 } from "@finance-taxation/domain-model";
+import { buildProfitStatementReport } from "../reports/summary.js";
 import { buildDashboardSnapshot } from "./summary.js";
+
+function ledgerEntry(overrides: Partial<LedgerEntry> & { id: string; accountCode: string }): LedgerEntry {
+  return {
+    companyId: "cmp-1",
+    voucherId: "v-1",
+    businessEventId: "evt-1",
+    entryDate: "2026-05-15",
+    summary: "分录",
+    accountName: overrides.accountCode,
+    debit: "0.00",
+    credit: "0.00",
+    source: "voucher_posting",
+    postedAt: "2026-05-15T05:00:00.000Z",
+    ...overrides
+  };
+}
+
+function snapshotFor(entries: LedgerEntry[], period: { startDate: string; endDate: string }) {
+  return buildDashboardSnapshot({
+    now: "2026-05-15T10:00:00.000Z",
+    period,
+    events: [],
+    tasks: [],
+    vouchers: [],
+    ledgerEntries: entries,
+    taxFilingBatches: []
+  });
+}
 
 test("buildDashboardSnapshot aggregates profit, queues, and ai summary", () => {
   const events: BusinessEvent[] = [
@@ -157,6 +186,7 @@ test("buildDashboardSnapshot aggregates profit, queues, and ai summary", () => {
 
   const snapshot = buildDashboardSnapshot({
     now: "2026-05-15T10:00:00.000Z",
+    period: { startDate: "2026-05-01", endDate: "2026-05-31" },
     events,
     tasks,
     vouchers,
@@ -176,4 +206,53 @@ test("buildDashboardSnapshot aggregates profit, queues, and ai summary", () => {
   assert.equal(snapshot.aiSummary.newEvents, 2);
   assert.equal(snapshot.aiSummary.postedVouchers, 1);
   assert.equal(snapshot.aiSummary.pendingTaxBatches, 1);
+});
+
+test("buildDashboardSnapshot only counts ledger entries inside the accounting period", () => {
+  // Arrange：上期与下期各一笔收入，驾驶舱此前无期间过滤，把开业至今累计当成「本月」
+  const entries: LedgerEntry[] = [
+    ledgerEntry({ id: "le-prev", accountCode: "6001", entryDate: "2026-04-30", credit: "700.00" }),
+    ledgerEntry({ id: "le-in", accountCode: "6001", entryDate: "2026-05-15", credit: "1000.00" }),
+    ledgerEntry({ id: "le-next", accountCode: "6001", entryDate: "2026-06-01", credit: "500.00" })
+  ];
+
+  // Act
+  const snapshot = snapshotFor(entries, { startDate: "2026-05-01", endDate: "2026-05-31" });
+
+  // Assert
+  assert.equal(snapshot.profitOverview.revenue, "1000");
+  assert.equal(snapshot.profitOverview.netProfit, "1000");
+});
+
+test("buildDashboardSnapshot counts every revenue account, not just 6001", () => {
+  const entries: LedgerEntry[] = [
+    ledgerEntry({ id: "le-1", accountCode: "6001", credit: "1000.00" }),
+    ledgerEntry({ id: "le-2", accountCode: "6051", credit: "300.00" })
+  ];
+
+  const snapshot = snapshotFor(entries, { startDate: "2026-05-01", endDate: "2026-05-31" });
+
+  assert.equal(snapshot.profitOverview.revenue, "1300");
+});
+
+test("buildDashboardSnapshot net profit matches the formal profit statement for the same entries", () => {
+  // 首页「本月赚了多少」点击下钻到 /reports，两处必须给出同一个数字
+  const entries: LedgerEntry[] = [
+    ledgerEntry({ id: "le-1", accountCode: "6001", credit: "1000.00" }),
+    ledgerEntry({ id: "le-2", accountCode: "6051", credit: "300.00" }),
+    ledgerEntry({ id: "le-3", accountCode: "6001c", debit: "400.00" }),
+    ledgerEntry({ id: "le-4", accountCode: "6201", debit: "100.00" }),
+    ledgerEntry({ id: "le-5", accountCode: "6301e", debit: "50.00" }),
+    ledgerEntry({ id: "le-6", accountCode: "6801", debit: "60.00" }),
+    ledgerEntry({ id: "le-7", accountCode: "1002", debit: "1300.00" })
+  ];
+
+  const snapshot = snapshotFor(entries, { startDate: "2026-05-01", endDate: "2026-05-31" });
+  const statement = buildProfitStatementReport({ periodLabel: "2026-05", entries });
+
+  assert.equal(snapshot.profitOverview.revenue, statement.totals.revenue);
+  assert.equal(snapshot.profitOverview.cost, statement.totals.cost);
+  assert.equal(snapshot.profitOverview.expense, statement.totals.expenses);
+  assert.equal(snapshot.profitOverview.grossProfit, statement.totals.grossProfit);
+  assert.equal(snapshot.profitOverview.netProfit, statement.totals.netProfit);
 });

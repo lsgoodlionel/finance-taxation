@@ -10,6 +10,7 @@ import type { PendingCardModel } from "./home-helpers";
 import { HomePendingSection, type PendingActing } from "./HomePendingSection";
 import { HomeKpiSection } from "./HomeKpiSection";
 import { HomeAskSection } from "./HomeAskSection";
+import type { HomeDataFailures } from "./useHomeData";
 
 export interface HomePageViewProps {
   loading: boolean;
@@ -17,6 +18,8 @@ export interface HomePageViewProps {
   pendingCards: readonly PendingCardModel[];
   pendingRemaining: number;
   acting: PendingActing;
+  /** 逐数据源失败标记；缺省视为全部成功（便于独立渲染测试）。 */
+  failures?: HomeDataFailures;
   dashboard: DashboardData | null;
   forecast: CashForecast | null;
   onApprove: (draftId: string) => void;
@@ -32,6 +35,7 @@ export function HomePageView({
   pendingCards,
   pendingRemaining,
   acting,
+  failures,
   dashboard,
   forecast,
   onApprove,
@@ -39,6 +43,7 @@ export function HomePageView({
   onRetry,
   quickStartSlot
 }: HomePageViewProps) {
+  const pendingSourcesFailed = Boolean(failures?.drafts || failures?.inbox);
   return (
     <div style={{ display: "grid", gap: "var(--v7-guided-space, 20px)" }}>
       <section className="v3-hero-shell">
@@ -67,12 +72,21 @@ export function HomePageView({
               cards={pendingCards}
               remaining={pendingRemaining}
               acting={acting}
+              sourcesFailed={pendingSourcesFailed}
               onApprove={onApprove}
               onReject={onReject}
+              onRetry={onRetry}
             />
           </Col>
           <Col xs={24} lg={8}>
-            <HomeKpiSection loading={loading} dashboard={dashboard} forecast={forecast} />
+            <HomeKpiSection
+              loading={loading}
+              dashboard={dashboard}
+              forecast={forecast}
+              dashboardFailed={Boolean(failures?.dashboard)}
+              forecastFailed={Boolean(failures?.forecast)}
+              onRetry={onRetry}
+            />
           </Col>
           <Col span={24}>
             <HomeAskSection />

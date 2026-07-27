@@ -3,6 +3,7 @@ import { LockOutlined, UnlockOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { DataTableShell } from "../../components/ui/DataTableShell";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Term } from "../../components/ui/Term";
 import type { AccountingPeriod } from "../../lib/api";
 
 const { Text } = Typography;
@@ -166,7 +167,7 @@ export function LedgerPeriodsPanel(props: LedgerPeriodsPanelProps) {
         )}
       >
         <p className="v3-section-description" style={{ marginBottom: "12px" }}>
-          锁账状态会直接影响该期间凭证是否允许继续过账，操作前应先确认影响范围。
+          <Term k="period-lock">锁账</Term>状态会直接影响该期间<Term k="voucher">凭证</Term>是否允许继续<Term k="posting">过账</Term>，操作前应先确认影响范围。
         </p>
         {periods.length === 0 ? (
           <EmptyState

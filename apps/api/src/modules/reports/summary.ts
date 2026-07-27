@@ -6,6 +6,7 @@ import type {
   LedgerEntry,
   ProfitStatementReport
 } from "@finance-taxation/domain-model";
+import { classifyProfitAccount, summarizeProfitTotals } from "./profit-accounts.js";
 
 interface PeriodInput {
   periodLabel: string;
@@ -149,45 +150,31 @@ export function buildProfitStatementReport(input: PeriodInput): ProfitStatementR
     sums.set(entry.accountCode, current);
   }
 
-  let revenueTotal = 0;
-  let costTotal = 0;
-  let expenseTotal = 0;
-
   for (const [code, { name, amount }] of sums.entries()) {
-    if (hasPrefix(code, ["6001", "6051", "6111", "6301"]) && !code.startsWith("6001c") && !code.startsWith("6301e")) {
-      const normalized = -amount;
-      revenueTotal += normalized;
-      revenueLines.push({ code, label: name, amount: formatAmount(normalized) });
+    const kind = classifyProfitAccount(code);
+    if (kind === "revenue") {
+      revenueLines.push({ code, label: name, amount: formatAmount(-amount) });
       continue;
     }
-    if (code.startsWith("6001c")) {
-      costTotal += amount;
-      costExpenseLines.push({ code, label: name, amount: formatAmount(amount) });
-      continue;
-    }
-    if (hasPrefix(code, ["6101", "6201", "6301e", "6401", "6601", "6711", "6801"])) {
-      expenseTotal += amount;
+    if (kind === "cost" || kind === "expense") {
       costExpenseLines.push({ code, label: name, amount: formatAmount(amount) });
     }
   }
 
-  const grossProfit = revenueTotal - costTotal;
-  const totalProfit = grossProfit - expenseTotal;
-  const incomeTax = costExpenseLines
-    .filter((line) => line.code.startsWith("6801"))
-    .reduce((sum, line) => sum + parseAmount(line.amount), 0);
+  // 总额与驾驶舱共用同一个纯函数，保证同一份数据在 /reports 与 /home 上完全一致。
+  const totals = summarizeProfitTotals(input.entries);
 
   return {
     periodLabel: input.periodLabel,
     revenues: nonZeroLines(revenueLines).sort((a, b) => a.code.localeCompare(b.code)),
     costsAndExpenses: nonZeroLines(costExpenseLines).sort((a, b) => a.code.localeCompare(b.code)),
     totals: {
-      revenue: formatAmount(revenueTotal),
-      cost: formatAmount(costTotal),
-      grossProfit: formatAmount(grossProfit),
-      expenses: formatAmount(expenseTotal),
-      totalProfit: formatAmount(totalProfit),
-      netProfit: formatAmount(totalProfit - incomeTax)
+      revenue: formatAmount(totals.revenue),
+      cost: formatAmount(totals.cost),
+      grossProfit: formatAmount(totals.grossProfit),
+      expenses: formatAmount(totals.expense),
+      totalProfit: formatAmount(totals.totalProfit),
+      netProfit: formatAmount(totals.netProfit)
     }
   };
 }

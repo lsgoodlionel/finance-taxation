@@ -7,6 +7,7 @@
  */
 import { Tabs, Space } from "antd";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { ProPageBanner } from "../../components/ui/ProPageBanner";
 import { ResultBanner } from "../../components/ui/ResultBanner";
 import { FinanceFlowBar } from "../../components/FinanceFlowBar";
 import { ArchivePackageCard } from "./ArchivePackageCard";
@@ -22,6 +23,11 @@ export function ExportCenterPage() {
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
+      <ProPageBanner
+        pageName="导出与归档中心"
+        plain="把报表、工资、税务、凭证等材料打包成给银行、税务局或审计看的文件，导出口径和期间要求都比较讲究；您要什么材料，直接问 AI 或让财务导给您更快。"
+      />
+
       <section className="v3-hero-shell">
         <PageHeader
           title="导出与归档中心"

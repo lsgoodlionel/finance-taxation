@@ -1,7 +1,9 @@
 import type { CloseDraft } from "../../lib/api";
 import {
   computeDraftTotals,
+  countManualReview,
   formatCny,
+  needsManualReview,
   getDraftGroupKey,
   groupDrafts,
   pruneIds,
@@ -136,6 +138,22 @@ function makeDraft(overrides: Partial<CloseDraft> & Pick<CloseDraft, "id">): Clo
     async () => { throw "boom"; }
   );
   assert(nonErrorFailure.failed[0]?.message === "未知错误", "expected non-Error throw to map to fallback message");
+}
+
+// ── 需人工把关：借贷不平 / AI 低置信（manual） ─────────────────────────────
+{
+  assert(!needsManualReview({ balanced: true, proposalLevel: "auto" }), "balanced + auto needs no extra review");
+  assert(needsManualReview({ balanced: false, proposalLevel: "auto" }), "unbalanced draft needs manual review");
+  assert(needsManualReview({ balanced: true, proposalLevel: "manual" }), "low-confidence draft needs manual review");
+  assert(!needsManualReview({ balanced: null, proposalLevel: "suggest" }), "unverified balance alone is not a flag");
+
+  const drafts = [
+    makeDraft({ id: "d1" }),
+    makeDraft({ id: "d2", balanced: false }),
+    makeDraft({ id: "d3", proposalLevel: "manual" }),
+  ];
+  assert(countManualReview(drafts) === 2, "expected 2 drafts flagged for manual review");
+  assert(countManualReview([]) === 0, "expected 0 flagged drafts for an empty list");
 }
 
 console.log("draft-batch tests passed");

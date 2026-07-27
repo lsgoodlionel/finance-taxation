@@ -1,5 +1,6 @@
 import React from "react";
 import { HelpPanel } from "../../components/ui/HelpPanel";
+import { Term } from "../../components/ui/Term";
 
 const TAX_ITEM_STATUSES: readonly (readonly [string, string])[] = [
   ["待处理", "事项已生成，尚未处理"],
@@ -17,7 +18,7 @@ export function TaxHelpModal({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       relations={(
         <>
-          <strong>经营事项页</strong>识别业务并形成税务关注点，<strong>单据中心</strong>和<strong>凭证中心</strong>提供申报依据，<strong>税务中心</strong>负责把这些结果归集为税务事项和申报批次，完成复核、申报和留档。
+          <strong>经营事项页</strong>识别业务并形成税务关注点，<strong>单据中心</strong>和<strong><Term k="voucher">凭证</Term>中心</strong>提供申报依据，<strong>税务中心</strong>负责把这些结果归集为税务事项和<Term k="filing-batch">申报批次</Term>，完成复核、申报和留档。
         </>
       )}
       workflowSteps={[

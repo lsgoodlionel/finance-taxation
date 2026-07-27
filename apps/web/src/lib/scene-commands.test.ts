@@ -60,7 +60,7 @@ assert(
 const guidedExpectations: Array<[string, string]> = [
   ["记一笔", "/quick-entry"],
   ["传票据", "/bills"],
-  ["查一笔钱去哪了", "/ledger?ledgerTab=journal"],
+  ["查一笔钱去哪了", `/assistant?ask=${encodeURIComponent("帮我查一笔钱去哪了：请说明这笔支出的时间、金额和对方是谁")}`],
   ["给员工报销", "/quick-entry"],
   ["客户要发票", "/bills?tab=invoices"],
   ["看经营情况", "/dashboard/chairman"],
@@ -70,6 +70,14 @@ for (const [label, path] of guidedExpectations) {
   const found = guidedCommands.find((cmd) => cmd.label.includes(label));
   assert(found, `expected guided command labelled ${label}`);
   assert(found.path === path, `expected ${label} to route to ${path}, got ${found.path}`);
+}
+
+// ── guided 命令不得直送总账（术语密度最高的专业页，老板进去只会被劝退） ──────
+for (const cmd of guidedCommands) {
+  assert(
+    !cmd.path.startsWith("/ledger"),
+    `expected guided command ${cmd.key} not to land on the raw ledger page`
+  );
 }
 
 // ── pro 专属财务动词 ≥3 个 ───────────────────────────────────────────────────

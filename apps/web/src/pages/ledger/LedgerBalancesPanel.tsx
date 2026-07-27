@@ -3,6 +3,7 @@ import { Table, Typography, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { DataTableShell } from "../../components/ui/DataTableShell";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Term } from "../../components/ui/Term";
 import type { LedgerBalanceItem } from "./types";
 
 const { Text } = Typography;
@@ -163,7 +164,7 @@ export function LedgerBalancesPanel({ items }: LedgerBalancesPanelProps) {
       )}
     >
       <p className="v3-section-description" style={{ marginBottom: "12px" }}>
-        适合月结前复核各科目余额结构，先看余额规模，再追踪异常科目来源。
+        适合月结前复核各<Term k="account">科目</Term>余额结构，先看余额规模，再追踪异常科目来源。
       </p>
       <Table<TreeRow>
         dataSource={treeData}

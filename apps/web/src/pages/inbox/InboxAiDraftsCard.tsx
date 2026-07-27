@@ -19,8 +19,8 @@ import { useListHotkeys } from "../../lib/use-list-hotkeys";
 import { InboxAiDraftItem } from "./InboxAiDraftItem";
 import { InboxDraftBatchBar, type BatchRunState } from "./InboxDraftBatchBar";
 import {
-  groupDrafts, pruneIds, runSequentialBatch, sumSelectedAmount, summarizeBatchResult,
-  toggleId, unionIds, type BatchFailure,
+  countManualReview, groupDrafts, pruneIds, runSequentialBatch, sumSelectedAmount,
+  summarizeBatchResult, toggleId, unionIds, type BatchFailure,
 } from "./draft-batch";
 
 const { Text } = Typography;
@@ -55,7 +55,8 @@ export function InboxAiDraftsCard() {
     setLoading(true);
     setError("");
     try {
-      const data = await getCloseDrafts("draft");
+      // status=pending：draft（月结）+ review_required（事项规则引擎）两种待批状态的并集
+      const data = await getCloseDrafts();
       setDrafts(data.items);
     } catch (err) {
       const msg = getErrorMessage(err, "AI 草稿加载失败");
@@ -153,6 +154,7 @@ export function InboxAiDraftsCard() {
 
   const visible = showAll ? drafts : drafts.slice(0, MAX_VISIBLE);
   const groups = useMemo(() => groupDrafts(drafts), [drafts]);
+  const manualReviewCount = useMemo(() => countManualReview(drafts), [drafts]);
   const selectedAmount = useMemo(() => sumSelectedAmount(drafts, selectedIds), [drafts, selectedIds]);
 
   const toggleSelected = useCallback((id: string) => {
@@ -198,6 +200,9 @@ export function InboxAiDraftsCard() {
         <Space size={8}>
           <Text strong>🤖 AI 草稿</Text>
           {drafts.length > 0 && <Tag color="processing">{drafts.length} 项待批准</Tag>}
+          {manualReviewCount > 0 && (
+            <Tag color="warning">{manualReviewCount} 条借贷不平或 AI 没把握，需人工核对</Tag>
+          )}
         </Space>
         <Space size={8}>
           <DatePicker

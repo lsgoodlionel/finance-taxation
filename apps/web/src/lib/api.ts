@@ -2351,8 +2351,14 @@ export interface CloseDraft {
   lines: CloseDraftLine[];
 }
 
-/** 列出 AI 生成的草稿凭证（默认待处理），供 inbox 逐项批准。 */
-export async function getCloseDrafts(status = "draft") {
+/**
+ * 列出待人工批准的草稿凭证，供 inbox / home 逐项批准。
+ *
+ * 同一张 event_voucher_drafts 表有两个生产者：事项规则引擎写 status='review_required'，
+ * 月结（Stage H）写 status='draft'，二者都是「待人工批准」语义。默认用 status=pending
+ * 查这两种状态的并集，避免只查一种导致草稿队列恒为空；仍可传入精确状态查询。
+ */
+export async function getCloseDrafts(status = "pending") {
   return request<{ items: CloseDraft[]; total: number }>(
     `/api/close/drafts?status=${encodeURIComponent(status)}`
   );

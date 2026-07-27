@@ -1,5 +1,6 @@
 import React from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { Term } from "../../components/ui/Term";
 import { buildResultPageSubtitle } from "../../lib/entry-guidance";
 
 type LedgerHeaderProps = {
@@ -20,7 +21,7 @@ export function LedgerHeader({ activeSceneLabel }: LedgerHeaderProps) {
         )}
       />
       <div className="v3-banner" data-tone="info" style={{ fontSize: "13px" }}>
-        这里是结果页工作台。先确认当前场景、过滤条件和账期，再进入分录、余额、日记账或锁账操作。
+        这里是结果页工作台。先确认当前场景、过滤条件和账期，再进入<Term k="journal-entry">分录</Term>、余额、日记账或<Term k="period-lock">锁账</Term>操作。
       </div>
     </div>
   );

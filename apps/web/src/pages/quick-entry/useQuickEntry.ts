@@ -2,7 +2,8 @@
  * 「记一笔」编排 Hook：串起 3 步的数据流。
  * 1 说清楚：票据 OCR（/api/assistant/ocr → /api/invoices/ocr）或白话解析（本地正则 + AI 增强）
  * 2 确认：白话草稿内联编辑 + 缺发票提醒
- * 3 完成：createEvent → analyzeEvent（拆任务/单据）→ 票据附件上传 → 尽力生成 AI 分录草稿
+ * 3 完成：createEvent → analyzeEvent（拆任务/单据）→ 票据附件上传 → 生成 AI 分录草稿
+ *   （草稿生成结果如实带回完成页：成功 / 未生成 / 失败，供文案按真实情况措辞）
  */
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -28,6 +29,7 @@ import type {
   ParseSource,
   QuickDraft,
   QuickEntryController,
+  QuickEntryDraftStatus,
   QuickEntryResult,
   QuickEntryStepKey,
   QuickInputMode
@@ -185,14 +187,25 @@ export function useQuickEntry(): QuickEntryController {
         }
       }
 
-      // 尽力而为：为当期生成 AI 分录草稿进财务队列（无权限/失败静默容忍）
-      void generateCloseDrafts(draft.occurredOn.slice(0, 7)).catch(() => undefined);
+      // 尽力而为：为当期生成 AI 分录草稿进财务队列。失败（如员工无权限 403）不阻塞主流程，
+      // 但**必须**把真实结果带到完成页——完成页不能无条件宣称「已生成草稿」。
+      let draftStatus: QuickEntryDraftStatus = "failed";
+      let draftCount = 0;
+      try {
+        const generated = await generateCloseDrafts(draft.occurredOn.slice(0, 7));
+        draftCount = generated.generated;
+        draftStatus = generated.generated > 0 ? "generated" : "none";
+      } catch {
+        draftStatus = "failed";
+      }
 
       setResult({
         eventId: created.id,
         taskCount,
         missingInvoice: isInvoiceMissing(draft.type, hasAttachment),
-        uploadWarning
+        uploadWarning,
+        draftStatus,
+        draftCount
       });
       setStep("done");
     } catch (error) {

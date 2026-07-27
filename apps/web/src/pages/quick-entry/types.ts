@@ -36,12 +36,24 @@ export interface ParsedFields {
 /** 解析来源：ai = 走通了后端 AI/OCR；local = 仅前端正则；manual = 用户手填 */
 export type ParseSource = "ai" | "local" | "manual";
 
+/**
+ * AI 分录草稿的**真实**生成结果（完成页据此措辞，不许无条件宣称已生成）：
+ * generated = 接口成功且确实生成了草稿；
+ * none = 接口成功但没生成（例如该期事项都已有草稿）；
+ * failed = 接口失败或没有权限（如员工无 ledger.post）。
+ */
+export type QuickEntryDraftStatus = "generated" | "none" | "failed";
+
 /** 第 3 步落库结果（完成页展示用） */
 export interface QuickEntryResult {
   eventId: string;
   taskCount: number;
   missingInvoice: boolean;
   uploadWarning: string | null;
+  /** AI 分录草稿生成结果 */
+  draftStatus: QuickEntryDraftStatus;
+  /** 本次实际生成的草稿条数（draftStatus !== "generated" 时为 0） */
+  draftCount: number;
 }
 
 /**
