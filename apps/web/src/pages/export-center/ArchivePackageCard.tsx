@@ -1,6 +1,7 @@
 import { Card, Row, Col, Tag, Button, Space, Typography, Progress, Spin, Alert, Result } from "antd";
 import { FolderViewOutlined, PrinterOutlined, ReloadOutlined, RightOutlined, LockOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
+import { Term } from "../../components/ui/Term";
 import type { ArchivePackage } from "../../lib/api";
 
 const { Text, Title } = Typography;
@@ -84,7 +85,7 @@ export function ArchivePackageCard({ period, pkg, loading, onReload }: ArchivePa
             <Space>
               <FolderViewOutlined style={{ color: "#2563eb" }} />
               <Text type="secondary" style={{ fontSize: 12 }}>
-                本资料包可用于对内财税管理留档、对外申报与审计审查。打印或导出 PDF 后建议与凭证、报表、申报回执一并归档保存。
+                本资料包可用于对内财税管理留档、对外申报与审计审查。打印或导出 PDF 后建议与<Term k="voucher">凭证</Term>、报表、申报回执一并<Term k="archive">归档</Term>保存；完成归档<Term k="period-lock">锁账</Term>后，本期资料不再变动。
               </Text>
             </Space>
           </Card>

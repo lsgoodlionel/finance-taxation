@@ -3,6 +3,7 @@ import type { LedgerEntry, LedgerPostingBatch } from "@finance-taxation/domain-m
 import { FinanceFlowBar } from "../components/FinanceFlowBar";
 import { HelpPanel, HelpTriggerButton } from "../components/ui/HelpPanel";
 import { ProPageBanner } from "../components/ui/ProPageBanner";
+import { Term } from "../components/ui/Term";
 import {
   getCashJournal,
   getLedgerBalances,
@@ -103,7 +104,7 @@ function LedgerHelpPanel({ open, onClose }: { open: boolean; onClose: () => void
       onClose={onClose}
       relations={(
         <>
-          <strong>凭证中心</strong>审核过账后，分录进入<strong>总账中心</strong>按科目归集；总账是<strong>财务报表</strong>的直接数据来源，也为<strong>税务申报</strong>和<strong>归档审计</strong>提供账务依据。
+          <strong><Term k="voucher">凭证</Term>中心</strong>审核<Term k="posting">过账</Term>后，<Term k="journal-entry">分录</Term>进入<strong>总账中心</strong>按<Term k="account">科目</Term>归集；<Term k="general-ledger">总账</Term>是<strong>财务报表</strong>的直接数据来源，也为<strong>税务申报</strong>和<strong><Term k="archive">归档</Term>审计</strong>提供账务依据。
         </>
       )}
       workflowSteps={[

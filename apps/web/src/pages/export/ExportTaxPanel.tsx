@@ -1,5 +1,6 @@
 import React from "react";
 import { DataTableShell } from "../../components/ui/DataTableShell";
+import { Term } from "../../components/ui/Term";
 
 type ExportTaxPanelProps = {
   vatFilingPeriod: string;
@@ -23,6 +24,9 @@ export function ExportTaxPanel({
   return (
     <DataTableShell title="税务底稿与申报准备导出">
       <div style={{ display: "grid", gap: "16px" }}>
+        <p className="v3-section-description" style={{ margin: 0 }}>
+          <Term k="vat">增值税</Term>与<Term k="cit">企业所得税</Term>的申报<Term k="working-paper">底稿</Term>按期间导出，用于申报前复核与留档。
+        </p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "end" }}>
           <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" }}>
             <span style={{ color: "#6c7a89" }}>增值税底稿期间</span>

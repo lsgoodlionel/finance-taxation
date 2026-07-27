@@ -51,10 +51,53 @@ test("summarizeProfitTotals splits income tax out of the expense bucket", () => 
 
   const totals = summarizeProfitTotals(entries);
 
-  assert.equal(totals.expense, 150);
+  // expense 不含所得税费用，6801 单独进 incomeTax
+  assert.equal(totals.expense, 50);
   assert.equal(totals.incomeTax, 100);
-  assert.equal(totals.totalProfit, 550);
-  assert.equal(totals.netProfit, 450);
+  // 利润总额不扣所得税费用：1000 - 300 - 50 = 650
+  assert.equal(totals.totalProfit, 650);
+  // 净利润只扣一次所得税费用：650 - 100 = 550
+  assert.equal(totals.netProfit, 550);
+});
+
+test("summarizeProfitTotals subtracts income tax exactly once", () => {
+  // Arrange：同一份数据，仅在是否存在 6801 分录上有差异
+  const base = [
+    entry("6001", "0.00", "1000.00"),
+    entry("6001c", "300.00", "0.00"),
+    entry("6601", "50.00", "0.00")
+  ];
+  const withTax = [...base, entry("6801", "100.00", "0.00")];
+
+  // Act
+  const withoutTaxTotals = summarizeProfitTotals(base);
+  const withTaxTotals = summarizeProfitTotals(withTax);
+
+  // Assert：所得税费用不影响利润总额，只把净利润拉低正好一次税额
+  assert.equal(withTaxTotals.totalProfit, withoutTaxTotals.totalProfit);
+  assert.equal(withoutTaxTotals.netProfit - withTaxTotals.netProfit, 100);
+  assert.equal(withTaxTotals.netProfit, withTaxTotals.totalProfit - withTaxTotals.incomeTax);
+});
+
+test("summarizeProfitTotals keeps pre-fix results when there is no income tax entry", () => {
+  // Arrange：无 6801 分录时新旧口径必须逐字段一致（回归保护）
+  const entries = [
+    entry("6001", "0.00", "1000.00"),
+    entry("6051", "0.00", "200.00"),
+    entry("6001c", "300.00", "0.00"),
+    entry("6301e", "20.00", "0.00"),
+    entry("6601", "80.00", "0.00")
+  ];
+
+  // Act
+  const totals = summarizeProfitTotals(entries);
+
+  // Assert
+  assert.equal(totals.incomeTax, 0);
+  assert.equal(totals.expense, 100);
+  assert.equal(totals.totalProfit, totals.grossProfit - totals.expense);
+  assert.equal(totals.netProfit, totals.totalProfit);
+  assert.equal(totals.totalProfit, 800);
 });
 
 test("summarizeProfitTotals ignores balance-sheet accounts and returns zeros for empty input", () => {

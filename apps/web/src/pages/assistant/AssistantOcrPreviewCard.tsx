@@ -1,4 +1,5 @@
 import React from "react";
+import { Term } from "../../components/ui/Term";
 import { panelBg } from "./styles";
 import type { OcrPreview } from "./types";
 
@@ -40,7 +41,7 @@ export function AssistantOcrPreviewCard({ ocrPreview, onClear }: AssistantOcrPre
           {ocrPreview.recognizedText.split("\n").slice(0, 3).join(" · ")}
         </div>
         <div style={{ fontSize: "11px", color: "#1a7f5a", marginTop: "4px" }}>
-          ✓ 确认创建经营事项后，此文件将自动挂载为原始凭证附件
+          ✓ 确认创建经营事项后，此文件将自动挂载为原始<Term k="voucher">凭证</Term>附件
         </div>
       </div>
       <button

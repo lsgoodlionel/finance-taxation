@@ -1,9 +1,15 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import pg from "pg";
 import { env } from "../config/env.js";
+import { registerPgDateParsers } from "./date-column.js";
 
 const { Pool } = pg;
 type PoolClient = pg.PoolClient;
+
+// pg 的类型解析器注册表是模块级全局的：在 DB 入口模块加载时注册一次，
+// 全站（含测试里自建的 Pool）的 `date` 列都会拿到 `YYYY-MM-DD` 字符串，
+// 不再经 JS Date 往返而被运行时时区前移一天。详见 db/date-column.ts。
+registerPgDateParsers();
 
 let _pool: pg.Pool | null = null;
 

@@ -6,6 +6,7 @@ import { Button, Empty, Space, Spin, Tag, Typography } from "antd";
 import { RightOutlined, SafetyCertificateOutlined, WarningOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import type { RiskFinding } from "@finance-taxation/domain-model";
+import { Term } from "../../components/ui/Term";
 import { useI18n, RISK_SEVERITY_LABELS } from "../../lib/i18n";
 import { rankRiskSeverity } from "./inbox-helpers";
 
@@ -53,7 +54,7 @@ export function InboxRiskCard({ findings, loading }: InboxRiskCardProps) {
             <Space direction="vertical" size={2}>
               <Text>暂无未关闭的风险预警</Text>
               <Text type="secondary" style={{ fontSize: 12 }}>
-                下一步建议：定期在风险勾稽中心运行风险检查，尽早发现口径不一致或申报不完整问题。
+                下一步建议：定期在风险<Term k="reconciliation">勾稽</Term>中心运行风险检查，尽早发现口径不一致或申报不完整问题。
               </Text>
             </Space>
           }

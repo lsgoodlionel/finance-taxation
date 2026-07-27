@@ -1,5 +1,6 @@
 import React from "react";
 import { HelpPanel } from "../../components/ui/HelpPanel";
+import { Term } from "../../components/ui/Term";
 
 const THREE_STATEMENTS_GUIDE: readonly (readonly [string, string])[] = [
   ["资产负债表", "回答“某一天公司值多少”：有多少资产、欠多少债、净资产还剩多少"],
@@ -15,7 +16,7 @@ export function ReportsHelpPanel({ open, onClose }: { open: boolean; onClose: ()
       onClose={onClose}
       relations={(
         <>
-          <strong>凭证中心</strong>过账后数据进入<strong>总账中心</strong>，报表中心基于总账自动编制三大报表；报表结果支撑<strong>董事长驾驶舱</strong>的经营判断，并流向<strong>税务申报</strong>、<strong>PDF 导出</strong>和<strong>归档</strong>。
+          <strong><Term k="voucher">凭证</Term>中心</strong><Term k="posting">过账</Term>后数据进入<strong>总账中心</strong>，报表中心基于<Term k="general-ledger">总账</Term>自动编制<Term k="three-statements">三大报表</Term>；报表结果支撑<strong>董事长驾驶舱</strong>的经营判断，并流向<strong>税务申报</strong>、<strong>PDF 导出</strong>和<strong><Term k="archive">归档</Term></strong>。
         </>
       )}
       workflowSteps={[

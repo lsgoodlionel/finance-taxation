@@ -22,7 +22,9 @@ export function buildCorporateIncomeTaxPreparation(input: {
   taxItems: TaxItem[];
   rndSummaries: RndProjectSummary[];
 }): CorporateIncomeTaxPreparation {
-  const accountingProfit = Math.max(parseAmount(input.profitStatement.totals.netProfit), 0);
+  // 会计利润 = 利润总额（税前），不是净利润；用 netProfit 会把所得税费用重复扣除，
+  // 低估应纳税所得额与预缴税额。对应企业所得税申报表主表「利润总额」行。
+  const accountingProfit = Math.max(parseAmount(input.profitStatement.totals.totalProfit), 0);
   const taxableIncomeEstimate = accountingProfit;
   const incomeTaxRate = 25;
   const prepaymentTaxEstimate = taxableIncomeEstimate * incomeTaxRate * 0.01;

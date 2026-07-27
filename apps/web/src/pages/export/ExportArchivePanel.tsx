@@ -1,6 +1,7 @@
 import React from "react";
 import type { ExportArchiveEntry, ExportArtifactKind } from "@finance-taxation/domain-model";
 import { DataTableShell } from "../../components/ui/DataTableShell";
+import { Term } from "../../components/ui/Term";
 
 type ExportArchivePanelProps = {
   archiveEntries: ExportArchiveEntry[];
@@ -48,6 +49,9 @@ export function ExportArchivePanel({
         </div>
       )}
     >
+      <p className="v3-section-description" style={{ margin: "0 0 12px" }}>
+        <Term k="archive">归档</Term>索引按批次记录每次导出的报表、税务与<Term k="voucher">凭证</Term>产物，便于日后按批次追溯原始文件。
+      </p>
       {archiveEntries.length === 0 ? (
         <div style={{ color: "#aab5c0", textAlign: "center", padding: "24px" }}>暂无归档索引</div>
       ) : (

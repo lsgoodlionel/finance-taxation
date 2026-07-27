@@ -8,6 +8,7 @@ import type {
 } from "@finance-taxation/domain-model";
 import type { ApiRequest } from "../../types.js";
 import { query, queryOne, withTransaction } from "../../db/client.js";
+import { toDateOnly } from "../../db/date-column.js";
 import { json } from "../../utils/http.js";
 import {
   buildVoucherTemplateDraft,
@@ -150,7 +151,9 @@ function mapLedgerEntryRow(row: LedgerEntryRow): LedgerEntry {
     companyId: row.company_id,
     voucherId: row.voucher_id,
     businessEventId: row.business_event_id,
-    entryDate: (toIsoString(row.entry_date) || "").slice(0, 10),
+    // entry_date 是 PG `date`（无时区的日历日期），必须走 toDateOnly 而不是
+    // ISO 时间戳往返——后者在 UTC+ 时区会把每月 1 号前移到上一期。
+    entryDate: toDateOnly(row.entry_date) ?? "",
     summary: row.summary,
     accountCode: row.account_code,
     accountName: row.account_name,
