@@ -12,6 +12,7 @@ import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowSta
 import { HelpPanel } from "../components/ui/HelpPanel";
 import { LevelLegend, RISK_SEVERITY_LEVELS } from "../components/ui/LevelLegend";
 import { ProPageBanner } from "../components/ui/ProPageBanner";
+import { Term } from "../components/ui/Term";
 import { useI18n, RISK_PRIORITY_LABELS, RISK_SEVERITY_LABELS, RISK_STATUS_LABELS } from "../lib/i18n";
 import { buildRiskClosureTargetChain, normalizeDrilldownState } from "./drilldown";
 import {
@@ -39,7 +40,7 @@ function RiskHelpPanel({ open, onClose }: { open: boolean; onClose: () => void }
       onClose={onClose}
       relations={(
         <>
-          <strong>经营事项页</strong>给出业务背景，<strong>任务中心</strong>推进执行，<strong>单据中心</strong>和<strong>凭证中心</strong>提供依据，<strong>税务中心</strong>提供申报结果。<strong>风险勾稽中心</strong>负责从这些页面中找出不一致、不完整或不合规的问题，并跟踪关闭。
+          <strong>经营事项页</strong>给出业务背景，<strong>任务中心</strong>推进执行，<strong>单据中心</strong>和<strong><Term k="voucher">凭证</Term>中心</strong>提供依据，<strong>税务中心</strong>提供申报结果。<strong>风险<Term k="reconciliation">勾稽</Term>中心</strong>负责从这些页面中找出不一致、不完整或不合规的问题，并跟踪关闭。
         </>
       )}
       workflowSteps={[

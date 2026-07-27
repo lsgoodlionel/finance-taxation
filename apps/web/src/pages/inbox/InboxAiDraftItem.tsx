@@ -10,6 +10,7 @@ import type { ColumnsType } from "antd/es/table";
 import { CheckOutlined, CloseOutlined, LinkOutlined } from "@ant-design/icons";
 import type { CloseDraft, CloseDraftLine } from "../../lib/api";
 import { computeDraftTotals, formatCny, toAmount } from "./draft-batch";
+import { Term } from "../../components/ui/Term";
 
 const { Text } = Typography;
 
@@ -25,7 +26,7 @@ function proposalLevelTag(level: CloseDraft["proposalLevel"]) {
 }
 
 function balancedTag(balanced: boolean | null) {
-  if (balanced === true) return <Tag color="success">借贷平衡</Tag>;
+  if (balanced === true) return <Tag color="success"><Term k="debit-credit-balance">借贷平衡</Term></Tag>;
   if (balanced === false) return <Tag color="error">不平衡</Tag>;
   return <Tag>待校验</Tag>;
 }
@@ -103,7 +104,7 @@ export function InboxAiDraftItem({
         </Space>
         <Space wrap size={6}>
           <Text type="secondary" style={{ fontSize: 11 }}>
-            事项 {draft.businessEventId} · 凭证类型 {draft.voucherType}
+            事项 {draft.businessEventId} · <Term k="voucher">凭证</Term>类型 {draft.voucherType}
           </Text>
           <Button
             type="link" size="small" icon={<LinkOutlined />}

@@ -1,6 +1,7 @@
 import React from "react";
 import type { ReportSnapshot } from "@finance-taxation/domain-model";
 import { ResultBanner } from "../../components/ui/ResultBanner";
+import { Term } from "../../components/ui/Term";
 import type { BundleKind, ReportsPeriodState, ReportsWorkbenchView } from "./report-types";
 import { formatSnapshotLabel, getSnapshotSelectionLabel, getWorkbenchViewLabel } from "./reports-helpers";
 
@@ -217,7 +218,7 @@ export function ReportsSidebar(props: ReportsSidebarProps) {
       <ResultBanner tone="info" message={`基准：${getSnapshotSelectionLabel(fromSnapshotId, snapshots)} ｜ 对比：${getSnapshotSelectionLabel(toSnapshotId, snapshots)}`} />
       <div style={{ display: "grid", gap: "10px", maxHeight: "320px", overflowY: "auto" }}>
         {snapshots.length === 0 ? (
-          <div style={{ fontSize: "13px", color: "#94a3b8" }}>暂无快照，请先保存资产负债表快照。</div>
+          <div style={{ fontSize: "13px", color: "#94a3b8" }}>暂无快照，请先保存<Term k="balance-sheet">资产负债表</Term>快照。</div>
         ) : snapshots.map((snapshot, index) => {
           const isFrom = fromSnapshotId === snapshot.id;
           const isTo = toSnapshotId === snapshot.id;

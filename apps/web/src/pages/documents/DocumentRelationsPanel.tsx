@@ -1,5 +1,6 @@
 import type { Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import { shortId } from "./documents-helpers";
+import { Term } from "../../components/ui/Term";
 
 type DocumentRelationsPanelProps = {
   tasks: (Task & { isOverdue?: boolean })[];
@@ -60,7 +61,7 @@ export function DocumentRelationsPanel({
 
       <div style={cardStyle}>
         <div style={headerRow}>
-          <h4 style={{ margin: 0, fontSize: "13.5px" }}>关联凭证</h4>
+          <h4 style={{ margin: 0, fontSize: "13.5px" }}>关联<Term k="voucher">凭证</Term></h4>
           <button onClick={onViewVouchers} style={linkBtn}>查看凭证中心</button>
         </div>
         {vouchers.length > 0 ? (

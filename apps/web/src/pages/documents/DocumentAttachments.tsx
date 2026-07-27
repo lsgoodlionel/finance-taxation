@@ -1,6 +1,7 @@
 import { type RefObject } from "react";
 import type { DocumentDetail } from "../../lib/api";
 import { formatFileSize } from "./documents-helpers";
+import { Term } from "../../components/ui/Term";
 
 type DocumentAttachmentsProps = {
   attachments: DocumentDetail["attachments"];
@@ -21,7 +22,7 @@ export function DocumentAttachments({
     <div style={{ display: "grid", gap: "10px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h4 style={{ margin: 0, fontSize: "13.5px" }}>
-          原始凭证附件 <span style={{ color: "#9aa5b4", fontWeight: 400 }}>({attachments.length})</span>
+          原始<Term k="voucher">凭证</Term>附件 <span style={{ color: "#9aa5b4", fontWeight: 400 }}>({attachments.length})</span>
         </h4>
         <label style={{
           display: "inline-flex", alignItems: "center", gap: "4px",

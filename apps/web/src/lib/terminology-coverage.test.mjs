@@ -48,28 +48,15 @@ const SCAN_DIRS = ["pages", "components"];
  * 行末注释记录当前仍缺释义的术语，便于认领与排期。
  */
 const LEGACY_UNCOVERED_FILES = [
-  "pages/RiskPage.tsx", // 凭证、勾稽
-  "pages/contracts/ContractDrawer.tsx", // 勾稽、凭证
-  "pages/documents/DocumentAttachments.tsx", // 凭证
-  "pages/documents/DocumentFormalView.tsx", // 凭证
-  "pages/documents/DocumentRelationsPanel.tsx", // 凭证
-  "pages/inbox/InboxAiDraftItem.tsx", // 借贷平衡、凭证
-  "pages/inbox/InboxAiDraftsCard.tsx", // 分录
-  "pages/reports/ReportsSidebar.tsx", // 资产负债表
-  "pages/reports/panels/BudgetVariancePanel.tsx", // 科目
-  "pages/risk/RiskWorkbenchHeader.tsx", // 勾稽
-  "pages/risk/TaxConsistencyPanel.tsx", // 票税一致性
-  "pages/rnd/RndCostWizard.tsx", // 研发费用归集
-  "pages/settings/CompanyTab.tsx", // 过账、凭证
-  "pages/vouchers/BalanceIndicator.tsx", // 借方、贷方
-  "pages/vouchers/BatchBar.tsx", // 凭证
-  "pages/vouchers/VoucherCreateModal.tsx", // 凭证
-  "pages/vouchers/VoucherDetailPanel.tsx", // 凭证、过账
-  "pages/vouchers/useVoucherBatch.tsx" // 过账、总账
+  // 勾稽：全文仅出现在 Tabs 标签「风险勾稽」内。Tabs 标签本身是 role="tab" 的可聚焦
+  // 元素，而 Term 触发器是 tabIndex=0 + role="button"，嵌进去会构成 nested
+  // interactive——与本测试豁免 <button> 文案同一条理由。该文件其余术语（凭证）已治理，
+  // 且风险页签正文没有承载「勾稽」的说明性文字可供改挂，故保留豁免。
+  "pages/contracts/ContractDrawer.tsx" // 勾稽（Tabs 标签，见上）
 ];
 
 /** 白名单预算：只减不增。想放宽必须同时改大这个数字，让扩容在代码评审里显形。 */
-const LEGACY_BUDGET = 18;
+const LEGACY_BUDGET = 1;
 
 /** JSX 文本节点：`>`/`}` 与 `<`/`{` 之间，且不含大括号、引号、反引号的片段。 */
 const JSX_TEXT_PATTERN = /[>}]([^<>{}"'`]*)[<{]/g;

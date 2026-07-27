@@ -67,20 +67,12 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
   const liabilityLines: FinancialReportLine[] = [];
   const equityLines: FinancialReportLine[] = [];
 
-  let totalRevenue = 0;
-  let totalExpense = 0;
-
-  for (const [accountCode, amount] of balanceMap.entries()) {
-    if (accountCode.startsWith("6")) {
-      if (accountCode === "6001" || accountCode === "6051" || accountCode === "6111" || accountCode === "6301") {
-        totalRevenue += -amount;
-      } else {
-        totalExpense += amount;
-      }
-    }
-  }
-
-  const netProfit = totalRevenue - totalExpense;
+  // 本年利润与利润表共用同一个汇总函数（V8-P）：此前资产负债表自带一套「精确匹配
+  // 4 个收入科目、其余 6 开头一律当费用」的平行判定，与利润表的前缀表口径不同，
+  // 同一笔分录在两张表上归类不一致（6602 在此被计入费用，在利润表却被丢弃）。
+  // summarizeProfitTotals 的 netProfit = 收入 - 成本 - 费用 - 所得税费用，与旧的
+  // totalRevenue - totalExpense（totalExpense 含所得税）逐项等价。
+  const netProfit = summarizeProfitTotals(asOfEntries).netProfit;
 
   if (Math.abs(netProfit) > 0.0001 && !equityLines.some((item) => item.code === "3131")) {
     equityLines.push({

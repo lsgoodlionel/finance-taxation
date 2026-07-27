@@ -6,6 +6,7 @@ import { buildDocumentRelations, type ExpenseDocumentTemplateModel } from "../do
 import { ExpenseClaimTemplate } from "../document-templates/ExpenseClaimTemplate";
 import { InvoiceBundleTemplate } from "../document-templates/InvoiceBundleTemplate";
 import { shortId } from "./documents-helpers";
+import { Term } from "../../components/ui/Term";
 
 export type ExpenseTemplateDetail = {
   templateKind: string;
@@ -91,7 +92,7 @@ function BasicInfoView({
       : <span style={{ color: "#c4cdd6" }}>暂无税务事项</span>],
     ["关联凭证", relations.vouchers.length > 0
       ? <span style={{ color: "#1a7f5a" }}>{relations.vouchers.length} 张（{relations.vouchers.map((v) => `V-${shortId(v.id)}`).join("、")}）</span>
-      : <span style={{ color: "#c4cdd6" }}>暂无凭证</span>],
+      : <span style={{ color: "#c4cdd6" }}>暂无<Term k="voucher">凭证</Term></span>],
     ["创建日期", detail.createdAt?.slice(0, 10) ?? "—"],
     ...(detail.archivedAt ? [["归档日期", detail.archivedAt.slice(0, 10)] as [string, React.ReactNode]] : [])
   ];

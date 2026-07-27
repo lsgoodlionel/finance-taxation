@@ -9,7 +9,15 @@
  * 这里把口径抽成共用纯函数，两侧共同引用，杜绝再次漂移。金额符号约定：
  * - 收入类（贷方余额）：credit - debit，收入为正；
  * - 成本/费用类（借方余额）：debit - credit，支出为正。
+ *
+ * V8-P：分类改以科目主数据（accounts/chart-of-accounts.ts）的 `category` 字段为
+ * 准，硬编码前缀表降级为科目表未命中时的兜底。此前的纯前缀表漏列了 `6602`
+ * 等科目，classifyProfitAccount 返回 other 而 summarizeProfitTotals 对 other
+ * 既不计收入也不计费用，费用被静默丢弃、利润虚高。
  */
+
+import type { AccountCategory } from "../accounts/chart-of-accounts.js";
+import { findChartAccount } from "../accounts/chart-of-accounts.js";
 
 /** 收入类科目前缀（主营业务收入 / 其他业务收入 / 投资收益 / 营业外收入）。 */
 export const REVENUE_ACCOUNT_PREFIXES = ["6001", "6051", "6111", "6301"] as const;
@@ -17,19 +25,11 @@ export const REVENUE_ACCOUNT_PREFIXES = ["6001", "6051", "6111", "6301"] as cons
 /** 主营业务成本前缀（本系统以 6001c 表示，与收入 6001 前缀重叠，需先排除）。 */
 export const COST_ACCOUNT_PREFIX = "6001c";
 
-/** 营业外支出前缀（与营业外收入 6301 前缀重叠，需先排除）。 */
+/** 管理费用前缀（本系统以 6301e 表示，与营业外收入 6301 前缀重叠，需先排除）。 */
 export const NON_OPERATING_EXPENSE_PREFIX = "6301e";
 
-/** 成本费用类科目前缀（含所得税费用 6801）。 */
-export const EXPENSE_ACCOUNT_PREFIXES = [
-  "6101",
-  "6201",
-  NON_OPERATING_EXPENSE_PREFIX,
-  "6401",
-  "6601",
-  "6711",
-  "6801"
-] as const;
+/** 损益类科目的编码段。6 开头且不是收入的科目一律计入费用，杜绝静默漏算。 */
+export const PROFIT_AND_LOSS_CODE_PREFIX = "6";
 
 /** 所得税费用前缀，用于从费用中单独拆出税额。 */
 export const INCOME_TAX_ACCOUNT_PREFIX = "6801";
@@ -62,12 +62,41 @@ function hasPrefix(code: string, prefixes: readonly string[]): boolean {
   return prefixes.some((prefix) => code.startsWith(prefix));
 }
 
-/** 把科目代码归入利润表的收入 / 成本 / 费用 / 其他四类。 */
+/**
+ * 科目主数据的 category → 利润表口径。
+ *
+ * `cost`（生产成本 4001 / 制造费用 4101）归入 `other`：这两个科目要先结转到
+ * 主营业务成本才进损益，直接计入利润表会重复计量。利润表的 `cost` 一档只服务
+ * 主营业务成本 6001c，由 classifyProfitAccount 的前置分支单独判定。
+ */
+function fromAccountCategory(category: AccountCategory): ProfitAccountKind {
+  if (category === "revenue") return "revenue";
+  if (category === "expense") return "expense";
+  return "other";
+}
+
+/**
+ * 把科目代码归入利润表的收入 / 成本 / 费用 / 其他四类。
+ *
+ * 优先级链（顺序不可调换）：
+ * 1. `6001c*` → 成本。必须先于 `6001` 收入前缀，否则主营业务成本会被当成收入。
+ * 2. `6301e*` → 费用。必须先于 `6301` 收入前缀，否则管理费用会被当成营业外收入。
+ * 3. 科目主数据 `category` 精确命中 → 权威分类。收入/费用直接采信，资产/负债/
+ *    权益/成本类归 other。这一档取代了此前那张硬编码费用前缀表——前缀表漏了
+ *    `6602` 之类未列举的科目，导致费用被静默丢弃、利润虚高。
+ * 4. 科目表未登记时的兜底：命中收入前缀 → 收入；否则只要是 6 开头 → 费用。
+ *    兜底与资产负债表历史行为一致（非收入的 6 开头一律当费用），保证未登记科目
+ *    与将来新增的子科目都不会从报表里消失。
+ */
 export function classifyProfitAccount(code: string): ProfitAccountKind {
   if (code.startsWith(COST_ACCOUNT_PREFIX)) return "cost";
   if (code.startsWith(NON_OPERATING_EXPENSE_PREFIX)) return "expense";
+
+  const account = findChartAccount(code);
+  if (account) return fromAccountCategory(account.category);
+
   if (hasPrefix(code, REVENUE_ACCOUNT_PREFIXES)) return "revenue";
-  if (hasPrefix(code, EXPENSE_ACCOUNT_PREFIXES)) return "expense";
+  if (code.startsWith(PROFIT_AND_LOSS_CODE_PREFIX)) return "expense";
   return "other";
 }
 

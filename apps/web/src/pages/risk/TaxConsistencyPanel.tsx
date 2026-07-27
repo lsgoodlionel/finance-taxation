@@ -9,6 +9,7 @@ import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { getTaxConsistency, type ConsistencySeverity, type TaxConsistencyCheck, type TaxConsistencyReport } from "../../lib/api";
 import { usePeriod } from "../../lib/period-context";
+import { Term } from "../../components/ui/Term";
 
 const { Text, Title } = Typography;
 
@@ -101,7 +102,7 @@ export function TaxConsistencyPanel() {
 
   return (
     <Card
-      title={<Title level={5} style={{ margin: 0 }}>票税一致性比对</Title>}
+      title={<Title level={5} style={{ margin: 0 }}><Term k="invoice-tax-consistency">票税一致性</Term>比对</Title>}
       extra={
         <DatePicker
           picker="month"
