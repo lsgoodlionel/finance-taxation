@@ -3,7 +3,12 @@
  * 工资材料、税务材料、批量归档、单据模板、风险复盘、研发辅助、凭证导出）与
  * ArchivePackagePage（/archive-package，按期间的财税资料包总览）为统一入口。
  *
- * 布局：场景卡片区（含资料包总览）+ 历史记录 Tab（导出任务/归档索引/审计轨迹）。
+ * 布局：场景导出 Tab（场景卡片区，含资料包总览）+ 税务申报文件 Tab + 历史记录 Tab
+ * （导出任务/归档索引/审计轨迹）。
+ *
+ * 「税务申报文件」原先挂在 /tax?task=export 上，V10 车道 F2a 之后归口到这里：
+ * 生成电子税务局用的申报文件属于导出动作，和报表、工资、资料包同类；税务中心只
+ * 负责算税和推进申报批次，页面上留一条指向这里的链接。
  */
 import { Tabs, Space } from "antd";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -16,6 +21,7 @@ import { ReportsAndPackagesCards } from "./ReportsAndPackagesCards";
 import { DocumentsAndRiskCards } from "./DocumentsAndRiskCards";
 import { RndAndVoucherCards } from "./RndAndVoucherCards";
 import { ExportHistorySection } from "./ExportHistorySection";
+import { DeclarationExportPanel } from "./DeclarationExportPanel";
 import { useExportCenterData } from "./useExportCenterData";
 
 export function ExportCenterPage() {
@@ -62,6 +68,19 @@ export function ExportCenterPage() {
                 <ReportsAndPackagesCards data={data} />
                 <DocumentsAndRiskCards data={data} />
                 <RndAndVoucherCards data={data} />
+              </div>
+            )
+          },
+          {
+            key: "declaration",
+            label: "税务申报文件",
+            children: (
+              <div style={{ display: "grid", gap: 16 }}>
+                <ResultBanner
+                  tone="info"
+                  message="这一栏生成的是上传电子税务局、公积金系统用的申报文件，并登记回执流水号；算多少、报批次仍在税务中心完成。"
+                />
+                <DeclarationExportPanel currentPeriod={data.vatFilingPeriod} />
               </div>
             )
           },

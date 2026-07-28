@@ -8,6 +8,10 @@
  * 角标一律用真实待办数（未结批次、逾期税种、未就绪事项），让该做的事自己浮上来。
  * 任务文案写在这里而不是组件里，是为了让「这页能办哪几件事」有单一事实来源，
  * 也方便直接单测。
+ *
+ * 「导出申报文件」曾短暂列为第 6 件事，现已归口到导出与归档中心
+ * （pages/export-center/DeclarationExportPanel.tsx）：它是一次导出动作，和报表、
+ * 工资、资料包同类，不该在税务中心另开一条导出入口。主任务里留一条链接过去。
  */
 import type { TaxFilingBatch, TaxItem } from "@finance-taxation/domain-model";
 import type { TaskDef } from "../../lib/task-focus";
@@ -17,8 +21,7 @@ export const TAX_TASK_KEYS = {
   materials: "materials",
   calendar: "calendar",
   items: "items",
-  profile: "profile",
-  export: "export"
+  profile: "profile"
 } as const;
 
 export type TaxTaskKey = (typeof TAX_TASK_KEYS)[keyof typeof TAX_TASK_KEYS];
@@ -79,11 +82,6 @@ export function buildTaxTasks({ batches, items, overdueCount }: TaxTaskInput): T
       key: TAX_TASK_KEYS.profile,
       label: "维护纳税人身份与税率",
       description: "设定公司的纳税人身份、申报频率和适用税率，低频维护，改动会影响后续所有计算。"
-    },
-    {
-      key: TAX_TASK_KEYS.export,
-      label: "导出申报文件",
-      description: "生成上传电子税务局用的申报文件，并登记回执流水号。"
     }
   ];
 }

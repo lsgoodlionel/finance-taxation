@@ -1,8 +1,12 @@
 /**
  * 申报文件导出面板
- * 嵌入 TaxPage，在 TaxBatchesPanel 下方展示
- * 提供 VAT XML / IIT CSV / 社保 CSV / 公积金 CSV 四个一键下载按钮
- * 展示历史申报提交记录
+ *
+ * 归属：导出与归档中心的「税务申报」Tab。原先挂在 /tax 上，但税务中心的职责是
+ * 「算出该交多少、把批次报完」，「生成给电子税务局的文件并登记回执」是一件导出
+ * 动作，和报表、工资、资料包同类，因此收归导出中心统一入口（/tax 只留跳转链接）。
+ *
+ * 提供 VAT XML / IIT CSV / 社保 CSV / 公积金 CSV 四个一键下载按钮，
+ * 并展示历史申报提交记录。
  */
 import React, { useState, useEffect, useCallback } from "react";
 import {
