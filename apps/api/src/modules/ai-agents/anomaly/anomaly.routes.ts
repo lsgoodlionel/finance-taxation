@@ -134,7 +134,14 @@ async function fetchInvoiceNumbers(companyId: string, range: DateRange): Promise
   }));
 }
 
-/** 周末大额交易所需的分录：落在周六/周日、发生额（借贷两侧取大者）> 0 的记账分录 */
+/**
+ * 周末大额交易所需的分录：落在周六/周日、发生额（借贷两侧取大者）> 0 的记账分录。
+ *
+ * 排除结转分录的理由与损益聚合那边不同：这里不是重复计量，而是**结转根本不是一笔
+ * 交易** —— 它是系统按期末日批量生成的账务处理。这个检测器要找的是「有人在周末做
+ * 了一笔大额业务」这种可疑迹象，而月末恰好是周六或周日时，整批结转分录会全部命中，
+ * 把月结变成告警制造机，真正的可疑交易反而被淹没。
+ */
 async function fetchWeekendAmountEntries(companyId: string, range: DateRange): Promise<AmountEntryInput[]> {
   const rows = await query<{ id: string; entry_date: string; summary: string; amount: string }>(
     `select id, to_char(entry_date, 'YYYY-MM-DD') as entry_date, summary, greatest(debit, credit) as amount
@@ -142,6 +149,7 @@ async function fetchWeekendAmountEntries(companyId: string, range: DateRange): P
      where company_id = $1 and entry_date >= $2 and entry_date < $3
        and extract(dow from entry_date) in (0, 6)
        and greatest(debit, credit) > 0
+       and ${EXCLUDE_PERIOD_CLOSING_SQL}
      order by entry_date`,
     [companyId, range.start, range.end]
   );
