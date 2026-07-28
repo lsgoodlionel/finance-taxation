@@ -79,7 +79,7 @@ export function ChairmanDashboardPage() {
           它就是这一页的摘要行；打散反而要读者在三段里各找一个数字。 */}
       <section className="v3-hero-shell">
         <PageHeader
-          title={isGuided ? "经营报告" : "董事长驾驶舱"}
+          title={isGuided ? "经营概览" : "董事长驾驶舱"}
           subtitle={isGuided ? "公司赚不赚钱、钱够不够用、有没有事要您拍板，这一页依次讲清楚。" : CHAIRMAN_DASHBOARD_SUBTITLE}
           actions={(
             <Space>

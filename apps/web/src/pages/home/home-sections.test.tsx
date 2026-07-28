@@ -95,7 +95,7 @@ const emptyHtml = render(
   })
 );
 assert(emptyHtml.includes("今天没有需要您处理的事"), "expected empty state title");
-assert(emptyHtml.includes("看看经营报告"), "expected empty state next action");
+assert(emptyHtml.includes("看看经营概览"), "expected empty state next action");
 
 // 待办来源接口失败且无卡片：禁止「都安排好了」，必须说读不到 + 给重试
 const failedEmptyHtml = render(

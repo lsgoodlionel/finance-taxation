@@ -210,3 +210,31 @@ test("公司资料 / AI 配置 / 集成配置的写操作统一要求 settings.m
     );
   }
 });
+
+/**
+ * banking 写操作的权限归属。
+ *
+ * 演进过程值得记住：这组路由最初**完全没有 permission**，任何登录用户（含只读的
+ * role-viewer）都能导流水、确认对账；随后被收到 `ledger.post` 堵洞，但那是记账权、
+ * 出纳并不持有 —— 等于把出纳挡在自己的本职工作外面。两次都不对，所以单开
+ * `banking.manage` 一键，给董事长/财务负责人/会计/出纳。
+ *
+ * 这条断言防的是两个方向的回退：降回 `*.view`（只读账号又能导流水），
+ * 或退回 `ledger.post`（出纳又做不了对账）。
+ */
+test("banking 写操作统一由 banking.manage 守护，且出纳持有该权限", () => {
+  const bankingWrites = writeRoutes().filter((route) => route.path.startsWith("/api/banking/"));
+  assert.ok(bankingWrites.length >= 8, `banking 写路由应至少 8 条，实际 ${bankingWrites.length}`);
+
+  const offenders = bankingWrites
+    .filter((route) => !route.permission || !permissionKeys(route.permission).includes("banking.manage"))
+    .map((route) => `${routeKey(route)} → ${route.permission ? permissionKeys(route.permission).join("|") : "(无)"}`);
+  assert.deepEqual(offenders, [], `以下 banking 写路由未挂 banking.manage：\n${offenders.join("\n")}`);
+
+  // 出纳能做，只读账号不能做 —— 这一条同时钉住了权限键的两端。
+  assert.equal(hasPermission(["role-cashier"], "banking.manage"), true, "出纳必须能做银行对账");
+  assert.equal(hasPermission([READ_ONLY_ROLE], "banking.manage"), false, "只读账号不得导流水");
+  // 会计与财务负责人同样要能做（银行对账是会计本职的一部分）
+  assert.equal(hasPermission(["role-accountant"], "banking.manage"), true);
+  assert.equal(hasPermission(["role-finance-director"], "banking.manage"), true);
+});

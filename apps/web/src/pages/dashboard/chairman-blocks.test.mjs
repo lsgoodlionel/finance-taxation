@@ -73,7 +73,10 @@ test("编造的「近 6 月收支趋势」不得回来", () => {
 });
 
 test("guided 与 pro 只在措辞上分轨，看到的块是同一批", () => {
-  assert.ok(SOURCE.includes("isGuided ? \"经营报告\""), "guided 用白话页名");
+  // guided 页名必须是白话，且不能与 guided 导航里的「经营报告」(/reports) 重名 ——
+  // /home 的空态按钮和 KPI 钻取都指向本页，两处叫同一个词会让用户以为是同一页。
+  assert.ok(SOURCE.includes("isGuided ? \"经营概览\""), "guided 用白话页名");
+  assert.ok(!SOURCE.includes("\"经营报告\""), "guided 页名不得与 /reports 的导航标签重名");
   const guidedBranches = SOURCE.match(/isGuided \?/g) ?? [];
   assert.ok(
     guidedBranches.length <= 2,

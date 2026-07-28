@@ -929,39 +929,41 @@ const routes: RouteDef[] = [
   },
 
   // banking (P1 accounts/statements + P3 reconciliation + P5 sync)
-  // 银行账户、流水导入/同步与对账确认都会改变账务基础数据，统一按 ledger.post 守护；
-  // 此前整组无 permission，任何登录用户（含 role-viewer）都能导流水、确认对账。
+  // 银行账户、流水导入/同步与对账确认都会改变账务基础数据，统一按 banking.manage 守护。
+  // 演进过程：此前整组无 permission，任何登录用户（含 role-viewer）都能导流水、确认对账；
+  // 先收到 ledger.post 堵住这个洞，但那是记账权、出纳不持有，等于把出纳挡在自己的
+  // 本职工作外面。banking.manage 单独成键，给董事长/财务负责人/会计/出纳四个角色。
   { method: "GET", path: "/api/banking/accounts", auth: true, handler: listBankAccounts },
-  { method: "POST", path: "/api/banking/accounts", auth: true, permission: "ledger.post", handler: createBankAccount },
+  { method: "POST", path: "/api/banking/accounts", auth: true, permission: "banking.manage", handler: createBankAccount },
   { method: "GET", path: "/api/banking/statements", auth: true, handler: listBankStatements },
-  { method: "POST", path: "/api/banking/statements/import", auth: true, permission: "ledger.post", handler: importBankStatements },
+  { method: "POST", path: "/api/banking/statements/import", auth: true, permission: "banking.manage", handler: importBankStatements },
   { method: "GET", path: "/api/banking/statements/unmatched", auth: true, handler: getUnmatchedSummary },
   {
     method: "PATCH",
     path: "/api/banking/statements/:id/match",
     auth: true,
-    permission: "ledger.post",
+    permission: "banking.manage",
     handler: (req, res, p) => matchStatement(req, res, p.id!)
   },
-  { method: "POST", path: "/api/banking/reconciliation/run", auth: true, permission: "ledger.post", handler: runReconciliationRoute },
+  { method: "POST", path: "/api/banking/reconciliation/run", auth: true, permission: "banking.manage", handler: runReconciliationRoute },
   { method: "GET", path: "/api/banking/reconciliation/candidates", auth: true, handler: listCandidatesRoute },
   {
     method: "POST",
     path: "/api/banking/reconciliation/candidates/:id/confirm",
     auth: true,
-    permission: "ledger.post",
+    permission: "banking.manage",
     handler: (req, res, p) => confirmCandidateRoute(req, res, p.id!)
   },
   {
     method: "POST",
     path: "/api/banking/reconciliation/candidates/:id/reject",
     auth: true,
-    permission: "ledger.post",
+    permission: "banking.manage",
     handler: (req, res, p) => rejectCandidateRoute(req, res, p.id!)
   },
   { method: "GET", path: "/api/banking/reconciliation/rules", auth: true, handler: getReconRulesRoute },
-  { method: "PUT", path: "/api/banking/reconciliation/rules", auth: true, permission: "ledger.post", handler: upsertReconRulesRoute },
-  { method: "POST", path: "/api/banking/sync-statements", auth: true, permission: "ledger.post", handler: syncStatementsRoute },
+  { method: "PUT", path: "/api/banking/reconciliation/rules", auth: true, permission: "banking.manage", handler: upsertReconRulesRoute },
+  { method: "POST", path: "/api/banking/sync-statements", auth: true, permission: "banking.manage", handler: syncStatementsRoute },
 
   // global search
   { method: "GET", path: "/api/search", auth: true, handler: globalSearch },

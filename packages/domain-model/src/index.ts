@@ -1053,6 +1053,10 @@ export const permissionCatalog = [
   "documents.manage",
   "ledger.view",
   "ledger.post",
+  // 银行账户、流水导入/同步、对账确认自成一档：这些是出纳的本职工作，
+  // 而 ledger.post 是记账权（出纳不持有）。此前整组 banking 写路由挂 ledger.post，
+  // 等于把出纳挡在自己的活儿外面；再往回降到 ledger.view 又会让只读账号也能导流水。
+  "banking.manage",
   "tax.view",
   "tax.manage",
   "rnd.view",
