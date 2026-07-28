@@ -1,252 +1,271 @@
-import { useEffect, useState } from "react";
-import type { RndProject, RndProjectSummary } from "@finance-taxation/domain-model";
-import {
-  createRndProject, getRndProjectDetail, listRndProjects,
-  type RndProjectDetail,
-} from "../lib/api";
-import { RND_STATUS_LABELS, useI18n } from "../lib/i18n";
-import {
-  Typography, Row, Col, Card, Table, Tag, Button, Space, Skeleton,
-  Alert, Input, Modal, Descriptions,
-} from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, ExperimentOutlined, RightOutlined } from "@ant-design/icons";
+/**
+ * 研发辅助账（V10 车道：按任务重组）。
+ *
+ * 改造前首屏 8 个平级区块：页头卡、全站 10 环节导航条、4 张 KPI 卡、空态提示、
+ * 项目列表卡、项目详情卡（内含 8 行属性 + 政策风险 + 政策建议三段）、归集向导
+ * Modal、新建项目 Modal。KPI 卡的四个数与详情卡里的数是同一批，列表与详情左右
+ * 各占半屏，而真正要动手的「归集费用」缩在表格行内的一个小按钮里——用户打开
+ * 看到的是「研发辅助账能看什么」，不是「你现在要办什么」。
+ *
+ * 改造后归口成三件事（挑项目 → 归集费用 → 核对加计扣除），TaskFocusShell 一次
+ * 只渲染一件事，选中的项目和当前这件事都写进 URL。全站导航条移除，理由与
+ * /ledger、/tax 一致：它按当前页在数组里的下标算 done/current，与业务数据无关，
+ * 本质是导航；何况这里还被写成了 current="ledger"——研发页并不是总账页。
+ * 「这一笔走到哪了」改由 ObjectFlowBar 按项目的真实字段渲染（见 rnd/rnd-tasks.ts）。
+ */
+import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import type { RndProject, RndProjectSummary, SuperDeductionPackage } from "@finance-taxation/domain-model";
+import { Button, Input, Modal, Skeleton, Typography } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
+import {
+  createRndProject,
+  getRndProjectDetail,
+  getRndSuperDeductionPackage,
+  listRndProjects,
+  type RndProjectDetail
+} from "../lib/api";
 import { PageHeader } from "../components/ui/PageHeader";
-import { FinanceFlowBar } from "../components/FinanceFlowBar";
-import { RndKpiCards } from "./rnd/RndKpiCards";
+import { TaskFocusShell } from "../components/ui/TaskFocusShell";
+import { RndContextPanel } from "./rnd/RndContextPanel";
+import { RndCostPanel } from "./rnd/RndCostPanel";
 import { RndCostWizard } from "./rnd/RndCostWizard";
+import { RndDeductionPanel } from "./rnd/RndDeductionPanel";
+import { RndProjectListPanel } from "./rnd/RndProjectListPanel";
+import { RndShell } from "./rnd/RndShell";
+import {
+  RND_TASK_KEYS,
+  buildRndTasks,
+  countProjectsWithoutCosts,
+  isRndTaskKey,
+  readRndProjectId,
+  readRndTask,
+  writeRndProjectId,
+  writeRndTask
+} from "./rnd/rnd-tasks";
 
 const { Text } = Typography;
 
-const STATUS_COLOR: Record<string, string> = {
-  planning:  "default",
-  active:    "processing",
-  completed: "success",
-  archived:  "default",
-};
+const DEFAULT_PROJECT_NAME = "AI 财税系统研发";
+
+type RndProjectRow = RndProject & { summary: RndProjectSummary };
 
 export function RndPage() {
-  const { t } = useI18n();
-  const [projects, setProjects]         = useState<Array<RndProject & { summary: RndProjectSummary }>>([]);
-  const [selectedProject, setSelected] = useState<RndProjectDetail | null>(null);
-  const [loading, setLoading]           = useState(true);
-  const [wizardOpen, setWizardOpen]     = useState(false);
-  const [createOpen, setCreateOpen]     = useState(false);
-  const [newName, setNewName]           = useState("AI 财税系统研发");
-  const [creating, setCreating]         = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [projects, setProjects] = useState<RndProjectRow[]>([]);
+  const [detail, setDetail] = useState<RndProjectDetail | null>(null);
+  const [deductionPackage, setDeductionPackage] = useState<SuperDeductionPackage | null>(null);
+  const [packageError, setPackageError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState(DEFAULT_PROJECT_NAME);
+  const [creating, setCreating] = useState(false);
+  const [message, setMessage] = useState("正在加载研发项目。");
 
-  useEffect(() => { void refresh(); }, []);
+  const activeTask = readRndTask(searchParams);
+  const urlProjectId = readRndProjectId(searchParams);
 
-  async function refresh(targetId?: string) {
+  /**
+   * 实际选中的项目：URL 上的 id 必须真的在清单里才作数，否则回落到第一个。
+   * 直接信 URL 会让一个失效的分享链接把页面卡在空详情上。
+   */
+  const selectedProjectId = useMemo(() => {
+    if (urlProjectId && projects.some((project) => project.id === urlProjectId)) {
+      return urlProjectId;
+    }
+    return projects[0]?.id ?? null;
+  }, [projects, urlProjectId]);
+
+  const tasks = useMemo(() => buildRndTasks(projects), [projects]);
+  const projectsWithoutCosts = countProjectsWithoutCosts(projects);
+
+  function selectTask(task: string): void {
+    if (!isRndTaskKey(task)) return;
+    setSearchParams(writeRndTask(searchParams, task));
+  }
+
+  function selectProject(projectId: string): void {
+    setSearchParams(writeRndProjectId(searchParams, projectId));
+  }
+
+  /**
+   * 从列表直接开工：选中项目 + 切到「归集费用」。
+   *
+   * 刻意不在这里顺手把向导也打开：detail 是异步换的，此刻 state 里还是上一个项目的
+   * 详情，向导会带着错的项目名和错的政策提示弹出来，用户填完提交到另一个项目上。
+   * 落到「归集费用」工作区后由用户点「继续归集费用」，那时 detail 已经是对的。
+   */
+  function collectCostsFor(projectId: string): void {
+    setSearchParams(writeRndTask(writeRndProjectId(searchParams, projectId), RND_TASK_KEYS.costs));
+  }
+
+  async function loadProjects(): Promise<void> {
     setLoading(true);
     try {
       const payload = await listRndProjects();
       setProjects(payload.items);
-      const id = targetId ?? payload.items[0]?.id;
-      if (id) {
-        const detail = await getRndProjectDetail(id);
-        setSelected(detail);
-      }
-    } catch (err) {
-      toast.error((err as Error).message);
+      setMessage(`共 ${payload.total} 个研发项目。`);
+    } catch (error) {
+      const text = (error as Error).message;
+      setMessage(text);
+      toast.error(text);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleCreate() {
-    if (!newName.trim()) { toast.error("请输入项目名称"); return; }
+  useEffect(() => {
+    void loadProjects();
+  }, []);
+
+  /**
+   * 详情与资料包都跟着选中的项目走。
+   * 资料包单独记错误：清单取不到不该把整块详情也清空，用户还得靠详情继续归集。
+   */
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setDetail(null);
+      setDeductionPackage(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    // 换项目时把向导关掉：它是对着某一个项目填的，留在屏幕上会变成
+    // 「标题是新项目、正在填的条目属于旧项目」。
+    setWizardOpen(false);
+
+    void getRndProjectDetail(selectedProjectId)
+      .then((payload) => {
+        if (!cancelled) setDetail(payload);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const text = (error as Error).message;
+        setDetail(null);
+        setMessage(text);
+        toast.error(text);
+      });
+
+    setDeductionPackage(null);
+    setPackageError(null);
+    void getRndSuperDeductionPackage(selectedProjectId)
+      .then((payload) => {
+        if (!cancelled) setDeductionPackage(payload);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setPackageError((error as Error).message);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
+
+  async function handleCreate(): Promise<void> {
+    if (!newName.trim()) {
+      toast.error("请输入项目名称");
+      return;
+    }
     setCreating(true);
     try {
       const project = await createRndProject({ name: newName, capitalizationPolicy: "mixed" });
-      await refresh(project.id);
+      await loadProjects();
+      // 新建完直接选中它，否则用户还得自己在列表里找一遍刚建的项目。
+      setSearchParams(writeRndProjectId(searchParams, project.id));
       setCreateOpen(false);
-      setNewName("AI 财税系统研发");
+      setNewName(DEFAULT_PROJECT_NAME);
       toast.success(`研发项目「${project.name}」已建立`);
-    } catch (err) {
-      toast.error((err as Error).message);
+    } catch (error) {
+      toast.error((error as Error).message);
     } finally {
       setCreating(false);
     }
   }
 
-  const columns: ColumnsType<RndProject & { summary: RndProjectSummary }> = [
-    {
-      title: "项目名称", dataIndex: "name", key: "name",
-      render: (name: string, record) => (
-        <div>
-          <Text strong style={{ fontSize: 13 }}>{name}</Text>
-          <div style={{ fontSize: 11, color: "#94a3b8" }}>{record.code}</div>
-        </div>
-      ),
-    },
-    {
-      title: "状态", dataIndex: "status", key: "status", width: 90,
-      render: (s: string) => <Tag color={STATUS_COLOR[s] ?? "default"}>{t(RND_STATUS_LABELS, s)}</Tag>,
-    },
-    {
-      title: "费用化", key: "expensed", width: 110, align: "right",
-      render: (_: unknown, r) => <Text style={{ fontFamily: "monospace", fontSize: 12 }}>¥{parseFloat(r.summary.expenseAmount || "0").toLocaleString()}</Text>,
-    },
-    {
-      title: "可扣除基数", key: "eligible", width: 120, align: "right",
-      render: (_: unknown, r) => (
-        <Text strong style={{ fontFamily: "monospace", fontSize: 12, color: "#16a34a" }}>
-          ¥{parseFloat(r.summary.superDeductionEligibleBase || "0").toLocaleString()}
-        </Text>
-      ),
-    },
-    {
-      title: "操作", key: "actions", width: 130,
-      render: (_: unknown, record) => (
-        <Space size={4}>
-          <Button size="small" type="link"
-            onClick={() => void getRndProjectDetail(record.id).then(setSelected)}>
-            详情 <RightOutlined />
-          </Button>
-          <Button size="small" icon={<ExperimentOutlined />}
-            onClick={() => {
-              void getRndProjectDetail(record.id).then(detail => {
-                setSelected(detail);
-                setWizardOpen(true);
-              });
-            }}>
-            归集
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+  async function refreshAfterCollection(): Promise<void> {
+    await loadProjects();
+    if (!selectedProjectId) return;
+    try {
+      const [nextDetail, nextPackage] = await Promise.all([
+        getRndProjectDetail(selectedProjectId),
+        getRndSuperDeductionPackage(selectedProjectId)
+      ]);
+      setDetail(nextDetail);
+      setDeductionPackage(nextPackage);
+      setPackageError(null);
+    } catch (error) {
+      setPackageError((error as Error).message);
+    }
+  }
+
+  function renderWorkspace() {
+    switch (activeTask) {
+      case RND_TASK_KEYS.projects:
+        return (
+          <RndProjectListPanel
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onSelectProject={selectProject}
+            onCollectCosts={collectCostsFor}
+          />
+        );
+      case RND_TASK_KEYS.costs:
+        return <RndCostPanel project={detail} onOpenWizard={() => setWizardOpen(true)} />;
+      case RND_TASK_KEYS.deduction:
+        return (
+          <RndDeductionPanel
+            project={detail}
+            deductionPackage={deductionPackage}
+            packageError={packageError}
+          />
+        );
+    }
+  }
 
   return (
-    <div style={{ display: "grid", gap: 24 }}>
-      {/* Hero header */}
-      <section className="v3-hero-shell">
-        <PageHeader
-          title="研发辅助账"
-          subtitle="归集研发费用、计算加计扣除基数，满足高新技术企业税务合规要求"
-          actions={(
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-              新建研发项目
-            </Button>
-          )}
-        />
-      </section>
-
-      <FinanceFlowBar current="ledger" />
-
-      {loading ? (
-        <Skeleton active paragraph={{ rows: 6 }} />
-      ) : (
-        <>
-          {/* KPI cards */}
-          <section className="v3-section-shell" data-tone="accent">
-            <RndKpiCards projects={projects} />
-          </section>
-
-          {projects.length === 0 && (
-            <Alert
-              type="info" showIcon
-              message="暂无研发项目，点击「新建研发项目」开始费用归集"
+    <>
+      <RndShell
+        header={(
+          <PageHeader
+            title="研发辅助账"
+            subtitle="按项目归集研发费用、算出加计扣除基数，供年度汇算清缴引用"
+            actions={(
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+                新建研发项目
+              </Button>
+            )}
+          />
+        )}
+      >
+        <TaskFocusShell
+          tasks={tasks}
+          activeKey={activeTask}
+          onSelectTask={selectTask}
+          switcherLabel="研发辅助账能办的事"
+          aside={(
+            <RndContextPanel
+              task={activeTask}
+              project={detail}
+              projectCount={projects.length}
+              projectsWithoutCosts={projectsWithoutCosts}
+              message={message}
             />
           )}
+        >
+          {loading ? <Skeleton active paragraph={{ rows: 6 }} /> : renderWorkspace()}
+        </TaskFocusShell>
+      </RndShell>
 
-          {/* Project list + detail */}
-          <Row gutter={[16, 16]}>
-            <Col xs={24} lg={14}>
-              <Card
-                title={<Space><Text strong>研发项目列表</Text><Tag>{projects.length}</Tag></Space>}
-                style={{ borderRadius: 12 }}
-                styles={{ body: { padding: 0 } }}
-              >
-                <Table
-                  dataSource={projects}
-                  columns={columns}
-                  rowKey="id"
-                  size="small"
-                  pagination={{ hideOnSinglePage: true, size: "small" }}
-                  rowClassName={record => record.id === selectedProject?.id ? "ant-table-row-selected" : ""}
-                  onRow={record => ({
-                    style: { cursor: "pointer" },
-                    onClick: () => void getRndProjectDetail(record.id).then(setSelected),
-                  })}
-                />
-              </Card>
-            </Col>
-
-            <Col xs={24} lg={10}>
-              <Card
-                title={<Text strong>项目详情</Text>}
-                style={{ borderRadius: 12 }}
-                extra={
-                  selectedProject && (
-                    <Button
-                      type="primary" size="small" icon={<ExperimentOutlined />}
-                      onClick={() => setWizardOpen(true)}
-                    >
-                      费用归集向导
-                    </Button>
-                  )
-                }
-              >
-                {selectedProject ? (
-                  <Space direction="vertical" size={16} style={{ width: "100%" }}>
-                    <Descriptions column={1} size="small" bordered>
-                      <Descriptions.Item label="项目名称">{selectedProject.name}</Descriptions.Item>
-                      <Descriptions.Item label="项目编号">{selectedProject.code}</Descriptions.Item>
-                      <Descriptions.Item label="开始日期">{selectedProject.startedOn}</Descriptions.Item>
-                      <Descriptions.Item label="资本化政策">{selectedProject.capitalizationPolicy}</Descriptions.Item>
-                      <Descriptions.Item label="费用化合计">
-                        ¥{parseFloat(selectedProject.summary.expenseAmount || "0").toLocaleString()}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="资本化合计">
-                        ¥{parseFloat(selectedProject.summary.capitalizedAmount || "0").toLocaleString()}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="加计扣除基数">
-                        <Text strong style={{ color: "#16a34a" }}>
-                          ¥{parseFloat(selectedProject.summary.superDeductionEligibleBase || "0").toLocaleString()}
-                        </Text>
-                      </Descriptions.Item>
-                      <Descriptions.Item label="累计工时">
-                        {selectedProject.summary.totalHours} 小时
-                      </Descriptions.Item>
-                    </Descriptions>
-
-                    {selectedProject.policyReview.conflicts.length > 0 && (
-                      <Alert type="warning" showIcon message="政策合规风险"
-                        description={selectedProject.policyReview.conflicts.join("；")}
-                      />
-                    )}
-
-                    <div>
-                      <Text type="secondary" style={{ fontSize: 12 }}>政策建议</Text>
-                      <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 13, lineHeight: 1.8 }}>
-                        {selectedProject.policyReview.guidance.map(g => <li key={g}>{g}</li>)}
-                      </ul>
-                    </div>
-                  </Space>
-                ) : (
-                  <div style={{ textAlign: "center", padding: "40px 0", color: "#94a3b8" }}>
-                    <ExperimentOutlined style={{ fontSize: 28, marginBottom: 8 }} />
-                    <div>选择项目查看详情</div>
-                  </div>
-                )}
-              </Card>
-            </Col>
-          </Row>
-        </>
-      )}
-
-      {/* Cost collection wizard */}
       <RndCostWizard
         open={wizardOpen}
-        project={selectedProject}
+        project={detail}
         onClose={() => setWizardOpen(false)}
-        onComplete={() => void refresh(selectedProject?.id)}
+        onComplete={() => void refreshAfterCollection()}
       />
 
-      {/* Create project modal */}
       <Modal
         title="新建研发项目"
         open={createOpen}
@@ -260,13 +279,13 @@ export function RndPage() {
           <Text type="secondary" style={{ fontSize: 13 }}>项目名称</Text>
           <Input
             value={newName}
-            onChange={e => setNewName(e.target.value)}
+            onChange={(event) => setNewName(event.target.value)}
             placeholder="如：AI 财税系统研发 2026"
             style={{ marginTop: 8 }}
             onPressEnter={() => void handleCreate()}
           />
         </div>
       </Modal>
-    </div>
+    </>
   );
 }

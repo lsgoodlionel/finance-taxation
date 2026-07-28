@@ -234,16 +234,16 @@ export function AssistantPage() {
   const quickPrompts = isOpMode ? STAFF_QUICK_PROMPTS : BOSS_QUICK_PROMPTS;
   const sessionGroups = groupByDate(sessions);
   const isLoading = sending || ocrLoading;
+  // 流程区块只在有 flowContext 时渲染（见下方 flowSection），所以标题不再需要
+  // 「标准业务处理流程」这个无事项时的兜底名——那正是被拿掉的那张全景图。
   const flowTitle = useMemo(() => {
     if (!flowContext?.eventTitle) {
-      return "标准业务处理流程";
+      return "当前事项流程";
     }
 
     return `当前事项流程：${flowContext.eventTitle}`;
   }, [flowContext]);
-  const flowSubtitle = flowContext
-    ? "根据 AI 已识别的事项上下文高亮当前处理位置，可继续点击节点进入相关业务页。"
-    : "覆盖外购物品与业务招待，从事项识别到税务归档，可在提交前后持续查看。";
+  const flowSubtitle = "根据 AI 已识别的事项上下文高亮当前处理位置，可继续点击节点进入相关业务页。";
   const currentFlowNode = flowContext?.nodes.find((node) => node.id === flowContext.currentNodeId);
   const nextFlowNode = flowContext?.nodes.find((node) => node.status === "pending");
 
@@ -267,11 +267,23 @@ export function AssistantPage() {
       isBoss={isBoss}
       suggestedEventsCount={suggestedEvents.length}
       hasBusinessEvent={Boolean(flowContext?.businessEventId)}
-      nextRouteLabel={nextFlowNode?.routes[0]}
+      // 用节点标题而不是 routes[0]：后者是路由路径，拼进句子会变成
+      // 「建议下一步前往 /vouchers 继续处理」。
+      nextStepLabel={nextFlowNode?.title}
     />
   );
 
-  const flowSection = (
+  /**
+   * 流程区块只在 AI 真的识别出事项之后才渲染。
+   *
+   * 改造前它是无条件渲染的：flowContext 为 null 时 ProcessFlowCard 会退回「概览」
+   * 模式，把 definition.ts 里全部流程节点摊成一排状态全为 pending 的胶囊，
+   * 顶着「标准业务处理流程」的标题、用 accent 底色压在对话框上方——用户还没开口，
+   * 先看到一张与自己无关的全流程图。这正是 V10 在 /ledger、/tax 上拿掉
+   * FinanceFlowBar 的同一个理由：与业务数据无关的流程图是「领域全景」，不是
+   * 「我这一笔走到哪了」。有了真实事项之后，它才变成后者，那时才值得占版面。
+   */
+  const flowSection = flowContext ? (
     <AssistantFlowSection
       flowContext={flowContext}
       flowTitle={flowTitle}
@@ -279,7 +291,7 @@ export function AssistantPage() {
       currentFlowNode={currentFlowNode}
       nextFlowNode={nextFlowNode}
     />
-  );
+  ) : undefined;
 
   const historySection = (
     <AssistantHistoryPanel visible={showHistory}>
