@@ -1,4 +1,4 @@
-import React from "react";
+import React, { type ReactNode } from "react";
 import type {
   BalanceSheetReport,
   CashFlowReport,
@@ -9,12 +9,12 @@ import type {
 import { ResultBanner } from "../../components/ui/ResultBanner";
 import type { ReportsStatus, ReportsWorkbenchView } from "./report-types";
 import { getWorkbenchViewLabel } from "./reports-helpers";
+import { STATEMENT_VIEWS, isStatementView } from "./reports-tasks";
 import { BalanceSheetPanel } from "./panels/BalanceSheetPanel";
 import { BudgetVariancePanel } from "./panels/BudgetVariancePanel";
 import { CashFlowPanel } from "./panels/CashFlowPanel";
 import { ChairmanSummaryPanel } from "./panels/ChairmanSummaryPanel";
 import { ProfitStatementPanel } from "./panels/ProfitStatementPanel";
-import { ReportDiffPanel } from "./panels/ReportDiffPanel";
 
 type ReportsWorkbenchProps = {
   activeView: ReportsWorkbenchView;
@@ -22,75 +22,106 @@ type ReportsWorkbenchProps = {
   balanceSheet: BalanceSheetReport | null;
   profitStatement: ProfitStatementReport | null;
   cashFlow: CashFlowReport | null;
-  diff: ReportDiffResult | null;
   chairmanSummary: ChairmanReportSummary | null;
+  diff: ReportDiffResult | null;
+  /** 「对比两期变化」这件事的完整工作区（挑快照 + 生成 + 差异结果）。 */
+  comparePanel: ReactNode;
+  onSelectStatement: (view: ReportsWorkbenchView) => void;
   defaultPeriod: string;
 };
 
+const STRIP_STYLE: React.CSSProperties = {
+  display: "grid",
+  gap: 12,
+  padding: "16px 20px",
+  borderRadius: 20,
+  background: "rgba(255,255,255,0.88)",
+  border: "1px solid rgba(20,40,60,0.08)"
+};
+
+const SWITCH_ROW_STYLE: React.CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap" };
+
+const CARD_GRID_STYLE: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: 12
+};
+
+function statementButtonStyle(selected: boolean): React.CSSProperties {
+  return {
+    padding: "8px 14px",
+    minHeight: 40,
+    borderRadius: 12,
+    border: selected ? "1px solid rgba(37,99,235,0.4)" : "1px solid rgba(20,40,60,0.08)",
+    background: selected ? "rgba(37,99,235,0.08)" : "rgba(248,250,252,0.9)",
+    color: selected ? "#1d4ed8" : "#1e2a37",
+    fontWeight: selected ? 700 : 500,
+    cursor: "pointer"
+  };
+}
+
+/**
+ * 当前这件事的结果区：一条「状态 + 关键数字（+ 三表切换）」的紧凑条，加下面一块面板。
+ *
+ * 改造前这里是「结果工作台」大卡（标题 + 说明 + 状态 + 三张数字卡）再叠一块面板，
+ * 说明文案还写着「左侧先固定上下文」——侧栏下线后那句话已经不成立，一并去掉。
+ */
 export function ReportsWorkbench({
   activeView,
   status,
   balanceSheet,
   profitStatement,
   cashFlow,
-  diff,
   chairmanSummary,
+  diff,
+  comparePanel,
+  onSelectStatement,
   defaultPeriod
 }: ReportsWorkbenchProps) {
-  const activeViewLabel = getWorkbenchViewLabel(activeView);
   const summaryCards = resolveSummaryCards(activeView, {
     balanceSheet,
     profitStatement,
     cashFlow,
-    diff,
-    chairmanSummary
+    chairmanSummary,
+    diff
   });
 
   return (
-    <section style={{ display: "grid", gap: "20px" }}>
-      <section
-        style={{
-          display: "grid",
-          gap: "12px",
-          padding: "20px 24px",
-          borderRadius: "20px",
-          background: "rgba(255,255,255,0.88)",
-          border: "1px solid rgba(20,40,60,0.08)"
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", flexWrap: "wrap" }}>
-          <div style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "12px", color: "#6c7a89" }}>结果工作台</span>
-            <h2 style={{ margin: 0, fontSize: "20px", color: "#1e2a37" }}>{activeViewLabel}</h2>
-            <p style={{ margin: 0, fontSize: "13px", color: "#4d5d6c", lineHeight: 1.7 }}>
-              左侧先固定上下文并触发动作，右侧只负责展示当前结果，减少报表、差异和输出信息混写。
-            </p>
+    <>
+      <section style={STRIP_STYLE} aria-label="当前结果概览">
+        {isStatementView(activeView) ? (
+          <div style={SWITCH_ROW_STYLE} role="group" aria-label="选择要看的报表">
+            {STATEMENT_VIEWS.map((view) => (
+              <button
+                key={view}
+                type="button"
+                aria-pressed={activeView === view}
+                onClick={() => onSelectStatement(view)}
+                style={statementButtonStyle(activeView === view)}
+              >
+                {getWorkbenchViewLabel(view)}
+              </button>
+            ))}
           </div>
-        </div>
+        ) : null}
         <ResultBanner tone={status.tone} message={status.message} />
         {summaryCards.length > 0 ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: "12px"
-            }}
-          >
+          <div style={CARD_GRID_STYLE}>
             {summaryCards.map((card) => (
               <div
                 key={card.label}
                 style={{
                   display: "grid",
-                  gap: "4px",
-                  padding: "12px 14px",
-                  borderRadius: "14px",
+                  gap: 4,
+                  padding: "10px 14px",
+                  borderRadius: 14,
                   background: card.tint,
                   border: "1px solid rgba(20,40,60,0.08)"
                 }}
               >
-                <span style={{ fontSize: "11px", color: "#516172", textTransform: "uppercase", letterSpacing: "0.04em" }}>{card.label}</span>
-                <strong style={{ fontSize: "18px", color: "#1e2a37" }}>{card.value}</strong>
-                {card.note ? <span style={{ fontSize: "12px", color: "#607080" }}>{card.note}</span> : null}
+                <span style={{ fontSize: 11, color: "#516172", letterSpacing: "0.04em" }}>{card.label}</span>
+                <strong style={{ fontSize: 18, color: "#1e2a37" }}>{card.value}</strong>
+                {card.note ? <span style={{ fontSize: 12, color: "#607080" }}>{card.note}</span> : null}
               </div>
             ))}
           </div>
@@ -100,10 +131,10 @@ export function ReportsWorkbench({
       {activeView === "balanceSheet" ? <BalanceSheetPanel report={balanceSheet} /> : null}
       {activeView === "profitStatement" ? <ProfitStatementPanel report={profitStatement} /> : null}
       {activeView === "cashFlow" ? <CashFlowPanel report={cashFlow} /> : null}
-      {activeView === "diff" ? <ReportDiffPanel diff={diff} /> : null}
+      {activeView === "diff" ? comparePanel : null}
       {activeView === "chairman" ? <ChairmanSummaryPanel summary={chairmanSummary} /> : null}
       {activeView === "budgetVariance" ? <BudgetVariancePanel defaultPeriod={defaultPeriod} /> : null}
-    </section>
+    </>
   );
 }
 
@@ -114,10 +145,12 @@ type SummaryCard = {
   tint: string;
 };
 
-function resolveSummaryCards(
-  activeView: ReportsWorkbenchView,
-  input: Pick<ReportsWorkbenchProps, "balanceSheet" | "profitStatement" | "cashFlow" | "diff" | "chairmanSummary">
-): SummaryCard[] {
+type SummaryInput = Pick<
+  ReportsWorkbenchProps,
+  "balanceSheet" | "profitStatement" | "cashFlow" | "chairmanSummary" | "diff"
+>;
+
+function resolveSummaryCards(activeView: ReportsWorkbenchView, input: SummaryInput): SummaryCard[] {
   if (activeView === "balanceSheet" && input.balanceSheet) {
     return [
       { label: "资产合计", value: input.balanceSheet.totals.assets, tint: "rgba(37,99,235,0.08)" },

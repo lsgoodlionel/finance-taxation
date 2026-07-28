@@ -1,10 +1,25 @@
+/**
+ * 任务中心（V10 车道 G1：横幅收敛 + 流程可见）。
+ *
+ * 改造前首屏 8 块、9 处 Alert：逾期横幅、未开始横幅、事项过滤横幅、业务指引横幅
+ * 四条并排，下面还压着一整块运维视角的运行态面板，帮助浮层里又叠 3 条 Alert。
+ * 横幅堆叠的结果是用户把它们全部略过。
+ *
+ * 收敛口径：凡是页头已经用标签/按钮表达过的（逾期数、待开始数），横幅一律删；
+ * 属于一次性用法说明的（拖拽推进）收进帮助面板；只有「当前被过滤到某个事项」
+ * 这种真实上下文留下来，并降级成一行可跳转的上下文条。真实的业务指引仍然保留，
+ * 但移进任务列表内部——它讲的是列表里这些任务该怎么办，不该另占一条全宽横幅。
+ *
+ * 这一页只承载一件事（推进任务），看板与列表是同一件事的两种视图，
+ * 因此不套 TaskFocusShell；「这个任务走到哪了」在详情抽屉里由 ObjectFlowBar 表达。
+ */
 import { useEffect, useRef, useState, useMemo } from "react";
 import { PageHeader } from "../components/ui/PageHeader";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Card, Space, Tag, Alert, Tooltip, Button, Segmented, Skeleton, Typography } from "antd";
 import {
   ClockCircleOutlined, ExclamationCircleOutlined, QuestionCircleOutlined,
-  AppstoreOutlined, UnorderedListOutlined, BellOutlined,
+  AppstoreOutlined, UnorderedListOutlined,
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import type { Task, TaskStatus } from "@finance-taxation/domain-model";
@@ -17,6 +32,9 @@ import { useQueryState } from "../hooks/useQueryState";
 import { TaskKanbanView } from "./tasks/TaskKanbanView";
 import { TaskListView } from "./tasks/TaskListView";
 import { TaskDrawer } from "./tasks/TaskDrawer";
+import { TasksHelpPanel } from "./tasks/TasksHelpPanel";
+import { buildTaskFlow, buildTaskFlowTitle, buildTaskRelatedObjects } from "./tasks/task-flow";
+import { needsRuntimeAttention } from "../features/runtime/runtime-attention";
 import { deriveContractRevenueTaskGuidance } from "./tasks/contract-revenue-task-guidance";
 import { derivePurchaseTaskGuidance } from "./tasks/purchase-task-guidance";
 import { deriveTravelTaskGuidance } from "./tasks/travel-task-guidance";
@@ -25,13 +43,33 @@ import { deriveTaskRuntimeSummary } from "../features/runtime/workflow-runtime";
 import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
 import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 type TaskWithOverdue = Task & { isOverdue?: boolean };
 type ViewMode = "list" | "kanban";
 
+const CONTEXT_BAR_STYLE: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "6px 10px",
+  padding: "8px 14px",
+  borderRadius: 10,
+  background: "rgba(37,99,235,0.06)",
+  border: "1px solid rgba(37,99,235,0.16)",
+  fontSize: 13
+};
+
+const DETAILS_SUMMARY_STYLE: React.CSSProperties = {
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#4d5d6c"
+};
+
 export function TasksPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const navState = normalizeDrilldownState(location.state);
   const navEventId = navState.businessEventId ?? null;
   /**
@@ -127,6 +165,16 @@ export function TasksPage() {
     { businessEventId: navEventId ?? undefined },
     localRuntimeSummary
   );
+  const runtimeAttention = needsRuntimeAttention(runtimeSummary);
+
+  const detailFlow = useMemo(
+    () => buildTaskFlow({ task: detailTask, allTasks: tasks }),
+    [detailTask, tasks]
+  );
+  const detailRelated = useMemo(
+    () => buildTaskRelatedObjects({ task: detailTask, allTasks: tasks }),
+    [detailTask, tasks]
+  );
 
   async function handleRuntimeAction(action: NonNullable<typeof runtimeSummary.actions>[number]) {
     if (action.key !== "retry-blocked-task" || !action.params?.taskId) {
@@ -144,116 +192,86 @@ export function TasksPage() {
     }
   }
 
+  function openEventScoped(path: string, businessEventId: string) {
+    navigate(path, { state: { businessEventId } });
+  }
+
+  const runtimePanel = (
+    <WorkflowRuntimePanel
+      title="任务运行态与授权态"
+      summary={runtimeSummary}
+      onAction={(action) => void handleRuntimeAction(action)}
+      busyActionKey={runtimeActionKey}
+    />
+  );
+
   return (
     <div style={{ display: "grid", gap: 24 }}>
-      {/* Hero header */}
+      {/* 1. 页头：逾期/待开始的数量、仅逾期筛选、视图切换、帮助，都在这里 */}
       <section className="v3-hero-shell">
         <PageHeader
           title="任务中心"
           subtitle={buildResultPageSubtitle("任务中心")}
           actions={(
-        <Space wrap>
-          {notStartedCount > 0 && (
-            <Tag icon={<ClockCircleOutlined />} color="blue">{notStartedCount} 待开始</Tag>
-          )}
-          {overdueCount > 0 && (
-            <Tag icon={<ExclamationCircleOutlined />} color="error">{overdueCount} 逾期</Tag>
-          )}
-          <Button
-            type={overdueOnly ? "primary" : "default"}
-            danger={overdueOnly}
-            size="small"
-            onClick={() => {
-              const next = !overdueOnly;
-              setOverdueOnly(next);
-              void loadTasks(next);
-            }}
-          >
-            {overdueOnly ? "显示全部" : "仅逾期"}
-          </Button>
-          <Segmented
-            size="small"
-            value={viewMode}
-            onChange={v => setViewStr(v as ViewMode)}
-            options={[
-              { value: "kanban", icon: <AppstoreOutlined />, label: "看板" },
-              { value: "list",   icon: <UnorderedListOutlined />, label: "列表" },
-            ]}
-            aria-label="视图切换"
-          />
-          <Tooltip title="操作说明">
-            <Button
-              shape="circle"
-              size="small"
-              icon={<QuestionCircleOutlined />}
-              onClick={() => setHelpOpen(true)}
-              aria-label="任务说明"
-            />
-          </Tooltip>
-        </Space>
+            <Space wrap>
+              {notStartedCount > 0 && (
+                <Tag icon={<ClockCircleOutlined />} color="blue">{notStartedCount} 待开始</Tag>
+              )}
+              {overdueCount > 0 && (
+                <Tag icon={<ExclamationCircleOutlined />} color="error">{overdueCount} 逾期</Tag>
+              )}
+              <Button
+                type={overdueOnly ? "primary" : "default"}
+                danger={overdueOnly}
+                size="small"
+                onClick={() => {
+                  const next = !overdueOnly;
+                  setOverdueOnly(next);
+                  void loadTasks(next);
+                }}
+              >
+                {overdueOnly ? "显示全部" : "仅看逾期"}
+              </Button>
+              <Segmented
+                size="small"
+                value={viewMode}
+                onChange={v => setViewStr(v as ViewMode)}
+                options={[
+                  { value: "kanban", icon: <AppstoreOutlined />, label: "看板" },
+                  { value: "list",   icon: <UnorderedListOutlined />, label: "列表" },
+                ]}
+                aria-label="视图切换"
+              />
+              <Tooltip title="操作说明">
+                <Button
+                  shape="circle"
+                  size="small"
+                  icon={<QuestionCircleOutlined />}
+                  onClick={() => setHelpOpen(true)}
+                  aria-label="任务说明"
+                />
+              </Tooltip>
+            </Space>
           )}
         />
       </section>
 
-      {/* Alert banners */}
-      {overdueCount > 0 && (
-        <Alert
-          type="error"
-          showIcon
-          icon={<ExclamationCircleOutlined />}
-          style={{ borderRadius: 8 }}
-          message={
-            <>
-              <Text strong>{overdueCount}</Text> 个任务已逾期，请尽快处理，避免影响税务申报与资料归档。
-            </>
-          }
-          action={
-            <Button size="small" danger ghost
-              icon={<BellOutlined />}
-              onClick={() => { setOverdueOnly(true); void loadTasks(true); }}
-            >
-              查看逾期
-            </Button>
-          }
-        />
-      )}
-      {notStartedCount > 0 && !overdueOnly && (
-        <Alert
-          type="info"
-          showIcon
-          style={{ borderRadius: 8 }}
-          message={
-            <>
-              AI 已为您生成 <Text strong>{notStartedCount}</Text> 个待处理任务。拖拽卡片或点击「开始执行」推进任务。
-            </>
-          }
-        />
-      )}
+      {/* 2. 上下文条：只在被某个事项过滤时出现，取代原来的全宽 Alert 横幅 */}
       {navEventId && (
-        <Alert
-          type="info"
-          showIcon
-          style={{ borderRadius: 8 }}
-          message={<>当前仅显示事项 <EntityLink kind="business_event" id={navEventId} /> 的关联任务。</>}
-        />
+        <div style={CONTEXT_BAR_STYLE} data-testid="tasks-context-bar">
+          <Text style={{ fontSize: 13 }}>当前只看事项</Text>
+          <EntityLink kind="business_event" id={navEventId} />
+          <Text type="secondary" style={{ fontSize: 12 }}>的关联任务</Text>
+          <Button type="link" size="small" style={{ padding: 0 }} onClick={() => navigate("/tasks")}>
+            查看全部任务
+          </Button>
+        </div>
       )}
-      {workflowGuidance && (
-        <Alert
-          type={workflowGuidance.tone === "error" ? "error" : "warning"}
-          showIcon
-          style={{ borderRadius: 8 }}
-          message={workflowGuidance.title}
-          description={workflowGuidance.message}
-        />
-      )}
-      <WorkflowRuntimePanel
-        title="任务运行态与授权态"
-        summary={runtimeSummary}
-        onAction={(action) => void handleRuntimeAction(action)}
-        busyActionKey={runtimeActionKey}
-      />
 
-      {/* Main content */}
+      {/* 3. 运行态：只有确有异常/待授权时才占位，正常时收进下面的折叠区 */}
+      {runtimeAttention && runtimePanel}
+
+      {/* 4. 任务列表（业务指引作为列表内的行内提示，不再另起横幅） */}
       <Card
         title={
           <Space>
@@ -264,6 +282,15 @@ export function TasksPage() {
         styles={{ body: { padding: viewMode === "kanban" ? 16 : 0 } }}
         style={{ borderRadius: 12 }}
       >
+        {workflowGuidance && (
+          <Alert
+            type={workflowGuidance.tone === "error" ? "error" : "warning"}
+            showIcon
+            style={{ margin: viewMode === "kanban" ? "0 0 16px" : "16px 16px 0", borderRadius: 8 }}
+            message={workflowGuidance.title}
+            description={workflowGuidance.message}
+          />
+        )}
         {loading ? (
           <div style={{ padding: 24 }}>
             <Skeleton active paragraph={{ rows: 6 }} />
@@ -286,61 +313,31 @@ export function TasksPage() {
         )}
       </Card>
 
-      {/* Detail drawer */}
+      {/* 5. 正常时收起的运行与授权状态——能力保留，但不占首屏 */}
+      {!runtimeAttention && (
+        <details className="v3-section-shell" data-tone="muted" style={{ padding: "12px 16px" }}>
+          <summary style={DETAILS_SUMMARY_STYLE}>运行与授权状态（当前无异常）</summary>
+          <div style={{ marginTop: 12 }}>{runtimePanel}</div>
+        </details>
+      )}
+
+      {/* 浮层：任务详情与帮助，不占首屏 */}
       <TaskDrawer
         task={detailTask}
+        flow={detailFlow}
+        flowTitle={buildTaskFlowTitle(detailTask?.title)}
+        relatedObjects={detailRelated}
         updatingId={updatingId}
         remindingId={remindingId}
         onClose={() => setDetailTask(null)}
         onStatusChange={handleStatusChange}
         onRemind={handleRemind}
+        onOpenDocuments={(eventId) => openEventScoped("/bills", eventId)}
+        onOpenTax={(eventId) => openEventScoped("/tax", eventId)}
+        onOpenVouchers={(eventId) => openEventScoped("/vouchers", eventId)}
       />
 
-      {/* Help drawer */}
-      <TaskDrawer
-        task={null}
-        updatingId={null}
-        remindingId={null}
-        onClose={() => setHelpOpen(false)}
-        onStatusChange={handleStatusChange}
-        onRemind={handleRemind}
-      />
-      {helpOpen && (
-        <div
-          style={{
-            position: "fixed", inset: 0, zIndex: 1000,
-            background: "rgba(0,0,0,0.4)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-          onClick={() => setHelpOpen(false)}
-        >
-          <div
-            style={{
-              background: "#fff", borderRadius: 16, padding: "28px 32px",
-              maxWidth: 480, width: "90%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)",
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <Title level={5} style={{ margin: 0 }}>任务中心 · 说明</Title>
-              <Button type="text" onClick={() => setHelpOpen(false)}>✕</Button>
-            </div>
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Alert type="info" showIcon
-                message="三个中心的关系"
-                description="任务中心是执行入口；单据中心负责补齐发票、回单；凭证中心负责最终入账。任务中心在三者中最靠前。"
-              />
-              <Alert type="info" showIcon
-                message="看板拖拽说明"
-                description="拖拽卡片到目标列即可更新任务状态。已完成的任务无法继续拖拽到其他列。"
-              />
-              <Alert type="warning" showIcon
-                message="逾期任务以红色高亮显示。若任务长期阻塞，应先定位是资料没补齐还是凭证无法推进，再回到对应页面处理。"
-              />
-            </Space>
-          </div>
-        </div>
-      )}
+      <TasksHelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

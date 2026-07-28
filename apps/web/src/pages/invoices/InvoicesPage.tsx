@@ -10,10 +10,9 @@
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { PageHeader } from "../../components/ui/PageHeader";
 import {
-  Typography, Card, Table, Tag, Button, Space, Modal, Form, Input,
-  Select, DatePicker, Alert, Tabs, Statistic, Row, Col, Upload, Empty, Skeleton,
+  Typography, Card, Table, Tag, Button, Space, Form,
+  Select, Alert, Statistic, Row, Col, Empty, Skeleton,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -27,19 +26,11 @@ import {
   listInvoices, createInvoice, verifyInvoice, ocrInvoice, deleteInvoice, generateInvoiceVoucher,
   parseEInvoice, type Invoice, type EInvoicePayload,
 } from "../../lib/api";
+import { InvoiceEntryModals } from "./InvoiceEntryModals";
+import { INV_TYPE_LABELS, VERIFY_COLOR, VERIFY_LABELS } from "./invoice-labels";
 
 const { Text } = Typography;
 
-const VERIFY_COLOR: Record<string, string> = {
-  pending: "default", verified: "success", invalid: "error", error: "warning",
-};
-const VERIFY_LABELS: Record<string, string> = {
-  pending: "待验真", verified: "已验真", invalid: "不合规", error: "验真异常",
-};
-const INV_TYPE_LABELS: Record<string, string> = {
-  vat_special: "增值税专票", vat_general: "增值税普票", electronic: "电子发票",
-  receipt: "收据", other: "其他",
-};
 
 export function InvoicesPage() {
   const navigate = useNavigate();
@@ -301,64 +292,60 @@ export function InvoicesPage() {
   ];
 
   return (
-    <div style={{ display: "grid", gap: 24 }}>
-      {/* Hero header */}
-      <section className="v3-hero-shell">
-        <PageHeader
-          title="发票台账"
-          subtitle="管理进销项发票，验真防假，关联经营事项"
-          actions={(
-            <Space>
-              <Button icon={<ImportOutlined />} onClick={() => setEInvoiceOpen(true)}>导入数电票</Button>
-              <Button icon={<CameraOutlined />} onClick={() => setOcrOpen(true)}>OCR 识别</Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>手动录入</Button>
-              <Button icon={<SyncOutlined />} onClick={() => void load()} />
-            </Space>
-          )}
-        />
-      </section>
-
-      {/* KPI */}
-      <Row gutter={[16, 16]}>
-        {[
-          { title: "待验真", value: pendingCount, color: pendingCount > 0 ? "#d97706" : "#64748b", icon: <ClockCircleOutlined /> },
-          { title: "已验真", value: verifiedCount, color: "#16a34a", icon: <CheckCircleOutlined /> },
-          { title: "不合规", value: invalidCount, color: invalidCount > 0 ? "#dc2626" : "#64748b", icon: <WarningOutlined /> },
-          { title: "本期进项合计", value: inputTotal.toFixed(2), color: "#2563eb", icon: <AuditOutlined />, prefix: "¥" },
-        ].map(item => (
-          <Col key={item.title} xs={24} sm={12} lg={6}>
-            <Card style={{ borderRadius: 10 }} styles={{ body: { padding: "16px 20px" } }}>
+    // V10：页头与业务链路条已上交 /bills 容器，这里只留「关键数字」与「台账」两块。
+    // 原先的独立筛选行、录入动作行、告警行都并入台账卡的卡头，不再各占一屏行。
+    <div style={{ display: "grid", gap: 16 }}>
+      {/* 关键数字：紧凑一条，替代原来四张大 KPI 卡 */}
+      <Card style={{ borderRadius: 12 }} styles={{ body: { padding: "12px 20px" } }}>
+        <Row gutter={[16, 12]}>
+          {[
+            { title: "待验真", value: pendingCount, color: pendingCount > 0 ? "#d97706" : "#64748b", icon: <ClockCircleOutlined /> },
+            { title: "已验真", value: verifiedCount, color: "#16a34a", icon: <CheckCircleOutlined /> },
+            { title: "不合规", value: invalidCount, color: invalidCount > 0 ? "#dc2626" : "#64748b", icon: <WarningOutlined /> },
+            { title: "本期进项合计", value: inputTotal.toFixed(2), color: "#2563eb", icon: <AuditOutlined />, prefix: "¥" },
+          ].map(item => (
+            <Col key={item.title} xs={12} lg={6}>
               <Statistic title={item.title} value={item.value}
                 prefix={item.prefix ?? item.icon}
-                valueStyle={{ fontSize: 20, color: item.color }} />
-            </Card>
-          </Col>
-        ))}
-      </Row>
+                valueStyle={{ fontSize: 18, color: item.color }} />
+            </Col>
+          ))}
+        </Row>
+      </Card>
 
-      {/* Alert if invalid invoices */}
-      {invalidCount > 0 && (
-        <Alert type="error" showIcon icon={<WarningOutlined />}
-          message={`${invalidCount} 张发票验真未通过，存在合规风险，请及时核查并联系开票方`} />
-      )}
-
-      {/* Filter */}
-      <Space>
-        <Text type="secondary" style={{ fontSize: 13 }}>筛选：</Text>
-        <Select
-          value={directionFilter}
-          onChange={setDirectionFilter}
-          style={{ width: 120 }}
-          options={[
-            { value: "", label: "全部" },
-            { value: "input", label: "进项发票" },
-            { value: "output", label: "销项发票" },
-          ]}
-        />
-      </Space>
-
-      {/* Invoice table */}
-      <Card style={{ borderRadius: 12 }} styles={{ body: { padding: 0 } }}>
+      {/* 发票台账：筛选、录入动作、合规告警与表格同属一块 */}
+      <Card
+        style={{ borderRadius: 12 }}
+        styles={{ body: { padding: 0 } }}
+        title={(
+          <Space size={8}>
+            <Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>筛选</Text>
+            <Select
+              value={directionFilter}
+              onChange={setDirectionFilter}
+              style={{ width: 120 }}
+              aria-label="按发票方向筛选"
+              options={[
+                { value: "", label: "全部" },
+                { value: "input", label: "进项发票" },
+                { value: "output", label: "销项发票" },
+              ]}
+            />
+          </Space>
+        )}
+        extra={(
+          <Space wrap>
+            <Button icon={<ImportOutlined />} onClick={() => setEInvoiceOpen(true)}>导入数电票</Button>
+            <Button icon={<CameraOutlined />} onClick={() => setOcrOpen(true)}>OCR 识别</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>手动录入</Button>
+            <Button icon={<SyncOutlined />} aria-label="刷新发票列表" onClick={() => void load()} />
+          </Space>
+        )}
+      >
+        {invalidCount > 0 && (
+          <Alert type="error" showIcon icon={<WarningOutlined />} style={{ margin: 16 }}
+            message={`${invalidCount} 张发票验真未通过，存在合规风险，请及时核查并联系开票方`} />
+        )}
         {loading ? (
           <div style={{ padding: 24 }}><Skeleton active paragraph={{ rows: 6 }} /></div>
         ) : (
@@ -374,151 +361,33 @@ export function InvoicesPage() {
         )}
       </Card>
 
-      {/* Add invoice modal */}
-      <Modal
-        title={<Space><AuditOutlined />录入发票</Space>}
-        open={addOpen}
-        onOk={() => void handleCreate()}
-        onCancel={() => { setAddOpen(false); form.resetFields(); setOcrResult(null); }}
-        okText="保存"
-        cancelText="取消"
-        width={580}
-      >
-        {ocrResult && (
-          <Alert type="success" showIcon message="OCR 识别结果已预填，请核对后保存"
-            style={{ marginBottom: 12 }} />
-        )}
-        <Form form={form} layout="vertical" size="small" style={{ paddingTop: 8 }}>
-          <Row gutter={12}>
-            <Col span={8}>
-              <Form.Item name="direction" label="发票方向" initialValue="input">
-                <Select options={[{ value: "input", label: "进项" }, { value: "output", label: "销项" }]} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="invoiceType" label="发票类型" initialValue="vat_special">
-                <Select options={Object.entries(INV_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="invoiceDate" label="开票日期" rules={[{ required: true }]}>
-                <DatePicker style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item name="invoiceCode" label="发票代码">
-                <Input placeholder="10位或12位" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="invoiceNo" label="发票号码" rules={[{ required: true }]}>
-                <Input placeholder="8位数字" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="sellerName" label="销售方名称" rules={[{ required: true }]}>
-            <Input placeholder="开票单位名称" />
-          </Form.Item>
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item name="sellerTaxNo" label="销售方税号">
-                <Input placeholder="纳税人识别号" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="buyerName" label="购买方名称">
-                <Input placeholder="本公司名称" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={12}>
-            <Col span={8}>
-              <Form.Item name="amount" label="不含税金额">
-                <Input prefix="¥" placeholder="0.00" />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="taxAmount" label="税额">
-                <Input prefix="¥" placeholder="0.00" />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="taxRate" label="税率">
-                <Input suffix="%" placeholder="13" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="businessEventId" label="关联事项 ID（可选）">
-            <Input placeholder="粘贴经营事项 ID" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* OCR modal */}
-      <Modal
-        title={<Space><CameraOutlined />OCR 发票识别</Space>}
-        open={ocrOpen}
-        onOk={() => void handleOcr()}
-        onCancel={() => { setOcrOpen(false); setOcrText(""); }}
-        okText="识别"
-        cancelText="取消"
-        confirmLoading={ocrLoading}
-        width={520}
-      >
-        <Alert type="info" showIcon style={{ marginBottom: 12 }}
-          message="方法一：上传发票图片（JPG/PNG）；方法二：粘贴发票文字内容" />
-        <Upload.Dragger accept=".jpg,.jpeg,.png" showUploadList={false}
-          beforeUpload={handleImageUpload} style={{ marginBottom: 12 }}>
-          <div style={{ padding: "12px 0" }}>
-            <CameraOutlined style={{ fontSize: 24, color: "#2563eb", marginBottom: 6 }} />
-            <p style={{ fontSize: 13, margin: 0 }}>点击或拖拽发票图片</p>
-          </div>
-        </Upload.Dragger>
-        <Input.TextArea
-          value={ocrText}
-          onChange={e => setOcrText(e.target.value)}
-          placeholder="或粘贴发票文字内容（发票代码、号码、金额、开票日期、购销双方名称等）"
-          rows={5}
-          style={{ fontSize: 12 }}
-        />
-      </Modal>
-
-      {/* Import e-invoice (数电票) modal */}
-      <Modal
-        title={<Space><ImportOutlined />导入数电票</Space>}
-        open={eInvoiceOpen}
-        onOk={() => void handleImportEInvoice()}
-        onCancel={closeEInvoiceModal}
-        okText="解析并导入"
-        cancelText="取消"
-        confirmLoading={eInvoiceLoading}
-        width={560}
-      >
-        <Alert type="info" showIcon style={{ marginBottom: 12 }}
-          message="粘贴数电票结构化 JSON，字段包含 invoiceNumber、issueDate、sellerTaxNo、buyerTaxNo、amount、tax、total，direction 可选（input 进项 / output 销项）" />
-        <Input.TextArea
-          value={eInvoiceText}
-          onChange={e => { setEInvoiceText(e.target.value); setEInvoiceErrors(null); }}
-          placeholder={'{\n  "invoiceNumber": "25332000000012345678",\n  "issueDate": "2026-07-10",\n  "sellerTaxNo": "91330000MA2XXXXXXX",\n  "buyerTaxNo": "91330000MA2YYYYYYY",\n  "amount": 1000.00,\n  "tax": 130.00,\n  "total": 1130.00,\n  "direction": "input"\n}'}
-          rows={10}
-          style={{ fontSize: 12, fontFamily: "monospace" }}
-        />
-        {eInvoiceErrors && (
-          <Alert
-            type="error"
-            showIcon
-            style={{ marginTop: 12 }}
-            message="数电票校验未通过"
-            description={(
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
-                {eInvoiceErrors.map(err => <li key={err}>{err}</li>)}
-              </ul>
-            )}
-          />
-        )}
-      </Modal>
+      <InvoiceEntryModals
+        form={form}
+        entry={{
+          open: addOpen,
+          prefilledByOcr: ocrResult !== null,
+          onSubmit: () => void handleCreate(),
+          onCancel: () => { setAddOpen(false); form.resetFields(); setOcrResult(null); },
+        }}
+        ocr={{
+          open: ocrOpen,
+          text: ocrText,
+          loading: ocrLoading,
+          onTextChange: setOcrText,
+          onUploadImage: handleImageUpload,
+          onSubmit: () => void handleOcr(),
+          onCancel: () => { setOcrOpen(false); setOcrText(""); },
+        }}
+        eInvoice={{
+          open: eInvoiceOpen,
+          text: eInvoiceText,
+          loading: eInvoiceLoading,
+          errors: eInvoiceErrors,
+          onTextChange: (value) => { setEInvoiceText(value); setEInvoiceErrors(null); },
+          onSubmit: () => void handleImportEInvoice(),
+          onCancel: closeEInvoiceModal,
+        }}
+      />
     </div>
   );
 }

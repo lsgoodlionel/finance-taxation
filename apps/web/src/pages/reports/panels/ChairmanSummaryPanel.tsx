@@ -20,7 +20,7 @@ export function ChairmanSummaryPanel({ summary }: ChairmanSummaryPanelProps) {
     ) : (
       <EmptyState
         title="尚未生成老板摘要"
-        description="先在左侧选择一个快照，再点击“生成老板摘要”。"
+        description="切到「对比两期变化」挑一个快照，再点「生成老板摘要」。"
       />
     );
   }

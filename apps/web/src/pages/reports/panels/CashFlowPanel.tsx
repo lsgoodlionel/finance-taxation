@@ -33,7 +33,7 @@ export function CashFlowPanel({ report }: Props) {
   const [view, setView] = useState<View>("table");
 
   if (!report) {
-    return <EmptyState title="暂无现金流量表" description="请先在左侧更新报表，加载当前期间结果。" />;
+    return <EmptyState title="暂无现金流量表" description="请先在页头选择期间并点「更新报表」，加载当前期间结果。" />;
   }
 
   const { totals } = report;
