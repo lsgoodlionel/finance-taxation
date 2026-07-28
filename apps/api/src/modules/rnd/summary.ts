@@ -33,6 +33,17 @@ export function buildRndProjectSummary(
     expenseAmount: formatAmount(expenseAmount),
     capitalizedAmount: formatAmount(capitalizedAmount),
     totalHours: formatAmount(totalHours),
+    /**
+     * 当期加计扣除基数**只含费用化部分**，不含资本化部分。
+     *
+     * 政策依据：财政部、税务总局公告 2023 年第 7 号 —— 未形成无形资产的按实际
+     * 发生额加计 100% 在当期扣除；**已形成无形资产的按成本 200% 摊销**。
+     * 资本化部分同样享受优惠，但通过以后各期的摊销分期实现，不在当期一次性
+     * 计入基数 —— 把它加进来会让当期优惠被高估。
+     *
+     * 前端曾自造过「费用化 + 资本化 × 0.6」的口径，那个 0.6 在政策与本模块里
+     * 都没有出处，已随 V10c 移除。
+     */
     superDeductionEligibleBase: formatAmount(expenseAmount)
   };
 }
