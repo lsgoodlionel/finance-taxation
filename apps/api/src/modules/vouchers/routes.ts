@@ -307,6 +307,21 @@ async function getVoucherForCompany(companyId: string, voucherId: string): Promi
   return rows[0] ?? null;
 }
 
+/**
+ * 取这张凭证的审核人，供过账时校验「复核人 ≠ 过账人」。
+ *
+ * 单独查而不并进 Voucher：审核人只服务于服务端的职责分离判定，不需要进
+ * domain-model 的对外契约，也就不会牵动前端类型。
+ * 返回 null 表示迁移 043 之前审核的历史凭证（无记录），由调用方决定如何放行。
+ */
+async function getVoucherApproverUserId(companyId: string, voucherId: string): Promise<string | null> {
+  const row = await queryOne<{ approved_by_user_id: string | null }>(
+    `select approved_by_user_id from vouchers where id = $1 and company_id = $2`,
+    [voucherId, companyId]
+  );
+  return row?.approved_by_user_id ?? null;
+}
+
 export async function listVouchers(req: ApiRequest, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://127.0.0.1");
   const eventId = url.searchParams.get("businessEventId") || undefined;
@@ -587,10 +602,11 @@ export async function approveVoucher(req: ApiRequest, res: ServerResponse, vouch
         set
           status = 'review_required',
           approved_at = $1::timestamptz,
+          approved_by_user_id = $4,
           updated_at = $1::timestamptz
         where id = $2 and company_id = $3
       `,
-      [now, voucherId, req.auth!.companyId]
+      [now, voucherId, req.auth!.companyId, req.auth!.userId]
     );
     const run = await ensureWorkflowRun(
       client,
@@ -672,11 +688,22 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
     return json(res, 400, { error: "Voucher must be approved before posting" });
   }
   const body = (req.body || {}) as { authorizerUserId?: string; authorizerName?: string };
-  const authorizerUserId = body.authorizerUserId ?? req.auth!.userId;
-  const authorizerName = body.authorizerName ?? req.auth!.username;
+  // 终审人不默认当前用户：过账是高风险动作，规则要求终审人与执行人不同。
+  // 默认成自己只会撞「执行人 == 终审人」冲突，报出的还是含糊的 DUTY_CONFLICT；
+  // 留空则命中 WORKFLOW_AUTHORIZATION_REQUIRED，明确告诉调用方缺终审人。
+  // 校验会保证到达后续流程时 authorizerUserId 必有值，故 name 直接跟随入参。
+  const authorizerUserId = body.authorizerUserId;
+  const authorizerName = body.authorizerName;
+
+  // 复核人必须取自「谁审核的这张凭证」，不能拿当前用户顶替 —— 早前两个角色都填
+  // req.auth.userId，而职责分离规则判定「复核人 == 过账人」即冲突，导致本接口对
+  // 任何调用恒返回 400，过账功能实际不可用。
+  // 迁移 043 之前审核的凭证没有审核人记录（NULL），此时跳过该项校验，否则存量凭证
+  // 永远过不了账；终审人要求与审计留痕不受影响。
+  const reviewerUserId = await getVoucherApproverUserId(req.auth!.companyId, voucherId);
   const authCheck = validateWorkflowAuthorization({
     action: "voucher.post",
-    reviewerUserId: req.auth!.userId,
+    reviewerUserId: reviewerUserId ?? undefined,
     posterUserId: req.auth!.userId,
     executorUserId: req.auth!.userId,
     authorizerUserId
@@ -686,9 +713,21 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
   }
   const previousState = mapVoucherStatusToWorkflowState(target.status);
   const nextState = mapVoucherStatusToWorkflowState("posted");
-  const transitionValidation = validateWorkflowTransition(previousState, nextState);
-  if (!transitionValidation.ok) {
-    return json(res, 400, { error: transitionValidation.message, code: transitionValidation.errorCode });
+  // 过账在状态机上是「开始执行 → 执行完成」两步。通用转移表刻意不允许 under_review
+  // 一步跳到 completed（审核态不能直达终态），而凭证只有 draft/review_required/posted
+  // 三个状态，审核后必然是 under_review —— 此前这里只校验 under_review -> completed，
+  // 于是所有审核过的凭证 100% 被判 WORKFLOW_INVALID_TRANSITION，这是过账失效的第二道闸。
+  // 拆成两步既贴合语义（过账就是执行动作），也让审计留下「执行中」的痕迹，
+  // 且不必为凭证放宽一张对所有资源类型生效的通用转移表。
+  const executingState = "executing" as const;
+  for (const [from, to] of [
+    [previousState, executingState],
+    [executingState, nextState]
+  ] as const) {
+    const transitionValidation = validateWorkflowTransition(from, to);
+    if (!transitionValidation.ok) {
+      return json(res, 400, { error: transitionValidation.message, code: transitionValidation.errorCode });
+    }
   }
 
   const postedAt = new Date().toISOString();
@@ -882,12 +921,25 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
           authorizerName
         })
       );
-      const transition = buildWorkflowTransitionRecord({
+      // 与上面的两步校验一一对应：先记「开始过账」，再记「过账完成」。
+      const startTransition = buildWorkflowTransitionRecord({
         companyId: req.auth!.companyId,
         workflowRunId: run.id,
         resourceType: "voucher",
         resourceId: voucherId,
         previousState,
+        nextState: executingState,
+        actorUserId: req.auth!.userId,
+        actorName: req.auth!.username,
+        basis: "voucher.post.start",
+        ruleVersion: "v4-1a"
+      });
+      const transition = buildWorkflowTransitionRecord({
+        companyId: req.auth!.companyId,
+        workflowRunId: run.id,
+        resourceType: "voucher",
+        resourceId: voucherId,
+        previousState: executingState,
         nextState,
         actorUserId: req.auth!.userId,
         actorName: req.auth!.username,
@@ -911,6 +963,7 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
         authorizerName
       });
       const running = markWorkflowCommandStatus(command, "running", { progress: "posting_voucher" });
+      await insertWorkflowTransition(client, startTransition);
       await insertWorkflowTransition(client, transition);
       await insertWorkflowCommandExecution(client, running);
       await updateWorkflowCommandExecution(
