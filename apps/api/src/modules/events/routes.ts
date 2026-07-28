@@ -1990,6 +1990,54 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
     vouchers: nextVouchers.length
   });
 
+  // 单据与税务事项的诞生点。上面那条 event.analyze 只记了个数，回答不了
+  // 「这份单据是哪次分析生出来的」——而 /audit 的单据/税务事项深链恰恰是按
+  // resourceType=document|tax_item + 对象编号来查的（见 apps/web/src/pages/
+  // drilldown.ts 的 resolveAuditContextFromState），不逐条留痕那两个深链永远是空。
+  //
+  // 对象 id 是确定性的（doc-<eventId>-<type> / tax-item-<eventId>-<taxType>），
+  // 重新分析会删旧建新、id 不变，所以这里如实记成又一次 created：
+  // 同一个 id 上的多条 created 就是「这个对象被重建过几次」，本身即事实。
+  for (const document of nextDocuments) {
+    writeAudit({
+      companyId: analyzedEvent.companyId,
+      userId: req.auth!.userId,
+      userName: req.auth!.username,
+      action: "document.created",
+      resourceType: "document",
+      resourceId: document.id,
+      resourceLabel: document.title,
+      changes: {
+        data: {
+          businessEventId: document.businessEventId,
+          documentType: document.documentType,
+          ownerDepartment: document.ownerDepartment,
+          status: document.status
+        }
+      }
+    });
+  }
+  for (const taxItem of nextTaxItems) {
+    writeAudit({
+      companyId: analyzedEvent.companyId,
+      userId: req.auth!.userId,
+      userName: req.auth!.username,
+      action: "tax_item.created",
+      resourceType: "tax_item",
+      resourceId: taxItem.id,
+      resourceLabel: `${taxItem.taxType} ${taxItem.filingPeriod}`,
+      changes: {
+        data: {
+          businessEventId: taxItem.businessEventId,
+          taxType: taxItem.taxType,
+          treatment: taxItem.treatment,
+          filingPeriod: taxItem.filingPeriod,
+          status: taxItem.status
+        }
+      }
+    });
+  }
+
   return json(res, 200, {
     eventId,
     generatedTasks: generatedTasks.length,

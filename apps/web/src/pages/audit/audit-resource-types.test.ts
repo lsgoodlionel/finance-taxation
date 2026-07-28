@@ -13,24 +13,30 @@ function assert(condition: unknown, message: string): asserts condition {
   }
 }
 
-// ── 三个查不出东西的选项必须被标出来，而不是留给空列表去误导人 ────────────────
+// ── 三类历史欠账已经补上写入点，必须当正常对象对待 ──────────────────────────
 //
-// 依据：apps/api/src 全量扫描 writeAudit() 的 resourceType（29 个取值），
-// document / tax_item / risk_finding 一个都不在其中。
+// 之前 document / tax_item / risk_finding 在 apps/api 里一条审计日志都不写，
+// 三个选项选了就是空列表。写入点已补齐：
+// - risk_finding：modules/risk/routes.ts（扫描开启/重新打开/消解 + 关闭复核）
+// - tax_item：modules/events/routes.ts 生成 + modules/tax/routes.ts 修改/状态/并批
+// - document：modules/events/routes.ts 生成 + modules/documents/routes.ts 修改/
+//   状态/挂附件/归档
+// 所以它们现在既要能筛、又不得再挂「查不到」的说明——那句话已经不是实话了。
 
 for (const resourceType of ["document", "tax_item", "risk_finding"]) {
-  assert(isUnauditedResourceType(resourceType), `${resourceType} 后端不写审计日志，必须标为无审计来源`);
+  assert(resourceType in AUDIT_RESOURCE_TYPE_LABELS, `${resourceType} 后端已留痕，应当可以直接筛`);
+  assert(!isUnauditedResourceType(resourceType), `${resourceType} 已有审计来源，不得再标为无来源`);
   assert(
-    (describeUnauditedResourceType(resourceType) ?? "").length > 10,
-    `${resourceType} 要给出一句「为什么查不到、该去哪儿查」的实话`
-  );
-  assert(
-    !(resourceType in AUDIT_RESOURCE_TYPE_LABELS),
-    `${resourceType} 不得混进「有审计来源」的正常清单里`
+    describeUnauditedResourceType(resourceType) === null,
+    `${resourceType} 已有审计来源，不该再给出「查不到」的说明`
   );
 }
 
 assert(describeUnauditedResourceType("voucher") === null, "凭证有审计来源，不该给出「查不到」的说明");
+
+// 清单清空，但机制留着：真出现没有审计来源的类型时登记进去，页面会把原因说出来。
+// 这条断言的作用是逼着「补后端」和「清清单」同时发生，而不是各走各的。
+assert(Object.keys(UNAUDITED_RESOURCE_TYPES).length === 0, "已无后端不留痕的对象类型");
 
 // ── 下拉里的每一项都必须是后端真的会写的类型 ────────────────────────────────
 //
@@ -39,8 +45,9 @@ assert(describeUnauditedResourceType("voucher") === null, "凭证有审计来源
 
 const VERIFIED_AUDIT_WRITERS = [
   "bank_statement", "business_event", "close_period", "contract", "counterparty",
-  "employee", "export_job", "filing_period", "invoice", "knowledge_item",
-  "payroll", "payroll_transfer_batch", "task", "tax_declaration_submission", "voucher"
+  "document", "employee", "export_job", "filing_period", "invoice", "knowledge_item",
+  "payroll", "payroll_transfer_batch", "risk_finding", "task", "tax_declaration_submission",
+  "tax_item", "voucher"
 ];
 
 for (const resourceType of Object.keys(AUDIT_RESOURCE_TYPE_LABELS)) {
@@ -66,8 +73,18 @@ for (const resourceType of ["invoice", "bank_statement", "counterparty", "task",
   const options = buildResourceTypeOptions("risk_finding");
   const matched = options.find((option) => option.value === "risk_finding");
   assert(matched, "从 /risk 跳进来时下拉必须有匹配项");
-  assert(matched.unaudited, "该项要标记为无审计来源");
-  assert(matched.label.includes("无审计来源"), "标签要把「查不到是因为没有来源」说在明处");
+  assert(!matched.unaudited, "风险发现现在有审计来源");
+  assert(matched.label === "风险发现", "该项就是一个普通选项，不该再挂「无审计来源」");
+}
+
+// 单据与税务事项同理：drilldown.ts 的 resolveAuditContextFromState 会把
+// documentId / taxItemId 映射成这两个 resourceType。
+for (const resourceType of ["document", "tax_item"]) {
+  const options = buildResourceTypeOptions(resourceType);
+  const matched = options.find((option) => option.value === resourceType);
+  assert(matched, `从深链带 ${resourceType} 进来时下拉必须有匹配项`);
+  assert(!matched.unaudited, `${resourceType} 现在有审计来源`);
+  assert(!matched.label.includes("无审计来源"), `${resourceType} 不该再挂「无审计来源」`);
 }
 
 {
@@ -91,6 +108,7 @@ for (const resourceType of ["invoice", "bank_statement", "counterparty", "task",
 // ── 类型显示名：表格、详情、下拉共用一份 ────────────────────────────────────
 
 assert(describeResourceType("voucher") === "凭证", "已知类型给中文名");
-assert(describeResourceType("risk_finding") === "风险发现", "无审计来源的类型在表格里仍要能显示中文名");
+assert(describeResourceType("risk_finding") === "风险发现", "风险发现在表格里要显示中文名");
+assert(describeResourceType("document") === "单据", "单据在表格里要显示中文名");
+assert(describeResourceType("tax_item") === "税务事项", "税务事项在表格里要显示中文名");
 assert(describeResourceType("some_future_type") === "some_future_type", "未知类型回落到原始取值，而不是留空");
-assert(Object.keys(UNAUDITED_RESOURCE_TYPES).length === 3, "无审计来源的类型目前恰好三个");

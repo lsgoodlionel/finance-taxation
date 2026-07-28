@@ -20,7 +20,24 @@ const ACTION_LABELS: Record<string, string> = {
   confirm: "确认工资",
   analyze: "AI 分析",
   "payroll.transfer.disbursed": "标记已代发",
-  "payroll.transfer.compensated": "补偿联动事项"
+  "payroll.transfer.compensated": "补偿联动事项",
+  // 单据 / 税务事项 / 风险发现三类的留痕（apps/api 的 modules/documents、
+  // modules/tax、modules/risk、以及 modules/events 的 analyzeEvent）。
+  // 不给中文名不会出错——下面会回落到原始取值——但审计员看到的是
+  // `risk.finding.reopened` 这种给机器看的字符串。
+  "document.created": "生成单据",
+  "document.updated": "修改单据",
+  "document.status_changed": "单据状态变更",
+  "document.attachment_added": "上传单据附件",
+  "document.archived": "单据归档",
+  "tax_item.created": "生成税务事项",
+  "tax_item.updated": "修改税务事项",
+  "tax_item.status_changed": "税务事项状态变更",
+  "tax_item.batched": "并入申报批次",
+  "risk.finding.opened": "风险开启",
+  "risk.finding.reopened": "风险重新打开",
+  "risk.finding.cleared": "风险已消解",
+  "risk.finding.closed": "风险关闭复核"
 };
 
 function panelStyle() {

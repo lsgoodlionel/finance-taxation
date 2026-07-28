@@ -103,23 +103,29 @@ function makeLog(id: string, action: string, resourceId: string): AuditLog {
   assert(!html.includes("保留数据库现场"), "通过时不得出现事故处置话术");
 }
 
-// ── 选到没有审计来源的类型时，说实话而不是让空列表去误导 ─────────────────────
+// ── 后端补齐留痕后，这三类不得再挂「查不到」的说明 ───────────────────────────
+//
+// 曾经 risk_finding / document / tax_item 在 apps/api 一条审计日志都不写，这里
+// 断言的是「要说清为什么查不到」。写入点补齐后（见 audit-resource-types.ts 的
+// 清单注释），那句话变成了假话——它会让审计员放弃一条真的查得到的线索。
 {
-  const html = renderToStaticMarkup(
-    createElement(AuditFiltersBar, {
-      resourceType: "risk_finding",
-      resourceId: "",
-      fromDate: "",
-      toDate: "",
-      onResourceTypeChange: noop,
-      onResourceIdChange: noop,
-      onFromDateChange: noop,
-      onToDateChange: noop,
-      onSearch: noop,
-      onReset: noop
-    })
-  );
-  assert(html.includes("风险发现不写审计日志"), "要说清为什么查不到");
+  for (const resourceType of ["risk_finding", "document", "tax_item"]) {
+    const html = renderToStaticMarkup(
+      createElement(AuditFiltersBar, {
+        resourceType,
+        resourceId: "",
+        fromDate: "",
+        toDate: "",
+        onResourceTypeChange: noop,
+        onResourceIdChange: noop,
+        onFromDateChange: noop,
+        onToDateChange: noop,
+        onSearch: noop,
+        onReset: noop
+      })
+    );
+    assert(!html.includes("不写审计日志"), `${resourceType} 已有审计来源，不该再挂这句提示`);
+  }
 
   const normal = renderToStaticMarkup(
     createElement(AuditFiltersBar, {

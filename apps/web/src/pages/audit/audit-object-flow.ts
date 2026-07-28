@@ -23,8 +23,10 @@
  *   关闭这一步」，画出来是误导。
  * - export_job / invoice / knowledge_item / task 等：动作之间没有后端强制的先后，
  *   属于并列事件流，不是流程。
- * - document / tax_item / risk_finding：后端**一条审计日志都不写**（见
- *   audit-resource-types.ts 的核对结果），连事件流都没有。
+ * - document / tax_item / risk_finding：这三类现在**确实会留痕**了（写入点见
+ *   audit-resource-types.ts 的清单注释），但同样不画流程，理由和 contract 一样：
+ *   单据的归档、税务事项的改口径、风险发现的关闭都不是「还差一步没做」——
+ *   一份正在履行的单据画成卡在归档那步，是误导。
  *
  * reverse（凭证冲红）也没有画进流程：它是对已过账凭证的纠错，不是第三步。
  */

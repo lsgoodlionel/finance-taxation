@@ -82,9 +82,10 @@ const COMPLETE_PAGE = { total: 3, limit: 50, offset: 0 };
     );
   }
 
-  // 后端一条审计日志都不写的类型，连事件流都没有。
+  // 这三类已经会留痕了，但动作之间没有后端强制的先后（归档/改口径/关闭都不是
+  // 「还差一步没做」），仍然不得画成流程。
   for (const resourceType of ["document", "tax_item", "risk_finding"]) {
-    assert(!hasAuditedSequence(resourceType), `${resourceType} 后端不写审计日志，不得画流程`);
+    assert(!hasAuditedSequence(resourceType), `${resourceType} 的动作之间没有强制先后，不得画流程`);
   }
 }
 
