@@ -298,15 +298,11 @@ test("buildDashboardSnapshot reports zero 所得税费用 when the period has no
 
 // ─── V11：结转损益排除 + 整元展示口径自洽 ────────────────────────────────────
 
-/**
- * 构造一条结转损益分录。`LedgerEntry.source` 的类型目前被窄化成
- * `"voucher_posting"` 字面量，而 closePeriod 实际写入 `"period_closing"`，
- * 因此这里必须绕过类型（类型与运行时的偏差已在报告中记录）。
- */
+/** 构造一条结转损益分录。 */
 function closingLedgerEntry(
   overrides: Partial<LedgerEntry> & { id: string; accountCode: string }
 ): LedgerEntry {
-  return { ...ledgerEntry(overrides), source: "period_closing" } as unknown as LedgerEntry;
+  return { ...ledgerEntry(overrides), source: "period_closing" };
 }
 
 test("dashboard profit overview ignores period-closing entries for the closed period", () => {

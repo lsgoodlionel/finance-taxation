@@ -301,7 +301,7 @@ function makeClosingEntry(
     ...makeEntry(id, accountCode, accountName, debit, credit),
     summary: "期末结转 2026-04",
     source: "period_closing"
-  } as unknown as LedgerEntry;
+  };
 }
 
 /**
