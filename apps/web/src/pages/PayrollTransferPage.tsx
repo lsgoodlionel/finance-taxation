@@ -1,21 +1,28 @@
 /**
- * 工资代发与社保工作台（P3 代发批次 + P4 社保关账）
- * route: /payroll/transfer
- * 采用 V3 hero/section 壳层风格（对齐总账中心）。
+ * 工资代发（P3 代发批次）与社保关账（P4）的两件事。
+ *
+ * V10 车道 B1：本页不再自持壳层。改造前它是 /payroll 域 Tab 下的一整页——
+ * 自己又摆了一次 PageHeader、一排三个 Statistic、运行态面板，再把「代发批次」
+ * 和「社保关账」并排塞进左右两栏。用户点两层 Tab 进来，看到的仍是两件不相干的事。
+ *
+ * 现在由 PayrollDomainPage 的 TaskFocusShell 统一决定「当前在做哪件事」，本组件
+ * 按 activeTask 只渲染其中一件：
+ * - transfer：这笔代发办到哪了（ObjectFlowBar）+ 批次清单/明细；
+ * - social：社保关账。
+ * 三个 Statistic 并进了 TransferBatchListCard 的表头汇总行，运行态面板改为
+ * 「有异常才占视线」（同 /tax、/vouchers 的 needsRuntimeAttention 口径）。
  */
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import {
-  Alert, Button, Col, Divider, Row, Space, Spin, Statistic,
-  message as antdMessage,
-} from "antd";
-import { FileDoneOutlined } from "@ant-design/icons";
+import { Alert, Space, Spin, message as antdMessage } from "antd";
 import { toast } from "sonner";
-import { PageHeader } from "../components/ui/PageHeader";
+import { ObjectFlowBar } from "../components/ui/ObjectFlowBar";
+import { Term } from "../components/ui/Term";
 import { SalaryAccountDrawer } from "./payroll-transfer/SalaryAccountDrawer";
 import { SocialSecurityCloseCard } from "./payroll-transfer/SocialSecurityCloseCard";
 import { TransferBatchDetailCard } from "./payroll-transfer/TransferBatchDetailCard";
 import { TransferBatchListCard } from "./payroll-transfer/TransferBatchListCard";
+import { buildTransferBatchFlow, buildTransferBatchFlowTitle } from "./payroll-transfer/transfer-batch-flow";
 import { useTransferBatchWorkflow } from "./payroll-transfer/useTransferBatchWorkflow";
 import { usePeriod } from "../lib/period-context";
 import { closeSocialSecurity } from "../lib/api";
@@ -23,9 +30,25 @@ import { useAccessUser } from "../features/runtime/useAccessUser";
 import { derivePayrollTransferRuntimeSummary } from "../features/runtime/workflow-runtime";
 import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
 import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
+import { needsRuntimeAttention } from "../features/runtime/runtime-attention";
 import { normalizeDrilldownState } from "./drilldown";
+import { PAYROLL_TASK_KEYS, type PayrollTaskKey } from "./payroll/payroll-tasks";
 
-export function PayrollTransferPage() {
+const HINT_STYLE: React.CSSProperties = { margin: 0, fontSize: 13, lineHeight: 1.7, color: "#6c7a89" };
+
+const DETAILS_SUMMARY_STYLE: React.CSSProperties = {
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#4d5d6c"
+};
+
+export interface PayrollTransferPageProps {
+  /** 由 PayrollDomainPage 的任务切换器决定；缺省时按「发工资」渲染。 */
+  activeTask?: PayrollTaskKey;
+}
+
+export function PayrollTransferPage({ activeTask = PAYROLL_TASK_KEYS.transfer }: PayrollTransferPageProps) {
   const location = useLocation();
   const navState = normalizeDrilldownState(location.state);
   const navBatchId = navState.resourceType === "payroll_transfer_batch" ? navState.resourceId ?? null : null;
@@ -73,40 +96,64 @@ export function PayrollTransferPage() {
     } finally { setBusy(false); }
   }
 
-  const totalAmount = batches.reduce((s, b) => s + Number(b.total_amount), 0);
-  const disbursedCount = batches.filter(b => b.status === "disbursed" || b.status === "confirmed").length;
   const localRuntimeSummary = derivePayrollTransferRuntimeSummary(batches, selected?.batch ?? null, accessUser?.roleIds ?? []);
   const runtimeSummary = useWorkflowRuntimeSummary(
     "payroll-transfer",
     { batchId: selected?.batch.id ?? undefined },
     localRuntimeSummary
   );
+  const runtimeAttention = needsRuntimeAttention(runtimeSummary);
+
+  const runtimePanel = (
+    <WorkflowRuntimePanel
+      title="工资代发运行态与授权态"
+      summary={runtimeSummary}
+      onAction={(action) => void workflow.handleRuntimeAction(action)}
+      busyActionKey={runtimeActionKey}
+    />
+  );
+
+  /** 一切正常时把运行态折起来，只在确有失败/待授权时让它占视线（同 /tax 口径）。 */
+  const runtimeSection = runtimeAttention ? runtimePanel : (
+    <details className="v3-section-shell" data-tone="muted" style={{ padding: "12px 16px" }}>
+      <summary style={DETAILS_SUMMARY_STYLE}>运行与授权状态（当前无异常）</summary>
+      <div style={{ marginTop: "12px" }}>{runtimePanel}</div>
+    </details>
+  );
 
   if (loading) return <div style={{ padding: 40, textAlign: "center" }}><Spin /></div>;
 
-  return (
-    <div style={{ display: "grid", gap: 24 }}>
-      <section className="v3-hero-shell">
-        <PageHeader title="工资代发与社保" subtitle="生成银行代发文件、推进代发流程，并在工资关账后一键生成社保申报与三险一金凭证。"
-          actions={<Button onClick={() => setAcctOpen(true)}>维护工资账号</Button>} />
-      </section>
+  if (activeTask === PAYROLL_TASK_KEYS.social) {
+    return (
+      <>
+        <SocialSecurityCloseCard
+          ssPeriod={ssPeriod}
+          busy={busy}
+          ssResult={ssResult}
+          onSsPeriodChange={setSsPeriod}
+          onClose={handleSsClose}
+        />
+        <p style={HINT_STYLE}>
+          关账要求该期间的工资已经全部确认，所以正常次序是先「算这个月的工资」、再「发这个月的工资」，最后在这里关账。
+          关账生成的是<Term k="voucher">凭证</Term>草稿，仍需到凭证中心复核后<Term k="posting">过账</Term>。
+        </p>
+      </>
+    );
+  }
 
-      <section className="v3-section-shell" data-tone="accent">
-        <Row gutter={16}>
-          <Col span={8}><Statistic title="代发批次" value={batches.length} prefix={<FileDoneOutlined />} /></Col>
-          <Col span={8}><Statistic title="累计代发金额" value={totalAmount} precision={2} prefix="¥" /></Col>
-          <Col span={8}><Statistic title="已代发批次" value={disbursedCount} valueStyle={{ color: "#16a34a" }} /></Col>
-        </Row>
-      </section>
-      <WorkflowRuntimePanel
-        title="工资代发运行态与授权态"
-        summary={runtimeSummary}
-        onAction={(action) => void workflow.handleRuntimeAction(action)}
-        busyActionKey={runtimeActionKey}
-      />
+  const batchFlow = buildTransferBatchFlow(selected?.batch ?? null);
+
+  return (
+    <>
+      {batchFlow ? (
+        <ObjectFlowBar flow={batchFlow} title={buildTransferBatchFlowTitle(selected?.batch ?? null)} />
+      ) : (
+        <p style={HINT_STYLE}>
+          还没有选中代发批次。在下面的清单里点一个批次，这里就会显示这笔钱办到哪一步、下一步该谁做。
+        </p>
+      )}
 
       <div className="v3-result-grid v3-result-grid--wide">
-        {/* 左：批次列表 + 生成 */}
         <TransferBatchListCard
           batches={batches}
           selectedBatchId={selected?.batch.id ?? null}
@@ -115,9 +162,9 @@ export function PayrollTransferPage() {
           onGenPeriodChange={setGenPeriod}
           onGenerate={workflow.handleGenerate}
           onSelectBatch={selectBatch}
+          onOpenSalaryAccounts={() => setAcctOpen(true)}
         />
 
-        {/* 右：批次详情 + 社保关账 */}
         <div className="v3-workbench-card">
           <section className="v3-section-shell">
             <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -134,27 +181,18 @@ export function PayrollTransferPage() {
               ) : (
                 <Alert type="info" showIcon message="从左侧选择代发批次查看明细与操作，或先生成新批次。" />
               )}
-
-              <Divider style={{ margin: "4px 0" }} />
-
-              {/* 社保关账 */}
-              <SocialSecurityCloseCard
-                ssPeriod={ssPeriod}
-                busy={busy}
-                ssResult={ssResult}
-                onSsPeriodChange={setSsPeriod}
-                onClose={handleSsClose}
-              />
             </Space>
           </section>
         </div>
       </div>
+
+      {runtimeSection}
 
       <SalaryAccountDrawer
         open={acctOpen}
         onClose={() => setAcctOpen(false)}
         onSaved={() => { if (selected) void selectBatch(selected.batch.id); }}
       />
-    </div>
+    </>
   );
 }

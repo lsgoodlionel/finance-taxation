@@ -1661,12 +1661,23 @@ async function loadAnalyzeGuardInput(
   companyId: string,
   eventId: string
 ): Promise<AnalyzeGuardInput> {
-  const voucherResult = await client.query<{ id: string; status: string }>(
+  // `reversed_by` 反查这张凭证有没有被红冲过。已被红冲的凭证账务影响已归零，
+  // 不该再拦着重新分析——否则红冲做完了事项依然是死路，等于没有出口。
+  const voucherResult = await client.query<{ id: string; status: string; reversed_by: string | null }>(
     `
-      select id, status
-      from vouchers
-      where company_id = $1 and business_event_id = $2
-      order by id
+      select
+        v.id,
+        v.status,
+        (
+          select r.id from vouchers r
+          where r.company_id = v.company_id
+            and r.reverses_voucher_id = v.id
+            and r.status = 'posted'
+          limit 1
+        ) as reversed_by
+      from vouchers v
+      where v.company_id = $1 and v.business_event_id = $2
+      order by v.id
       for update
     `,
     [companyId, eventId]
@@ -1696,7 +1707,11 @@ async function loadAnalyzeGuardInput(
     : { rows: [] as { period: string }[] };
 
   return {
-    postedVoucherIds: voucherResult.rows.filter((row) => row.status === "posted").map((row) => row.id),
+    // 只有**未被红冲**的已过账凭证才构成阻断：红冲凭证自身也要过账，
+    // 冲销完成后原凭证的账务影响已归零，再拦就没有出口了。
+    postedVoucherIds: voucherResult.rows
+      .filter((row) => row.status === "posted" && !row.reversed_by)
+      .map((row) => row.id),
     lockedPeriods: lockedResult.rows.map((row) => row.period)
   };
 }

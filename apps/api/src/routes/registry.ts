@@ -97,6 +97,7 @@ import {
   listVouchers,
   listVoucherPostingRecords,
   postVoucher,
+  reverseVoucher,
   validateVoucher,
   updateVoucher
 } from "../modules/vouchers/routes.js";
@@ -659,6 +660,15 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "ledger.post",
     handler: (req, res, p) => postVoucher(req, res, p.id!)
+  },
+  // 红冲是已过账凭证唯一合法的更正出口（analyze 的硬删路径已被堵成 409）。
+  // 生成的是 draft 凭证，仍需人工审核 + 过账，故与记账同级而非更高。
+  {
+    method: "POST",
+    path: "/api/vouchers/:id/reverse",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => reverseVoucher(req, res, p.id!)
   },
   {
     method: "POST",

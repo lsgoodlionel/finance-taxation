@@ -33,6 +33,7 @@ import {
   mapVoucherStatusToWorkflowState,
   validateWorkflowTransition
 } from "../workflows/runtime.js";
+import { buildReversalLines, canReverseVoucher } from "./reversal.js";
 
 interface VoucherRow {
   id: string;
@@ -512,6 +513,126 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
   });
 
   return json(res, 201, voucher);
+}
+
+/**
+ * 红冲：为已过账凭证生成一张借贷相反的冲销凭证。
+ *
+ * 这是已过账凭证唯一合法的更正出口。此前 `POST /api/events/:id/analyze` 会连同
+ * 已过账凭证与其总账分录一起硬删（无留痕），该路径已被闸门堵成 409；但堵死之后
+ * 系统没有任何更正入口，已过账事项就此进入死路 —— 本接口就是那个出口。
+ *
+ * 红冲凭证以 `draft` 落库，与普通凭证走完全相同的审核 → 过账流程：它同样是一笔
+ * 真实账务，没有理由绕开职责分离。**刻意不自动过账**。
+ */
+export async function reverseVoucher(req: ApiRequest, res: ServerResponse, voucherId: string) {
+  const target = await getVoucherForCompany(req.auth!.companyId, voucherId);
+  if (!target) {
+    return json(res, 404, { error: "Voucher not found" });
+  }
+
+  const meta = await queryOne<{ reverses_voucher_id: string | null; reversed_by: string | null }>(
+    `
+      select
+        v.reverses_voucher_id,
+        (
+          select r.id from vouchers r
+          where r.company_id = v.company_id and r.reverses_voucher_id = v.id
+          limit 1
+        ) as reversed_by
+      from vouchers v
+      where v.id = $1 and v.company_id = $2
+    `,
+    [voucherId, req.auth!.companyId]
+  );
+  const verdict = canReverseVoucher({
+    status: target.status,
+    postedAt: target.postedAt,
+    reversesVoucherId: meta?.reverses_voucher_id ?? null,
+    alreadyReversed: Boolean(meta?.reversed_by)
+  });
+  if (!verdict.ok) {
+    return json(res, 409, { error: verdict.message, code: verdict.errorCode });
+  }
+
+  // 原凭证所在期间已锁账时不得再动它的账 —— 与过账同一条铁律。
+  // 期间取原凭证总账分录的实际 entry_date，而不是"当前月"：跨月红冲用当前月判定
+  // 会直接绕过对原期间的锁。
+  const lockedPeriod = await queryOne<{ period: string }>(
+    `
+      select distinct to_char(le.entry_date, 'YYYY-MM') as period
+      from ledger_entries le
+      join accounting_periods ap
+        on ap.company_id = le.company_id and ap.period = to_char(le.entry_date, 'YYYY-MM')
+      where le.company_id = $1 and le.voucher_id = $2 and ap.is_locked
+      limit 1
+    `,
+    [req.auth!.companyId, voucherId]
+  );
+  if (lockedPeriod) {
+    return json(res, 409, {
+      error: `原凭证所属会计期间 ${lockedPeriod.period} 已锁账，无法红冲。请先解锁该期间。`,
+      code: "VOUCHER_PERIOD_LOCKED"
+    });
+  }
+
+  const now = new Date().toISOString();
+  const reversalId = `vch-rev-${voucherId}-${Date.now()}`;
+  const reversalLines = buildReversalLines(target.lines);
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `
+        insert into vouchers (
+          id, company_id, business_event_id, mapping_id, voucher_type, summary,
+          status, source, reverses_voucher_id, created_at, updated_at
+        ) values ($1, $2, $3, $4, $5, $6, 'draft', 'reversal', $7, $8::timestamptz, $8::timestamptz)
+      `,
+      [
+        reversalId,
+        target.companyId,
+        target.businessEventId,
+        target.mappingId,
+        target.voucherType,
+        `红冲：${target.summary}`,
+        voucherId,
+        now
+      ]
+    );
+    for (const [index, line] of reversalLines.entries()) {
+      await client.query(
+        `
+          insert into voucher_lines (
+            id, voucher_id, summary, account_code, account_name, debit, credit, sort_order
+          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8)
+        `,
+        [
+          `${reversalId}-${index + 1}`,
+          reversalId,
+          line.summary,
+          line.accountCode,
+          line.accountName,
+          line.debit,
+          line.credit,
+          index
+        ]
+      );
+    }
+  });
+
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: "reverse",
+    resourceType: "voucher",
+    resourceId: voucherId,
+    resourceLabel: target.summary,
+    changes: { data: { reversalVoucherId: reversalId, lineCount: reversalLines.length } }
+  });
+
+  const created = await getVoucherForCompany(req.auth!.companyId, reversalId);
+  return json(res, 201, created);
 }
 
 export async function getVoucherDetail(req: ApiRequest, res: ServerResponse, voucherId: string) {

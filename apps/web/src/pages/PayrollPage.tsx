@@ -1,4 +1,15 @@
-import { useEffect, useState } from "react";
+/**
+ * 工资管理里的三件事：算工资 / 维护员工档案 / 设参数口径。
+ *
+ * V10 车道 B1：本页不再自持壳层与页内 Tab 条。改造前它同时是「域 Tab 的一页」和
+ * 「自己再分三个 Tab 的一页」——加上 PayrollRunWizard 的 6 步，用户要点三层才摸到
+ * 具体操作，而前两层讲的是同一件事：工资域里有哪几件事可做。
+ *
+ * 现在由 PayrollDomainPage 的 TaskFocusShell 统一承担那一层，本组件按 activeTask
+ * 只渲染其中一件事的工作区。PayrollRunWizard 的 6 步保留不动——那是一件事内部的
+ * 分步，与「几件事之间的取舍」不是一回事。
+ */
+import React, { useEffect, useState } from "react";
 import { PayrollRunWizard } from "./payroll/PayrollRunWizard";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { PayrollPeriodSummary, PayrollRecord, PayrollTaxReviewLedger } from "@finance-taxation/domain-model";
@@ -15,10 +26,7 @@ import {
 import { usePeriod } from "../lib/period-context";
 import { resolvePayrollLinkedEventId } from "./payroll-closure";
 import { PayrollEmployeesTabPanel } from "./payroll/PayrollEmployeesTabPanel";
-import { PayrollHeader } from "./payroll/PayrollHeader";
 import { PayrollPolicyTabPanel } from "./payroll/PayrollPolicyTabPanel";
-import { PayrollShell } from "./payroll/PayrollShell";
-import { PayrollTabBar, type PayrollTab } from "./payroll/PayrollTabBar";
 import {
   EMPTY_EMP_FORM,
   isPayrollPolicyMissingError,
@@ -26,6 +34,7 @@ import {
   policyToForm
 } from "./payroll/payroll-page-helpers";
 import { buildPayrollPageSummaries } from "./payroll/payroll-page-summaries";
+import { PAYROLL_TASK_KEYS, type PayrollTaskKey } from "./payroll/payroll-tasks";
 import { usePayrollEmployeesState } from "./payroll/usePayrollEmployeesState";
 import { usePayrollEventLinkage } from "./payroll/usePayrollEventLinkage";
 import { usePayrollLinkedArtifacts } from "./payroll/usePayrollLinkedArtifacts";
@@ -33,16 +42,29 @@ import { usePayrollPolicyState } from "./payroll/usePayrollPolicyState";
 import { useAccessUser } from "../features/runtime/useAccessUser";
 import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
 import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
+import { needsRuntimeAttention } from "../features/runtime/runtime-attention";
 
-export function PayrollPage() {
+const STATUS_LINE_STYLE: React.CSSProperties = { fontSize: "13px" };
+
+const DETAILS_SUMMARY_STYLE: React.CSSProperties = {
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#4d5d6c"
+};
+
+export interface PayrollPageProps {
+  /** 由 PayrollDomainPage 的任务切换器决定；缺省时按「算工资」渲染。 */
+  activeTask?: PayrollTaskKey;
+}
+
+export function PayrollPage({ activeTask = PAYROLL_TASK_KEYS.run }: PayrollPageProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const navState = normalizePayrollNavState(location.state);
   const navPayrollPeriod = navState.payrollPeriod ?? null;
   const navEmployeeId = navState.employeeId ?? null;
-  const navTab = navState.tab ?? null;
   const navBusinessEventId = navState.businessEventId ?? null;
-  const [tab, setTab] = useState<PayrollTab>(navPayrollPeriod || navBusinessEventId ? "payroll" : "employees");
   const [message, setMessage] = useState("正在加载数据...");
 
   // employees tab

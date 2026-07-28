@@ -13,7 +13,12 @@
 export type AnalyzeBlockCode = "EVENT_HAS_POSTED_VOUCHERS" | "EVENT_PERIOD_LOCKED";
 
 export interface AnalyzeGuardInput {
-  /** 该事项下状态为 posted 的凭证 id。 */
+  /**
+   * 该事项下状态为 posted **且尚未被红冲**的凭证 id。
+   *
+   * 已被红冲（存在一张已过账的反向凭证指向它）的凭证账务影响已归零，不构成阻断 ——
+   * 否则财务红冲完了事项依然打不开，等于没有出口。口径由调用方的取数保证。
+   */
   readonly postedVoucherIds: readonly string[];
   /** 该事项分录（`ledger_entries.entry_date`）所属、且已锁账的会计期间（YYYY-MM）。 */
   readonly lockedPeriods: readonly string[];
@@ -49,7 +54,8 @@ export function evaluateAnalyzeGuard(input: AnalyzeGuardInput): AnalyzeGuardVerd
     return blocked(
       "EVENT_HAS_POSTED_VOUCHERS",
       `该事项已有 ${input.postedVoucherIds.length} 张凭证过账，不能重新分析（重新分析会删除已入账分录）。` +
-        "已入账凭证只能红冲（生成反向凭证）冲销，当前版本需由财务人工处理后再新建事项。",
+        "已入账凭证只能红冲：对每张凭证调用 POST /api/vouchers/:id/reverse 生成反向凭证，" +
+        "经审核过账后即可重新分析。",
       input
     );
   }
