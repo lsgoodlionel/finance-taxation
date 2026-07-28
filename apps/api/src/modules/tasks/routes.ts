@@ -6,6 +6,7 @@ import type { ApiRequest } from "../../types.js";
 import { buildTaskTree, hasCompanyWideAccess, listCompanyTasks } from "../events/routes.js";
 import { writeAudit } from "../../services/audit.js";
 import { isTaskOverdue } from "./overdue.js";
+import { canMutateTask } from "./mutation-scope.js";
 import { buildWorkflowCommandExecution, buildWorkflowRun, markWorkflowCommandStatus } from "../workflows/commands.js";
 import {
   ensureWorkflowRun,
@@ -74,12 +75,15 @@ export async function listTasks(req: ApiRequest, res: ServerResponse) {
 
 export async function remindTask(req: ApiRequest, res: ServerResponse, taskId: string) {
   const companyId = req.auth!.companyId;
-  const task = await queryOne<{ id: string; title: string; company_id: string }>(
-    "select id, title, company_id from tasks where id = $1 and company_id = $2",
+  const task = await queryOne<{ id: string; title: string; company_id: string; owner_id: string | null }>(
+    "select id, title, company_id, owner_id from tasks where id = $1 and company_id = $2",
     [taskId, companyId]
   );
   if (!task) {
     return json(res, 404, { error: "Task not found" });
+  }
+  if (!canMutateTask({ ownerId: task.owner_id }, req.auth!)) {
+    return json(res, 403, { error: "只能催办自己名下的任务" });
   }
   writeAudit({
     companyId,
@@ -101,12 +105,16 @@ export async function updateTask(req: ApiRequest, res: ServerResponse, taskId: s
     return json(res, 400, { error: `无效状态，可选值：${[...VALID_TASK_STATUSES].join(", ")}` });
   }
 
-  const existing = await queryOne<{ id: string; title: string; status: string }>(
-    "select id, title, status from tasks where id = $1 and company_id = $2",
+  const existing = await queryOne<{ id: string; title: string; status: string; owner_id: string | null }>(
+    "select id, title, status, owner_id from tasks where id = $1 and company_id = $2",
     [taskId, companyId]
   );
   if (!existing) {
     return json(res, 404, { error: "Task not found" });
+  }
+  // 路由权限只保证「进得来」（tasks.view 或 tasks.manage）；能改谁的任务由归属决定。
+  if (!canMutateTask({ ownerId: existing.owner_id }, req.auth!)) {
+    return json(res, 403, { error: "只能更新自己名下的任务" });
   }
   const taskWorkflowTransition =
     body.status && body.status !== existing.status

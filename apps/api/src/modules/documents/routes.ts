@@ -10,6 +10,7 @@ import { query, queryOne } from "../../db/client.js";
 import { parseMultipart } from "../../utils/multipart.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
+import { writeAudit } from "../../services/audit.js";
 
 const UPLOADS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../data/uploads");
 
@@ -177,6 +178,34 @@ async function getScopedDocument(req: ApiRequest, documentId: string): Promise<G
   return (await scopeDocuments(rows, req))[0] ?? null;
 }
 
+/**
+ * 单据留痕入口。
+ *
+ * resourceId 必须是单据自己的 id：/audit 的单据深链带的是
+ * resourceType=document + documentId（apps/web/src/pages/drilldown.ts 的
+ * resolveAuditContextFromState），记到关联的经营事项上那个深链就查不出东西。
+ *
+ * 单据的诞生不在本模块——它由经营事项分析批量生成，见 modules/events/routes.ts
+ * 的 analyzeEvent（document.created）。这里覆盖创建之后的每一次改动。
+ */
+function auditDocument(
+  req: ApiRequest,
+  action: string,
+  document: { id: string; title: string },
+  changes: Record<string, unknown>
+): void {
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action,
+    resourceType: "document",
+    resourceId: document.id,
+    resourceLabel: document.title,
+    changes
+  });
+}
+
 export async function listDocuments(req: ApiRequest, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://127.0.0.1");
   const eventId = url.searchParams.get("businessEventId") || undefined;
@@ -211,6 +240,16 @@ export async function updateDocument(req: ApiRequest, res: ServerResponse, docum
   }
   const body = (req.body || {}) as Partial<GeneratedDocument>;
   const updatedAt = new Date().toISOString();
+  const before = {
+    status: target.status,
+    title: target.title,
+    ownerDepartment: target.ownerDepartment
+  };
+  const after = {
+    status: body.status ?? target.status,
+    title: body.title ?? target.title,
+    ownerDepartment: body.ownerDepartment ?? target.ownerDepartment
+  };
   await queryOne(
     `
       update generated_documents
@@ -222,16 +261,23 @@ export async function updateDocument(req: ApiRequest, res: ServerResponse, docum
       where id = $5 and company_id = $6
       returning id
     `,
-    [
-      body.status ?? target.status,
-      body.title ?? target.title,
-      body.ownerDepartment ?? target.ownerDepartment,
-      updatedAt,
-      documentId,
-      req.auth!.companyId
-    ]
+    [after.status, after.title, after.ownerDepartment, updatedAt, documentId, req.auth!.companyId]
   );
   const updated = await getScopedDocument(req, documentId);
+
+  // 状态变更单独一个动作：审计员按动作筛「谁把这份单据改成了已归档/待补件」，
+  // 埋在 changes 的 JSON 里只能靠肉眼翻。什么都没改的提交不留痕——前端重复提交
+  // 同一份表单是常事，为它写一条只会稀释真正的改动。
+  const hasChange = (Object.keys(after) as (keyof typeof after)[]).some((key) => after[key] !== before[key]);
+  if (hasChange) {
+    auditDocument(
+      req,
+      after.status === before.status ? "document.updated" : "document.status_changed",
+      { id: documentId, title: after.title },
+      { before, after }
+    );
+  }
+
   return json(res, 200, updated);
 }
 
@@ -250,6 +296,7 @@ export async function attachDocumentFile(req: ApiRequest, res: ServerResponse, d
     return json(res, 400, { error: "attachmentId is required" });
   }
   const now = new Date().toISOString();
+  const fileName = body.fileName || body.attachmentId;
   await queryOne(
     `
       insert into document_attachment_records (
@@ -274,7 +321,7 @@ export async function attachDocumentFile(req: ApiRequest, res: ServerResponse, d
       body.attachmentId,
       req.auth!.companyId,
       documentId,
-      body.fileName || body.attachmentId,
+      fileName,
       body.fileType || "application/octet-stream",
       body.fileSize || 0,
       body.attachmentId,
@@ -294,6 +341,15 @@ export async function attachDocumentFile(req: ApiRequest, res: ServerResponse, d
   );
   const updated = await getScopedDocument(req, documentId);
   const attachments = await listCompanyDocumentAttachments(req.auth!.companyId, documentId);
+
+  // after 取回读结果而不是在这里重算「草稿→待补件」：那条规则写在上面的 SQL
+  // `case when status = 'draft' ...` 里，用 TS 复制一份就多了个会漂移的真相。
+  auditDocument(req, "document.attachment_added", target, {
+    before: { status: target.status },
+    after: { status: updated?.status ?? target.status },
+    data: { attachmentIds: [body.attachmentId], fileNames: [fileName] }
+  });
+
   return json(res, 200, {
     ...updated,
     attachments
@@ -319,6 +375,12 @@ export async function archiveDocument(req: ApiRequest, res: ServerResponse, docu
     [now, documentId, req.auth!.companyId]
   );
   const updated = await getScopedDocument(req, documentId);
+
+  auditDocument(req, "document.archived", target, {
+    before: { status: target.status, archivedAt: target.archivedAt },
+    after: { status: "archived", archivedAt: now }
+  });
+
   return json(res, 200, updated);
 }
 
@@ -388,6 +450,18 @@ export async function uploadDocumentFile(req: ApiRequest, res: ServerResponse, d
 
   const updated = await getScopedDocument(req, documentId);
   const attachments = await listCompanyDocumentAttachments(req.auth!.companyId, documentId);
+
+  // 一次上传只留一条：多份文件是同一个动作的产物，拆成 N 条会让「这份单据被动过
+  // 几次」这个最常看的数字失真。动作名与 attach 复用——落到库里的事实是同一件。
+  auditDocument(req, "document.attachment_added", target, {
+    before: { status: target.status },
+    after: { status: updated?.status ?? target.status },
+    data: {
+      attachmentIds: files.map((file) => file.storageKey),
+      fileNames: files.map((file) => file.fileName)
+    }
+  });
+
   return json(res, 200, {
     ...updated,
     attachments

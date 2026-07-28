@@ -230,22 +230,28 @@ async function installCommonMocks(page: Page) {
   });
 }
 
-test("audit drilldown restores export scene and highlights target job", async ({ page }) => {
+// 用例名如实化：原名是 "restores export scene and highlights target job"，
+// 但断言里既没验证 scene 恢复也没验证高亮 —— ExportCenterPage 整个组件不读
+// location.state（Tabs 用 defaultActiveKey），drilldown.ts 的 extractExportScene
+// 算出的 scene 无人消费，是死代码。按钮文案已改为只承诺它真做得到的事。
+test("audit drilldown opens the export centre (it cannot target a specific job)", async ({ page }) => {
   await installCommonMocks(page);
 
   await page.goto("/audit?resourceType=export_job&resourceId=job-export-1&logId=audit-export-1");
 
   await expect(page.getByRole("heading", { name: "审计日志" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "查看导出任务" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "打开导出与归档中心" }).first()).toBeVisible();
 
-  await page.getByRole("button", { name: "查看导出任务" }).first().click();
+  await page.getByRole("button", { name: "打开导出与归档中心" }).first().click();
 
   // G1 导出与归档中心聚合：/pdf-export 深链现在重定向到 /export-center（Tab 容器）。
   await expect(page).toHaveURL(/\/export-center/);
   await expect(page.getByRole("heading", { name: "导出与归档中心" })).toBeVisible();
 });
 
-test("audit drilldown restores payroll transfer batch context", async ({ page }) => {
+// 同上，用例名如实化：深链经 <Navigate replace> 重定向不携带 router state，
+// 批次要靠下面手动点行选中 —— 「restores ... context」是它做不到的事。
+test("audit drilldown opens the payroll transfer task (the batch must be picked manually)", async ({ page }) => {
   await installCommonMocks(page);
 
   await page.goto("/audit?resourceType=payroll_transfer_batch&resourceId=pt-batch-2026-05&logId=audit-transfer-1");
@@ -255,9 +261,11 @@ test("audit drilldown restores payroll transfer batch context", async ({ page })
 
   await page.getByRole("button", { name: "查看代发批次" }).first().click();
 
-  // G4 工资域聚合：/payroll/transfer 深链现在重定向到 /payroll?tab=transfer（Tab 容器）。
-  await expect(page).toHaveURL(/\/payroll\?tab=transfer/);
-  await expect(page.getByRole("heading", { name: "工资代发与社保" })).toBeVisible();
+  // G4 工资域聚合：/payroll/transfer 深链重定向到工资域容器。
+  // V10c 后两层 Tab 塌成一层任务切换器，参数从 ?tab= 归一为 ?task=，页头统一为「工资」。
+  await expect(page).toHaveURL(/\/payroll\?task=transfer/);
+  await expect(page.getByRole("heading", { name: "工资" })).toBeVisible();
+  await expect(page.getByRole("tab", { selected: true })).toHaveText("发这个月的工资");
 
   // 该深链经由 <Navigate replace> 重定向，不再携带原 router state 自动定位目标批次；
   // 在批次列表中手动选中目标批次，以继续核对补偿审计追溯上下文（符合新 IA 下的真实行为）。

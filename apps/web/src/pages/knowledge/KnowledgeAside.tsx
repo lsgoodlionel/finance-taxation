@@ -1,3 +1,4 @@
+import React from "react";
 export function KnowledgeAside() {
   return (
     <div style={{ display: "grid", gap: "8px" }}>

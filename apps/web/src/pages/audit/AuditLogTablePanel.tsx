@@ -1,18 +1,9 @@
+import React from "react";
 import type { AuditLog } from "@finance-taxation/domain-model";
-import { resolveAuditLogTarget } from "../drilldown";
-
-const RESOURCE_TYPE_LABELS: Record<string, string> = {
-  business_event: "经营事项",
-  voucher: "凭证",
-  document: "单据",
-  contract: "合同",
-  employee: "员工",
-  payroll: "工资",
-  payroll_transfer_batch: "工资代发批次",
-  export_job: "导出任务",
-  tax_item: "税务事项",
-  risk_finding: "风险发现"
-};
+import { resolveAuditNavigationTarget } from "./audit-navigation";
+// 对象类型的中文名与下拉选项共用一份（见 audit-resource-types.ts）：
+// 此前这里和 AuditFiltersBar 各维护一张表，两张表的取值集合已经不一致。
+import { describeResourceType } from "./audit-resource-types";
 
 const ACTION_LABELS: Record<string, string> = {
   create: "创建",
@@ -29,7 +20,24 @@ const ACTION_LABELS: Record<string, string> = {
   confirm: "确认工资",
   analyze: "AI 分析",
   "payroll.transfer.disbursed": "标记已代发",
-  "payroll.transfer.compensated": "补偿联动事项"
+  "payroll.transfer.compensated": "补偿联动事项",
+  // 单据 / 税务事项 / 风险发现三类的留痕（apps/api 的 modules/documents、
+  // modules/tax、modules/risk、以及 modules/events 的 analyzeEvent）。
+  // 不给中文名不会出错——下面会回落到原始取值——但审计员看到的是
+  // `risk.finding.reopened` 这种给机器看的字符串。
+  "document.created": "生成单据",
+  "document.updated": "修改单据",
+  "document.status_changed": "单据状态变更",
+  "document.attachment_added": "上传单据附件",
+  "document.archived": "单据归档",
+  "tax_item.created": "生成税务事项",
+  "tax_item.updated": "修改税务事项",
+  "tax_item.status_changed": "税务事项状态变更",
+  "tax_item.batched": "并入申报批次",
+  "risk.finding.opened": "风险开启",
+  "risk.finding.reopened": "风险重新打开",
+  "risk.finding.cleared": "风险已消解",
+  "risk.finding.closed": "风险关闭复核"
 };
 
 function panelStyle() {
@@ -131,14 +139,14 @@ export function AuditLogTablePanel({
               {logs.map((log) => {
                 const isExpanded = expandedId === log.id;
                 const hasChanges = !!log.changes;
-                const target = resolveAuditLogTarget(log);
+                const target = resolveAuditNavigationTarget(log);
                 const isSelected = selectedLogId === log.id;
                 return (
                   <tr key={log.id} style={{ background: isSelected ? "rgba(37,99,235,0.06)" : "transparent" }}>
                     <td style={{ ...cell, whiteSpace: "nowrap", color: "#6c7a89" }}>{fmtDate(log.createdAt)}</td>
                     <td style={cell}>{log.userName ?? log.userId ?? "-"}</td>
                     <td style={cell}>{actionTag(log.action)}</td>
-                    <td style={cell}>{RESOURCE_TYPE_LABELS[log.resourceType] ?? log.resourceType}</td>
+                    <td style={cell}>{describeResourceType(log.resourceType)}</td>
                     <td style={{ ...cell, background: navResourceId === log.resourceId ? "rgba(37,99,235,0.06)" : "transparent" }}>
                       <div style={{ maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {log.resourceLabel ?? log.resourceId ?? "-"}

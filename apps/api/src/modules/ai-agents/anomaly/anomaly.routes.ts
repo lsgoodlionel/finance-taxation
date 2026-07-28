@@ -13,6 +13,7 @@ import type { ServerResponse } from "node:http";
 import type { ApiRequest } from "../../../types.js";
 import { query } from "../../../db/client.js";
 import { json } from "../../../utils/http.js";
+import { EXCLUDE_PERIOD_CLOSING_SQL } from "../../ledger/closing-entries.js";
 import {
   COST_ACCOUNT_PREFIX,
   NON_OPERATING_EXPENSE_PREFIX,
@@ -133,7 +134,14 @@ async function fetchInvoiceNumbers(companyId: string, range: DateRange): Promise
   }));
 }
 
-/** 周末大额交易所需的分录：落在周六/周日、发生额（借贷两侧取大者）> 0 的记账分录 */
+/**
+ * 周末大额交易所需的分录：落在周六/周日、发生额（借贷两侧取大者）> 0 的记账分录。
+ *
+ * 排除结转分录的理由与损益聚合那边不同：这里不是重复计量，而是**结转根本不是一笔
+ * 交易** —— 它是系统按期末日批量生成的账务处理。这个检测器要找的是「有人在周末做
+ * 了一笔大额业务」这种可疑迹象，而月末恰好是周六或周日时，整批结转分录会全部命中，
+ * 把月结变成告警制造机，真正的可疑交易反而被淹没。
+ */
 async function fetchWeekendAmountEntries(companyId: string, range: DateRange): Promise<AmountEntryInput[]> {
   const rows = await query<{ id: string; entry_date: string; summary: string; amount: string }>(
     `select id, to_char(entry_date, 'YYYY-MM-DD') as entry_date, summary, greatest(debit, credit) as amount
@@ -141,6 +149,7 @@ async function fetchWeekendAmountEntries(companyId: string, range: DateRange): P
      where company_id = $1 and entry_date >= $2 and entry_date < $3
        and extract(dow from entry_date) in (0, 6)
        and greatest(debit, credit) > 0
+       and ${EXCLUDE_PERIOD_CLOSING_SQL}
      order by entry_date`,
     [companyId, range.start, range.end]
   );
@@ -161,6 +170,10 @@ async function fetchTaxBurdenPeriods(companyId: string, endPeriod: string): Prom
     (_, i) => `account_code not like $${i + excludeOffset}`
   ).join(" and ");
   const startParamIndex = excludeOffset + REVENUE_EXCLUDED_PREFIXES.length;
+  // 排除结转损益分录（口径见 ledger/closing-entries.ts）：revenue 一列是按属期聚合
+  // 营业收入，属于损益聚合。不排除的话已结转月份 revenue = 0，税负率 = 税额 / 0，
+  // 于是每个正常结账的月份都会被判成「税负率异常」——把月结变成告警制造机。
+  // tax 一列取 2221 应交税费，结转分录不涉及 2xxx，本过滤对它无影响。
   const rows = await query<{ period: string; tax: string; revenue: string }>(
     `select to_char(entry_date, 'YYYY-MM') as period,
             sum(case when account_code like $2 then credit - debit else 0 end) as tax,
@@ -168,6 +181,7 @@ async function fetchTaxBurdenPeriods(companyId: string, endPeriod: string): Prom
                      then credit - debit else 0 end) as revenue
      from ledger_entries
      where company_id = $1
+       and ${EXCLUDE_PERIOD_CLOSING_SQL}
        and to_char(entry_date, 'YYYY-MM') between $${startParamIndex} and $${startParamIndex + 1}
      group by period
      order by period`,

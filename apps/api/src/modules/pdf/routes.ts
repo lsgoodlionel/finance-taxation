@@ -1,5 +1,6 @@
 import type { ServerResponse } from "node:http";
 import { query, queryOne } from "../../db/client.js";
+import { toDateOnly } from "../../db/date-column.js";
 import { json } from "../../utils/http.js";
 import type { ApiRequest } from "../../types.js";
 import { wrapHtml, fmt, escHtml } from "./template.js";
@@ -183,7 +184,10 @@ interface VoucherRow {
   voucher_type: string;
   summary: string;
   status: string;
-  created_at: string;
+  // `timestamptz` 由 node-postgres 解析成 Date（只有 `date` 列注册了返回字符串的
+  // 解析器，见 db/date-column.ts）。此前这里声明成 string，类型撒了谎，下面的
+  // `.slice()` 在运行时必然抛 TypeError —— 凭证 PDF 导出实测恒 500。
+  created_at: string | Date;
 }
 
 interface LineRow {
@@ -212,8 +216,8 @@ export async function voucherPdf(req: ApiRequest, res: ServerResponse, voucherId
   if (!voucher) { json(res, 404, { error: "凭证不存在" }); return; }
   const companyName = companyRes?.name ?? "";
 
-  const voucherNo = `V-${voucher.created_at.slice(0, 10).replace(/-/g, "")}-${voucher.id.slice(-6).toUpperCase()}`;
-  const voucherDate = voucher.created_at.slice(0, 10);
+  const voucherDate = toDateOnly(voucher.created_at) ?? "";
+  const voucherNo = `V-${voucherDate.replace(/-/g, "")}-${voucher.id.slice(-6).toUpperCase()}`;
 
   let totalDebit = 0, totalCredit = 0;
   const lineRows = lines.map((l) => {

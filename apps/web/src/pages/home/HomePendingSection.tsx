@@ -78,7 +78,7 @@ export function HomePendingSection({
           description="都安排好了。可以看看下面公司的经营情况，或问 AI 一个问题。"
           action={(
             <Link to="/dashboard/chairman">
-              <Button style={{ minHeight: 44 }}>看看经营报告</Button>
+              <Button style={{ minHeight: 44 }}>看看经营概览</Button>
             </Link>
           )}
         />

@@ -1,110 +1,53 @@
-import type {
-  PayrollPeriodSummary,
-  PayrollRecord,
-  PayrollTaxReviewLedger,
-  RiskFinding,
-  TaxItem,
-  Voucher
-} from "@finance-taxation/domain-model";
-import { buildPayrollArtifactSummary } from "../payroll-closure";
-import { buildPayrollRiskBuckets, buildPayrollVoucherSuggestions } from "../payroll-guidance";
-import { buildPayrollLinkageSummary } from "../payroll-linkage";
-import { buildPayrollTaxReviewSummary } from "../payroll-tax-review";
-import { buildPayrollWorkflow } from "../payroll-workflow";
+/**
+ * 工资页要用的派生数据。
+ *
+ * V10 收口时清掉了 6 个「算了但没人用」的字段：payrollWorkflow / payrollLinkage /
+ * payrollTaxReview / payrollArtifactSummary / payrollVoucherSuggestions /
+ * payrollRiskBuckets。它们的消费方（PayrollWorkflowSummary、PayrollRunSection）
+ * 早在工资计算改成向导时就从渲染树里摘掉了，函数却还在每次渲染时把这一整套
+ * 汇总重算一遍——包括遍历全部工资记录和风险发现。
+ *
+ * 现在只留运行态面板真正读的两项。要恢复其中任何一项，请连同它的展示组件一起加回来。
+ */
+import type { PayrollRecord, PayrollPeriodSummary, PayrollTaxReviewLedger } from "@finance-taxation/domain-model";
 import { derivePayrollRuntimeSummary } from "../../features/runtime/workflow-runtime";
 
 export interface PayrollPageSummariesInput {
-  selectedPeriod: string;
-  customPeriod: string;
+  /** 用户当前正在处理的工资期间（与工资向导同一个值）。 */
+  activePeriod: string;
   periods: PayrollPeriodSummary[];
   payrollRecords: PayrollRecord[];
   linkedEventId: string | null;
-  linkedTaxItemCount: number;
-  linkedVoucherCount: number;
-  linkedTaxItems: TaxItem[];
-  linkedVouchers: Voucher[];
-  linkedRisks: RiskFinding[];
+  linkedRiskCount: number;
   reviewLedgers: PayrollTaxReviewLedger[];
-  iitChecklist: string[];
-  iitMaterialPeriod: string | null;
   roleIds: string[];
 }
 
+export interface PayrollPageSummaries {
+  /** 运行态按哪个期间取：优先当前期间，其次账套里最近的一期。 */
+  runtimePeriod: string;
+  localRuntimeSummary: ReturnType<typeof derivePayrollRuntimeSummary>;
+}
+
 export function buildPayrollPageSummaries({
-  selectedPeriod,
-  customPeriod,
+  activePeriod,
   periods,
   payrollRecords,
   linkedEventId,
-  linkedTaxItemCount,
-  linkedVoucherCount,
-  linkedTaxItems,
-  linkedVouchers,
-  linkedRisks,
+  linkedRiskCount,
   reviewLedgers,
-  iitChecklist,
-  iitMaterialPeriod,
   roleIds
-}: PayrollPageSummariesInput) {
-  const payrollWorkflow = selectedPeriod
-    ? buildPayrollWorkflow({
-        period: selectedPeriod,
-        records: payrollRecords,
-        linkedEventId
-      })
-    : null;
-  const payrollLinkage = selectedPeriod
-    ? buildPayrollLinkageSummary({
-        taxItemCount: linkedTaxItemCount,
-        voucherCount: linkedVoucherCount,
-        confirmedCount: payrollRecords.filter((record) => record.status === "confirmed").length,
-        totalCount: payrollRecords.length,
-        linkedEventId
-      })
-    : null;
-  const payrollTaxReview = selectedPeriod
-    ? buildPayrollTaxReviewSummary({
-        period: selectedPeriod,
-        records: payrollRecords,
-        linkedEventId,
-        taxItemCount: linkedTaxItemCount,
-        iitMaterial: iitMaterialPeriod === selectedPeriod
-          ? {
-              companyId: "",
-              filingPeriod: iitMaterialPeriod,
-              payrollEventCount: linkedEventId ? 1 : 0,
-              withholdingItemCount: linkedTaxItemCount,
-              totalPayrollAmount: "0",
-              checklist: iitChecklist
-            }
-          : null
-      })
-    : null;
-  const payrollArtifactSummary = buildPayrollArtifactSummary({
-    taxItems: linkedTaxItems,
-    vouchers: linkedVouchers,
-    risks: linkedRisks
-  });
-  const payrollVoucherSuggestions = buildPayrollVoucherSuggestions(payrollRecords, linkedVouchers);
-  const payrollRiskBuckets = buildPayrollRiskBuckets(linkedRisks);
-  const runtimePeriod = selectedPeriod || periods[0]?.period || customPeriod || "";
-  const localRuntimeSummary = derivePayrollRuntimeSummary(
-    runtimePeriod,
-    payrollRecords,
-    linkedEventId,
-    reviewLedgers,
-    linkedRisks.length,
-    roleIds
-  );
-
+}: PayrollPageSummariesInput): PayrollPageSummaries {
+  const runtimePeriod = activePeriod || periods[0]?.period || "";
   return {
-    payrollWorkflow,
-    payrollLinkage,
-    payrollTaxReview,
-    payrollArtifactSummary,
-    payrollVoucherSuggestions,
-    payrollRiskBuckets,
     runtimePeriod,
-    localRuntimeSummary
+    localRuntimeSummary: derivePayrollRuntimeSummary(
+      runtimePeriod,
+      payrollRecords,
+      linkedEventId,
+      reviewLedgers,
+      linkedRiskCount,
+      roleIds
+    )
   };
 }

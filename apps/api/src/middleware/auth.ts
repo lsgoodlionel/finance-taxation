@@ -17,7 +17,7 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
   "role-chairman": [
     "dashboard.view", "events.view", "events.create", "events.assign",
     "tasks.view", "tasks.manage", "documents.view", "documents.manage",
-    "ledger.view", "ledger.post", "tax.view", "tax.manage",
+    "ledger.view", "ledger.post", "banking.manage", "tax.view", "tax.manage",
     "rnd.view", "rnd.manage", "risk.view", "risk.manage", "settings.manage",
     "contracts.view", "contracts.manage",
     "payroll.view", "payroll.manage",
@@ -27,7 +27,7 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
   "role-finance-director": [
     "dashboard.view", "events.view", "events.create", "events.assign",
     "tasks.view", "tasks.manage", "documents.view", "documents.manage",
-    "ledger.view", "ledger.post", "tax.view", "tax.manage",
+    "ledger.view", "ledger.post", "banking.manage", "tax.view", "tax.manage",
     "rnd.view", "rnd.manage", "risk.view", "risk.manage",
     "contracts.view", "contracts.manage",
     "payroll.view", "payroll.manage",
@@ -37,7 +37,7 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
   "role-accountant": [
     "dashboard.view", "events.view",
     "tasks.view", "documents.view", "documents.manage",
-    "ledger.view", "ledger.post", "tax.view", "tax.manage",
+    "ledger.view", "ledger.post", "banking.manage", "tax.view", "tax.manage",
     "payroll.view",
     "audit.view", "workflow.view", "workflow.manage",
     "knowledge.view"
@@ -51,7 +51,8 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
   "role-cashier": [
     "dashboard.view", "events.view",
     "tasks.view", "documents.view", "documents.manage",
-    "ledger.view", "tax.view",
+    // 出纳管银行账户、导流水、做对账 —— 这是本职，但不含记账权 ledger.post。
+    "ledger.view", "banking.manage", "tax.view",
     "payroll.view", "knowledge.view"
   ],
   "role-tax-specialist": [

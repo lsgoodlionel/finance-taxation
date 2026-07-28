@@ -1,64 +1,119 @@
-// Unit tests for RndPage logic — no DOM required
-function okRnd(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new Error(message);
+import React, { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { RndProjectSummary } from "@finance-taxation/domain-model";
+import { RndShell } from "./RndShell";
+import { RndContextPanel } from "./RndContextPanel";
+
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) {
+    throw new Error(message);
+  }
 }
 
-// ─── KPI aggregation ──────────────────────────────────────────────────────────
+const VOID_TAGS = new Set(["br", "hr", "img", "input", "link", "meta", "source"]);
 
-interface RndSummary { expenseAmount: string; capitalizedAmount: string; superDeductionEligibleBase: string }
-interface RndProject { status: string; summary: RndSummary }
+/** 数根容器下的直接子元素——「首屏区块」在实测里就是按这个数的。 */
+function countTopLevelBlocks(markup: string): number {
+  let depth = 0;
+  let count = 0;
+  for (const match of markup.matchAll(/<(\/?)([a-zA-Z][a-zA-Z0-9-]*)([^>]*?)(\/?)>/g)) {
+    const [, closing, name, , selfClose] = match;
+    if (closing) {
+      depth -= 1;
+      continue;
+    }
+    if (depth === 1) count += 1;
+    if (!VOID_TAGS.has((name ?? "").toLowerCase()) && !selfClose) depth += 1;
+  }
+  return count;
+}
 
-function aggregateKpis(projects: RndProject[]) {
-  const active = projects.filter(p => p.status === "active" || p.status === "planning").length;
-  const totalInvestment = projects.reduce((s, p) =>
-    s + parseFloat(p.summary.expenseAmount || "0") + parseFloat(p.summary.capitalizedAmount || "0"), 0
+function makeSummary(overrides: Partial<RndProjectSummary> = {}): RndProjectSummary {
+  return {
+    projectId: "rnd-1",
+    expenseAmount: "0",
+    capitalizedAmount: "0",
+    totalHours: "0",
+    superDeductionEligibleBase: "0",
+    ...overrides
+  };
+}
+
+// 骨架只剩「页头 + 当前任务工作区」两块。改造前根网格下是 8 个平级区块。
+{
+  const html = renderToStaticMarkup(
+    createElement(RndShell, {
+      header: createElement("div", null, "rnd-header"),
+      children: createElement("div", null, "rnd-task-panel")
+    })
   );
-  const eligibleBase = projects.reduce((s, p) =>
-    s + parseFloat(p.summary.superDeductionEligibleBase || "0"), 0
+
+  assert(html.includes("rnd-header"), "expected the R&D shell header slot");
+  assert(html.includes("rnd-task-panel"), "expected the R&D shell task panel slot");
+
+  const blocks = countTopLevelBlocks(html);
+  assert(blocks === 2, `expected 2 top-level blocks on /rnd, got ${blocks}`);
+}
+
+// 上下文面板随任务收缩：挑项目时看全局盘子，归集/核对时只看这一个项目。
+{
+  const overview = renderToStaticMarkup(
+    createElement(RndContextPanel, {
+      task: "projects" as const,
+      project: null,
+      projectCount: 4,
+      projectsWithoutCosts: 2,
+      message: "共 4 个研发项目。"
+    })
   );
-  return { active, totalInvestment, eligibleBase, estimatedDeduction: eligibleBase * 0.75 };
+  assert(overview.includes("研发台账概览"), "the project task aside shows the portfolio overview");
+  assert(overview.includes("还没归集费用"), "the overview names the real backlog");
+  // 没有选中项目就没有对象级流程条——没有对象，就没有「这一笔走到哪了」。
+  assert(!overview.includes("办到哪了"), "no object flow bar without a selected project");
+  assert(!overview.includes("这个项目的基本情况"), "the overview must not carry per-project details");
 }
 
-const projects: RndProject[] = [
-  { status: "active",    summary: { expenseAmount: "100000", capitalizedAmount: "50000", superDeductionEligibleBase: "120000" } },
-  { status: "planning",  summary: { expenseAmount: "20000",  capitalizedAmount: "0",     superDeductionEligibleBase: "20000"  } },
-  { status: "completed", summary: { expenseAmount: "80000",  capitalizedAmount: "30000", superDeductionEligibleBase: "90000"  } },
-];
+{
+  const project = {
+    id: "rnd-1",
+    companyId: "c-1",
+    businessEventId: null,
+    code: "RND-2026-001",
+    name: "AI 财税系统研发",
+    status: "active" as const,
+    capitalizationPolicy: "mixed" as const,
+    startedOn: "2026-01-01",
+    endedOn: null,
+    ownerId: null,
+    notes: "",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    costLines: [],
+    timeEntries: [],
+    summary: makeSummary({ totalHours: "120" }),
+    policyReview: { projectId: "rnd-1", projectName: "AI 财税系统研发", recommendedPolicy: "mixed" as const, conflicts: [], guidance: [] },
+    guidance: { projectId: "rnd-1", projectName: "AI 财税系统研发", subsidyHints: [], policyHints: [], riskHints: [] }
+  };
 
-const kpis = aggregateKpis(projects);
-okRnd(kpis.active === 2,                              "2 active/planning projects");
-okRnd(kpis.totalInvestment === 280000,                "total investment is 280000");
-okRnd(kpis.eligibleBase === 230000,                   "eligible base is 230000");
-okRnd(kpis.estimatedDeduction === 230000 * 0.75,      "deduction is 75% of eligible base");
+  const costsAside = renderToStaticMarkup(
+    createElement(RndContextPanel, {
+      task: "costs" as const,
+      project,
+      projectCount: 4,
+      projectsWithoutCosts: 2,
+      message: "已加载"
+    })
+  );
 
-// ─── Cost collection totals ───────────────────────────────────────────────────
-
-interface CostEntry { accountingTreatment: string; amount: string }
-
-function computeTotals(entries: CostEntry[]) {
-  const expensed    = entries.filter(e => e.accountingTreatment === "expensed").reduce((s, e) => s + parseFloat(e.amount || "0"), 0);
-  const capitalized = entries.filter(e => e.accountingTreatment === "capitalized").reduce((s, e) => s + parseFloat(e.amount || "0"), 0);
-  return { expensed, capitalized, total: expensed + capitalized, eligibleBase: expensed + capitalized * 0.6 };
+  assert(costsAside.includes("办到哪了"), "a selected project gets an object flow bar");
+  assert(costsAside.includes("归集研发费用"), "the flow names the current step");
+  assert(costsAside.includes("这个项目的基本情况"), "the cost aside carries per-project context");
+  assert(!costsAside.includes("研发台账概览"), "the cost aside must not repeat the portfolio overview");
+  // 工时出现在上下文里，但必须同时说清它不参与基数计算——否则用户会以为工时少了会少扣。
+  assert(costsAside.includes("120 小时"), "hours are shown as context");
+  // 「加计扣除」被 <Term> 包成了独立元素，所以断言分两段查而不是查整句。
+  assert(costsAside.includes("工时是备查资料，不参与"), "hours must be labelled as non-contributing");
+  assert(costsAside.includes("基数只看费用化金额"), "the aside must state what the base actually counts");
 }
 
-const entries: CostEntry[] = [
-  { accountingTreatment: "expensed",    amount: "50000" },
-  { accountingTreatment: "expensed",    amount: "30000" },
-  { accountingTreatment: "capitalized", amount: "20000" },
-];
-
-const totals = computeTotals(entries);
-okRnd(totals.expensed    === 80000,  "expensed total is 80000");
-okRnd(totals.capitalized === 20000,  "capitalized total is 20000");
-okRnd(totals.total       === 100000, "total is 100000");
-okRnd(totals.eligibleBase === 80000 + 20000 * 0.6, "eligible base is expensed + 60% of capitalized");
-
-// ─── Super-deduction rate ─────────────────────────────────────────────────────
-
-function computeDeduction(eligibleBase: number, rate = 0.75) {
-  return eligibleBase * rate;
-}
-
-okRnd(computeDeduction(100000)        === 75000,  "75% deduction on 100000");
-okRnd(computeDeduction(100000, 1.0)   === 100000, "100% deduction for high-tech enterprises");
-okRnd(computeDeduction(0)             === 0,      "zero base gives zero deduction");
+console.log("rnd-shell-ok");

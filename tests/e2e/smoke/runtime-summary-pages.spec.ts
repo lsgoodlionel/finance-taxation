@@ -62,7 +62,11 @@ const CASES = [
   {
     route: "/payroll/transfer",
     role: "manager" as const,
-    heading: "工资代发与社保",
+    // V10c 工资域把「域 Tab + 页内 Tab」两层塌成一层任务切换器，页头统一为「工资」，
+    // 原先的子页面标题「工资代发与社保」不再作为 heading 存在。
+    // 旧深链 /payroll/transfer 仍然可用，会被归一成 /payroll?task=transfer。
+    heading: "工资",
+    selectedTaskLabel: "发这个月的工资",
     panelTitle: "工资代发运行态与授权态",
     runtimePath: "/api/runtime/payroll-transfer",
     actionLabel: "补偿联动事项",
@@ -91,7 +95,14 @@ for (const item of CASES) {
 
     await loginAsRole(item.role);
     await page.goto(item.route);
-    await expect(page.getByRole("heading", { name: item.heading })).toBeVisible();
+    // exact 不可省：运行态面板的 h3 标题以页头文案开头（如「工资」→「工资代发运行态与授权态」），
+    // 子串匹配会同时命中两者而触发 strict mode violation。
+    await expect(page.getByRole("heading", { name: item.heading, exact: true })).toBeVisible();
+    // 页头统一后，光有 heading 不足以证明深链落对了地方：还要断言选中的正是那件事，
+    // 否则归一逻辑把 ?task= 丢了也照样绿。
+    if ("selectedTaskLabel" in item && item.selectedTaskLabel) {
+      await expect(page.getByRole("tab", { selected: true })).toHaveText(item.selectedTaskLabel);
+    }
 
     // V10「一次一件事」后，运行态/授权态属运维视角：确有异常或待授权时才自动展开，
     // 否则收进 <details> 以免占据首屏（能力不减，只是不占首屏）。

@@ -1,3 +1,4 @@
+import React from "react";
 import { CATEGORY_COLORS } from "./types";
 import type { KnowledgeSummary as KnowledgeSummaryData } from "./knowledge-helpers";
 

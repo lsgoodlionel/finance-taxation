@@ -33,6 +33,7 @@ import {
   mapVoucherStatusToWorkflowState,
   validateWorkflowTransition
 } from "../workflows/runtime.js";
+import { buildReversalLines, canReverseVoucher } from "./reversal.js";
 
 interface VoucherRow {
   id: string;
@@ -307,6 +308,21 @@ async function getVoucherForCompany(companyId: string, voucherId: string): Promi
   return rows[0] ?? null;
 }
 
+/**
+ * 取这张凭证的审核人，供过账时校验「复核人 ≠ 过账人」。
+ *
+ * 单独查而不并进 Voucher：审核人只服务于服务端的职责分离判定，不需要进
+ * domain-model 的对外契约，也就不会牵动前端类型。
+ * 返回 null 表示迁移 043 之前审核的历史凭证（无记录），由调用方决定如何放行。
+ */
+async function getVoucherApproverUserId(companyId: string, voucherId: string): Promise<string | null> {
+  const row = await queryOne<{ approved_by_user_id: string | null }>(
+    `select approved_by_user_id from vouchers where id = $1 and company_id = $2`,
+    [voucherId, companyId]
+  );
+  return row?.approved_by_user_id ?? null;
+}
+
 export async function listVouchers(req: ApiRequest, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://127.0.0.1");
   const eventId = url.searchParams.get("businessEventId") || undefined;
@@ -499,6 +515,126 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
   return json(res, 201, voucher);
 }
 
+/**
+ * 红冲：为已过账凭证生成一张借贷相反的冲销凭证。
+ *
+ * 这是已过账凭证唯一合法的更正出口。此前 `POST /api/events/:id/analyze` 会连同
+ * 已过账凭证与其总账分录一起硬删（无留痕），该路径已被闸门堵成 409；但堵死之后
+ * 系统没有任何更正入口，已过账事项就此进入死路 —— 本接口就是那个出口。
+ *
+ * 红冲凭证以 `draft` 落库，与普通凭证走完全相同的审核 → 过账流程：它同样是一笔
+ * 真实账务，没有理由绕开职责分离。**刻意不自动过账**。
+ */
+export async function reverseVoucher(req: ApiRequest, res: ServerResponse, voucherId: string) {
+  const target = await getVoucherForCompany(req.auth!.companyId, voucherId);
+  if (!target) {
+    return json(res, 404, { error: "Voucher not found" });
+  }
+
+  const meta = await queryOne<{ reverses_voucher_id: string | null; reversed_by: string | null }>(
+    `
+      select
+        v.reverses_voucher_id,
+        (
+          select r.id from vouchers r
+          where r.company_id = v.company_id and r.reverses_voucher_id = v.id
+          limit 1
+        ) as reversed_by
+      from vouchers v
+      where v.id = $1 and v.company_id = $2
+    `,
+    [voucherId, req.auth!.companyId]
+  );
+  const verdict = canReverseVoucher({
+    status: target.status,
+    postedAt: target.postedAt,
+    reversesVoucherId: meta?.reverses_voucher_id ?? null,
+    alreadyReversed: Boolean(meta?.reversed_by)
+  });
+  if (!verdict.ok) {
+    return json(res, 409, { error: verdict.message, code: verdict.errorCode });
+  }
+
+  // 原凭证所在期间已锁账时不得再动它的账 —— 与过账同一条铁律。
+  // 期间取原凭证总账分录的实际 entry_date，而不是"当前月"：跨月红冲用当前月判定
+  // 会直接绕过对原期间的锁。
+  const lockedPeriod = await queryOne<{ period: string }>(
+    `
+      select distinct to_char(le.entry_date, 'YYYY-MM') as period
+      from ledger_entries le
+      join accounting_periods ap
+        on ap.company_id = le.company_id and ap.period = to_char(le.entry_date, 'YYYY-MM')
+      where le.company_id = $1 and le.voucher_id = $2 and ap.is_locked
+      limit 1
+    `,
+    [req.auth!.companyId, voucherId]
+  );
+  if (lockedPeriod) {
+    return json(res, 409, {
+      error: `原凭证所属会计期间 ${lockedPeriod.period} 已锁账，无法红冲。请先解锁该期间。`,
+      code: "VOUCHER_PERIOD_LOCKED"
+    });
+  }
+
+  const now = new Date().toISOString();
+  const reversalId = `vch-rev-${voucherId}-${Date.now()}`;
+  const reversalLines = buildReversalLines(target.lines);
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `
+        insert into vouchers (
+          id, company_id, business_event_id, mapping_id, voucher_type, summary,
+          status, source, reverses_voucher_id, created_at, updated_at
+        ) values ($1, $2, $3, $4, $5, $6, 'draft', 'reversal', $7, $8::timestamptz, $8::timestamptz)
+      `,
+      [
+        reversalId,
+        target.companyId,
+        target.businessEventId,
+        target.mappingId,
+        target.voucherType,
+        `红冲：${target.summary}`,
+        voucherId,
+        now
+      ]
+    );
+    for (const [index, line] of reversalLines.entries()) {
+      await client.query(
+        `
+          insert into voucher_lines (
+            id, voucher_id, summary, account_code, account_name, debit, credit, sort_order
+          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8)
+        `,
+        [
+          `${reversalId}-${index + 1}`,
+          reversalId,
+          line.summary,
+          line.accountCode,
+          line.accountName,
+          line.debit,
+          line.credit,
+          index
+        ]
+      );
+    }
+  });
+
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: "reverse",
+    resourceType: "voucher",
+    resourceId: voucherId,
+    resourceLabel: target.summary,
+    changes: { data: { reversalVoucherId: reversalId, lineCount: reversalLines.length } }
+  });
+
+  const created = await getVoucherForCompany(req.auth!.companyId, reversalId);
+  return json(res, 201, created);
+}
+
 export async function getVoucherDetail(req: ApiRequest, res: ServerResponse, voucherId: string) {
   const target = await getVoucherForCompany(req.auth!.companyId, voucherId);
   if (!target) {
@@ -517,6 +653,37 @@ export async function updateVoucher(req: ApiRequest, res: ServerResponse, vouche
     return json(res, 404, { error: "Voucher not found" });
   }
   const body = (req.body || {}) as Partial<Voucher>;
+
+  // 已入账凭证不得原地改写 —— 会计上只允许红冲。此前这里对 status/summary 一律
+  // 照单全收，实机可把一张已过账凭证改回 draft 并改掉摘要，而它的总账分录仍留在
+  // 账上；退回 draft 后再走一次过账，要么主键冲突报 500，要么重复记账。
+  if (target.postedAt || target.status === "posted") {
+    return json(res, 409, {
+      error: "凭证已过账，不能修改。如需更正请使用红冲（POST /api/vouchers/:id/reverse）。",
+      code: "VOUCHER_ALREADY_POSTED"
+    });
+  }
+
+  const nextStatus = body.status ?? target.status;
+  if (nextStatus !== target.status) {
+    // 状态推进只能走各自的专用接口：approve 附带状态机校验并记录审核人，
+    // post 附带借贷校验、职责分离、期间锁并生成总账分录。
+    // 从这里改状态会跳过全部这些，最坏的情况是凭证显示已过账而账上根本没有分录。
+    if (nextStatus === "posted") {
+      return json(res, 400, {
+        error: "不能直接把凭证改成已过账。过账请调用 POST /api/vouchers/:id/post，它才会生成总账分录。",
+        code: "VOUCHER_STATUS_NOT_UPDATABLE"
+      });
+    }
+    const validation = validateWorkflowTransition(
+      mapVoucherStatusToWorkflowState(target.status),
+      mapVoucherStatusToWorkflowState(nextStatus)
+    );
+    if (!validation.ok) {
+      return json(res, 400, { error: validation.message, code: validation.errorCode });
+    }
+  }
+
   const updatedAt = new Date().toISOString();
   await queryOne(
     `
@@ -528,14 +695,21 @@ export async function updateVoucher(req: ApiRequest, res: ServerResponse, vouche
       where id = $4 and company_id = $5
       returning id
     `,
-    [
-      body.status ?? target.status,
-      body.summary ?? target.summary,
-      updatedAt,
-      voucherId,
-      req.auth!.companyId
-    ]
+    [nextStatus, body.summary ?? target.summary, updatedAt, voucherId, req.auth!.companyId]
   );
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: "update",
+    resourceType: "voucher",
+    resourceId: voucherId,
+    resourceLabel: target.summary,
+    changes: {
+      before: { status: target.status, summary: target.summary },
+      after: { status: nextStatus, summary: body.summary ?? target.summary }
+    }
+  });
   const updated = await getVoucherForCompany(req.auth!.companyId, voucherId);
   return json(res, 200, updated);
 }
@@ -587,10 +761,11 @@ export async function approveVoucher(req: ApiRequest, res: ServerResponse, vouch
         set
           status = 'review_required',
           approved_at = $1::timestamptz,
+          approved_by_user_id = $4,
           updated_at = $1::timestamptz
         where id = $2 and company_id = $3
       `,
-      [now, voucherId, req.auth!.companyId]
+      [now, voucherId, req.auth!.companyId, req.auth!.userId]
     );
     const run = await ensureWorkflowRun(
       client,
@@ -672,11 +847,22 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
     return json(res, 400, { error: "Voucher must be approved before posting" });
   }
   const body = (req.body || {}) as { authorizerUserId?: string; authorizerName?: string };
-  const authorizerUserId = body.authorizerUserId ?? req.auth!.userId;
-  const authorizerName = body.authorizerName ?? req.auth!.username;
+  // 终审人不默认当前用户：过账是高风险动作，规则要求终审人与执行人不同。
+  // 默认成自己只会撞「执行人 == 终审人」冲突，报出的还是含糊的 DUTY_CONFLICT；
+  // 留空则命中 WORKFLOW_AUTHORIZATION_REQUIRED，明确告诉调用方缺终审人。
+  // 校验会保证到达后续流程时 authorizerUserId 必有值，故 name 直接跟随入参。
+  const authorizerUserId = body.authorizerUserId;
+  const authorizerName = body.authorizerName;
+
+  // 复核人必须取自「谁审核的这张凭证」，不能拿当前用户顶替 —— 早前两个角色都填
+  // req.auth.userId，而职责分离规则判定「复核人 == 过账人」即冲突，导致本接口对
+  // 任何调用恒返回 400，过账功能实际不可用。
+  // 迁移 043 之前审核的凭证没有审核人记录（NULL），此时跳过该项校验，否则存量凭证
+  // 永远过不了账；终审人要求与审计留痕不受影响。
+  const reviewerUserId = await getVoucherApproverUserId(req.auth!.companyId, voucherId);
   const authCheck = validateWorkflowAuthorization({
     action: "voucher.post",
-    reviewerUserId: req.auth!.userId,
+    reviewerUserId: reviewerUserId ?? undefined,
     posterUserId: req.auth!.userId,
     executorUserId: req.auth!.userId,
     authorizerUserId
@@ -686,9 +872,21 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
   }
   const previousState = mapVoucherStatusToWorkflowState(target.status);
   const nextState = mapVoucherStatusToWorkflowState("posted");
-  const transitionValidation = validateWorkflowTransition(previousState, nextState);
-  if (!transitionValidation.ok) {
-    return json(res, 400, { error: transitionValidation.message, code: transitionValidation.errorCode });
+  // 过账在状态机上是「开始执行 → 执行完成」两步。通用转移表刻意不允许 under_review
+  // 一步跳到 completed（审核态不能直达终态），而凭证只有 draft/review_required/posted
+  // 三个状态，审核后必然是 under_review —— 此前这里只校验 under_review -> completed，
+  // 于是所有审核过的凭证 100% 被判 WORKFLOW_INVALID_TRANSITION，这是过账失效的第二道闸。
+  // 拆成两步既贴合语义（过账就是执行动作），也让审计留下「执行中」的痕迹，
+  // 且不必为凭证放宽一张对所有资源类型生效的通用转移表。
+  const executingState = "executing" as const;
+  for (const [from, to] of [
+    [previousState, executingState],
+    [executingState, nextState]
+  ] as const) {
+    const transitionValidation = validateWorkflowTransition(from, to);
+    if (!transitionValidation.ok) {
+      return json(res, 400, { error: transitionValidation.message, code: transitionValidation.errorCode });
+    }
   }
 
   const postedAt = new Date().toISOString();
@@ -882,12 +1080,25 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
           authorizerName
         })
       );
-      const transition = buildWorkflowTransitionRecord({
+      // 与上面的两步校验一一对应：先记「开始过账」，再记「过账完成」。
+      const startTransition = buildWorkflowTransitionRecord({
         companyId: req.auth!.companyId,
         workflowRunId: run.id,
         resourceType: "voucher",
         resourceId: voucherId,
         previousState,
+        nextState: executingState,
+        actorUserId: req.auth!.userId,
+        actorName: req.auth!.username,
+        basis: "voucher.post.start",
+        ruleVersion: "v4-1a"
+      });
+      const transition = buildWorkflowTransitionRecord({
+        companyId: req.auth!.companyId,
+        workflowRunId: run.id,
+        resourceType: "voucher",
+        resourceId: voucherId,
+        previousState: executingState,
         nextState,
         actorUserId: req.auth!.userId,
         actorName: req.auth!.username,
@@ -911,6 +1122,7 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
         authorizerName
       });
       const running = markWorkflowCommandStatus(command, "running", { progress: "posting_voucher" });
+      await insertWorkflowTransition(client, startTransition);
       await insertWorkflowTransition(client, transition);
       await insertWorkflowCommandExecution(client, running);
       await updateWorkflowCommandExecution(

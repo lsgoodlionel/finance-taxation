@@ -422,7 +422,17 @@ export interface LedgerEntry {
   accountName: string;
   debit: string;
   credit: string;
-  source: "voucher_posting";
+  /**
+   * 分录来源。
+   * - `voucher_posting`：凭证过账产生的业务分录；
+   * - `period_closing`：期末结转损益产生的分录（`closePeriod` 写入）。
+   *
+   * 这个联合是**如实**的：类型此前只写 `voucher_posting`，而结转分录从一开始就
+   * 在往库里写 `period_closing`，测试只能用 `as unknown as LedgerEntry` 绕过。
+   * 两者的区别有实际后果 —— 损益聚合必须排除结转分录、账簿列示必须保留，
+   * 判断依据见 apps/api 的 modules/ledger/closing-entries.ts。
+   */
+  source: "voucher_posting" | "period_closing";
   postedAt: string;
 }
 
@@ -1043,6 +1053,10 @@ export const permissionCatalog = [
   "documents.manage",
   "ledger.view",
   "ledger.post",
+  // 银行账户、流水导入/同步、对账确认自成一档：这些是出纳的本职工作，
+  // 而 ledger.post 是记账权（出纳不持有）。此前整组 banking 写路由挂 ledger.post，
+  // 等于把出纳挡在自己的活儿外面；再往回降到 ledger.view 又会让只读账号也能导流水。
+  "banking.manage",
   "tax.view",
   "tax.manage",
   "rnd.view",

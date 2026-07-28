@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Steps, Button, Card, Table, Tag, Statistic, Alert, DatePicker, Space,
   Row, Col, Divider, Typography, Spin, Empty, Result,
@@ -32,14 +32,29 @@ interface Props {
   employees: Employee[];
   periods: PayrollPeriodSummary[];
   policy: PayrollPolicy | null;
+  /**
+   * 正在计算的工资期间，由 PayrollPage 持有。
+   *
+   * 改造前向导自己 useState 一个「当前月份」，于是同一页上出现两个期间：
+   * 顶部全局期间选择器和审计跳转带来的 payrollPeriod 只改得动外面那个，
+   * 向导标题里仍写着当月——运行态面板、事项联动算的是 A 期间，用户在向导里
+   * 算的是 B 期间。期间提到外面之后这一页只剩一个口径。
+   */
+  period: string;
+  onPeriodChange: (period: string) => void;
+  /** 把本期工资记录同步给外层：运行态与「接入事项主线」都要按同一批记录算。 */
+  onRecordsChange: (records: PayrollRecord[]) => void;
 }
 
-export function PayrollRunWizard({ employees, periods, policy }: Props) {
+export function PayrollRunWizard({
+  employees,
+  periods,
+  policy,
+  period,
+  onPeriodChange,
+  onRecordsChange
+}: Props) {
   const [current, setCurrent] = useState(0);
-  const [period, setPeriod] = useState<string>(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
   const [records, setRecords] = useState<PayrollRecord[]>([]);
   const [computing, setComputing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -50,6 +65,27 @@ export function PayrollRunWizard({ employees, periods, policy }: Props) {
     () => employees.filter((e) => e.status === "active"),
     [employees],
   );
+
+  /**
+   * 换期间就把本期结果清空、退回第一步。
+   *
+   * 改造前换了期间但记录还留在屏幕上（handleNext0 只在查到记录时才覆盖），
+   * 用户会对着 3 月的表格确认 4 月的工资。用 ref 跳过首次渲染，
+   * 免得刚挂载就把外层深链加载好的记录抹掉。
+   */
+  const lastPeriodRef = useRef(period);
+  useEffect(() => {
+    if (lastPeriodRef.current === period) return;
+    lastPeriodRef.current = period;
+    setRecords([]);
+    setSynced(false);
+    setCurrent(0);
+  }, [period]);
+
+  useEffect(() => {
+    onRecordsChange(records);
+    // 只在记录本身变化时上报；把回调放进依赖会因为父级每次渲染重建箭头函数而空转。
+  }, [records]);
 
   const summary = useMemo(() => ({
     headcount: records.length,
@@ -67,9 +103,8 @@ export function PayrollRunWizard({ employees, periods, policy }: Props) {
     // try loading existing records for this period
     try {
       const res = await listPayroll(period);
-      if (res.items.length > 0) {
-        setRecords(res.items);
-      }
+      // 无条件覆盖：查到 0 条说明本期还没算过，此时留着上一期的记录才是错的。
+      setRecords(res.items);
     } catch {
       // no records yet — fine, Step 3 will compute
     }
@@ -212,7 +247,7 @@ export function PayrollRunWizard({ employees, periods, policy }: Props) {
   function renderStep() {
     switch (current) {
       case 0:
-        return <Step0 period={period} setPeriod={setPeriod} periods={periods} policy={policy} />;
+        return <Step0 period={period} setPeriod={onPeriodChange} periods={periods} policy={policy} />;
       case 1:
         return (
           <div>
@@ -386,11 +421,17 @@ export function PayrollRunWizard({ employees, periods, policy }: Props) {
         {current === STEPS.length - 1 && (
           <Button
             onClick={() => {
-              setCurrent(0);
-              setRecords([]);
-              setSynced(false);
               const d = new Date();
-              setPeriod(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+              const nextPeriod = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+              if (nextPeriod === period) {
+                // 本来就停在当月，期间不变则重置 effect 不会触发，这里自己清。
+                setCurrent(0);
+                setRecords([]);
+                setSynced(false);
+                return;
+              }
+              // 期间一变，上面的 effect 会把步骤和记录一起重置，这里不用再清一遍。
+              onPeriodChange(nextPeriod);
             }}
           >
             开始新一期

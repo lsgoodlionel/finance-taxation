@@ -1,4 +1,5 @@
 import type { ServerResponse } from "node:http";
+import type { PoolClient } from "pg";
 import type {
   BusinessEvent,
   BusinessEventActivity,
@@ -25,6 +26,7 @@ import { listCompanyVouchers } from "../vouchers/routes.js";
 import { json } from "../../utils/http.js";
 import { uniqueId } from "../../utils/id.js";
 import { writeAudit } from "../../services/audit.js";
+import { evaluateAnalyzeGuard, type AnalyzeGuardInput } from "./analyze-guard.js";
 import { buildGeneratedTasksForEvent } from "./task-chain.js";
 import { buildContractRevenueBundle } from "./contract-revenue-rules.js";
 import { buildPurchaseExpenseBundle } from "./purchase-expense-rules.js";
@@ -1619,10 +1621,107 @@ export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId:
   return json(res, 200, updated);
 }
 
+/**
+ * analyze 的每一条出口都要留痕：此前该路由删除已入账分录时完全无审计记录，
+ * 事后无法回答"谁在什么时候抹掉了哪些账"。
+ */
+function auditAnalyze(
+  req: ApiRequest,
+  eventId: string,
+  action: string,
+  changes: Record<string, unknown>
+): void {
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action,
+    resourceType: "business_event",
+    resourceId: eventId,
+    changes
+  });
+}
+
+/**
+ * 读取 analyze 闸门所需的两项事实：该事项下已过账的凭证，以及该事项分录落在
+ * 哪些已锁账期间。
+ *
+ * 必须在**将要执行删除的同一个事务里**调用：
+ * - 凭证行整批 `for update`（不只锁 posted 的那些）。只锁 posted 会留下竞态——
+ *   并发的 `postVoucher` 改的是当时还是 draft 的行，不在锁集合内，就能在"检查"
+ *   与"删除"之间把它变成 posted。锁全量后并发过账会阻塞到本事务结束。
+ * - 期间同样用本事务的连接查，不走 `isPeriodLocked` 的全局连接池。
+ *
+ * 期间按 `ledger_entries.entry_date` 在库内 `to_char` 成期——不能沿用过账路径
+ * `isPeriodLocked(companyId, 当前月)` 的"当前月"口径，否则跨月重新分析会绕过
+ * 锁账；在 SQL 内成期也避开了 `date` 列经 JS `Date` 往返的时区偏移。
+ */
+async function loadAnalyzeGuardInput(
+  client: PoolClient,
+  companyId: string,
+  eventId: string
+): Promise<AnalyzeGuardInput> {
+  // `reversed_by` 反查这张凭证有没有被红冲过。已被红冲的凭证账务影响已归零，
+  // 不该再拦着重新分析——否则红冲做完了事项依然是死路，等于没有出口。
+  const voucherResult = await client.query<{ id: string; status: string; reversed_by: string | null }>(
+    `
+      select
+        v.id,
+        v.status,
+        (
+          select r.id from vouchers r
+          where r.company_id = v.company_id
+            and r.reverses_voucher_id = v.id
+            and r.status = 'posted'
+          limit 1
+        ) as reversed_by
+      from vouchers v
+      where v.company_id = $1 and v.business_event_id = $2
+      order by v.id
+      for update
+    `,
+    [companyId, eventId]
+  );
+
+  const periodResult = await client.query<{ period: string }>(
+    `
+      select distinct to_char(entry_date, 'YYYY-MM') as period
+      from ledger_entries
+      where company_id = $1 and business_event_id = $2
+      order by 1
+    `,
+    [companyId, eventId]
+  );
+  const periods = periodResult.rows.map((row) => row.period);
+
+  const lockedResult = periods.length
+    ? await client.query<{ period: string }>(
+        `
+          select period
+          from accounting_periods
+          where company_id = $1 and period = any($2::text[]) and is_locked
+          order by period
+        `,
+        [companyId, periods]
+      )
+    : { rows: [] as { period: string }[] };
+
+  return {
+    // 只有**未被红冲**的已过账凭证才构成阻断：红冲凭证自身也要过账，
+    // 冲销完成后原凭证的账务影响已归零，再拦就没有出口了。
+    postedVoucherIds: voucherResult.rows
+      .filter((row) => row.status === "posted" && !row.reversed_by)
+      .map((row) => row.id),
+    lockedPeriods: lockedResult.rows.map((row) => row.period)
+  };
+}
+
 export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId: string) {
   const companyEvents = await listCompanyEvents(req.auth!.companyId);
   const target = scopeEvents(companyEvents, req).find((row) => row.id === eventId);
   if (!target) {
+    // 越权/探测同样留痕：调用方持有 events.create，但该事项不在其可见范围内。
+    auditAnalyze(req, eventId, "event.analyze.denied", { reason: "not_found_or_out_of_scope" });
     return json(res, 404, { error: "Event not found" });
   }
 
@@ -1674,10 +1773,25 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
   const nextState = mapBusinessEventStatusToWorkflowState(analyzedEvent.status);
   const analysisTransitionValidation = validateWorkflowTransition(previousState, nextState);
   if (!analysisTransitionValidation.ok) {
+    auditAnalyze(req, eventId, "event.analyze.blocked", {
+      code: analysisTransitionValidation.errorCode,
+      previousState,
+      nextState
+    });
     return json(res, 400, { error: analysisTransitionValidation.message, code: analysisTransitionValidation.errorCode });
   }
 
-  await withTransaction(async (client) => {
+  // 已入账的账务不可被"重新分析"顺手删掉：只能红冲，且锁账期间一律拒绝。
+  // 闸门放在事务内、且在任何删除之前——先锁住凭证行再判定，检查结果才不会在
+  // 检查与删除之间过期。裁决为拒绝时直接返回，事务不做任何写入。
+  const guard = await withTransaction(async (client) => {
+    const verdict = evaluateAnalyzeGuard(
+      await loadAnalyzeGuardInput(client, target.companyId, target.id)
+    );
+    if (!verdict.allowed) {
+      return verdict;
+    }
+
     await client.query(
       `
         update business_events
@@ -1856,7 +1970,73 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
     });
     await insertWorkflowTransition(client, transition);
     await updateWorkflowRunState(client, run.id, nextState, null, transition.occurredAt);
+    return { allowed: true } as const;
   });
+
+  if (!guard.allowed) {
+    auditAnalyze(req, eventId, "event.analyze.blocked", {
+      code: guard.code,
+      postedVoucherIds: guard.postedVoucherIds,
+      lockedPeriods: guard.lockedPeriods
+    });
+    return json(res, 409, { error: guard.message, code: guard.code });
+  }
+
+  auditAnalyze(req, eventId, "event.analyze", {
+    previousStatus: target.status,
+    generatedTasks: generatedTasks.length,
+    generatedDocuments: nextDocuments.length,
+    taxItems: nextTaxItems.length,
+    vouchers: nextVouchers.length
+  });
+
+  // 单据与税务事项的诞生点。上面那条 event.analyze 只记了个数，回答不了
+  // 「这份单据是哪次分析生出来的」——而 /audit 的单据/税务事项深链恰恰是按
+  // resourceType=document|tax_item + 对象编号来查的（见 apps/web/src/pages/
+  // drilldown.ts 的 resolveAuditContextFromState），不逐条留痕那两个深链永远是空。
+  //
+  // 对象 id 是确定性的（doc-<eventId>-<type> / tax-item-<eventId>-<taxType>），
+  // 重新分析会删旧建新、id 不变，所以这里如实记成又一次 created：
+  // 同一个 id 上的多条 created 就是「这个对象被重建过几次」，本身即事实。
+  for (const document of nextDocuments) {
+    writeAudit({
+      companyId: analyzedEvent.companyId,
+      userId: req.auth!.userId,
+      userName: req.auth!.username,
+      action: "document.created",
+      resourceType: "document",
+      resourceId: document.id,
+      resourceLabel: document.title,
+      changes: {
+        data: {
+          businessEventId: document.businessEventId,
+          documentType: document.documentType,
+          ownerDepartment: document.ownerDepartment,
+          status: document.status
+        }
+      }
+    });
+  }
+  for (const taxItem of nextTaxItems) {
+    writeAudit({
+      companyId: analyzedEvent.companyId,
+      userId: req.auth!.userId,
+      userName: req.auth!.username,
+      action: "tax_item.created",
+      resourceType: "tax_item",
+      resourceId: taxItem.id,
+      resourceLabel: `${taxItem.taxType} ${taxItem.filingPeriod}`,
+      changes: {
+        data: {
+          businessEventId: taxItem.businessEventId,
+          taxType: taxItem.taxType,
+          treatment: taxItem.treatment,
+          filingPeriod: taxItem.filingPeriod,
+          status: taxItem.status
+        }
+      }
+    });
+  }
 
   return json(res, 200, {
     eventId,

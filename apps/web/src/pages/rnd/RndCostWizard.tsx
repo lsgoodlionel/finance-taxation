@@ -13,6 +13,13 @@ import { createRndCostLine } from "../../lib/api";
 import { COST_TYPE_LABELS, ACCOUNTING_TREATMENT_LABELS, useI18n } from "../../lib/i18n";
 import { Term } from "../../components/ui/Term";
 import type { RndCostLineType, RndAccountingTreatment } from "@finance-taxation/domain-model";
+import {
+  RND_STATUS_PRESENTATION,
+  SUPER_DEDUCTION_EXTRA_MULTIPLE,
+  computeEligibleBase,
+  computeExtraDeduction,
+  parseAmount
+} from "./rnd-tasks";
 
 const { Text, Title } = Typography;
 
@@ -50,11 +57,17 @@ export function RndCostWizard({ open, project, onClose, onComplete }: RndCostWiz
   if (!project) return null;
   const safeProject = project;
 
-  const totalExpensed    = costEntries.filter(e => e.accountingTreatment === "expensed").reduce((s, e) => s + parseFloat(e.amount || "0"), 0);
-  const totalCapitalized = costEntries.filter(e => e.accountingTreatment === "capitalized").reduce((s, e) => s + parseFloat(e.amount || "0"), 0);
+  const totalExpensed    = costEntries.filter(e => e.accountingTreatment === "expensed").reduce((s, e) => s + parseAmount(e.amount), 0);
+  const totalCapitalized = costEntries.filter(e => e.accountingTreatment === "capitalized").reduce((s, e) => s + parseAmount(e.amount), 0);
   const totalAmount      = totalExpensed + totalCapitalized;
-  const eligibleBase     = totalExpensed + totalCapitalized * 0.60; // approx eligible portion
-  const estimatedDeduction = eligibleBase * 0.75;
+  /**
+   * 口径与后端一致：基数 = 费用化金额，资本化完全不进基数。
+   * 改造前这里写的是 `费用化 + 资本化 × 0.60`，那个 0.60 在后端
+   * （modules/rnd/summary.ts）和税法口径里都找不到出处，结果是向导预览的数
+   * 比提交之后台账里的数大一截——用户按预览做的决定会落空。
+   */
+  const eligibleBase     = computeEligibleBase(costEntries);
+  const extraDeduction   = computeExtraDeduction(eligibleBase);
 
   function addEntry() {
     void form.validateFields().then((values) => {
@@ -115,8 +128,11 @@ export function RndCostWizard({ open, project, onClose, onComplete }: RndCostWiz
             <Descriptions.Item label="资本化政策">
               <Tag color="blue">{project.capitalizationPolicy}</Tag>
             </Descriptions.Item>
+            {/* 状态直出英文枚举值（planning/active/closed）用户看不懂，按领域模型的三个取值给中文。 */}
             <Descriptions.Item label="项目状态">
-              <Tag color={project.status === "active" ? "success" : "default"}>{project.status}</Tag>
+              <Tag color={RND_STATUS_PRESENTATION[project.status]?.color ?? "default"}>
+                {RND_STATUS_PRESENTATION[project.status]?.label ?? project.status}
+              </Tag>
             </Descriptions.Item>
           </Descriptions>
           <Alert
@@ -208,7 +224,7 @@ export function RndCostWizard({ open, project, onClose, onComplete }: RndCostWiz
               columns={[
                 { title: "类别", dataIndex: "costType", render: (v: RndCostLineType) => t(COST_TYPE_LABELS, v) },
                 { title: "处理", dataIndex: "accountingTreatment", render: (v: RndAccountingTreatment) => t(ACCOUNTING_TREATMENT_LABELS, v) },
-                { title: "金额", dataIndex: "amount", align: "right" as const, render: (v: string) => `¥${parseFloat(v).toLocaleString()}` },
+                { title: "金额", dataIndex: "amount", align: "right" as const, render: (v: string) => `¥${parseAmount(v).toLocaleString()}` },
                 { title: "日期", dataIndex: "occurredOn" },
                 {
                   title: "", key: "action", width: 50,
@@ -243,14 +259,14 @@ export function RndCostWizard({ open, project, onClose, onComplete }: RndCostWiz
               <Statistic title="合计研发投入" value={totalAmount.toFixed(2)} prefix="¥" />
             </Col>
             <Col span={12}>
-              <Statistic title="加计扣除基数（估算）" value={eligibleBase.toFixed(2)} prefix="¥" valueStyle={{ color: "#16a34a" }} />
+              <Statistic title="加计扣除基数（仅费用化）" value={eligibleBase.toFixed(2)} prefix="¥" valueStyle={{ color: "#16a34a" }} />
             </Col>
           </Row>
           <Alert
             type="success"
             showIcon
-            message={`按 75% 加计扣除率，本次预计可额外扣除 ¥${estimatedDeduction.toFixed(2)}`}
-            description="注：最终加计扣除金额以年度汇算清缴时经税务师核定的数额为准。"
+            message={`按加计 ${SUPER_DEDUCTION_EXTRA_MULTIPLE * 100}%，本次预计可额外扣除 ¥${extraDeduction.toFixed(2)}`}
+            description="资本化金额不计入基数，它先形成无形资产、按期摊销。最终加计扣除金额以年度汇算清缴时核定的数额为准。"
           />
           {project.policyReview.guidance.length > 0 && (
             <Alert
@@ -285,8 +301,8 @@ export function RndCostWizard({ open, project, onClose, onComplete }: RndCostWiz
             <Descriptions.Item label="合计金额">¥{totalAmount.toFixed(2)}</Descriptions.Item>
             <Descriptions.Item label="费用化">¥{totalExpensed.toFixed(2)}</Descriptions.Item>
             <Descriptions.Item label="资本化">¥{totalCapitalized.toFixed(2)}</Descriptions.Item>
-            <Descriptions.Item label="预计加计扣除" span={2}>
-              <Text strong style={{ color: "#16a34a" }}>¥{estimatedDeduction.toFixed(2)}</Text>
+            <Descriptions.Item label="预计可额外扣除" span={2}>
+              <Text strong style={{ color: "#16a34a" }}>¥{extraDeduction.toFixed(2)}</Text>
             </Descriptions.Item>
           </Descriptions>
           <Alert

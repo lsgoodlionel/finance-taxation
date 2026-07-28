@@ -33,9 +33,11 @@ import type {
   RiskClosureRecord,
   RiskFinding,
   RndAccountingPolicyReview,
+  RndCostLine,
   RndPolicyGuidance,
   RndProject,
   RndProjectSummary,
+  RndTimeEntry,
   IndividualIncomeTaxMaterial,
   StampAndSurtaxSummary,
   SuperDeductionPackage,
@@ -136,21 +138,10 @@ export interface VoucherDetail extends Voucher {
 }
 
 export interface RndProjectDetail extends RndProject {
-  costLines: Array<{
-    id: string;
-    costType: string;
-    accountingTreatment: string;
-    amount: string;
-    occurredOn: string;
-    notes: string;
-  }>;
-  timeEntries: Array<{
-    id: string;
-    staffName: string;
-    workDate: string;
-    hours: string;
-    notes: string;
-  }>;
+  // 后端 getRndProjectDetail 直接返回完整行（含 voucherId / businessEventId），
+  // 不做字段投影，因此此处必须用完整领域类型，否则会隐藏可用于对象级溯源的外键。
+  costLines: RndCostLine[];
+  timeEntries: RndTimeEntry[];
   summary: RndProjectSummary;
   policyReview: RndAccountingPolicyReview;
   guidance: RndPolicyGuidance;
@@ -1055,6 +1046,42 @@ export interface DashboardData {
 
 export async function getDashboardChairman() {
   return request<DashboardData>("/v2/dashboard/chairman");
+}
+
+/**
+ * 历史收支趋势的一个会计期间。
+ *
+ * `hasData: false` 表示该期间**账上没有分录**，此时各金额一律为 `null`——后端不补零
+ * 也不外推（口径见 apps/api 的 modules/dashboard/trend.ts）。前端必须把 `null` 画成
+ * 断点，把它当 0 处理就是把「这个月没有账」画成「这个月收入归零」。
+ */
+export interface ChairmanTrendPoint {
+  period: string;
+  hasData: boolean;
+  revenue: string | null;
+  cost: string | null;
+  /** 期间费用合计，不含所得税费用。 */
+  expense: string | null;
+  incomeTax: string | null;
+  grossProfit: string | null;
+  netProfit: string | null;
+}
+
+export interface ChairmanTrendData {
+  endPeriod: string;
+  months: number;
+  /** 连续的期间序列，升序；没有账的期间也占一格。 */
+  points: ChairmanTrendPoint[];
+  /** 有账的期间数；为 0 表示整段区间无数据，应整块留白而不是画一张空图。 */
+  periodsWithData: number;
+}
+
+/**
+ * 不传 `period`：让后端取默认的当前期间，与 getDashboardChairman 完全一致，
+ * 这样趋势图最后一个点与利润概览卡片说的必定是同一个月。
+ */
+export async function getDashboardChairmanTrend(months: number) {
+  return request<ChairmanTrendData>(`/api/dashboard/chairman/trend?months=${months}`);
 }
 
 export async function listAccounts(filters?: { category?: string; q?: string; leafOnly?: boolean }) {

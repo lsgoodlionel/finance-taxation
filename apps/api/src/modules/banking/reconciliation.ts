@@ -18,6 +18,7 @@
  */
 
 import { query, queryOne } from "../../db/client.js";
+import { toDateOnly } from "../../db/date-column.js";
 import { writeAudit } from "../../services/audit.js";
 
 // ── 类型定义 ──────────────────────────────────────────────────────────────────
@@ -34,7 +35,11 @@ export interface BankStmt {
 export interface VoucherCandidate {
   id: string;
   total_debit: string;
-  created_at: string;
+  // `timestamptz` 由 node-postgres 解析成 Date（只有 `date` 列注册了返回字符串的
+  // 解析器，见 db/date-column.ts）。此前声明成 string 让类型撒了谎，
+  // `computeMatchScore` 里的 `.slice()` 在生产必然抛 TypeError；
+  // 单测没抓到是因为夹具喂的是字符串，与真实取数类型不一致。
+  created_at: string | Date;
   summary: string;
 }
 
@@ -44,7 +49,8 @@ export interface MatchResult {
   score: number;
   reasons: string[];
   amountDiff: number;
-  dateDiffDays: number;
+  /** 凭证日期取不到时为 null（`reconciliation_candidates.date_diff_days` 列本就可空）。 */
+  dateDiffDays: number | null;
 }
 
 export interface ReconRules {
@@ -139,9 +145,12 @@ export function computeMatchScore(
   if (amtScore === 50) reasons.push("金额完全匹配");
   else if (amtScore > 0) reasons.push(`金额接近（差 ¥${amountDiff.toFixed(2)}）`);
 
-  // 日期
-  const dateDiffDays = daysBetween(stmt.transaction_date, voucher.created_at.slice(0, 10));
-  const dateScore = scoreDateProximity(dateDiffDays);
+  // 日期。取不到凭证日期时不给日期分，也不谎报「日期一致」——
+  // daysBetween 拿到空串会算出 NaN，而 NaN 与任何阈值比较都为假，
+  // 会静默落到 0 分且 `diffDays === 0` 为假，行为虽不崩但读起来像"日期不匹配"。
+  const voucherDate = toDateOnly(voucher.created_at);
+  const dateDiffDays = voucherDate === null ? null : daysBetween(stmt.transaction_date, voucherDate);
+  const dateScore = dateDiffDays === null ? 0 : scoreDateProximity(dateDiffDays);
   if (dateDiffDays === 0) reasons.push("日期一致");
   else if (dateScore > 0) reasons.push(`日期相差 ${dateDiffDays} 天`);
 

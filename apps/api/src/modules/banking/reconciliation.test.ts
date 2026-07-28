@@ -110,3 +110,53 @@ test("computeMatchScore caps total at 100", () => {
   // Assert
   assert.ok(result.score <= 100);
 });
+
+/**
+ * 这三个用例存在的理由：上面所有夹具都把 `created_at` 喂成**字符串**，
+ * 而生产从 pg 拿到的是 **Date** —— `timestamptz` 没有注册返回字符串的类型解析器
+ * （只有 `date` 列有，见 db/date-column.ts）。类型声明当时写的是 `string`，
+ * TS 不报错，于是 `created_at.slice(0, 10)` 在生产必然抛 TypeError，
+ * 整条自动对账链路失效，而单测全绿。
+ *
+ * 因此这里刻意用 Date 入参：夹具类型与真实取数一致，才是有效覆盖。
+ */
+test("computeMatchScore accepts a Date created_at, matching what node-postgres actually returns", () => {
+  // Arrange: 与「日期一致」用例同一天，但按生产的真实类型传入
+  const stmt = makeStmt({ transaction_date: "2026-05-10" });
+  const voucher = makeVoucher({ created_at: new Date("2026-05-10T00:00:00.000Z") });
+
+  // Act
+  const result = computeMatchScore(stmt, voucher, DEFAULT_RULES);
+
+  // Assert: 不抛异常，且与字符串入参得到完全相同的结果
+  assert.equal(result.dateDiffDays, 0);
+  assert.equal(result.score, 80);
+  assert.ok(result.reasons.includes("日期一致"));
+});
+
+test("computeMatchScore scores a Date created_at identically to its string form", () => {
+  // Arrange
+  const stmt = makeStmt({ transaction_date: "2026-05-13" });
+  const iso = "2026-05-10T00:00:00.000Z";
+
+  // Act
+  const fromString = computeMatchScore(stmt, makeVoucher({ created_at: iso }), DEFAULT_RULES);
+  const fromDate = computeMatchScore(stmt, makeVoucher({ created_at: new Date(iso) }), DEFAULT_RULES);
+
+  // Assert: 两种入参形态不得产生任何评分差异
+  assert.deepEqual(fromDate, fromString);
+});
+
+test("computeMatchScore gives no date score when the voucher date is unusable", () => {
+  // Arrange: 无效日期不应伪造「日期一致」，也不应让分数变成 NaN
+  const stmt = makeStmt({ transaction_date: "2026-05-10" });
+  const voucher = makeVoucher({ created_at: new Date("invalid") });
+
+  // Act
+  const result = computeMatchScore(stmt, voucher, DEFAULT_RULES);
+
+  // Assert: 只剩金额分，日期差为 null 而非 NaN
+  assert.equal(result.dateDiffDays, null);
+  assert.equal(result.score, 50);
+  assert.ok(!result.reasons.includes("日期一致"));
+});

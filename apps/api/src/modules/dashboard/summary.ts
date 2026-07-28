@@ -5,7 +5,9 @@ import type {
   TaxFilingBatch,
   Voucher
 } from "@finance-taxation/domain-model";
+import { isPeriodClosingEntry } from "../ledger/closing-entries.js";
 import { summarizeProfitTotals } from "../reports/profit-accounts.js";
+import { formatWhole, formatRate, toWholeYuanOverview } from "./profit-display.js";
 
 interface DashboardQueueItem {
   id: string;
@@ -56,15 +58,6 @@ export interface DashboardSnapshot {
   queues: { approvals: number; blockedTasks: number; overdueTasks: number };
 }
 
-function formatWhole(value: number): string {
-  return Math.round(value).toString();
-}
-
-function formatRate(numerator: number, denominator: number): string {
-  if (!denominator) return "0.00%";
-  return `${((numerator / denominator) * 100).toFixed(2)}%`;
-}
-
 function sameDay(iso: string | null | undefined, day: string): boolean {
   return Boolean(iso && iso.slice(0, 10) === day);
 }
@@ -87,12 +80,18 @@ export function buildDashboardSnapshot(input: {
   const day = input.now.slice(0, 10);
 
   // 盈利概览必须按当前会计期间过滤：此前无期间过滤，「本月净利」实为开业至今累计。
+  //
+  // 同时排除结转损益分录（口径见 ledger/closing-entries.ts）：这是「按期间聚合经营
+  // 成果」的读路径，结转分录 entry_date 落在本期之内、金额与本期业务分录恰好相反，
+  // 不排除的话月结一做完，驾驶舱本月收入/净利立刻全变 0，且毫无报错提示。
   const periodEntries = input.ledgerEntries.filter(
-    (entry) => entry.entryDate >= input.period.startDate && entry.entryDate <= input.period.endDate
+    (entry) =>
+      entry.entryDate >= input.period.startDate &&
+      entry.entryDate <= input.period.endDate &&
+      !isPeriodClosingEntry(entry)
   );
   // 科目口径与正式利润表共用同一纯函数，避免驾驶舱与 /reports 再次漂移。
-  const { revenue, cost, expense, incomeTax, grossProfit, netProfit } =
-    summarizeProfitTotals(periodEntries);
+  const totals = summarizeProfitTotals(periodEntries);
 
   const approvals = input.vouchers
     .filter((voucher) => voucher.status === "review_required")
@@ -150,16 +149,18 @@ export function buildDashboardSnapshot(input: {
     `待提交税务批次 ${pendingTaxBatches} 个`
   ];
 
+  const overview = toWholeYuanOverview(totals);
+
   return {
     profitOverview: {
-      revenue: formatWhole(revenue),
-      cost: formatWhole(cost),
-      expense: formatWhole(expense),
-      incomeTax: formatWhole(incomeTax),
-      grossProfit: formatWhole(grossProfit),
-      netProfit: formatWhole(netProfit),
-      grossMargin: formatRate(grossProfit, revenue),
-      netMargin: formatRate(netProfit, revenue)
+      revenue: formatWhole(overview.revenue),
+      cost: formatWhole(overview.cost),
+      expense: formatWhole(overview.expense),
+      incomeTax: formatWhole(overview.incomeTax),
+      grossProfit: formatWhole(overview.grossProfit),
+      netProfit: formatWhole(overview.netProfit),
+      grossMargin: formatRate(overview.grossProfit, overview.revenue),
+      netMargin: formatRate(overview.netProfit, overview.revenue)
     },
     riskBoard: {
       approvals,

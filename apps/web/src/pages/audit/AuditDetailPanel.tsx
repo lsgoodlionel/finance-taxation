@@ -1,5 +1,7 @@
+import React from "react";
 import type { AuditLog } from "@finance-taxation/domain-model";
-import { resolveAuditLogTarget } from "../drilldown";
+import { resolveAuditNavigationTarget } from "./audit-navigation";
+import { describeResourceType } from "./audit-resource-types";
 
 function panelStyle() {
   return {
@@ -17,7 +19,7 @@ type AuditDetailPanelProps = {
 };
 
 export function AuditDetailPanel({ log, renderChanges, onNavigate }: AuditDetailPanelProps) {
-  const target = log ? resolveAuditLogTarget(log) : null;
+  const target = log ? resolveAuditNavigationTarget(log) : null;
   return (
     <article style={panelStyle()}>
       <h3 style={{ marginTop: 0 }}>日志详情</h3>
@@ -27,7 +29,7 @@ export function AuditDetailPanel({ log, renderChanges, onNavigate }: AuditDetail
             <strong>对象：</strong>{log.resourceLabel ?? log.resourceId ?? "-"}
           </div>
           <div>
-            <strong>对象类型：</strong>{log.resourceType}
+            <strong>对象类型：</strong>{describeResourceType(log.resourceType)}
           </div>
           <div>
             <strong>操作：</strong>{log.action}

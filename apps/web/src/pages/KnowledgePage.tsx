@@ -1,5 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+/**
+ * 企业制度库（V10 车道 B2：按任务重组）。
+ *
+ * 改造前首屏 7 个平级区块：页头（含两个入口按钮）、概览统计、筛选条、解析结果面板、
+ * 录入表单、条目列表、右侧「AI 引用说明」。「上传制度文件」「手工录入」「翻查条目」
+ * 是三件互不相干的事，却同屏抢位置。
+ *
+ * 改造后：三件事进 TaskFocusShell（见 knowledge/knowledge-tasks.ts），一次只渲染
+ * 一件事的工作区；概览统计与说明收缩成随任务变化的 aside；选中的任务写在 ?task= 里。
+ */
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { KnowledgeItem } from "@finance-taxation/domain-model";
+import { TaskFocusShell } from "../components/ui/TaskFocusShell";
 import {
   createKnowledgeItem,
   deleteKnowledgeItem,
@@ -15,14 +27,20 @@ import {
   type FileParseState,
   type KnowledgeForm as KnowledgeFormData
 } from "./knowledge/types";
+import {
+  buildKnowledgeTasks,
+  readKnowledgeTask,
+  writeKnowledgeTask,
+  isKnowledgeTaskKey,
+  type KnowledgeTaskKey
+} from "./knowledge/knowledge-tasks";
 import { KnowledgeShell } from "./knowledge/KnowledgeShell";
 import { KnowledgeHeader } from "./knowledge/KnowledgeHeader";
-import { KnowledgeSummary } from "./knowledge/KnowledgeSummary";
 import { KnowledgeFilters } from "./knowledge/KnowledgeFilters";
 import { KnowledgeForm } from "./knowledge/KnowledgeForm";
 import { KnowledgeList } from "./knowledge/KnowledgeList";
-import { KnowledgeParsePanel } from "./knowledge/KnowledgeParsePanel";
-import { KnowledgeAside } from "./knowledge/KnowledgeAside";
+import { KnowledgeImportPanel } from "./knowledge/KnowledgeImportPanel";
+import { KnowledgeContextPanel } from "./knowledge/KnowledgeContextPanel";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
@@ -35,12 +53,34 @@ export function KnowledgePage() {
   const [form, setForm] = useState<KnowledgeFormData>(BLANK_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [parseStates, setParseStates] = useState<FileParseState[]>([]);
-  const [showParsePanel, setShowParsePanel] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTask = readKnowledgeTask(searchParams);
+  const tasks = useMemo(() => buildKnowledgeTasks({ parseStates }), [parseStates]);
+
+  /** 切到某件事；不带 replace，用户能用浏览器后退回到上一件事。 */
+  function goToTask(task: KnowledgeTaskKey) {
+    setSearchParams(writeKnowledgeTask(searchParams, task));
+  }
+
+  /**
+   * 用户手动点切换器。点进「手工录入一条」意味着「我要新写一条」，
+   * 因此清空表单——否则上次编辑到一半的旧条目会静默地跟过来，用户以为在新建，
+   * 实际保存的是对旧条目的修改。程序化跳转（编辑既有条目、从解析结果填入）
+   * 走 goToTask，不经过这里，表单内容得以保留。
+   */
+  function handleSelectTask(key: string) {
+    if (!isKnowledgeTaskKey(key)) return;
+    if (key === "create") {
+      setEditingId(null);
+      setForm(BLANK_FORM);
+    }
+    goToTask(key);
+  }
 
   useEffect(() => {
     void (async () => {
@@ -86,8 +126,9 @@ export function KnowledgePage() {
       }
       setForm(BLANK_FORM);
       setEditingId(null);
-      setShowForm(false);
       await refresh();
+      // 存完这一条，下一步多半是回列表确认它在不在——直接把用户送回去。
+      goToTask("browse");
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -101,7 +142,13 @@ export function KnowledgePage() {
       tags: item.tags.join(", ")
     });
     setEditingId(item.id);
-    setShowForm(true);
+    goToTask("create");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(BLANK_FORM);
+    goToTask("browse");
   }
 
   async function handleDelete(item: KnowledgeItem) {
@@ -124,12 +171,6 @@ export function KnowledgePage() {
     }
   }
 
-  function toggleForm() {
-    setShowForm((prev) => !prev);
-    setEditingId(null);
-    setForm(BLANK_FORM);
-  }
-
   async function handleFileSelect(files: FileList) {
     const fileArr = Array.from(files);
     if (fileArr.length === 0) return;
@@ -145,7 +186,6 @@ export function KnowledgePage() {
 
     let currentStates: FileParseState[] = valid.map((f) => ({ file: f, status: "parsing" as const }));
     setParseStates(currentStates);
-    setShowParsePanel(true);
     setMessage(`正在解析 ${valid.length} 个文件，请稍候…`);
 
     let successCount = 0;
@@ -188,8 +228,7 @@ export function KnowledgePage() {
       tags: item.tags.join(", ")
     });
     setEditingId(null);
-    setShowForm(true);
-    setShowParsePanel(false);
+    goToTask("create");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -206,7 +245,6 @@ export function KnowledgePage() {
       setMessage(`已创建条目「${item.title}」。`);
       await refresh();
       setParseStates((prev) => prev.filter((_, i) => i !== stateIndex));
-      if (parseStates.length <= 1) setShowParsePanel(false);
     } catch (err) {
       setMessage((err as Error).message);
     } finally {
@@ -216,61 +254,71 @@ export function KnowledgePage() {
 
   const parsingCount = parseStates.filter((s) => s.status === "parsing").length;
   const summary = buildKnowledgeSummary(items);
+  const activeTaskLabel = tasks.find((task) => task.key === activeTask)?.label ?? "";
+
+  function renderWorkspace() {
+    if (activeTask === "create") {
+      return (
+        <KnowledgeForm
+          form={form}
+          editing={editingId !== null}
+          onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+          onSave={() => void handleSave()}
+          onCancel={cancelEdit}
+        />
+      );
+    }
+
+    if (activeTask === "import") {
+      return (
+        <KnowledgeImportPanel
+          fileInputRef={fileInputRef}
+          parseStates={parseStates}
+          parsingCount={parsingCount}
+          savingId={savingId}
+          onFilesSelected={(files) => void handleFileSelect(files)}
+          onClear={() => setParseStates([])}
+          onFill={fillFormFromParsed}
+          onSaveDirectly={saveDirectly}
+        />
+      );
+    }
+
+    return (
+      <>
+        <KnowledgeFilters
+          filterCategory={filterCategory}
+          searchQ={searchQ}
+          onSelectCategory={handleSelectCategory}
+          onSearchChange={setSearchQ}
+          onSearch={handleSearch}
+        />
+        <KnowledgeList
+          items={items}
+          total={total}
+          expandedId={expandedId}
+          onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
+          onEdit={startEdit}
+          onToggleActive={(item) => void handleToggleActive(item)}
+          onDelete={(item) => void handleDelete(item)}
+        />
+      </>
+    );
+  }
 
   return (
     <>
-      <KnowledgeShell
-        header={(
-          <KnowledgeHeader
-            fileInputRef={fileInputRef}
-            parsingCount={parsingCount}
-            showForm={showForm}
-            onFilesSelected={(files) => void handleFileSelect(files)}
-            onToggleForm={toggleForm}
-          />
-        )}
-        summary={<KnowledgeSummary summary={summary} message={message} />}
-        filters={(
-          <KnowledgeFilters
-            filterCategory={filterCategory}
-            searchQ={searchQ}
-            onSelectCategory={handleSelectCategory}
-            onSearchChange={setSearchQ}
-            onSearch={handleSearch}
-          />
-        )}
-        parsePanel={showParsePanel && parseStates.length > 0 ? (
-          <KnowledgeParsePanel
-            parseStates={parseStates}
-            parsingCount={parsingCount}
-            savingId={savingId}
-            onClose={() => setShowParsePanel(false)}
-            onFill={fillFormFromParsed}
-            onSaveDirectly={saveDirectly}
-          />
-        ) : undefined}
-        form={showForm ? (
-          <KnowledgeForm
-            form={form}
-            editing={editingId !== null}
-            onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
-            onSave={() => void handleSave()}
-            onCancel={toggleForm}
-          />
-        ) : undefined}
-        list={(
-          <KnowledgeList
-            items={items}
-            total={total}
-            expandedId={expandedId}
-            onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
-            onEdit={startEdit}
-            onToggleActive={(item) => void handleToggleActive(item)}
-            onDelete={(item) => void handleDelete(item)}
-          />
-        )}
-        aside={<KnowledgeAside />}
-      />
+      <KnowledgeShell header={<KnowledgeHeader activeTaskLabel={activeTaskLabel} />}>
+        <TaskFocusShell
+          tasks={tasks}
+          activeKey={activeTask}
+          onSelectTask={handleSelectTask}
+          switcherLabel="制度库能办的事"
+          aside={<KnowledgeContextPanel task={activeTask} summary={summary} message={message} />}
+        >
+          {renderWorkspace()}
+        </TaskFocusShell>
+      </KnowledgeShell>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </>
   );

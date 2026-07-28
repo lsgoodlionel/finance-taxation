@@ -42,6 +42,7 @@ import {
   mapTaxFilingBatchStatusToWorkflowState,
   validateWorkflowTransition
 } from "../workflows/runtime.js";
+import { writeAudit } from "../../services/audit.js";
 
 interface TaxItemRow {
   id: string;
@@ -173,6 +174,36 @@ function mapTaxFilingBatchArchiveRow(row: TaxFilingBatchArchiveRow): TaxFilingBa
     archiveNotes: row.archive_notes,
     archivedAt: toIsoString(row.archived_at) || new Date().toISOString()
   };
+}
+
+/**
+ * 税务事项留痕入口。
+ *
+ * resourceId 必须是事项自己的 id：/audit 的税务事项深链带的是
+ * resourceType=tax_item + taxItemId（apps/web/src/pages/drilldown.ts 的
+ * resolveAuditContextFromState）。申报期间与申报提交上已有的痕迹（见
+ * modules/tax-integration/declaration-export.routes.ts）回答不了「这一条事项
+ * 被谁改过」，两者不能互相替代。
+ *
+ * 事项的诞生不在本模块——由经营事项分析批量生成，见 modules/events/routes.ts
+ * 的 analyzeEvent（tax_item.created）。
+ */
+function auditTaxItem(
+  req: ApiRequest,
+  action: string,
+  item: { id: string; taxType: string; filingPeriod: string },
+  changes: Record<string, unknown>
+): void {
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action,
+    resourceType: "tax_item",
+    resourceId: item.id,
+    resourceLabel: `${item.taxType} ${item.filingPeriod}`,
+    changes
+  });
 }
 
 export async function listCompanyTaxItems(
@@ -349,6 +380,18 @@ export async function updateTaxItem(req: ApiRequest, res: ServerResponse, taxIte
   }
   const body = (req.body || {}) as Partial<TaxItem>;
   const updatedAt = new Date().toISOString();
+  const before = {
+    status: target.status,
+    treatment: target.treatment,
+    basis: target.basis,
+    filingPeriod: target.filingPeriod
+  };
+  const after = {
+    status: body.status ?? target.status,
+    treatment: body.treatment ?? target.treatment,
+    basis: body.basis ?? target.basis,
+    filingPeriod: body.filingPeriod ?? target.filingPeriod
+  };
   await queryOne(
     `
       update tax_items
@@ -361,17 +404,22 @@ export async function updateTaxItem(req: ApiRequest, res: ServerResponse, taxIte
       where id = $6 and company_id = $7
       returning id
     `,
-    [
-      body.status ?? target.status,
-      body.treatment ?? target.treatment,
-      body.basis ?? target.basis,
-      body.filingPeriod ?? target.filingPeriod,
-      updatedAt,
-      taxItemId,
-      req.auth!.companyId
-    ]
+    [after.status, after.treatment, after.basis, after.filingPeriod, updatedAt, taxItemId, req.auth!.companyId]
   );
   const updated = (await listCompanyTaxItems(req.auth!.companyId, { taxItemId }))[0];
+
+  // 状态变更单独一个动作：「谁把这条事项改成了 ready」直接决定它能不能进申报批次，
+  // 是税务口径上最需要被单独筛出来的一类改动。什么都没改的提交不留痕。
+  const hasChange = (Object.keys(after) as (keyof typeof after)[]).some((key) => after[key] !== before[key]);
+  if (hasChange) {
+    auditTaxItem(
+      req,
+      after.status === before.status ? "tax_item.updated" : "tax_item.status_changed",
+      { id: taxItemId, taxType: target.taxType, filingPeriod: after.filingPeriod },
+      { before, after }
+    );
+  }
+
   return json(res, 200, updated);
 }
 
@@ -435,6 +483,20 @@ export async function createTaxFilingBatch(req: ApiRequest, res: ServerResponse)
       );
     }
   });
+
+  // 「这条事项什么时候被谁并进了哪个申报批次」是它的关键动作：批次一旦提交就
+  // 不可回退，事后追溯必须能从事项本身查到批次，而不是反过来翻批次找事项。
+  for (const item of scopedItems) {
+    auditTaxItem(req, "tax_item.batched", item, {
+      data: {
+        batchId: batch.id,
+        batchStatus: batch.status,
+        filingPeriod: batch.filingPeriod,
+        itemStatus: item.status
+      }
+    });
+  }
+
   return json(res, 201, batch);
 }
 

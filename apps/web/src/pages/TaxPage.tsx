@@ -9,10 +9,14 @@
  * 只渲染一件事的工作区，其余收进顶部一行切换器（角标是真实待办数）。
  * 「当前这个批次走到哪了」由 ObjectFlowBar 按批次真实字段表达，取代原先
  * currentNodeId 写死的 ProcessFlowStageSection。
+ *
+ * 申报文件导出不在这里：它已归口到导出与归档中心
+ * （pages/export-center/DeclarationExportPanel.tsx），主任务里只留一条链接。
  */
 // 显式引入 React：仓库的 node 测试用经典 JSX 转换（见 tools/v4/run-web-tests.mjs），
 // 其它页面/组件同样这样写，缺了它这一页就无法在测试里被渲染。
 import React, { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { ProPageBanner } from "../components/ui/ProPageBanner";
 import { ResultBanner } from "../components/ui/ResultBanner";
 import { ObjectFlowBar } from "../components/ui/ObjectFlowBar";
@@ -30,7 +34,6 @@ import { TaxProfilePanel } from "./tax/TaxProfilePanel";
 import { TaxShell } from "./tax/TaxShell";
 import { TaxCalendar } from "./tax/TaxCalendar";
 import { VatDeclarationWizard } from "./tax/VatDeclarationWizard";
-import { DeclarationExportPanel } from "./tax/DeclarationExportPanel";
 import { TaxWorkspaceSummary } from "./tax/TaxWorkspaceSummary";
 import { useTaxWorkspace } from "./tax/useTaxWorkspace";
 import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
@@ -48,6 +51,13 @@ const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
 };
 
 const ACTION_ROW_STYLE = { display: "flex", flexWrap: "wrap" as const, gap: "10px", alignItems: "center" };
+
+/** 跳去导出中心的链接按钮：外观和同排的动作按钮一致，但语义上是导航而非动作。 */
+const LINK_BUTTON_STYLE = {
+  ...actionButtonStyle(),
+  display: "inline-block",
+  textDecoration: "none"
+};
 
 const HINT_STYLE = {
   margin: 0,
@@ -166,8 +176,12 @@ export function TaxPage() {
           <button onClick={() => setTaskState(TAX_TASK_KEYS.materials)} style={actionButtonStyle()}>
             去准备申报材料
           </button>
+          <Link to="/export-center" style={LINK_BUTTON_STYLE}>
+            去导出申报文件
+          </Link>
           <span style={{ fontSize: "12px", color: "#6c7a89" }}>
             向导按「取数 → 核对 → 复核 → 提交」四步走完一次<Term k="vat">增值税</Term>申报；下面的列表用于逐个批次手工推进。
+            报完之后要生成上传电子税务局的文件、登记回执流水号，去「导出与<Term k="archive">归档</Term>中心」的「税务申报文件」。
           </span>
         </div>
         <TaxBatchesPanel
@@ -226,17 +240,6 @@ export function TaxPage() {
     );
   }
 
-  function renderExportWorkspace() {
-    return (
-      <>
-        <p style={HINT_STYLE}>
-          这里只做「生成申报文件并登记回执」。报表、资料包等其它导出在左侧菜单的「导出与<Term k="archive">归档</Term>」里。
-        </p>
-        <DeclarationExportPanel currentPeriod={vatFilingPeriod} />
-      </>
-    );
-  }
-
   function renderWorkspace() {
     switch (activeTask) {
       case TAX_TASK_KEYS.materials:
@@ -256,8 +259,6 @@ export function TaxPage() {
             onResolveRuleProfile={() => void handleResolveRuleProfile()}
           />
         );
-      case TAX_TASK_KEYS.export:
-        return renderExportWorkspace();
       default:
         return renderDeclareWorkspace();
     }
