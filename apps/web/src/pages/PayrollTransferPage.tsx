@@ -9,8 +9,9 @@
  * 按 activeTask 只渲染其中一件：
  * - transfer：这笔代发办到哪了（ObjectFlowBar）+ 批次清单/明细；
  * - social：社保关账。
- * 三个 Statistic 并进了 TransferBatchListCard 的表头汇总行，运行态面板改为
- * 「有异常才占视线」（同 /tax、/vouchers 的 needsRuntimeAttention 口径）。
+ * 三个 Statistic 并进了 TransferBatchListCard 的表头汇总行；状态文案与运行态
+ * 合成一块 PayrollTaskContext 收在工作区之后，且一切正常时折叠
+ * （同 /tax、/vouchers 的 needsRuntimeAttention 口径）。
  */
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
@@ -32,16 +33,10 @@ import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
 import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
 import { needsRuntimeAttention } from "../features/runtime/runtime-attention";
 import { normalizeDrilldownState } from "./drilldown";
+import { PayrollTaskContext } from "./payroll/PayrollTaskContext";
 import { PAYROLL_TASK_KEYS, type PayrollTaskKey } from "./payroll/payroll-tasks";
 
 const HINT_STYLE: React.CSSProperties = { margin: 0, fontSize: 13, lineHeight: 1.7, color: "#6c7a89" };
-
-const DETAILS_SUMMARY_STYLE: React.CSSProperties = {
-  cursor: "pointer",
-  fontSize: 13,
-  fontWeight: 600,
-  color: "#4d5d6c"
-};
 
 export interface PayrollTransferPageProps {
   /** 由 PayrollDomainPage 的任务切换器决定；缺省时按「发工资」渲染。 */
@@ -113,14 +108,6 @@ export function PayrollTransferPage({ activeTask = PAYROLL_TASK_KEYS.transfer }:
     />
   );
 
-  /** 一切正常时把运行态折起来，只在确有失败/待授权时让它占视线（同 /tax 口径）。 */
-  const runtimeSection = runtimeAttention ? runtimePanel : (
-    <details className="v3-section-shell" data-tone="muted" style={{ padding: "12px 16px" }}>
-      <summary style={DETAILS_SUMMARY_STYLE}>运行与授权状态（当前无异常）</summary>
-      <div style={{ marginTop: "12px" }}>{runtimePanel}</div>
-    </details>
-  );
-
   if (loading) return <div style={{ padding: 40, textAlign: "center" }}><Spin /></div>;
 
   if (activeTask === PAYROLL_TASK_KEYS.social) {
@@ -133,10 +120,20 @@ export function PayrollTransferPage({ activeTask = PAYROLL_TASK_KEYS.transfer }:
           onSsPeriodChange={setSsPeriod}
           onClose={handleSsClose}
         />
+        {/*
+          社保关账刻意不画 ObjectFlowBar：关账的结果只存在于本次调用的返回值里
+          （凭证 id 列表 + 合计），页面没有一个可复查的「关账对象」及其字段，
+          刷新之后连「这个月关过没有」都读不回来。没有支撑字段就不画流程步骤。
+        */}
         <p style={HINT_STYLE}>
           关账要求该期间的工资已经全部确认，所以正常次序是先「算这个月的工资」、再「发这个月的工资」，最后在这里关账。
           关账生成的是<Term k="voucher">凭证</Term>草稿，仍需到凭证中心复核后<Term k="posting">过账</Term>。
         </p>
+        <PayrollTaskContext
+          message={ssResult ?? `准备对 ${ssPeriod} 做社保公积金关账。`}
+          runtime={runtimePanel}
+          runtimeAttention={runtimeAttention}
+        />
       </>
     );
   }
@@ -186,7 +183,15 @@ export function PayrollTransferPage({ activeTask = PAYROLL_TASK_KEYS.transfer }:
         </div>
       </div>
 
-      {runtimeSection}
+      <PayrollTaskContext
+        message={
+          selected
+            ? `当前批次 ${selected.batch.id}（${selected.batch.payroll_period}），共 ${batches.length} 个代发批次。`
+            : `共 ${batches.length} 个代发批次，尚未选中任何一笔。`
+        }
+        runtime={runtimePanel}
+        runtimeAttention={runtimeAttention}
+      />
 
       <SalaryAccountDrawer
         open={acctOpen}

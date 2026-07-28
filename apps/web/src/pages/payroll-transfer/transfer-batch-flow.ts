@@ -6,8 +6,12 @@
  *
  * 这里每一步的状态都来自批次的真实字段：
  * - 审批 / 导出 / 代发 / 对账：由 batch.status 在既定状态机上的位置决定；
+ * - 回写经营事项：由 compensation_status 决定（completed / not_required 算办完）；
  * - 卡住原因：补偿态 failed / pending 时取 last_error（后端写入的真实报错）；
  * - 关联对象：代发成功后回写的 compensation_event_id，可直接跳到经营事项。
+ *
+ * 刻意没画的步骤：「生成代发文件的下载」「工资条发放」在批次上都没有对应字段
+ * （下载只写审计日志，不改批次状态），画出来就只能靠猜，所以不画。
  *
  * 状态推进规则（第一个未完成的是 current、其后一律 pending）由 lib/object-flow.ts
  * 的 buildObjectFlow 统一负责，本模块只回答「每一步做完没、卡在什么上」。
@@ -55,10 +59,27 @@ function buildRelatedEvent(batch: PayrollTransferBatch): FlowRelatedObject[] {
 }
 
 /**
+ * 「回写经营事项」这一步做完没。
+ *
+ * completed 是代发时把事项写成功；not_required 是还没走到代发那一步
+ * （导出时后端会把它复位成 not_required），此时这一步谈不上没做完——
+ * 前面还有步骤没完成，buildObjectFlow 会把它显示成「还没轮到」。
+ */
+function isCompensationSettled(batch: PayrollTransferBatch): boolean {
+  return batch.compensation_status === "completed" || batch.compensation_status === "not_required";
+}
+
+/**
  * 由批次推导流程视图；没有选中批次时返回 null（页面据此不画空条）。
  *
  * 刻意不把「生成批次」列为第一步：批次对象存在本身就说明这步做完了，
  * 一个永远是 ✓ 的步骤只会占位置。
+ *
+ * 「回写经营事项」单列一步而不是挂在代发上：它有独立的字段
+ * （compensation_status / compensation_event_id / last_error）、独立的产物
+ * （可跳转的经营事项）和独立的操作按钮（明细卡上的「补偿」）。合并进代发的话，
+ * 一个已对账但补偿失败的批次会整条显示成「全部办完」——那是假的，
+ * 而这恰恰是用户唯一需要动手的情况。
  */
 export function buildTransferBatchFlow(batch: PayrollTransferBatch | null): ObjectFlow | null {
   if (!batch) {
@@ -84,17 +105,20 @@ export function buildTransferBatchFlow(batch: PayrollTransferBatch | null): Obje
       key: "disburse",
       label: "银行代发到账",
       done: hasReached(batch.status, "disbursed"),
-      // 补偿异常只可能发生在代发这一步之后（事项是代发时联动生成的），
-      // 挂在这里才对得上用户看到的报错。
-      blockedReason: hasReached(batch.status, "disbursed") ? null : blockedReason,
-      related: buildRelatedEvent(batch),
       owner: OWNER_CASHIER
+    },
+    {
+      key: "compensate",
+      label: "回写经营事项",
+      done: isCompensationSettled(batch),
+      blockedReason,
+      related: buildRelatedEvent(batch),
+      owner: OWNER_PAYROLL_STAFF
     },
     {
       key: "confirm",
       label: "银行回单对账",
       done: hasReached(batch.status, "confirmed"),
-      blockedReason: hasReached(batch.status, "disbursed") ? blockedReason : null,
       owner: OWNER_CASHIER
     }
   ]);

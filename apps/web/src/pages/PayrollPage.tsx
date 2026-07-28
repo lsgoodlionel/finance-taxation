@@ -6,16 +6,17 @@
  * 具体操作，而前两层讲的是同一件事：工资域里有哪几件事可做。
  *
  * 现在由 PayrollDomainPage 的 TaskFocusShell 统一承担那一层，本组件按 activeTask
- * 只渲染其中一件事的工作区。PayrollRunWizard 的 6 步保留不动——那是一件事内部的
- * 分步，与「几件事之间的取舍」不是一回事。
+ * 只渲染其中一件事的工作区（其余不进 DOM）。PayrollRunWizard 的 6 步保留不动——
+ * 那是一件事内部的分步，与「几件事之间的取舍」不是一回事。
+ *
+ * 期间口径也在这里收口：本页只有一个 activePeriod，全局期间选择器、审计跳转和
+ * 工资向导读写的都是它（改造前向导自己另有一个 period，三者互不相干）。
  */
 import React, { useEffect, useState } from "react";
 import { PayrollRunWizard } from "./payroll/PayrollRunWizard";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { PayrollPeriodSummary, PayrollRecord, PayrollTaxReviewLedger } from "@finance-taxation/domain-model";
 import {
-  computePayroll,
-  confirmPayroll,
   describePageLoadError,
   getPayrollPeriods,
   getPayrollPolicy,
@@ -27,6 +28,7 @@ import { usePeriod } from "../lib/period-context";
 import { resolvePayrollLinkedEventId } from "./payroll-closure";
 import { PayrollEmployeesTabPanel } from "./payroll/PayrollEmployeesTabPanel";
 import { PayrollPolicyTabPanel } from "./payroll/PayrollPolicyTabPanel";
+import { PayrollTaskContext } from "./payroll/PayrollTaskContext";
 import {
   EMPTY_EMP_FORM,
   isPayrollPolicyMissingError,
@@ -44,15 +46,6 @@ import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
 import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
 import { needsRuntimeAttention } from "../features/runtime/runtime-attention";
 
-const STATUS_LINE_STYLE: React.CSSProperties = { fontSize: "13px" };
-
-const DETAILS_SUMMARY_STYLE: React.CSSProperties = {
-  cursor: "pointer",
-  fontSize: 13,
-  fontWeight: 600,
-  color: "#4d5d6c"
-};
-
 export interface PayrollPageProps {
   /** 由 PayrollDomainPage 的任务切换器决定；缺省时按「算工资」渲染。 */
   activeTask?: PayrollTaskKey;
@@ -64,29 +57,21 @@ export function PayrollPage({ activeTask = PAYROLL_TASK_KEYS.run }: PayrollPageP
   const navState = normalizePayrollNavState(location.state);
   const navPayrollPeriod = navState.payrollPeriod ?? null;
   const navEmployeeId = navState.employeeId ?? null;
-  const navBusinessEventId = navState.businessEventId ?? null;
   const [message, setMessage] = useState("正在加载数据...");
 
-  // employees tab
   const employeesState = usePayrollEmployeesState(setMessage);
   const {
     employees, setEmployees, showEmpForm, setShowEmpForm,
     editingEmp, setEditingEmp, empForm, setEmpForm
   } = employeesState;
 
-  // payroll tab
   const { period: globalPeriod } = usePeriod();
   const [periods, setPeriods] = useState<PayrollPeriodSummary[]>([]);
-  const [selectedPeriod, setSelectedPeriod] = useState("");
-  const [customPeriod, setCustomPeriod] = useState(globalPeriod);
-
-  // 全局期间变化时同步「计算工资」默认期间
-  useEffect(() => { setCustomPeriod(globalPeriod); }, [globalPeriod]);
+  /** 本页唯一的期间口径：向导、运行态、事项联动全部读它。 */
+  const [activePeriod, setActivePeriod] = useState(navPayrollPeriod ?? globalPeriod);
   const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
-  const [computing, setComputing] = useState(false);
   const [reviewLedgers, setReviewLedgers] = useState<PayrollTaxReviewLedger[]>([]);
 
-  // policy tab
   const policyState = usePayrollPolicyState(setMessage);
   const { policy, setPolicy, setPolicyForm, setEditingPolicy, setPolicyMissing } = policyState;
   const accessUser = useAccessUser();
@@ -99,42 +84,46 @@ export function PayrollPage({ activeTask = PAYROLL_TASK_KEYS.run }: PayrollPageP
         setMessage(describePageLoadError(error));
       }
     }
-    bootstrap();
+    void bootstrap();
   }, []);
 
+  // 顶部全局期间切换后本页跟着换；紧随其后的跳转 effect 优先级更高，会再覆盖一次。
+  useEffect(() => {
+    setActivePeriod(globalPeriod);
+  }, [globalPeriod]);
+
+  /**
+   * 审计/钻取带来的工资期间：切到这一期，并把这一期的工资记录读出来。
+   *
+   * 改造前这段逻辑写了两遍（两个 effect 都对 navPayrollPeriod 调 handleLoadPeriod），
+   * 于是每次深链进来都打两次接口、两条状态文案互相覆盖。这里合并成一处。
+   */
+  useEffect(() => {
+    if (!navPayrollPeriod) {
+      return;
+    }
+    setActivePeriod(navPayrollPeriod);
+    void handleLoadPeriod(navPayrollPeriod).catch(() => {
+      setPayrollRecords([]);
+      setMessage(`已切换到工资期间 ${navPayrollPeriod}，请先生成或加载工资记录。`);
+    });
+  }, [navPayrollPeriod]);
+
+  useEffect(() => {
+    if (!navEmployeeId) {
+      return;
+    }
+    setMessage(`已按员工 ${navEmployeeId} 定位到员工档案。`);
+  }, [navEmployeeId]);
+
   const linkage = usePayrollEventLinkage({
-    selectedPeriod,
+    selectedPeriod: activePeriod,
     payrollRecords,
     setReviewLedgers,
     setMessage,
     navigate
   });
   const { linkedEventIds, linkedEventId, rememberLinkedEvent } = linkage;
-
-  useEffect(() => {
-    if (navTab === "employees" || navEmployeeId) {
-      setTab("employees");
-      if (navEmployeeId) {
-        setMessage(`已按员工 ${navEmployeeId} 恢复工资管理上下文。`);
-      }
-      return;
-    }
-    if (navPayrollPeriod || navBusinessEventId) {
-      setTab("payroll");
-    }
-  }, [navBusinessEventId, navEmployeeId, navPayrollPeriod, navTab]);
-
-  useEffect(() => {
-    if (!navPayrollPeriod) {
-      return;
-    }
-    setCustomPeriod(navPayrollPeriod);
-    void handleLoadPeriod(navPayrollPeriod).catch(() => {
-      setSelectedPeriod(navPayrollPeriod);
-      setPayrollRecords([]);
-      setMessage(`已切换到工资期间 ${navPayrollPeriod}，请先生成或加载工资记录。`);
-    });
-  }, [navPayrollPeriod]);
 
   async function loadAll() {
     const [empRes, perRes, policyResult] = await Promise.all([
@@ -163,25 +152,7 @@ export function PayrollPage({ activeTask = PAYROLL_TASK_KEYS.run }: PayrollPageP
     throw policyResult.error;
   }
 
-  async function handleComputePayroll() {
-    const period = customPeriod;
-    if (!period) { setMessage("请输入工资期间（格式：YYYY-MM）"); return; }
-    setComputing(true);
-    try {
-      await computePayroll(period);
-      setSelectedPeriod(period);
-      const res = await listPayroll(period);
-      setPayrollRecords(res.items);
-      const perRes = await getPayrollPeriods();
-      setPeriods(perRes.items);
-      setMessage(`已计算 ${res.total} 条工资记录，期间：${period}。`);
-    } finally {
-      setComputing(false);
-    }
-  }
-
   async function handleLoadPeriod(period: string) {
-    setSelectedPeriod(period);
     const res = await listPayroll(period);
     setPayrollRecords(res.items);
     try {
@@ -196,42 +167,19 @@ export function PayrollPage({ activeTask = PAYROLL_TASK_KEYS.run }: PayrollPageP
     setMessage(`已加载 ${period} 工资数据，共 ${res.total} 条。`);
   }
 
-  useEffect(() => {
-    if (!navState.payrollPeriod) {
-      return;
-    }
-    void handleLoadPeriod(navState.payrollPeriod).catch((error) => setMessage((error as Error).message));
-  }, [navState.payrollPeriod]);
-
-  async function handleConfirm(recordId: string) {
-    await confirmPayroll(recordId);
-    if (selectedPeriod) {
-      const res = await listPayroll(selectedPeriod);
-      setPayrollRecords(res.items);
-    }
-    setMessage("工资记录已确认。");
-  }
-
   const linkedArtifacts = usePayrollLinkedArtifacts({
     linkedEventId,
-    selectedPeriod,
+    selectedPeriod: activePeriod,
     setReviewLedgers
   });
 
   const summaries = buildPayrollPageSummaries({
-    selectedPeriod,
-    customPeriod,
+    activePeriod,
     periods,
     payrollRecords,
     linkedEventId,
-    linkedTaxItemCount: linkedArtifacts.linkedTaxItemCount,
-    linkedVoucherCount: linkedArtifacts.linkedVoucherCount,
-    linkedTaxItems: linkedArtifacts.linkedTaxItems,
-    linkedVouchers: linkedArtifacts.linkedVouchers,
-    linkedRisks: linkedArtifacts.linkedRisks,
+    linkedRiskCount: linkedArtifacts.linkedRisks.length,
     reviewLedgers,
-    iitChecklist: linkedArtifacts.iitChecklist,
-    iitMaterialPeriod: linkedArtifacts.iitMaterialPeriod,
     roleIds: accessUser?.roleIds ?? []
   });
   const runtimeSummary = useWorkflowRuntimeSummary(
@@ -239,12 +187,13 @@ export function PayrollPage({ activeTask = PAYROLL_TASK_KEYS.run }: PayrollPageP
     { period: summaries.runtimePeriod || undefined },
     summaries.localRuntimeSummary
   );
+  const runtimeAttention = needsRuntimeAttention(runtimeSummary);
 
   useEffect(() => {
     if (!linkedEventId || navState.businessEventId !== linkedEventId) {
       return;
     }
-    if (navState.payrollPeriod && navState.payrollPeriod !== selectedPeriod) {
+    if (navState.payrollPeriod && navState.payrollPeriod !== activePeriod) {
       return;
     }
     if (navState.tab === "employees" && navState.employeeId) {
@@ -253,26 +202,20 @@ export function PayrollPage({ activeTask = PAYROLL_TASK_KEYS.run }: PayrollPageP
     if (navState.resourceType || navState.resourceId) {
       setMessage(`已恢复工资上下文：事项 ${linkedEventId}，可继续查看税务、凭证或风险结果。`);
     }
-  }, [linkedEventId, navState.businessEventId, navState.employeeId, navState.payrollPeriod, navState.resourceId, navState.resourceType, navState.tab, selectedPeriod]);
+  }, [linkedEventId, navState.businessEventId, navState.employeeId, navState.payrollPeriod, navState.resourceId, navState.resourceType, navState.tab, activePeriod]);
 
-  const header = (
-    <PayrollHeader
-      message={message}
-      actions={<PayrollTabBar activeTab={tab} onChange={setTab} />}
+  const runtimePanel = (
+    <WorkflowRuntimePanel
+      title="工资运行态与授权态"
+      summary={runtimeSummary}
+      onAction={(action) => void linkage.handleRuntimeAction(action)}
+      busyActionKey={linkage.runtimeActionKey}
     />
   );
 
-  const content = (
-    <>
-      <WorkflowRuntimePanel
-        title="工资运行态与授权态"
-        summary={runtimeSummary}
-        onAction={(action) => void linkage.handleRuntimeAction(action)}
-        busyActionKey={linkage.runtimeActionKey}
-      />
-
-      {/* ── Tab: 员工管理 ── */}
-      {tab === "employees" && (
+  function renderWorkspace() {
+    if (activeTask === PAYROLL_TASK_KEYS.employees) {
+      return (
         <PayrollEmployeesTabPanel
           employees={employees}
           navEmployeeId={navEmployeeId}
@@ -286,14 +229,10 @@ export function PayrollPage({ activeTask = PAYROLL_TASK_KEYS.run }: PayrollPageP
           onUpdateEmployee={employeesState.handleUpdateEmployee}
           onEditEmployee={employeesState.startEditEmployee}
         />
-      )}
-
-      {/* ── Tab: 工资计算 ── */}
-      {tab === "payroll" && (
-        <PayrollRunWizard employees={employees} periods={periods} policy={policy} />
-      )}
-      {/* ── Tab: 参数设置 ── */}
-      {tab === "policy" && (
+      );
+    }
+    if (activeTask === PAYROLL_TASK_KEYS.policy) {
+      return (
         <PayrollPolicyTabPanel
           policy={policy}
           policyForm={policyState.policyForm}
@@ -309,9 +248,24 @@ export function PayrollPage({ activeTask = PAYROLL_TASK_KEYS.run }: PayrollPageP
             }
           }}
         />
-      )}
+      );
+    }
+    return (
+      <PayrollRunWizard
+        employees={employees}
+        periods={periods}
+        policy={policy}
+        period={activePeriod}
+        onPeriodChange={setActivePeriod}
+        onRecordsChange={setPayrollRecords}
+      />
+    );
+  }
+
+  return (
+    <>
+      {renderWorkspace()}
+      <PayrollTaskContext message={message} runtime={runtimePanel} runtimeAttention={runtimeAttention} />
     </>
   );
-
-  return <PayrollShell header={header} content={content} />;
 }
