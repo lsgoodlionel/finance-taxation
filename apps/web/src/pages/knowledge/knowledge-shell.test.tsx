@@ -1,6 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { KnowledgeShell } from "./KnowledgeShell";
+import { KnowledgeContextPanel } from "./KnowledgeContextPanel";
+import { buildKnowledgeSummary } from "./knowledge-helpers";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -8,34 +10,59 @@ function assert(condition: unknown, message: string): asserts condition {
   }
 }
 
-const html = renderToStaticMarkup(
-  createElement(KnowledgeShell, {
-    header: createElement("div", null, "header"),
-    summary: createElement("div", null, "summary"),
-    filters: createElement("div", null, "filters"),
-    parsePanel: createElement("div", null, "parsePanel"),
-    form: createElement("div", null, "form"),
-    list: createElement("div", null, "list"),
-    aside: createElement("div", null, "aside")
-  })
-);
+const VOID_TAGS = new Set(["br", "hr", "img", "input", "link", "meta", "source"]);
 
-assert(html.includes("header"), "expected knowledge shell header slot");
-assert(html.includes("summary"), "expected knowledge shell summary slot");
-assert(html.includes("filters"), "expected knowledge shell filters slot");
-assert(html.includes("parsePanel"), "expected knowledge shell parse panel slot");
-assert(html.includes("form"), "expected knowledge shell form slot");
-assert(html.includes("list"), "expected knowledge shell list slot");
-assert(html.includes("aside"), "expected knowledge shell aside slot");
+/** 数根容器下的直接子元素——「首屏区块」在实测里就是按这个数的。 */
+function countTopLevelBlocks(markup: string): number {
+  let depth = 0;
+  let count = 0;
+  for (const match of markup.matchAll(/<(\/?)([a-zA-Z][a-zA-Z0-9-]*)([^>]*?)(\/?)>/g)) {
+    const [, closing, name, , selfClose] = match;
+    if (closing) {
+      depth -= 1;
+      continue;
+    }
+    if (depth === 1) count += 1;
+    if (!VOID_TAGS.has((name ?? "").toLowerCase()) && !selfClose) depth += 1;
+  }
+  return count;
+}
 
-// 可选槽位省略时不应渲染对应内容
-const htmlMinimal = renderToStaticMarkup(
-  createElement(KnowledgeShell, {
-    header: createElement("div", null, "H"),
-    summary: createElement("div", null, "S"),
-    filters: createElement("div", null, "F"),
-    list: createElement("div", null, "L"),
-    aside: createElement("div", null, "A")
-  })
-);
-assert(!htmlMinimal.includes("parsePanel"), "expected no parse panel when omitted");
+// 骨架只剩「页头 + 当前任务工作区」两块。改造前是 7 个平级槽位。
+{
+  const html = renderToStaticMarkup(
+    createElement(KnowledgeShell, {
+      header: createElement("div", null, "knowledge-header"),
+      children: createElement("div", null, "knowledge-task-panel")
+    })
+  );
+
+  assert(html.includes("knowledge-header"), "expected knowledge shell header slot");
+  assert(html.includes("knowledge-task-panel"), "expected knowledge shell task panel slot");
+
+  const blocks = countTopLevelBlocks(html);
+  assert(blocks === 2, `expected 2 top-level blocks on /knowledge, got ${blocks}`);
+}
+
+// 上下文面板随任务变化：只有「查阅已有条目」看分类分布，另外两件事给本步骤的提示。
+{
+  const summary = buildKnowledgeSummary([]);
+
+  const browse = renderToStaticMarkup(
+    createElement(KnowledgeContextPanel, { task: "browse", summary, message: "共 0 条" })
+  );
+  assert(browse.includes("制度库概览"), "browse aside should show the library overview");
+  assert(browse.includes("AI 引用说明"), "browse aside should keep the AI citation note");
+
+  const create = renderToStaticMarkup(
+    createElement(KnowledgeContextPanel, { task: "create", summary, message: "已新增" })
+  );
+  assert(!create.includes("制度库概览"), "create aside must not carry the overview stats");
+  assert(create.includes("写好一条的要点"), "create aside should explain what makes a good entry");
+
+  const importPanel = renderToStaticMarkup(
+    createElement(KnowledgeContextPanel, { task: "import", summary, message: "解析完成" })
+  );
+  assert(!importPanel.includes("制度库概览"), "import aside must not carry the overview stats");
+  assert(importPanel.includes("导入是怎么工作的"), "import aside should explain the import flow");
+}

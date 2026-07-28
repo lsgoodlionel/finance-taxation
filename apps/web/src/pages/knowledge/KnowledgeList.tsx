@@ -29,7 +29,7 @@ export function KnowledgeList({
       {items.length === 0 ? (
         <EmptyState
           title="暂无条目"
-          description="点击「新增条目」添加企业制度，或点击「从文件导入」批量上传 PDF / Word 文档。"
+          description="换个分类或关键词再找找；要新增，切到上方的「手工录入一条」或「从文件导入制度」。"
         />
       ) : (
         <div style={{ display: "grid", gap: "10px" }}>

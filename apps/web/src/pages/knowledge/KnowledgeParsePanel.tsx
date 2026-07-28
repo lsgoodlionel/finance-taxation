@@ -28,7 +28,7 @@ export function KnowledgeParsePanel({
         <button
           onClick={onClose}
           style={{ background: "none", border: "none", cursor: "pointer", fontSize: "16px", color: "#9aa5b4" }}
-          aria-label="关闭解析面板"
+          aria-label="清空本次解析结果"
         >
           ✕
         </button>
