@@ -33,9 +33,11 @@ import type {
   RiskClosureRecord,
   RiskFinding,
   RndAccountingPolicyReview,
+  RndCostLine,
   RndPolicyGuidance,
   RndProject,
   RndProjectSummary,
+  RndTimeEntry,
   IndividualIncomeTaxMaterial,
   StampAndSurtaxSummary,
   SuperDeductionPackage,
@@ -136,21 +138,10 @@ export interface VoucherDetail extends Voucher {
 }
 
 export interface RndProjectDetail extends RndProject {
-  costLines: Array<{
-    id: string;
-    costType: string;
-    accountingTreatment: string;
-    amount: string;
-    occurredOn: string;
-    notes: string;
-  }>;
-  timeEntries: Array<{
-    id: string;
-    staffName: string;
-    workDate: string;
-    hours: string;
-    notes: string;
-  }>;
+  // 后端 getRndProjectDetail 直接返回完整行（含 voucherId / businessEventId），
+  // 不做字段投影，因此此处必须用完整领域类型，否则会隐藏可用于对象级溯源的外键。
+  costLines: RndCostLine[];
+  timeEntries: RndTimeEntry[];
   summary: RndProjectSummary;
   policyReview: RndAccountingPolicyReview;
   guidance: RndPolicyGuidance;

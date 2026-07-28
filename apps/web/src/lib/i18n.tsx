@@ -128,9 +128,9 @@ export const RISK_STATUS_LABELS: Record<string, string> = {
   open: "待处理", resolved: "已关闭", investigating: "调查中"
 };
 
+// 键必须与 domain-model 的 RndProjectStatus 保持一致："planning" | "active" | "closed"
 export const RND_STATUS_LABELS: Record<string, string> = {
-  planning: "规划中", active: "进行中",
-  completed: "已完成", terminated: "已终止"
+  planning: "规划中", active: "进行中", closed: "已结项"
 };
 
 export const CONTRACT_TYPE_LABELS: Record<string, string> = {
