@@ -5,6 +5,10 @@ import {
 } from "@ant-design/icons";
 import type { TaskStatus } from "@finance-taxation/domain-model";
 import type { WorkflowRunDetail } from "../../lib/api";
+import type { FlowRelatedObject, ObjectFlow } from "../../lib/object-flow";
+import { ObjectFlowBar } from "../../components/ui/ObjectFlowBar";
+import { RelatedObjectsPanel } from "../../components/ui/RelatedObjectsPanel";
+import { EntityLink } from "../../components/ui/EntityLink";
 
 const { Text } = Typography;
 
@@ -45,12 +49,16 @@ export interface TaskDrawerItem {
 interface TaskDrawerProps {
   task: TaskDrawerItem | null;
   runtimeDetail?: WorkflowRunDetail | null;
+  /** 「这个任务办到哪了」；数据撑不起时传 null，抽屉自动不画（见 task-flow.ts）。 */
+  flow?: ObjectFlow | null;
+  flowTitle?: string;
+  /** 这个任务牵扯到的可跳转对象（关联事项、父任务、未完成子任务）。 */
+  relatedObjects?: readonly FlowRelatedObject[];
   updatingId: string | null;
   remindingId: string | null;
   onClose: () => void;
   onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>;
   onRemind: (taskId: string) => Promise<void>;
-  onOpenEvent?: (businessEventId: string) => void;
   onOpenDocuments?: (businessEventId: string) => void;
   onOpenTax?: (businessEventId: string) => void;
   onOpenVouchers?: (businessEventId: string) => void;
@@ -59,12 +67,14 @@ interface TaskDrawerProps {
 export function TaskDrawer({
   task,
   runtimeDetail,
+  flow = null,
+  flowTitle = "这个任务办到哪了",
+  relatedObjects = [],
   updatingId,
   remindingId,
   onClose,
   onStatusChange,
   onRemind,
-  onOpenEvent,
   onOpenDocuments,
   onOpenTax,
   onOpenVouchers
@@ -129,11 +139,12 @@ export function TaskDrawer({
               description={`${latestCommand?.lastErrorDetail || "已存在人工补偿记录"}${runtimeDetail?.compensations.length ? `；补偿 ${runtimeDetail.compensations.length} 条` : ""}`}
             />
           ) : null}
+          {flow ? <ObjectFlowBar flow={flow} title={flowTitle} /> : null}
+
           {task.businessEventId ? (
-            <Space wrap size={8}>
-              <Button size="small" onClick={() => onOpenEvent?.(task.businessEventId!)}>
-                查看事项
-              </Button>
+            <Space wrap size={8} align="center">
+              <Text type="secondary" style={{ fontSize: 12 }}>关联事项</Text>
+              <EntityLink kind="business_event" id={task.businessEventId} />
               <Button size="small" onClick={() => onOpenDocuments?.(task.businessEventId!)}>
                 查看单据
               </Button>
@@ -145,6 +156,8 @@ export function TaskDrawer({
               </Button>
             </Space>
           ) : null}
+
+          <RelatedObjectsPanel objects={relatedObjects} title="这个任务牵扯到的对象" />
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px" }}>
             {[

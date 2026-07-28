@@ -2,7 +2,6 @@ import {
   defaultReportsView,
   formatSnapshotLabel,
   pickLatestSnapshotId,
-  resolveBundlePeriodLabel,
   resolveInitialReportsView
 } from "./reports-helpers";
 
@@ -18,11 +17,8 @@ assertEqual(
   "2026-05 利润表",
   "expected snapshot label"
 );
-assertEqual(
-  resolveBundlePeriodLabel("audit", { year: 2026, month: 5, quarter: 2 }, "2026-05"),
-  "2026-05",
-  "expected audit bundle to prefer loaded period label"
-);
+// 月结 / 审计 / 稽核资料包已移交 /export-center（同一 closing-bundle 接口，
+// 且那边会登记导出历史与审计轨迹），本页不再自带期间推导。
 
 // ── V7 K3：guided 默认落「老板摘要」，pro 保持三表工作台 ─────────────────────
 assertEqual(resolveInitialReportsView("guided"), "chairman", "expected guided default view to be chairman summary");

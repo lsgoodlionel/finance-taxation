@@ -12,11 +12,12 @@ function assert(condition: unknown, message: string): asserts condition {
 const html = renderToStaticMarkup(
   createElement(MemoryRouter, null, createElement(ReportsShell, {
     header: createElement("div", null, "header"),
-    sidebar: createElement("div", null, "sidebar"),
-    workbench: createElement("div", null, "workbench"),
+    children: createElement("div", null, "workbench")
   }))
 );
 
 assert(html.includes("header"), "expected reports shell header slot");
-assert(html.includes("sidebar"), "expected reports shell sidebar slot");
 assert(html.includes("workbench"), "expected reports shell workbench slot");
+// 侧栏已下线：壳层不再有第二列，四件事收进任务切换器。
+assert(!html.includes("v3-result-grid"), "expected the two-column sidebar grid to be gone");
+assert(html.includes("财务报表"), "expected the finance flow bar to stay in the shell");

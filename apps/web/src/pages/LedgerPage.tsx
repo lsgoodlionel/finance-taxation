@@ -1,8 +1,21 @@
-import { useEffect, useState } from "react";
+/**
+ * 总账中心（V10 车道 G2：按任务重组）。
+ *
+ * 改造前首屏 7 个平级区块：页头横幅、全站 10 环节导航条、页头卡、场景摘要、
+ * 5 张场景卡、场景内容、右侧上下文面板。其中场景摘要与上下文面板讲的是同一批
+ * 数字，场景卡是第三处「这页能干什么」的罗列——用户打开看到的是「总账能查什么」，
+ * 而不是「你现在要查什么」。
+ *
+ * 改造后：五个场景成为五件事（见 ledger/ledger-tasks.ts），TaskFocusShell 一次
+ * 只渲染一件事的工作区，上下文面板随任务收缩成 aside。全站导航条移除，理由与
+ * /tax 一致：它按当前页下标算 done/current，本质是导航，左侧主菜单已在做同一件事。
+ */
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import type { LedgerEntry, LedgerPostingBatch } from "@finance-taxation/domain-model";
-import { FinanceFlowBar } from "../components/FinanceFlowBar";
 import { HelpPanel, HelpTriggerButton } from "../components/ui/HelpPanel";
 import { ProPageBanner } from "../components/ui/ProPageBanner";
+import { TaskFocusShell } from "../components/ui/TaskFocusShell";
 import { Term } from "../components/ui/Term";
 import {
   getCashJournal,
@@ -15,78 +28,28 @@ import {
   unlockPeriod
 } from "../lib/api";
 import type { AccountingPeriod } from "../lib/api";
-import { useQueryState } from "../hooks/useQueryState";
+import { normalizeDrilldownState } from "./drilldown";
 import { LedgerBalancesPanel } from "./ledger/LedgerBalancesPanel";
 import { LedgerContextPanel } from "./ledger/LedgerContextPanel";
 import { LedgerEntriesPanel } from "./ledger/LedgerEntriesPanel";
 import { LedgerHeader } from "./ledger/LedgerHeader";
 import { LedgerJournalPanel } from "./ledger/LedgerJournalPanel";
 import { LedgerPeriodsPanel } from "./ledger/LedgerPeriodsPanel";
-import { LedgerSceneSelector } from "./ledger/LedgerSceneSelector";
-import { LedgerSceneSummary } from "./ledger/LedgerSceneSummary";
 import { LedgerShell } from "./ledger/LedgerShell";
 import { LedgerSummaryPanel } from "./ledger/LedgerSummaryPanel";
 import {
+  buildLedgerTasks,
+  countUnlockedPeriods,
+  readLedgerTask,
+  writeLedgerTask
+} from "./ledger/ledger-tasks";
+import {
   type JournalItem,
   type LedgerBalanceItem,
-  LEDGER_SCENE_OPTIONS,
   type LedgerSceneKey,
   type LedgerSummaryItem,
   isLedgerSceneKey
 } from "./ledger/types";
-
-function buildSceneSummary(
-  scene: LedgerSceneKey,
-  context: {
-    entryCount: number;
-    batchCount: number;
-    summaryCount: number;
-    balanceCount: number;
-    journalCount: number;
-    lockedPeriodCount: number;
-    voucherFilter: string;
-    eventFilter: string;
-    journalType: "cash" | "bank";
-  }
-) {
-  switch (scene) {
-    case "summary":
-      return {
-        title: "科目汇总总览",
-        description: "先看累计借贷发生额，再决定是否继续钻取到科目余额或具体分录。",
-        highlights: [`${context.summaryCount} 个科目`, `${context.entryCount} 条分录`, `${context.batchCount} 个过账批次`],
-        pendingCount: context.summaryCount
-      };
-    case "balances":
-      return {
-        title: "科目余额复核",
-        description: "适合月结前检查余额结构，确认异常科目后再回到分录场景追踪来源。",
-        highlights: [`${context.balanceCount} 个余额科目`, `${context.entryCount} 条分录`, "月结前复核"],
-        pendingCount: context.balanceCount
-      };
-    case "journal":
-      return {
-        title: `${context.journalType === "cash" ? "现金" : "银行"}日记账`,
-        description: "按资金账类型和日期区间查看流水，用于核对资金收付与凭证来源。",
-        highlights: [`${context.journalCount} 条记录`, context.journalType === "cash" ? "现金（1001）" : "银行存款（1002）", "支持日期过滤"],
-        pendingCount: context.journalCount
-      };
-    case "entries":
-      return {
-        title: "总账分录与过账批次",
-        description: "按凭证编号或事项编号过滤，快速定位过账来源并查看完整会计分录。",
-        highlights: [`${context.entryCount} 条分录`, `${context.batchCount} 个批次`, context.voucherFilter || context.eventFilter ? "已启用过滤" : "当前查看全部"],
-        pendingCount: context.entryCount
-      };
-    case "periods":
-      return {
-        title: "会计期间锁账",
-        description: "关闭账期后锁定期间，防止已结账月份被继续过账或篡改。",
-        highlights: [`${context.lockedPeriodCount} 个期间`, "支持新增锁账", "支持解锁回退"],
-        pendingCount: context.lockedPeriodCount
-      };
-  }
-}
 
 const LEDGER_SCENE_GUIDE: readonly (readonly [string, string])[] = [
   ["科目汇总", "按科目查看累计借贷发生额，先总览全账覆盖范围，再决定往哪里钻取"],
@@ -118,7 +81,7 @@ function LedgerHelpPanel({ open, onClose }: { open: boolean; onClose: () => void
       caution="总账数据只能通过凭证过账形成，不能在本页直接修改。发现错账应回到凭证中心处理；已锁账期间需先解锁（反结账）并会留下审计记录。"
     >
       <div>
-        <strong>五个场景各是什么</strong>
+        <strong>五件事各是什么</strong>
         {LEDGER_SCENE_GUIDE.map(([scene, description]) => (
           <div key={scene} style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
             <span style={{ fontWeight: 600, minWidth: "76px" }}>{scene}</span>
@@ -131,6 +94,11 @@ function LedgerHelpPanel({ open, onClose }: { open: boolean; onClose: () => void
 }
 
 export function LedgerPage() {
+  const location = useLocation();
+  const navState = normalizeDrilldownState(location.state);
+  const navVoucherId = navState.voucherId ?? null;
+  const navEventId = navState.businessEventId ?? null;
+
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [batches, setBatches] = useState<LedgerPostingBatch[]>([]);
   const [summary, setSummary] = useState<LedgerSummaryItem[]>([]);
@@ -140,21 +108,51 @@ export function LedgerPage() {
   const [journalFrom, setJournalFrom] = useState("");
   const [journalTo, setJournalTo] = useState("");
   const [message, setMessage] = useState("正在准备总账数据。");
-  const [selectedVoucherId, setSelectedVoucherId] = useState("");
-  const [selectedEventId, setSelectedEventId] = useState("");
+  const [selectedVoucherId, setSelectedVoucherId] = useState(navVoucherId ?? "");
+  const [selectedEventId, setSelectedEventId] = useState(navVoucherId ? "" : navEventId ?? "");
   const [periods, setPeriods] = useState<AccountingPeriod[]>([]);
   const [newPeriod, setNewPeriod] = useState("");
   const [periodOp, setPeriodOp] = useState<string | null>(null);
-  const [sceneQuery, setSceneQuery] = useQueryState("ledgerTab", "summary");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showHelp, setShowHelp] = useState(false);
-  const activeScene = isLedgerSceneKey(sceneQuery) ? sceneQuery : "summary";
+
+  const activeTask: LedgerSceneKey = readLedgerTask(searchParams);
+  const tasks = useMemo(() => buildLedgerTasks({ periods }), [periods]);
+
+  function selectTask(task: string) {
+    if (!isLedgerSceneKey(task)) {
+      return;
+    }
+    setSearchParams(writeLedgerTask(searchParams, task));
+  }
+
+  /**
+   * 从凭证中心「查看总账」跳过来时带着 voucherId：把当前这件事切到「追一笔分录的
+   * 来源」，否则用户落在科目汇总上，还得自己找到过滤框把凭证号抄一遍。
+   *
+   * 写进 URL 而不是直接算进 activeTask：后者会让 location.state 永久压住切换器，
+   * 用户点别的任务点不动。replace 是为了不在历史里多压一格。
+   */
+  useEffect(() => {
+    if (!navVoucherId && !navEventId) {
+      return;
+    }
+    setSearchParams(writeLedgerTask(searchParams, "entries"), { replace: true });
+    // 只在跳转带来的定位信息变化时执行；searchParams 变化不该把用户拽回来。
+  }, [navEventId, navVoucherId]);
 
   useEffect(() => {
     async function bootstrap() {
+      // 从凭证/事项跳进来时首屏就按它过滤，别让用户面对全量数据再自己抄一遍编号。
+      const arrivalFilter = navVoucherId
+        ? { voucherId: navVoucherId }
+        : navEventId
+          ? { businessEventId: navEventId }
+          : {};
       try {
         const [entriesPayload, batchesPayload, summaryPayload, balancesPayload] = await Promise.all([
-          listLedgerEntries(),
-          listLedgerPostingBatches(),
+          listLedgerEntries(arrivalFilter),
+          listLedgerPostingBatches(navVoucherId ?? undefined),
           getLedgerSummary(),
           getLedgerBalances()
         ]);
@@ -162,31 +160,33 @@ export function LedgerPage() {
         setBatches(batchesPayload.items);
         setSummary(summaryPayload.items);
         setBalances(balancesPayload.items);
+        const arrivalLabel = navVoucherId
+          ? `已按凭证 ${navVoucherId} 过滤：`
+          : navEventId
+            ? `已按事项 ${navEventId} 过滤：`
+            : "已加载 ";
         setMessage(
-          `已加载 ${entriesPayload.total} 条总账分录，${batchesPayload.total} 个过账批次，${summaryPayload.total} 个科目汇总。`
+          `${arrivalLabel}${entriesPayload.total} 条总账分录，${batchesPayload.total} 个过账批次，${summaryPayload.total} 个科目汇总。`
         );
       } catch (error) {
         setMessage((error as Error).message);
       }
     }
     void bootstrap();
-  }, []);
+    // 期间清单要在进页面时就拉：任务切换器上「还有几个期间没锁」的角标靠它，
+    // 等用户点进锁账那件事再拉就永远是 0，角标等于骗人。
+    void loadPeriods();
+  }, [navEventId, navVoucherId]);
 
   useEffect(() => {
-    if (activeScene === "journal") {
+    if (activeTask === "journal") {
       void loadJournal();
       return;
     }
-    if (activeScene === "periods") {
+    if (activeTask === "periods") {
       void loadPeriods();
     }
-  }, [activeScene]);
-
-  useEffect(() => {
-    if (!isLedgerSceneKey(sceneQuery)) {
-      setSceneQuery("summary");
-    }
-  }, [sceneQuery, setSceneQuery]);
+  }, [activeTask]);
 
   async function filterLedger(filters: { voucherId?: string; businessEventId?: string }) {
     const [entriesPayload, batchesPayload] = await Promise.all([
@@ -260,8 +260,8 @@ export function LedgerPage() {
     }
   }
 
-  function renderScene() {
-    switch (activeScene) {
+  function renderWorkspace() {
+    switch (activeTask) {
       case "summary":
         return <LedgerSummaryPanel items={summary} />;
       case "balances":
@@ -332,23 +332,7 @@ export function LedgerPage() {
     }
   }
 
-  const activeOption = LEDGER_SCENE_OPTIONS.find((option) => option.key === activeScene) ?? {
-    key: "summary",
-    title: "科目汇总",
-    description: "查看累计借贷发生额，快速判断总账覆盖范围。",
-    emoji: "📚"
-  };
-  const sceneSummary = buildSceneSummary(activeScene, {
-    entryCount: entries.length,
-    batchCount: batches.length,
-    summaryCount: summary.length,
-    balanceCount: balances.length,
-    journalCount: journal.length,
-    lockedPeriodCount: periods.length,
-    voucherFilter: selectedVoucherId,
-    eventFilter: selectedEventId,
-    journalType
-  });
+  const activeTaskLabel = tasks.find((task) => task.key === activeTask)?.label ?? "";
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -356,7 +340,6 @@ export function LedgerPage() {
         pageName="总账中心"
         plain="账本的原始记录：每笔业务记进了哪个科目、什么时候入的账、有没有正式生效，财务在这里查账对账。想知道钱花在哪儿、还剩多少，看「经营报告」或直接问 AI 更快。"
       />
-      <FinanceFlowBar current="ledger" />
       <LedgerHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
       <LedgerShell
         header={(
@@ -364,44 +347,37 @@ export function LedgerPage() {
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <HelpTriggerButton onClick={() => setShowHelp(true)} label="查看总账中心操作说明" />
             </div>
-            <LedgerHeader activeSceneLabel={activeOption.title} />
+            <LedgerHeader activeSceneLabel={activeTaskLabel} />
           </div>
         )}
-        summary={(
-          <LedgerSceneSummary
-            scene={activeScene}
-            title={sceneSummary.title}
-            description={sceneSummary.description}
-            highlights={sceneSummary.highlights}
-            pendingCount={sceneSummary.pendingCount}
-          />
-        )}
-        sceneSelector={(
-          <LedgerSceneSelector
-            activeScene={activeScene}
-            options={LEDGER_SCENE_OPTIONS}
-            onChange={(scene) => setSceneQuery(scene)}
-          />
-        )}
-        content={renderScene()}
-        context={(
-          <LedgerContextPanel
-            scene={activeScene}
-            message={message}
-            entryCount={entries.length}
-            batchCount={batches.length}
-            summaryCount={summary.length}
-            balanceCount={balances.length}
-            journalCount={journal.length}
-            lockedPeriodCount={periods.length}
-            voucherFilter={selectedVoucherId}
-            eventFilter={selectedEventId}
-            journalType={journalType}
-            journalFrom={journalFrom}
-            journalTo={journalTo}
-          />
-        )}
-      />
+      >
+        <TaskFocusShell
+          tasks={tasks}
+          activeKey={activeTask}
+          onSelectTask={selectTask}
+          switcherLabel="总账中心能办的事"
+          aside={(
+            <LedgerContextPanel
+              scene={activeTask}
+              message={message}
+              entryCount={entries.length}
+              batchCount={batches.length}
+              summaryCount={summary.length}
+              balanceCount={balances.length}
+              journalCount={journal.length}
+              lockedPeriodCount={periods.length - countUnlockedPeriods(periods)}
+              unlockedPeriodCount={countUnlockedPeriods(periods)}
+              voucherFilter={selectedVoucherId}
+              eventFilter={selectedEventId}
+              journalType={journalType}
+              journalFrom={journalFrom}
+              journalTo={journalTo}
+            />
+          )}
+        >
+          {renderWorkspace()}
+        </TaskFocusShell>
+      </LedgerShell>
     </div>
   );
 }

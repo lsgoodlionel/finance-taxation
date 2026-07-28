@@ -1,5 +1,5 @@
 import type { ReportSnapshot } from "@finance-taxation/domain-model";
-import type { BundleKind, ReportsPeriodState, ReportsWorkbenchView } from "./report-types";
+import type { ReportsWorkbenchView } from "./report-types";
 
 const REPORT_TYPE_LABELS: Record<ReportSnapshot["reportType"], string> = {
   balance_sheet: "资产负债表",
@@ -48,23 +48,6 @@ export function getWorkbenchViewLabel(view: ReportsWorkbenchView): string {
     default:
       return "财务报表";
   }
-}
-
-export function resolveBundlePeriodLabel(
-  kind: BundleKind,
-  period: Pick<ReportsPeriodState, "year" | "month" | "quarter">,
-  reportPeriodLabel?: string
-): string {
-  if (reportPeriodLabel) {
-    return reportPeriodLabel;
-  }
-  if (kind === "month_end") {
-    return `${period.year}-${String(period.month).padStart(2, "0")}`;
-  }
-  if (kind === "audit") {
-    return `${period.year}-Q${period.quarter}`;
-  }
-  return String(period.year);
 }
 
 export function getSnapshotSelectionLabel(snapshotId: string, snapshots: ReportSnapshot[]): string {

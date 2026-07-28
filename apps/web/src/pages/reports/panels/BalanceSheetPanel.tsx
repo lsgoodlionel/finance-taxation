@@ -33,7 +33,7 @@ export function BalanceSheetPanel({ report }: Props) {
   const [view, setView] = useState<View>("table");
 
   if (!report) {
-    return <EmptyState title="暂无资产负债表" description="请先在左侧更新报表，加载当前期间结果。" />;
+    return <EmptyState title="暂无资产负债表" description="请先在页头选择期间并点「更新报表」，加载当前期间结果。" />;
   }
 
   // Top-N items for chart (up to 8 each side to keep legible)

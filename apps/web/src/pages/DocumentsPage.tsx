@@ -190,8 +190,12 @@ export function DocumentsPage() {
         />
       )}
       <DocumentsShell
-        header={<DocumentsHeader onOpenHelp={() => setShowHelp(true)} />}
-        summary={<DocumentsSummary summary={summary} message={message} />}
+        summary={(
+          <div style={{ display: "grid", gap: "14px" }}>
+            <DocumentsHeader onOpenHelp={() => setShowHelp(true)} />
+            <DocumentsSummary summary={summary} message={message} />
+          </div>
+        )}
         list={(
           <DocumentsList
             documents={documents}

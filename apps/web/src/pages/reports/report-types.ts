@@ -35,5 +35,3 @@ export type ReportsDataState = {
   diff: ReportDiffResult | null;
   chairmanSummary: ChairmanReportSummary | null;
 };
-
-export type BundleKind = "month_end" | "audit" | "inspection";

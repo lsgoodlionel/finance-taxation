@@ -1,15 +1,20 @@
 /**
- * 我的一天 · 统一收件箱工作台（G3 inbox-first）
+ * 我的一天 · 统一收件箱工作台
  * route: /inbox
- * 聚合四类待办卡片：待办任务 / 风险预警 / 审批请求 / AI 草稿（Stage H 占位）。
- * 打开系统先看「今天要干什么」，点卡片直达对应中心处理。
+ *
+ * V10 车道 G1：从 10 个平级区块（滚 2.9 屏）收敛到 5 块。
+ * 它是 guided 与 pro 两轨的默认落地页，本该最聚焦，改造前却有三个平行入口区
+ * （新手引导、逐税种申报到期卡、其他模块待办卡片墙）和四张主待办卡抢注意力。
+ *
+ * 现在的结构，从上到下就是「今天什么状况 → 要处理什么 → 顺手能做完什么 → 其余」：
+ * 1) hero；2) 今天的状况（统计 + 紧急 + 到期汇总 + 新手引导）；
+ * 3) 今天要处理的（任务 / 风险 / 审批三张摘要卡并排）；
+ * 4) AI 草稿工作台（唯一能就地做完的一块）；5) 其他模块待办（默认收起）。
  */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, Row, Col, Button, Tag, Space, Typography, Statistic, Alert, Spin, Empty } from "antd";
-import {
-  ReloadOutlined, RightOutlined, FireOutlined, InboxOutlined, CalendarOutlined,
-} from "@ant-design/icons";
+import { Button, Space, Spin } from "antd";
+import { ReloadOutlined, CalendarOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import type { RiskFinding, WorkflowRun } from "@finance-taxation/domain-model";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -20,16 +25,12 @@ import {
 import { usePeriod } from "../lib/period-context";
 import { buildOnboardingChecklist } from "../lib/onboarding-checklist";
 import { useWorkspaceMode } from "../lib/workspace-mode";
-import { InboxTasksCard } from "./inbox/InboxTasksCard";
-import { InboxRiskCard } from "./inbox/InboxRiskCard";
-import { InboxApprovalsCard } from "./inbox/InboxApprovalsCard";
 import { InboxAiDraftsCard } from "./inbox/InboxAiDraftsCard";
+import { InboxMoreTodos } from "./inbox/InboxMoreTodos";
+import { InboxTodayBar } from "./inbox/InboxTodayBar";
+import { InboxTriageBoard } from "./inbox/InboxTriageBoard";
+import { isInboxAllClear, summarizeInboxFocus, summarizeTaxDeadlines } from "./inbox/inbox-focus";
 import type { TaskWithOverdue } from "./inbox/inbox-helpers";
-
-const { Text } = Typography;
-
-// 已由「待办任务」专属卡片覆盖，通用列表中不再重复展示
-const TASK_INBOX_KEYS = new Set(["overdue_tasks", "todo_tasks"]);
 
 export function MyDayPage() {
   const navigate = useNavigate();
@@ -74,18 +75,24 @@ export function MyDayPage() {
   // 快速开始 checklist：按工作区模式分内容（pro=后端 setup 清单，guided=白话三件事）
   const checklist = buildOnboardingChecklist(setup, mode);
 
-  const otherItems = items.filter((i) => i.count > 0 && !TASK_INBOX_KEYS.has(i.key));
-  const otherUrgent = otherItems.filter((i) => i.tone === "warning");
-  const overdueTaskCount = tasks.filter((t) => t.isOverdue).length;
-  const openHighRiskCount = riskFindings.filter((f) => f.status === "open" && f.severity === "high").length;
-  const urgentTotal = overdueTaskCount + openHighRiskCount + otherUrgent.reduce((s, i) => s + i.count, 0);
+  const focus = useMemo(
+    () => summarizeInboxFocus({
+      items,
+      totalPending,
+      tasks,
+      findings: riskFindings,
+      approvalCount: approvalRuns.length,
+    }),
+    [approvalRuns.length, items, riskFindings, tasks, totalPending]
+  );
+  const deadlineSummary = useMemo(() => summarizeTaxDeadlines(deadlines), [deadlines]);
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
       <section className="v3-hero-shell">
         <PageHeader
           title="我的一天"
-          subtitle="收件箱一处汇总待办任务、风险预警、审批请求与 AI 草稿，按优先级处理，点卡片直达对应中心。"
+          subtitle="今天要处理的事都在这里：待办任务、风险预警、审批请求、AI 草稿。先看上面的状况，再逐块处理。"
           actions={(
             <Space>
               <Button icon={<CalendarOutlined />} onClick={() => navigate("/close")}>月度结账</Button>
@@ -95,133 +102,31 @@ export function MyDayPage() {
         />
       </section>
 
-      {checklist && !checklist.ready && (
-        <section className="v3-section-shell" data-tone="muted">
-          <Space direction="vertical" size={10} style={{ width: "100%" }}>
-            <Space style={{ justifyContent: "space-between", width: "100%" }}>
-              <Text strong>🚀 快速开始（{checklist.doneCount}/{checklist.total} 已完成）</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {mode === "guided" ? "花几分钟做完这三件事，就能上手了" : "完成基础配置后即可顺畅跑通日常财税"}
-              </Text>
-            </Space>
-            <Row gutter={[12, 12]}>
-              {checklist.items.map((s) => (
-                <Col key={s.key} xs={24} sm={12} lg={8}>
-                  <button
-                    type="button"
-                    disabled={s.done}
-                    onClick={() => !s.done && navigate(s.actionPath)}
-                    aria-label={`${s.done ? "已完成" : "待办"}：${s.label}${s.hint ? `，${s.hint}` : ""}`}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-                      width: "100%", textAlign: "left", font: "inherit",
-                      borderRadius: 10, border: "1px solid rgba(20,40,60,0.08)",
-                      background: s.done ? "rgba(22,163,74,0.06)" : "#fff",
-                      cursor: s.done ? "default" : "pointer", opacity: s.done ? 0.75 : 1,
-                    }}>
-                    <span aria-hidden="true" style={{ fontSize: 16 }}>{s.done ? "✅" : "⬜"}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <Text strong={!s.done} delete={s.done} style={{ fontSize: 13 }}>{s.label}</Text>
-                      {!s.done && <div style={{ fontSize: 11, color: "#64748b" }}>{s.hint}</div>}
-                    </div>
-                    {!s.done && <RightOutlined aria-hidden="true" style={{ color: "#64748b", fontSize: 11 }} />}
-                  </button>
-                </Col>
-              ))}
-            </Row>
-          </Space>
-        </section>
-      )}
-
-      {deadlines.length > 0 && (
-        <section className="v3-section-shell">
-          <Space direction="vertical" size={8} style={{ width: "100%" }}>
-            <Text strong>📅 申报到期提醒（{period}）</Text>
-            <Row gutter={[12, 12]}>
-              {deadlines.map((d) => (
-                <Col key={d.taxType} xs={24} sm={12} lg={6}>
-                  <Card size="small" style={{ borderRadius: 10, borderLeft: `3px solid ${d.filed ? "#16a34a" : d.urgent ? "#dc2626" : "#2563eb"}` }}
-                    styles={{ body: { padding: "10px 14px" } }}>
-                    <Text strong style={{ fontSize: 13 }}>{d.label}</Text>
-                    <div style={{ fontSize: 11, color: "#94a3b8", margin: "2px 0" }}>截止 {d.dueDate}</div>
-                    {d.filed
-                      ? <Tag color="success">已申报</Tag>
-                      : d.daysLeft < 0
-                        ? <Tag color="error">已逾期 {-d.daysLeft} 天</Tag>
-                        : <Tag color={d.urgent ? "error" : "blue"}>剩 {d.daysLeft} 天</Tag>}
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          </Space>
-        </section>
-      )}
-
-      <section className="v3-section-shell" data-tone="accent">
-        <Row gutter={16} align="middle">
-          <Col span={6}><Statistic title="待办总数" value={totalPending} prefix={<InboxOutlined />} /></Col>
-          <Col span={6}><Statistic title="紧急（逾期/高危风险）" value={urgentTotal}
-            prefix={<FireOutlined />} valueStyle={{ color: urgentTotal ? "#dc2626" : "#16a34a" }} /></Col>
-          <Col span={6}><Statistic title="待审批事项" value={approvalRuns.length}
-            valueStyle={{ color: approvalRuns.length ? "#d97706" : undefined }} /></Col>
-          <Col span={6}><Statistic title="其他模块待办类别" value={otherItems.length} suffix={`/ ${items.length}`} /></Col>
-        </Row>
-      </section>
+      <InboxTodayBar
+        summary={focus}
+        deadlines={deadlineSummary}
+        period={period}
+        checklist={checklist}
+        mode={mode}
+        allClear={!loading && isInboxAllClear(focus)}
+      />
 
       {loading ? (
         <div role="status" aria-live="polite" aria-label="收件箱加载中" style={{ padding: 40, textAlign: "center" }}>
           <Spin />
         </div>
       ) : (
-        <>
-          {urgentTotal > 0 && (
-            <Alert type="warning" showIcon
-              message={`有 ${urgentTotal} 项紧急待办，建议优先处理逾期任务与高危风险。`} />
-          )}
-
-          <InboxTasksCard tasks={tasks} loading={loading} />
-          <InboxRiskCard findings={riskFindings} loading={loading} />
-          <InboxApprovalsCard runs={approvalRuns} loading={loading} />
-          <InboxAiDraftsCard />
-
-          {otherItems.length > 0 && (
-            <section className="v3-section-shell">
-              <Text strong style={{ display: "block", marginBottom: 10 }}>📌 其他模块待办</Text>
-              <Row gutter={[16, 16]}>
-                {otherItems.map((it) => (
-                  <Col key={it.key} xs={24} sm={12} lg={8}>
-                    <Card style={{ borderRadius: 12, borderLeft: `3px solid ${it.tone === "warning" ? "#dc2626" : "#2563eb"}` }}
-                      styles={{ body: { padding: "16px 18px" } }}>
-                      <Space direction="vertical" size={6} style={{ width: "100%" }}>
-                        <Space style={{ justifyContent: "space-between", width: "100%" }}>
-                          <Text strong>{it.label}</Text>
-                          <Tag color={it.tone === "warning" ? "error" : "blue"}>{it.count}</Tag>
-                        </Space>
-                        <Text type="secondary" style={{ fontSize: 12 }}>{it.hint}</Text>
-                        <Button
-                          type="link"
-                          size="small"
-                          style={{ padding: 0 }}
-                          onClick={() => navigate(it.actionPath)}
-                          aria-label={`前往处理：${it.label}`}
-                        >
-                          前往处理 <RightOutlined aria-hidden="true" />
-                        </Button>
-                      </Space>
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-            </section>
-          )}
-
-          {totalPending === 0 && tasks.length === 0 && riskFindings.length === 0 && approvalRuns.length === 0 && (
-            <Card style={{ borderRadius: 12 }}>
-              <Empty description="太棒了，当前没有待办事项 🎉" />
-            </Card>
-          )}
-        </>
+        <InboxTriageBoard
+          tasks={tasks}
+          findings={riskFindings}
+          runs={approvalRuns}
+          loading={loading}
+        />
       )}
+
+      <InboxAiDraftsCard />
+
+      <InboxMoreTodos items={focus.otherItems} />
     </div>
   );
 }

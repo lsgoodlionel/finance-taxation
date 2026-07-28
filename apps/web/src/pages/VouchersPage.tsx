@@ -1,6 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+/**
+ * 凭证中心（V10 车道 G2：按任务重组）。
+ *
+ * 改造前首屏 7 块，其中两块（WorkflowRuntimePanel / WorkflowRuntimeCard）标题几乎
+ * 一样、讲的都是「运行态与授权态」，还有一块阶段流程图是用页面现造的占位对象喂
+ * resolveProcessFlowContext 算出来的，结果基本恒定；而凭证真正的流程
+ * （草稿 → 校验 → 审核 → 过账）在界面上反倒没有表达，「下一步做什么」只有快捷键 a
+ * 知道。
+ *
+ * 改造后固定四段（筛选提示按需出现，最多五段，顺序钉在 vouchers/VouchersShell）：
+ *   页头 → [事项筛选提示] → 这张凭证办到哪了 + 下一步 → 列表与详情 → 运行态（折叠）
+ */
+// 显式引入 React：仓库的 node 测试用经典 JSX 转换（见 tools/v4/run-web-tests.mjs），
+// 缺了它这一页就无法在测试里被整页渲染（首屏区块数就只能靠人肉数）。
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Row, Col, Card, Button, Space, Typography, Alert, Skeleton, Modal } from "antd";
+import { Button, Space, Modal } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import type { Voucher } from "@finance-taxation/domain-model";
@@ -11,53 +25,27 @@ import {
 } from "../lib/api";
 import { normalizeDrilldownState } from "./drilldown";
 import { EntityLink } from "../components/ui/EntityLink";
-import { resolveProcessFlowContext } from "../features/process-flow/resolve";
-import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { PageHeader } from "../components/ui/PageHeader";
-import { HelpPanel, HelpTriggerButton } from "../components/ui/HelpPanel";
+import { HelpTriggerButton } from "../components/ui/HelpPanel";
 import { Term } from "../components/ui/Term";
-import { WorkflowRuntimeCard } from "../components/workflow/WorkflowRuntimeCard";
-import { VouchersList } from "./vouchers/VouchersList";
-import { VoucherDetailPanel } from "./vouchers/VoucherDetailPanel";
 import { VoucherCreateModal } from "./vouchers/VoucherCreateModal";
-import { BatchBar } from "./vouchers/BatchBar";
+import { VoucherFlowPanel } from "./vouchers/VoucherFlowPanel";
+import { VoucherRuntimeSection } from "./vouchers/VoucherRuntimeSection";
+import { VouchersHelpPanel } from "./vouchers/VouchersHelpPanel";
+import { VouchersShell } from "./vouchers/VouchersShell";
+import { VouchersWorkspace } from "./vouchers/VouchersWorkspace";
 import { useVoucherBatch } from "./vouchers/useVoucherBatch";
 import { buildValidationHints } from "./vouchers/validation-hints";
+import {
+  buildVoucherFlow, buildVoucherFlowTitle, buildVoucherNextStep, buildVoucherReportPeriod,
+} from "./vouchers/voucher-flow";
 import {
   filterVouchersByTab, formatVoucherCode, resolveNextAction, voucherAmount, type VoucherTab,
 } from "./vouchers/voucher-actions";
 import { useListHotkeys } from "../lib/use-list-hotkeys";
 import { useAccessUser } from "../features/runtime/useAccessUser";
 import { deriveVoucherRuntimeSummary } from "../features/runtime/workflow-runtime";
-import { WorkflowRuntimePanel } from "../features/runtime/WorkflowRuntimePanel";
 import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
-
-const { Text } = Typography;
-
-function VouchersHelpPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return (
-    <HelpPanel
-      open={open}
-      title="凭证中心 · 业务关系与操作说明"
-      onClose={onClose}
-      relations={(
-        <>
-          <strong>经营事项页</strong>定义业务背景，<strong>单据中心</strong>提供发票、回单等原始依据；<strong>凭证中心</strong>把它们转成正式会计凭证并过账；过账结果流向<strong>总账中心</strong>和<strong>财务报表</strong>。标准链路：事项 / 单据 → 凭证 → 总账 / 报表。
-        </>
-      )}
-      workflowSteps={[
-        "按模板或从事项生成借贷凭证草稿",
-        "执行借贷校验，确认借方合计等于贷方合计",
-        "复核无误后审核凭证",
-        "审核通过后执行过账，正式记入总账",
-        "过账结果进入报表、税务和归档流程"
-      ]}
-      responsibility="这里负责管理借贷凭证的完整生命周期：草稿 → 校验 → 审核 → 过账。凭证是账本和报表的直接来源，摘要、科目和金额都在本页确定。"
-      operations="常见操作包括：按模板生成凭证、选择凭证查看分录明细、执行借贷校验、审核凭证、执行过账、修改摘要，以及跳转到关联的事项、单据、税务和总账页面。"
-      caution="过账是正式记账动作：过账后凭证将影响总账和财务报表，不能直接修改。发现错误需要通过冲销凭证或在总账中心反结账处理。"
-    />
-  );
-}
 
 export function VouchersPage() {
   const location = useLocation();
@@ -312,21 +300,14 @@ export function VouchersPage() {
     }
   }
 
-  // ── Process flow context ──────────────────────────────────────────────────
+  // ── 这张凭证走到哪了 ───────────────────────────────────────────────────────
+  // 每一步都来自凭证真实字段 + 本次校验结论；「下一步」复用 resolveNextAction，
+  // 与快捷键 a 是同一份判定（见 vouchers/voucher-flow.ts）。
 
-  const voucherFlowContext = useMemo(() => {
-    if (!detail) return null;
-    return resolveProcessFlowContext({
-      event: { id: detail.businessEventId || detail.id, type: "general", title: detail.summary, status: detail.status },
-      detail: {
-        tasks: [{ id: `${detail.id}-task-stage` }],
-        generatedDocuments: [{ id: `${detail.businessEventId || detail.id}-document-stage` }],
-        vouchers: [{ id: detail.id }],
-        taxItems: [],
-        hasArchivedArtifacts: Boolean(detail.postedAt),
-      },
-    });
-  }, [detail]);
+  const voucherFlow = useMemo(() => buildVoucherFlow(detail, validation), [detail, validation]);
+  const voucherNextStep = useMemo(() => buildVoucherNextStep(detail), [detail]);
+  const reportPeriod = useMemo(() => buildVoucherReportPeriod(detail), [detail]);
+
   const localRuntimeSummary = useMemo(
     () => deriveVoucherRuntimeSummary(vouchers, detail, accessUser?.roleIds ?? []),
     [accessUser?.roleIds, detail, vouchers]
@@ -363,129 +344,81 @@ export function VouchersPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: "grid", gap: 24 }}>
-      {/* Hero header */}
-      <section className="v3-hero-shell">
-        <PageHeader
-          title="凭证中心"
-          actions={(
-            <Space>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>按模板生成</Button>
-              <HelpTriggerButton onClick={() => setHelpOpen(true)} label="查看凭证中心操作说明" />
-            </Space>
-          )}
-        />
-        <p style={{ margin: "4px 0 0", fontSize: 13.5, color: "var(--text-muted, #6c7a89)", lineHeight: 1.7 }}>
-          管理<Term k="debit-credit-balance">借贷</Term><Term k="voucher">凭证</Term>草稿、审核与
-          <Term k="posting">过账</Term>：流程为 草稿 → 审核 → <Term k="posting">过账</Term>，
-          <Term k="posting">过账</Term>后将影响<Term k="general-ledger">总账</Term>和财务报表
-        </p>
-      </section>
-
-      <VouchersHelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
-
-      {navEventId && (
-        <Alert
-          type="info" showIcon style={{ borderRadius: 8 }}
-          message={<>当前筛选事项 <EntityLink kind="business_event" id={navEventId} /> 的关联凭证。</>}
-        />
-      )}
-      <WorkflowRuntimePanel
-        title="凭证运行态与授权态"
-        summary={runtimeSummary}
-        onAction={(action) => void handleRuntimeAction(action)}
-        busyActionKey={runtimeActionKey}
-      />
-
-      <WorkflowRuntimeCard
-        title="凭证运行态 / 授权态"
-        resourceType="voucher"
-        resourceId={detail?.id ?? selectedId}
-        emptyHint="选择凭证后，可查看该凭证的运行状态、授权状态、重试与补偿信息。"
-        onChanged={() => refresh(detail?.id ?? selectedId ?? undefined)}
-        onDetailChange={setRuntimeDetail}
-      />
-
-      {/* Process flow */}
-      {detail && (
-        <ProcessFlowStageSection
-          title="凭证阶段流程"
-          subtitle="凭证处理阶段在整体业务流程中的位置"
-          currentNodeId={voucherFlowContext?.currentNodeId ?? "voucher_tax_processing"}
-          branch={voucherFlowContext?.branch}
-          businessEventId={detail.businessEventId}
-        />
-      )}
-
-      {/* Main layout: list + detail */}
-      <section className="v3-section-shell">
-        {loading ? (
-          <Card style={{ borderRadius: 12 }}>
-            <Skeleton active paragraph={{ rows: 8 }} />
-          </Card>
-        ) : (
-          <Row gutter={[16, 16]}>
-            {/* Left: voucher list with status tabs */}
-            <Col xs={24} lg={13}>
-              <Card
-                title={<Space><Text strong>凭证对象</Text></Space>}
-                extra={(
-                  <Text type="secondary" style={{ fontSize: 11 }}>
-                    快捷键：j/k 移动 · Enter 打开 · x 勾选 · a 下一步
-                  </Text>
-                )}
-                style={{ borderRadius: 12 }}
-                styles={{ body: { padding: "0 0 8px" } }}
-              >
-                <div style={{ padding: "8px 12px 0" }}>
-                  <BatchBar
-                    checkedCount={batch.checkedIds.length}
-                    approvableCount={batch.approvableCount}
-                    postableCount={batch.postableCount}
-                    running={batch.running}
-                    progress={batch.progress}
-                    onBatchApprove={batch.startBatchApprove}
-                    onBatchPost={batch.startBatchPost}
-                    onClear={batch.clearChecked}
-                  />
-                </div>
-                <VouchersList
-                  vouchers={vouchers}
-                  selectedId={selectedId}
-                  activeId={activeVoucherId}
-                  activeTab={activeTab}
-                  checkedIds={batch.checkedIds}
-                  onTabChange={handleTabChange}
-                  onSelect={handleRowClick}
-                  onCheckedChange={batch.replaceChecked}
-                />
-              </Card>
-            </Col>
-
-            {/* Right: voucher detail */}
-            <Col xs={24} lg={11}>
-              <Card style={{ borderRadius: 12 }}>
-                <VoucherDetailPanel
-                  detail={detail}
-                  runtimeDetail={runtimeDetail}
-                  validation={validation}
-                  updating={updating}
-                  onValidate={handleValidate}
-                  onApprove={handleApprove}
-                  onPost={handlePost}
-                  onSummaryUpdate={handleSummaryUpdate}
-                  onOpenEvent={(businessEventId) => navigate("/events", { state: { businessEventId } })}
-                  onOpenDocuments={(businessEventId) => navigate("/documents", { state: { businessEventId } })}
-                  onOpenTax={(businessEventId) => navigate("/tax", { state: { businessEventId } })}
-                  onOpenLedger={(voucherId, businessEventId) => navigate("/ledger", { state: { voucherId, businessEventId } })}
-                />
-              </Card>
-            </Col>
-          </Row>
+    <>
+      <VouchersShell
+        header={(
+          <>
+            <PageHeader
+              title="凭证中心"
+              actions={(
+                <Space>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>按模板生成</Button>
+                  <HelpTriggerButton onClick={() => setHelpOpen(true)} label="查看凭证中心操作说明" />
+                </Space>
+              )}
+            />
+            <p style={{ margin: "4px 0 0", fontSize: 13.5, color: "var(--text-muted, #6c7a89)", lineHeight: 1.7 }}>
+              管理<Term k="debit-credit-balance">借贷</Term><Term k="voucher">凭证</Term>草稿、审核与
+              <Term k="posting">过账</Term>：流程为 草稿 → 审核 → <Term k="posting">过账</Term>，
+              <Term k="posting">过账</Term>后将影响<Term k="general-ledger">总账</Term>和财务报表
+            </p>
+          </>
         )}
-      </section>
+        notice={navEventId ? (
+          <span style={{ fontSize: 13, color: "#4d5d6c" }}>
+            当前只看事项 <EntityLink kind="business_event" id={navEventId} /> 的关联<Term k="voucher">凭证</Term>。
+          </span>
+        ) : null}
+        flow={(
+          <VoucherFlowPanel
+            flow={voucherFlow}
+            title={buildVoucherFlowTitle(detail)}
+            nextStep={voucherNextStep}
+            reportPeriod={reportPeriod}
+            busy={updating}
+            onRunNextStep={() => {
+              if (detail) void runNextAction(detail);
+            }}
+            onOpenReports={() => navigate("/reports")}
+          />
+        )}
+        aside={(
+          <VoucherRuntimeSection
+            summary={runtimeSummary}
+            busyActionKey={runtimeActionKey}
+            voucherId={detail?.id ?? selectedId}
+            onAction={(action) => void handleRuntimeAction(action)}
+            onRuntimeChanged={() => void refresh(detail?.id ?? selectedId ?? undefined)}
+            onRuntimeDetailChange={setRuntimeDetail}
+          />
+        )}
+      >
+        <VouchersWorkspace
+          loading={loading}
+          vouchers={vouchers}
+          selectedId={selectedId}
+          activeVoucherId={activeVoucherId}
+          activeTab={activeTab}
+          detail={detail}
+          runtimeDetail={runtimeDetail}
+          validation={validation}
+          updating={updating}
+          batch={batch}
+          onTabChange={handleTabChange}
+          onSelect={handleRowClick}
+          onValidate={handleValidate}
+          onApprove={handleApprove}
+          onPost={handlePost}
+          onSummaryUpdate={handleSummaryUpdate}
+          onOpenEvent={(businessEventId) => navigate("/events", { state: { businessEventId } })}
+          onOpenDocuments={(businessEventId) => navigate("/documents", { state: { businessEventId } })}
+          onOpenTax={(businessEventId) => navigate("/tax", { state: { businessEventId } })}
+          onOpenLedger={(voucherId, businessEventId) => navigate("/ledger", { state: { voucherId, businessEventId } })}
+        />
+      </VouchersShell>
 
-      {/* Create modal */}
+      {/* 抽屉与弹窗不占首屏，放在外壳之外 */}
+      <VouchersHelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
       <VoucherCreateModal
         open={modalOpen}
         templates={templates}
@@ -494,6 +427,6 @@ export function VouchersPage() {
         onSubmit={handleCreate}
         onClose={() => setModalOpen(false)}
       />
-    </div>
+    </>
   );
 }

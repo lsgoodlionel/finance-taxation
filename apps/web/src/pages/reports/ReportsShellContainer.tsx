@@ -1,33 +1,49 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   createReportSnapshot,
   getBalanceSheetReport,
   getCashFlowReport,
   getChairmanReportSummary,
-  getClosingBundleHtml,
   getPrintableReportHtml,
   getReportDiff,
   getProfitStatementReport,
   listReportSnapshots
 } from "../../lib/api";
+import { TaskFocusShell } from "../../components/ui/TaskFocusShell";
+import { resolveActiveTask } from "../../lib/task-focus";
 import { useWorkspaceMode } from "../../lib/workspace-mode";
 import { ReportsHeader } from "./ReportsHeader";
 import { ReportsHelpPanel } from "./ReportsHelpPanel";
+import { ReportsPeriodControl } from "./ReportsPeriodControl";
 import { ReportsShell } from "./ReportsShell";
-import { ReportsSidebar } from "./ReportsSidebar";
 import { ReportsWorkbench } from "./ReportsWorkbench";
-import type { BundleKind, ReportsStatus, ReportsWorkbenchView } from "./report-types";
+import { SnapshotComparePanel } from "./panels/SnapshotComparePanel";
+import type { ReportsStatus, ReportsWorkbenchView } from "./report-types";
+import { getWorkbenchViewLabel, pickLatestSnapshotId } from "./reports-helpers";
 import {
-  getWorkbenchViewLabel,
-  pickLatestSnapshotId,
-  resolveBundlePeriodLabel,
-  resolveInitialReportsView
-} from "./reports-helpers";
+  buildReportsTasks,
+  isStatementView,
+  resolveInitialReportsTask,
+  resolveTaskByView,
+  resolveViewByTask
+} from "./reports-tasks";
+import { readReportsUrlState, writeReportsUrlState } from "./reports-url-state";
 
+/**
+ * 财务报表中心容器。
+ *
+ * V10：一次只显示一件事。四件事（看结论 / 看三张报表 / 对比两期 / 对预算）由
+ * TaskFocusShell 承载，只有当前这件事进 DOM；期间上下文收进页头；
+ * 月结 / 审计 / 稽核资料包移交 /export-center（那边是同一接口的等价能力，
+ * 还会登记导出历史与审计轨迹）。
+ */
 export function ReportsShellContainer() {
   const navigate = useNavigate();
   const { mode } = useWorkspaceMode();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlState = useMemo(() => readReportsUrlState(searchParams), [searchParams]);
+
   const [periodType, setPeriodType] = useState<"month" | "quarter" | "year">("month");
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(5);
@@ -40,12 +56,24 @@ export function ReportsShellContainer() {
   const [toSnapshotId, setToSnapshotId] = useState("");
   const [diff, setDiff] = useState<Awaited<ReturnType<typeof getReportDiff>> | null>(null);
   const [chairmanSummary, setChairmanSummary] = useState<Awaited<ReturnType<typeof getChairmanReportSummary>> | null>(null);
-  const [activeView, setActiveView] = useState<ReportsWorkbenchView>(() => resolveInitialReportsView(mode));
+  const [activeView, setActiveView] = useState<ReportsWorkbenchView>(() =>
+    resolveViewByTask(
+      resolveActiveTask(buildReportsTasks(mode), urlState.task, resolveInitialReportsTask(mode)) ?? "",
+      urlState.report || "balanceSheet"
+    )
+  );
   const [showHelp, setShowHelp] = useState(false);
   const [status, setStatus] = useState<ReportsStatus>({
     tone: "info",
     message: "正在准备财务报表。"
   });
+
+  const tasks = useMemo(() => buildReportsTasks(mode), [mode]);
+  const activeTaskKey = resolveTaskByView(activeView);
+  /** 三表里最后看过的那张，切走再切回时回到原处。 */
+  const lastStatementView: ReportsWorkbenchView = isStatementView(activeView)
+    ? activeView
+    : urlState.report || "balanceSheet";
 
   useEffect(() => {
     async function bootstrap() {
@@ -68,6 +96,15 @@ export function ReportsShellContainer() {
 
     void bootstrap();
   }, []);
+
+  useEffect(() => {
+    // report 参数即便切到别的任务也保留：它记的是「三表里在看哪张」，
+    // 切走再切回要能回到原处，否则每次都被打回资产负债表。
+    const next = writeReportsUrlState({ task: activeTaskKey, report: lastStatementView });
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [activeTaskKey, lastStatementView, searchParams, setSearchParams]);
 
   async function loadReports() {
     const request = { periodType, year, month, quarter };
@@ -166,76 +203,64 @@ export function ReportsShellContainer() {
     }
   }
 
-  async function openBundle(kind: BundleKind) {
-    try {
-      const html = await getClosingBundleHtml(
-        kind,
-        resolveBundlePeriodLabel(kind, { year, month, quarter }, balanceSheet?.periodLabel)
-      );
-      openHtmlWindow(html, "无法打开资料包窗口");
-      setStatus({
-        tone: "success",
-        message: kind === "month_end" ? "已打开月结资料包。" : kind === "audit" ? "已打开审计资料包。" : "已打开稽核资料包。"
-      });
-    } catch (error) {
-      setStatus({
-        tone: "error",
-        message: (error as Error).message
-      });
-    }
-  }
-
   return (
     <>
-    <ReportsHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
-    <ReportsShell
-      header={(
-        <ReportsHeader
-          activeViewLabel={getWorkbenchViewLabel(activeView)}
-          onNavigateToExportCenter={() => navigate("/pdf-export")}
-          onNavigateToTax={() => navigate("/tax")}
-          onOpenHelp={() => setShowHelp(true)}
-        />
-      )}
-      sidebar={(
-        <ReportsSidebar
-          mode={mode}
-          periodType={periodType}
-          year={year}
-          month={month}
-          quarter={quarter}
-          snapshots={snapshots}
-          fromSnapshotId={fromSnapshotId}
-          toSnapshotId={toSnapshotId}
-          activeView={activeView}
-          onPeriodTypeChange={setPeriodType}
-          onYearChange={setYear}
-          onMonthChange={setMonth}
-          onQuarterChange={setQuarter}
-          onSelectFrom={setFromSnapshotId}
-          onSelectTo={setToSnapshotId}
-          onSelectView={setActiveView}
-          onReload={() => void loadReports()}
-          onSaveSnapshot={() => void saveSnapshot()}
-          onGenerateDiff={() => void generateDiff()}
-          onGenerateSummary={() => void generateSummary()}
-          onOpenPrintable={() => void openPrintable()}
-          onOpenBundle={(kind) => void openBundle(kind)}
-        />
-      )}
-      workbench={(
-        <ReportsWorkbench
-          activeView={activeView}
-          status={status}
-          balanceSheet={balanceSheet}
-          profitStatement={profitStatement}
-          cashFlow={cashFlow}
-          diff={diff}
-          chairmanSummary={chairmanSummary}
-          defaultPeriod={`${year}-${String(month).padStart(2, "0")}`}
-        />
-      )}
-    />
+      <ReportsHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
+      <ReportsShell
+        header={(
+          <ReportsHeader
+            activeViewLabel={getWorkbenchViewLabel(activeView)}
+            periodControl={(
+              <ReportsPeriodControl
+                periodType={periodType}
+                year={year}
+                month={month}
+                quarter={quarter}
+                onPeriodTypeChange={setPeriodType}
+                onYearChange={setYear}
+                onMonthChange={setMonth}
+                onQuarterChange={setQuarter}
+                onReload={() => void loadReports()}
+              />
+            )}
+            onOpenHelp={() => setShowHelp(true)}
+          />
+        )}
+      >
+        <TaskFocusShell
+          tasks={tasks}
+          activeKey={activeTaskKey}
+          onSelectTask={(key) => setActiveView(resolveViewByTask(key, lastStatementView))}
+          switcherLabel="财务报表中心当前要做的事"
+        >
+          <ReportsWorkbench
+            activeView={activeView}
+            status={status}
+            balanceSheet={balanceSheet}
+            profitStatement={profitStatement}
+            cashFlow={cashFlow}
+            chairmanSummary={chairmanSummary}
+            diff={diff}
+            onSelectStatement={setActiveView}
+            defaultPeriod={`${year}-${String(month).padStart(2, "0")}`}
+            comparePanel={(
+              <SnapshotComparePanel
+                snapshots={snapshots}
+                fromSnapshotId={fromSnapshotId}
+                toSnapshotId={toSnapshotId}
+                diff={diff}
+                onSelectFrom={setFromSnapshotId}
+                onSelectTo={setToSnapshotId}
+                onSaveSnapshot={() => void saveSnapshot()}
+                onGenerateDiff={() => void generateDiff()}
+                onGenerateSummary={() => void generateSummary()}
+                onOpenPrintable={() => void openPrintable()}
+                onOpenExportCenter={() => navigate("/export-center")}
+              />
+            )}
+          />
+        </TaskFocusShell>
+      </ReportsShell>
     </>
   );
 }

@@ -38,7 +38,7 @@ import { buildBatchItemLinks, buildTaxBatchFlow, buildTaxBatchFlowTitle } from "
 import { countOverdueObligations, currentFilingPeriod, deriveTaxObligations } from "./tax/tax-obligations";
 import { TAX_TASK_KEYS, TAX_TASK_QUERY_KEY, buildTaxTasks, type TaxTaskKey } from "./tax/tax-tasks";
 import { actionButtonStyle } from "./tax/taxStyles";
-import type { WorkflowRuntimeSummary } from "../features/runtime/workflow-runtime";
+import { needsRuntimeAttention } from "../features/runtime/runtime-attention";
 
 const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
   vat: "增值税底稿",
@@ -66,19 +66,6 @@ const DETAILS_SUMMARY_STYLE = {
   fontWeight: 600,
   color: "#4d5d6c"
 };
-
-/**
- * 运行态/授权态是否需要用户现在就看。
- * 一切正常时它只是背景噪音，不该占据工作区——收进「相关」区，需要时展开。
- */
-function needsRuntimeAttention(summary: WorkflowRuntimeSummary): boolean {
-  return (
-    summary.executionState === "failed" ||
-    summary.authorizationState === "awaiting_authorization" ||
-    summary.authorizationState === "insufficient" ||
-    (summary.issue ? summary.issue.tone !== "info" : false)
-  );
-}
 
 export function TaxPage() {
   const {

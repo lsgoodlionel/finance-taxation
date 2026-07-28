@@ -92,6 +92,18 @@ for (const item of CASES) {
     await loginAsRole(item.role);
     await page.goto(item.route);
     await expect(page.getByRole("heading", { name: item.heading })).toBeVisible();
+
+    // V10「一次一件事」后，运行态/授权态属运维视角：确有异常或待授权时才自动展开，
+    // 否则收进 <details> 以免占据首屏（能力不减，只是不占首屏）。
+    // 本用例验证的是「摘要能正确加载与呈现」，与折叠策略无关，故先展开所有收起项。
+    // 注意不能用 locator.filter({has: heading}) 定位 —— details 关闭时其内部
+    // 元素对 Playwright 不可达，过滤会匹配不到。折叠策略本身由 web 单测的区块数断言覆盖。
+    await page.evaluate(() => {
+      document.querySelectorAll("details").forEach((el) => {
+        (el as HTMLDetailsElement).open = true;
+      });
+    });
+
     const panel = page.locator("section").filter({
       has: page.getByRole("heading", { name: item.panelTitle })
     }).first();

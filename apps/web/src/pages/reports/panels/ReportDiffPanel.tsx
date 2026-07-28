@@ -20,7 +20,7 @@ export function ReportDiffPanel({ diff }: ReportDiffPanelProps) {
     return (
       <EmptyState
         title="尚未生成差异分析"
-        description="先在左侧选择基准快照和对比快照，再点击“生成差异分析”。"
+        description="在上面挑好基准快照和对比快照，再点「生成差异分析」。"
       />
     );
   }
