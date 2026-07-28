@@ -12,9 +12,9 @@ import {
   NO_TREND_AVAILABLE,
   previousPeriodEndDate
 } from "./kpi.js";
+import { isPeriodLabel, periodBounds } from "./period.js";
 import { buildDashboardSnapshot, type DashboardPeriod } from "./summary.js";
-
-const PERIOD_LABEL = /^\d{4}-\d{2}$/;
+import { buildChairmanTrend, resolveTrendMonths } from "./trend.js";
 
 /**
  * 余额卡片取数 —— **不排除结转损益分录**（口径见 ledger/closing-entries.ts）。
@@ -42,15 +42,7 @@ function sumAccountBalance(
  * 非法取值一律回落到当前期间，保证首页永远有数可看。
  */
 export function resolveDashboardPeriod(rawPeriod: string | null, now: Date): DashboardPeriod & { label: string } {
-  const label =
-    rawPeriod && PERIOD_LABEL.test(rawPeriod) ? rawPeriod : now.toISOString().slice(0, 7);
-  const year = Number(label.slice(0, 4));
-  const month = Number(label.slice(5, 7));
-  return {
-    label,
-    startDate: `${label}-01`,
-    endDate: new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10)
-  };
+  return periodBounds(isPeriodLabel(rawPeriod) ? rawPeriod : now.toISOString().slice(0, 7));
 }
 
 /** 余额类科目（货币资金、应收、应交税费）按「期末时点」取数，而非期间发生额。 */
@@ -149,4 +141,35 @@ export async function handleChairmanDashboard(req: ApiRequest, res: ServerRespon
     aiSummary: snapshot.aiSummary,
     riskCount: openRiskCount
   });
+}
+
+/**
+ * `GET /api/dashboard/chairman/trend?months=6&period=YYYY-MM`
+ *
+ * 按会计期间聚合真实的历史收入/成本，供驾驶舱「公司赚不赚钱？」一段画趋势图。
+ * 口径、留白规则与实现理由都在 dashboard/trend.ts 的抬头。
+ *
+ * `period` 缺省取当前自然月，即最后一个点就是驾驶舱主接口的当期——两个接口共用
+ * resolveDashboardPeriod，图上最后一个点与利润概览卡片说的是同一个月。
+ *
+ * 取全量分录后在内存里按期聚合，而不是写一句 `group by to_char(entry_date,…)`：
+ * 收入/成本/费用的科目口径在 reports/profit-accounts.ts（还要查科目主数据的 category），
+ * 搬进 SQL 就等于把那套分类再实现一遍，而它正是「驾驶舱与 /reports 对不上」的病根。
+ * 数据量与本文件的主接口同级（两者都要全表扫一遍公司分录）。
+ */
+export async function handleChairmanTrend(req: ApiRequest, res: ServerResponse) {
+  const companyId = req.auth!.companyId;
+  const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  const period = resolveDashboardPeriod(url.searchParams.get("period"), new Date());
+  const months = resolveTrendMonths(url.searchParams.get("months"));
+
+  const ledgerEntries = await listCompanyLedgerEntries(companyId);
+
+  const trend = buildChairmanTrend({
+    endPeriod: period.label,
+    months,
+    ledgerEntries: ledgerEntries.filter((entry) => entry.companyId === companyId)
+  });
+
+  return json(res, 200, trend);
 }

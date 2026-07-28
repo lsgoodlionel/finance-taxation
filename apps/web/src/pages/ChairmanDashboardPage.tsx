@@ -12,14 +12,16 @@
  * 改造后 5 块：一眼看全的页头 + KPI 条，然后三段各回答副标题里承诺的一个问题
  * （段首先给结论、图表是结论的展开），最后是默认收起的财务过程统计。
  *
- * 顺带删掉了「近 6 月收支趋势」图 —— 它 6 个点里有 5 个是编的：
+ * 「近 6 月收支趋势」图曾在 V10 被整个删掉 —— 它 6 个点里有 5 个是编的：
  *   const factors = [0.72, 0.81, 0.88, 0.94, 0.97, 1.0];
  *   收入: Math.round(revenue * factors[i])
- * 也就是把本月收入乘一组写死的系数当成历史。它必然画出一条单调上升的曲线，
- * 无论公司实际是增长还是下滑，而卡片标题写的是「近 6 月收支趋势」。后端目前没有
- * 按期间的历史收入/成本接口（只有 /api/rnd/trend 是研发专用），要如实画这张图
- * 得先有那个接口。在它出现之前不画——这与后端在风险卡上「与其编一个 +2，不如
- * 明确留白」的处理是同一条纪律（modules/dashboard/routes.ts）。
+ * 也就是把本月收入乘一组写死的系数当成历史，必然画出一条单调上升的曲线，无论公司
+ * 实际是增长还是下滑。当时后端没有按期间的历史收入/成本接口，所以宁可不画。
+ *
+ * 现在 `/api/dashboard/chairman/trend` 有了：按会计期间聚合总账分录，口径与本页的
+ * 利润概览同源，没有账的期间如实留空。图因此回到「公司赚不赚钱？」一段——它回答的
+ * 正是这个问题的时间维度（这个月的盈利是常态还是波动）。取数与留白规则见
+ * dashboard/DashboardTrendChart.tsx 与 apps/api 的 modules/dashboard/trend.ts。
  */
 import React, { useEffect, useState } from "react";
 import { Card, Col, Collapse, Row, Space, Tag } from "antd";
@@ -35,6 +37,7 @@ import { DashboardAlertCards } from "./dashboard/DashboardAlertCards";
 import { DashboardKpiCards } from "./dashboard/DashboardKpiCards";
 import { DashboardPieChart } from "./dashboard/DashboardPieChart";
 import { DashboardQuestionSection } from "./dashboard/DashboardQuestionSection";
+import { DashboardTrendChart } from "./dashboard/DashboardTrendChart";
 import { ProfitSummaryCard } from "./dashboard/ProfitSummaryCard";
 import { buildChairmanQuestions, type ChairmanQuestion, type ChairmanQuestionKey } from "./dashboard/chairman-questions";
 
@@ -94,7 +97,10 @@ export function ChairmanDashboardPage() {
       </section>
 
       <DashboardQuestionSection question={pickQuestion(questions, "profit")} tone="accent">
+        {/* 趋势图整行在上：段首结论说的是「本期净利多少」，紧接着要回答的是
+            「这是常态还是波动」，那是一条时间轴，横向铺开才读得出来。 */}
         <Row gutter={[16, 16]}>
+          <Col span={24}><DashboardTrendChart /></Col>
           <Col xs={24} lg={12}><ProfitSummaryCard profitOverview={data.profitOverview} /></Col>
           <Col xs={24} lg={12}><DashboardPieChart data={data} /></Col>
         </Row>

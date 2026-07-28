@@ -3,7 +3,7 @@ import { query } from "../db/client.js";
 import { getMenu } from "../modules/access/routes.js";
 import { listAccounts, getAccountByCode } from "../modules/accounts/routes.js";
 import { handleAuthMeta } from "../modules/auth/routes.js";
-import { handleChairmanDashboard } from "../modules/dashboard/routes.js";
+import { handleChairmanDashboard, handleChairmanTrend } from "../modules/dashboard/routes.js";
 import {
   attachDocumentFile,
   archiveDocument,
@@ -332,6 +332,13 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "dashboard.view",
     handler: handleChairmanDashboard
+  },
+  {
+    method: "GET",
+    path: "/api/dashboard/chairman/trend",
+    auth: true,
+    permission: "dashboard.view",
+    handler: handleChairmanTrend
   },
   { method: "POST", path: "/api/auth/login", handler: login },
   { method: "POST", path: "/api/auth/refresh", handler: refresh },

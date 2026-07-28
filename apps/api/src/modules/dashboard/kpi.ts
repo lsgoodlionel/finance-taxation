@@ -6,6 +6,7 @@
  * 涨跌箭头的 Tag 并在旁边写死「环比上月」，于是一个静态余额被读成了「本月比
  * 上月多了 153 万」。这不是环比，是呈现失实。这里给出真正的环比实现。
  */
+import { periodBounds, previousPeriodLabel } from "./period.js";
 
 /** 上期无数据（公司首个有账期间）时的降级文案。 */
 export const NO_PRIOR_PERIOD_TREND = "无上期数据";
@@ -35,13 +36,10 @@ export function formatAmount(value: number): string {
 
 /**
  * 上一会计期间的期末日期：`2026-05` → `2026-04-30`。
- * 全程用 `Date.UTC` 构造，结果与运行时时区无关（同 resolveDashboardPeriod）。
+ * 月份算法统一在 dashboard/period.ts，跨年与月长只在那里处理一次。
  */
 export function previousPeriodEndDate(periodLabel: string): string {
-  const year = Number(periodLabel.slice(0, 4));
-  const month = Number(periodLabel.slice(5, 7));
-  // Date.UTC(year, month - 1, 0) = 上一个月的最后一天；month=1 时自动退到上一年 12-31。
-  return new Date(Date.UTC(year, month - 1, 0)).toISOString().slice(0, 10);
+  return periodBounds(previousPeriodLabel(periodLabel)).endDate;
 }
 
 /**

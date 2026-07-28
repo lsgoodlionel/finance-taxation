@@ -8,11 +8,13 @@ function okDash(condition: unknown, message: string): asserts condition {
 
 type ProfitOverview = DashboardData["profitOverview"];
 
-// 「近 6 月收支趋势」图连同它的 buildTrendData 一起删了：6 个点里 5 个是把本月收入
+// 「近 6 月收支趋势」图曾连同它的 buildTrendData 一起被删：6 个点里 5 个是把本月收入
 // 乘一组写死系数 [0.72, 0.81, 0.88, 0.94, 0.97, 1.0] 编出来的，必然画成单调上升，
 // 与公司实际是增长还是下滑无关。这里原本还照抄了一份该实现并断言「越早的月份数越小」——
-// 断言的其实是那组写死的系数，等于用测试把编造的口径锁死。后端目前没有按期间的历史
-// 收入/成本接口，如实画不出来就不画（同 dashboard/routes.ts 风险卡「明确留白」的处理）。
+// 断言的其实是那组写死的系数，等于用测试把编造的口径锁死。
+//
+// 现在 /api/dashboard/chairman/trend 按会计期间聚合真实总账，图已恢复。它的数据映射
+// 另有 trend-series.test.ts 逐点钉住「每个点都来自接口返回」，本文件不再涉及趋势。
 
 // 期间费用 200000 已不含所得税；所得税 50000 单列，净利 = 100 万 - 60 万 - 20 万 - 5 万。
 const overview: ProfitOverview = {

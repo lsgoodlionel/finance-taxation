@@ -405,3 +405,131 @@ test("chairman dashboard falls back to the current accounting period when no per
     await pool.end();
   }
 });
+
+interface TrendBody {
+  endPeriod: string;
+  months: number;
+  periodsWithData: number;
+  points: Array<{
+    period: string;
+    hasData: boolean;
+    revenue: string | null;
+    cost: string | null;
+    expense: string | null;
+    netProfit: string | null;
+  }>;
+}
+
+async function fetchTrend(searchQuery: string): Promise<TrendBody> {
+  const { handleChairmanTrend } = await import("./routes.js");
+  const capture = createResponseCapture();
+  await handleChairmanTrend(
+    {
+      method: "GET",
+      url: `/api/dashboard/chairman/trend${searchQuery}`,
+      auth: createAuthContext()
+    } as ApiRequest,
+    capture.response
+  );
+  const result = capture.readJson<TrendBody>();
+  assert.equal(result.statusCode, 200);
+  assert.ok(result.body);
+  return result.body as TrendBody;
+}
+
+function trendPoint(body: TrendBody, period: string) {
+  const point = body.points.find((candidate) => candidate.period === period);
+  assert.ok(point, `趋势里缺了期间 ${period}`);
+  return point;
+}
+
+test("chairman trend aggregates real per-period revenue from the ledger, month by month", async () => {
+  await prepareDatabase();
+
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  try {
+    await seedLedgerFixtures(pool);
+    const { closePool } = await import("../../db/client.js");
+
+    // 夹具：2026-04 收入 9999、2026-05 收入 1300（1000 + 300）成本 400 费用 100。
+    const trend = await fetchTrend("?months=6&period=2026-05");
+
+    assert.equal(trend.endPeriod, "2026-05");
+    assert.equal(trend.months, 6);
+    assert.deepEqual(
+      trend.points.map((point) => point.period),
+      ["2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05"],
+      "连续六个期间，一个不漏一个不多"
+    );
+
+    // 各期各算各的：4 月 9999 → 5 月 1300 是一条下滑曲线，
+    // 而被删掉的旧实现（本月数 × [0.72…1.0]）只画得出单调上升。
+    assert.equal(trendPoint(trend, "2026-04").revenue, "9999");
+    assert.equal(trendPoint(trend, "2026-05").revenue, "1300");
+    assert.equal(trendPoint(trend, "2026-05").cost, "400");
+    assert.equal(trendPoint(trend, "2026-05").expense, "100");
+    assert.equal(trendPoint(trend, "2026-05").netProfit, "800");
+
+    await closePool();
+  } finally {
+    await pool.end();
+  }
+});
+
+test("chairman trend leaves periods without ledger entries blank instead of filling zeros", async () => {
+  await prepareDatabase();
+
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  try {
+    await seedLedgerFixtures(pool);
+    const { closePool } = await import("../../db/client.js");
+
+    const trend = await fetchTrend("?months=6&period=2026-05");
+
+    for (const period of ["2025-12", "2026-01", "2026-02", "2026-03"]) {
+      const empty = await pool.query<{ n: string }>(
+        `select count(*)::text n from ledger_entries
+         where company_id = $1 and to_char(entry_date, 'YYYY-MM') = $2`,
+        [COMPANY_ID, period]
+      );
+      assert.equal(empty.rows[0]?.n, "0", `前提：${period} 库里确实没有分录`);
+
+      const point = trendPoint(trend, period);
+      assert.equal(point.hasData, false, `${period} 没有账，不得报告为有数据`);
+      assert.equal(point.revenue, null, `${period} 补零会被读成「收入归零」`);
+      assert.equal(point.cost, null);
+      assert.equal(point.netProfit, null);
+    }
+
+    assert.equal(trend.periodsWithData, 2, "只有 4 月与 5 月有账");
+
+    await closePool();
+  } finally {
+    await pool.end();
+  }
+});
+
+test("chairman trend last point matches the profit overview card for the same period", async () => {
+  await prepareDatabase();
+
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  try {
+    await seedLedgerFixtures(pool);
+    const { closePool } = await import("../../db/client.js");
+
+    // 同一屏上「本月」出现两次：利润概览卡片一次、趋势图末点一次，必须是同一个数。
+    const dashboard = await fetchDashboard("?period=2026-05");
+    const trend = await fetchTrend("?months=3&period=2026-05");
+    const last = trend.points[trend.points.length - 1]!;
+
+    assert.equal(last.period, dashboard.period);
+    assert.equal(last.revenue, dashboard.profitOverview.revenue);
+    assert.equal(last.cost, dashboard.profitOverview.cost);
+    assert.equal(last.expense, dashboard.profitOverview.expense);
+    assert.equal(last.netProfit, dashboard.profitOverview.netProfit);
+
+    await closePool();
+  } finally {
+    await pool.end();
+  }
+});

@@ -62,10 +62,35 @@ test("每一段都先给结论，结论来自纯函数而不是页面里临时�
   }
 });
 
-test("编造的「近 6 月收支趋势」不得回来", () => {
-  assert.ok(!SOURCE.includes("DashboardTrendChart"), "趋势图 6 个点里 5 个是写死系数乘出来的，已删除");
-  assert.ok(!SOURCE.includes("factors"), "不得再出现估算系数");
-  assert.ok(!SOURCE.includes("近 6 月"), "后端没有按期间的历史收入/成本接口，画不出就不画");
+/**
+ * 趋势图的源码（同样去掉注释：抬头照抄了被删掉的那段编造逻辑用于说明，
+ * 不去掉的话「不得出现估算系数」会被自己的说明文字绊倒）。
+ */
+const TREND_CHART_SOURCE = readFileSync(new URL("./DashboardTrendChart.tsx", import.meta.url), "utf8")
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/^\s*\/\/.*$/gm, "");
+
+test("趋势图回来了，但每个点都必须来自接口", () => {
+  // 上一版 6 个点里 5 个是 `factors = [0.72, ...]` 乘本月数得到的。它现在被允许出现
+  // 在页面上，唯一的前提是：数据源是后端按期间聚合的总账，前端一个数都不许自己造。
+  assert.ok(SOURCE.includes("<DashboardTrendChart"), "接口就绪后趋势图回到「公司赚不赚钱？」一段");
+  assert.ok(
+    TREND_CHART_SOURCE.includes("getDashboardChairmanTrend"),
+    "趋势数据只能来自 /api/dashboard/chairman/trend"
+  );
+  assert.ok(
+    TREND_CHART_SOURCE.includes("buildTrendSeries"),
+    "接口返回到图上的点必须走 trend-series.ts 的纯函数，否则「每个点都来自接口」测不到"
+  );
+
+  // 防回退：任何形式的系数外推、或再次拿本月 profitOverview 反推历史，都不许回来。
+  assert.ok(!TREND_CHART_SOURCE.includes("factors"), "不得再出现估算系数");
+  assert.ok(!TREND_CHART_SOURCE.includes("profitOverview"), "历史各期只能来自趋势接口，不得由本月数派生");
+  // recharts 的 connectNulls 默认 false，即缺口断开。压根不提它就不会开错。
+  assert.ok(
+    !TREND_CHART_SOURCE.includes("connectNulls"),
+    "没有账的期间必须断开；把缺口连起来等于把留白画成一条实测曲线"
+  );
 
   // 饼图留着：它的估算只发生在成本/费用的内部构成，且各分块之和恒等于营业收入
   // （见 expense-slices.ts 的不变式与它的测试），与「把本月数乘系数当历史」不是一回事。

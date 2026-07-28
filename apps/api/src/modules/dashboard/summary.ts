@@ -6,7 +6,8 @@ import type {
   Voucher
 } from "@finance-taxation/domain-model";
 import { isPeriodClosingEntry } from "../ledger/closing-entries.js";
-import { summarizeProfitTotals, type ProfitTotals } from "../reports/profit-accounts.js";
+import { summarizeProfitTotals } from "../reports/profit-accounts.js";
+import { formatWhole, formatRate, toWholeYuanOverview } from "./profit-display.js";
 
 interface DashboardQueueItem {
   id: string;
@@ -55,52 +56,6 @@ export interface DashboardSnapshot {
   riskBoard: DashboardRiskBoard;
   aiSummary: DashboardAiSummary;
   queues: { approvals: number; blockedTasks: number; overdueTasks: number };
-}
-
-function formatWhole(value: number): string {
-  return Math.round(value).toString();
-}
-
-function formatRate(numerator: number, denominator: number): string {
-  if (!denominator) return "0.00%";
-  return `${((numerator / denominator) * 100).toFixed(2)}%`;
-}
-
-/**
- * 把利润表合计整成「整元展示口径」，保证卡片内部恒等式成立。
- *
- * 此前六个字段各自独立 `Math.round(原始值)`，舍入误差互不相关，于是
- * `收入 − 成本 − 费用 − 所得税 = 净利` 与 `收入 − 成本 = 毛利` 在展示层随机不成立。
- * 例：收入 100.4 / 成本 0.5 / 费用 0 → 分别舍入得 100、1、0，毛利原始值 99.9 舍入得
- * 100，而 100 − 1 = 99 ≠ 100。费用构成饼图同理会出现「各分块之和 ≠ 营业收入」，
- * 分块比例加起来不是 100%。
- *
- * 改为**只对四个叶子项（收入/成本/费用/所得税）舍入一次**，毛利与净利由已舍入的
- * 叶子项派生。代价是派生值与真实值最多差几元（各叶子项舍入误差之和），换来的是
- * 老板在卡片上做的任何一次心算都对得上。毛利率/净利率同样用已舍入的口径计算，
- * 否则会出现「净利 100 ÷ 收入 100 = 99.60%」这种自相矛盾的展示。
- */
-function toWholeYuanOverview(totals: ProfitTotals): {
-  revenue: number;
-  cost: number;
-  expense: number;
-  incomeTax: number;
-  grossProfit: number;
-  netProfit: number;
-} {
-  const revenue = Math.round(totals.revenue);
-  const cost = Math.round(totals.cost);
-  const expense = Math.round(totals.expense);
-  const incomeTax = Math.round(totals.incomeTax);
-  const grossProfit = revenue - cost;
-  return {
-    revenue,
-    cost,
-    expense,
-    incomeTax,
-    grossProfit,
-    netProfit: grossProfit - expense - incomeTax
-  };
 }
 
 function sameDay(iso: string | null | undefined, day: string): boolean {
