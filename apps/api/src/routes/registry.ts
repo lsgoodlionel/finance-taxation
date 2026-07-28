@@ -825,7 +825,9 @@ const routes: RouteDef[] = [
 
   // exports —— 导出/归档属取证类操作，人群与审计查阅一致（chairman/财务负责人/
   // 会计/税务专员/审计），排除 employee/cashier/viewer。
-  { method: "GET", path: "/api/exports/jobs", auth: true, handler: listExportJobs },
+  // 读接口同口径：导出历史与归档索引暴露「谁在什么时候导出了哪些财税资料」，
+  // 与写入同属取证面，不能比 POST 松。
+  { method: "GET", path: "/api/exports/jobs", auth: true, permission: "audit.view", handler: listExportJobs },
   { method: "POST", path: "/api/exports/jobs", auth: true, permission: "audit.view", handler: createExportJob },
   {
     method: "POST",
@@ -834,7 +836,7 @@ const routes: RouteDef[] = [
     permission: "audit.view",
     handler: (req, res, p) => updateExportJobStatus(req, res, p.id!)
   },
-  { method: "GET", path: "/api/exports/archive-index", auth: true, handler: listExportArchiveEntries },
+  { method: "GET", path: "/api/exports/archive-index", auth: true, permission: "audit.view", handler: listExportArchiveEntries },
 
   // pdf export
   { method: "GET", path: "/api/pdf/payroll", auth: true, permission: "payroll.view", handler: payrollPdf },
@@ -933,11 +935,16 @@ const routes: RouteDef[] = [
   // 演进过程：此前整组无 permission，任何登录用户（含 role-viewer）都能导流水、确认对账；
   // 先收到 ledger.post 堵住这个洞，但那是记账权、出纳不持有，等于把出纳挡在自己的
   // 本职工作外面。banking.manage 单独成键，给董事长/财务负责人/会计/出纳四个角色。
-  { method: "GET", path: "/api/banking/accounts", auth: true, handler: listBankAccounts },
+  //
+  // 读接口挂 ledger.view 而非 banking.manage：账号、余额、逐笔流水与对账规则都是
+  // 总账口径的账务数据，归口与 /api/ledger/* 一致（银行页本身是票据中心的一个 Tab）。
+  // 读写用不同前缀是有意的 —— 能看账不等于能动账，而 banking.manage 的四个角色
+  // 都持有 ledger.view，不存在「能写不能读」的空洞。
+  { method: "GET", path: "/api/banking/accounts", auth: true, permission: "ledger.view", handler: listBankAccounts },
   { method: "POST", path: "/api/banking/accounts", auth: true, permission: "banking.manage", handler: createBankAccount },
-  { method: "GET", path: "/api/banking/statements", auth: true, handler: listBankStatements },
+  { method: "GET", path: "/api/banking/statements", auth: true, permission: "ledger.view", handler: listBankStatements },
   { method: "POST", path: "/api/banking/statements/import", auth: true, permission: "banking.manage", handler: importBankStatements },
-  { method: "GET", path: "/api/banking/statements/unmatched", auth: true, handler: getUnmatchedSummary },
+  { method: "GET", path: "/api/banking/statements/unmatched", auth: true, permission: "ledger.view", handler: getUnmatchedSummary },
   {
     method: "PATCH",
     path: "/api/banking/statements/:id/match",
@@ -946,7 +953,7 @@ const routes: RouteDef[] = [
     handler: (req, res, p) => matchStatement(req, res, p.id!)
   },
   { method: "POST", path: "/api/banking/reconciliation/run", auth: true, permission: "banking.manage", handler: runReconciliationRoute },
-  { method: "GET", path: "/api/banking/reconciliation/candidates", auth: true, handler: listCandidatesRoute },
+  { method: "GET", path: "/api/banking/reconciliation/candidates", auth: true, permission: "ledger.view", handler: listCandidatesRoute },
   {
     method: "POST",
     path: "/api/banking/reconciliation/candidates/:id/confirm",
@@ -961,12 +968,15 @@ const routes: RouteDef[] = [
     permission: "banking.manage",
     handler: (req, res, p) => rejectCandidateRoute(req, res, p.id!)
   },
-  { method: "GET", path: "/api/banking/reconciliation/rules", auth: true, handler: getReconRulesRoute },
+  { method: "GET", path: "/api/banking/reconciliation/rules", auth: true, permission: "ledger.view", handler: getReconRulesRoute },
   { method: "PUT", path: "/api/banking/reconciliation/rules", auth: true, permission: "banking.manage", handler: upsertReconRulesRoute },
   { method: "POST", path: "/api/banking/sync-statements", auth: true, permission: "banking.manage", handler: syncStatementsRoute },
 
-  // global search
-  { method: "GET", path: "/api/search", auth: true, handler: globalSearch },
+  // global search —— 命令面板的全局入口，所有角色都持有 dashboard.view。
+  // 注意：它跨事项/合同/发票/凭证/员工/单据聚合，handler 目前不按调用者权限逐类过滤，
+  // 只按 company_id 隔离；收紧到单一 *.view 会让命令面板对部分角色整体失效，
+  // 逐类过滤应作为后续项在 handler 内做，而不是靠这里的权限键。
+  { method: "GET", path: "/api/search", auth: true, permission: "dashboard.view", handler: globalSearch },
 
   // ai agents (P6)
   // suggest 产出分录建议（记账职责）；assess 面向事项负责人；review 输出全公司风险
@@ -974,7 +984,9 @@ const routes: RouteDef[] = [
   { method: "POST", path: "/api/ai/accounting/suggest", auth: true, permission: "ledger.post", handler: suggestAccounting },
   { method: "POST", path: "/api/ai/completeness/assess", auth: true, permission: "events.create", handler: assessEventCompleteness },
   { method: "POST", path: "/api/ai/audit/review", auth: true, permission: "audit.view", handler: auditReview },
-  { method: "GET", path: "/api/ai/results", auth: true, handler: getAiResults },
+  // 一个读接口同时吐三类产物：事项级分录建议、事项完整度评估，以及 audit agent
+  // 的全公司勾稽发现（风险等级、未匹配流水、草稿凭证数）。按最敏感的那一类定门槛。
+  { method: "GET", path: "/api/ai/results", auth: true, permission: "audit.view", handler: getAiResults },
   {
     method: "POST",
     path: "/api/ai/results/:id/accept",
@@ -984,7 +996,7 @@ const routes: RouteDef[] = [
   },
 
   // counterparties (P7) —— 往来单位是合同/发票的主体主数据，按合同管理权守护。
-  { method: "GET", path: "/api/counterparties", auth: true, handler: listCounterparties },
+  { method: "GET", path: "/api/counterparties", auth: true, permission: "contracts.view", handler: listCounterparties },
   { method: "POST", path: "/api/counterparties", auth: true, permission: "contracts.manage", handler: createCounterparty },
   {
     method: "PATCH",
@@ -995,10 +1007,12 @@ const routes: RouteDef[] = [
   },
 
   // billing (P8) —— 订阅变更与付款确认属公司治理决策，收归 settings.manage。
-  { method: "GET", path: "/api/billing/plans", auth: true, handler: listPlans },
-  { method: "GET", path: "/api/billing/subscription", auth: true, handler: getSubscription },
+  // 读接口同口径：订阅档位、配额用量与付款流水（金额/支付方式/流水号）只服务
+  // 「系统中心 → 订阅计费」这一个页面，而该页的菜单键本身就是 settings.manage。
+  { method: "GET", path: "/api/billing/plans", auth: true, permission: "settings.manage", handler: listPlans },
+  { method: "GET", path: "/api/billing/subscription", auth: true, permission: "settings.manage", handler: getSubscription },
   { method: "POST", path: "/api/billing/subscribe", auth: true, permission: "settings.manage", handler: subscribePlan },
-  { method: "GET", path: "/api/billing/payments", auth: true, handler: listPayments },
+  { method: "GET", path: "/api/billing/payments", auth: true, permission: "settings.manage", handler: listPayments },
   {
     method: "POST",
     path: "/api/billing/payments/:id/confirm",
@@ -1008,12 +1022,15 @@ const routes: RouteDef[] = [
   },
 
   // misc single-endpoint domains
-  { method: "GET", path: "/api/tax/deadlines", auth: true, handler: getTaxDeadlines },
-  { method: "GET", path: "/api/feedback", auth: true, handler: listFeedback },
+  { method: "GET", path: "/api/tax/deadlines", auth: true, permission: "tax.view", handler: getTaxDeadlines },
+  // 提交是自助的，读列表不是：listFeedback 返回全公司所有人的反馈（含 user_name +
+  // 正文），不按调用者收敛，且只服务「系统中心 → 反馈与升级」这一个页面。
+  { method: "GET", path: "/api/feedback", auth: true, permission: "settings.manage", handler: listFeedback },
   // 自助提交：任何登录用户都应能反馈问题；收敛为提案则与 /api/proposals/:id/decide 同级。
   { method: "POST", path: "/api/feedback", auth: true, permission: "dashboard.view", handler: submitFeedback },
   { method: "POST", path: "/api/feedback/consolidate", auth: true, permission: "settings.manage", handler: consolidateFeedbackRoute },
-  { method: "GET", path: "/api/proposals", auth: true, handler: listProposals },
+  // 升级提案的读写同页同权：列表已含决策人与决策意见。
+  { method: "GET", path: "/api/proposals", auth: true, permission: "settings.manage", handler: listProposals },
   {
     method: "POST",
     path: "/api/proposals/:id/decide",
@@ -1021,16 +1038,20 @@ const routes: RouteDef[] = [
     permission: "settings.manage",
     handler: (req, res, p) => decideProposal(req, res, p.id!)
   },
-  { method: "GET", path: "/api/archive/package", auth: true, handler: getArchivePackage },
-  { method: "GET", path: "/api/forecast/cash", auth: true, handler: getCashForecast },
-  { method: "GET", path: "/api/setup/status", auth: true, handler: getSetupStatus },
-  { method: "GET", path: "/api/inbox", auth: true, handler: getInbox },
-  { method: "GET", path: "/api/close/status", auth: true, handler: getCloseStatus },
+  // 财税资料包＝归档产物清单，与 /api/exports/* 同属取证面，故同为 audit.view。
+  { method: "GET", path: "/api/archive/package", auth: true, permission: "audit.view", handler: getArchivePackage },
+  // 与 /api/analytics/cash-forecast 同源同口径，权限键保持一致。
+  { method: "GET", path: "/api/forecast/cash", auth: true, permission: "dashboard.view", handler: getCashForecast },
+  { method: "GET", path: "/api/setup/status", auth: true, permission: "dashboard.view", handler: getSetupStatus },
+  // 收件箱与月结向导都是跨模块的**计数**聚合，不返回明细；权限键对齐各自页面的
+  // 菜单键（/inbox → tasks.view，月结清单归口总账）。
+  { method: "GET", path: "/api/inbox", auth: true, permission: "tasks.view", handler: getInbox },
+  { method: "GET", path: "/api/close/status", auth: true, permission: "ledger.view", handler: getCloseStatus },
 
   // invoices (P1) — ocr + sub-paths before the /:id catch-all
   // 发票录入/识别/验真与既有的 /api/invoices/parse 对齐到 documents.manage；
   // 删除是销毁税务凭据，按记账权（ledger.post）守护，不与录入同级。
-  { method: "GET", path: "/api/invoices", auth: true, handler: listInvoices },
+  { method: "GET", path: "/api/invoices", auth: true, permission: "documents.view", handler: listInvoices },
   { method: "POST", path: "/api/invoices", auth: true, permission: "documents.manage", handler: createInvoice },
   { method: "POST", path: "/api/invoices/ocr", auth: true, permission: "documents.manage", handler: ocrInvoice },
   // 数电票结构化解析入库（须在 /api/invoices/:id catch-all 之前注册）

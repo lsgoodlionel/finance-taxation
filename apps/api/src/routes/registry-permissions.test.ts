@@ -14,6 +14,11 @@ import type { ApiRequest } from "../types.js";
  * 全公司的风险预警/待办提醒信道；整个 banking 模块与发票删除更是完全没有权限声明。
  *
  * 这三条断言的目的是让同类回退在评审前就红掉，而不是等下一次安全审计。
+ *
+ * 第四条断言把口径从「写操作」扩到**全部**认证路由：GET 也必须声明权限。
+ * 此前 22 条读接口只写了 `auth: true`——银行账户与逐笔流水、发票列表、往来单位、
+ * 订阅与付款流水、AI 全公司勾稽输出、导出历史与归档索引，任何登录账号（含
+ * role-viewer）都能直接拉全量。读接口不改数据，但泄露的是同一批数据本身。
  */
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -77,8 +82,32 @@ const WRITE_ROUTES_ALLOWED_FOR_READ_ONLY_ROLE: ReadonlySet<string> = new Set([
   "POST /api/tasks/:id/remind"
 ]);
 
+/**
+ * 允许「认证但不声明 permission」的路由。判据只有一条：**该路由的授权判定无法
+ * 用权限键表达**，因为它要么就是权限判定本身的来源，要么只作用于调用者自己。
+ * 三条都在 handler 内按 `req.auth` 收敛，不存在「拿到别人的东西」的路径。
+ *
+ * 任何新增条目都必须满足同一判据——「这个页面人人都要用」不是理由，
+ * 那种情况应当挂一个全角色都持有的 `*.view`（如 dashboard.view / tasks.view），
+ * 让路由表继续如实记录归口。
+ *
+ * 注：POST /api/auth/logout 同时出现在 WRITE_ROUTES_WITHOUT_PERMISSION 里；
+ * 两张表回答的是不同问题（写操作口径 / 全量认证路由口径），故各自登记。
+ */
+const AUTH_ROUTES_WITHOUT_PERMISSION: ReadonlyMap<string, string> = new Map([
+  ["GET /api/access/me", "返回调用者自己的身份与权限集，它是权限判定的来源，无法再被权限守护"],
+  ["GET /api/access/menu", "按调用者自己的角色过滤导航项，handler 内已用 hasPermission 逐项收敛"],
+  ["POST /api/auth/logout", "仅撤销调用者自己的会话，无跨主体影响"]
+]);
+
 function routeKey(route: RouteDef): string {
   return `${route.method} ${route.path}`;
+}
+
+function authenticatedRoutes(): readonly RouteDef[] {
+  return createAppRouter()
+    .routes()
+    .filter((route) => route.auth === true);
 }
 
 function permissionKeys(permission: RoutePermission): readonly PermissionKey[] {
@@ -136,15 +165,35 @@ test("只读角色 role-viewer 无法通过任何写操作路由的权限守护"
   );
 });
 
-test("白名单本身保持有效：不得为已删除或已收紧的路由留下豁免", () => {
-  const existing = new Set(writeRoutes().map(routeKey));
-  const stale = [
-    ...WRITE_ROUTES_WITHOUT_PERMISSION.keys(),
-    ...WRITE_ROUTES_WITH_VIEW_PERMISSION.keys(),
-    ...WRITE_ROUTES_ALLOWED_FOR_READ_ONLY_ROLE
-  ].filter((key) => !existing.has(key));
+test("每个认证路由都显式声明权限（读接口同样不许只写 auth: true）", () => {
+  const offenders = authenticatedRoutes()
+    .filter((route) => !route.permission && !AUTH_ROUTES_WITHOUT_PERMISSION.has(routeKey(route)))
+    .map(routeKey);
 
-  assert.deepEqual(stale, [], `白名单残留了不存在的路由：\n${stale.join("\n")}`);
+  assert.deepEqual(
+    offenders,
+    [],
+    `以下认证路由未声明 permission，任何登录用户（含只读账号）均可读取：\n${offenders.join("\n")}`
+  );
+});
+
+test("白名单本身保持有效：不得为已删除或已收紧的路由留下豁免", () => {
+  const existingWrites = new Set(writeRoutes().map(routeKey));
+  const unguardedAuthed = new Set(
+    authenticatedRoutes().filter((route) => !route.permission).map(routeKey)
+  );
+  const stale = [
+    ...[
+      ...WRITE_ROUTES_WITHOUT_PERMISSION.keys(),
+      ...WRITE_ROUTES_WITH_VIEW_PERMISSION.keys(),
+      ...WRITE_ROUTES_ALLOWED_FOR_READ_ONLY_ROLE
+    ].filter((key) => !existingWrites.has(key)),
+    // 这张表的豁免一旦路由被删除或被收紧（补上了 permission），就必须同步摘掉，
+    // 否则下一条同名路由会白白继承一个没人再审视过的豁免。
+    ...[...AUTH_ROUTES_WITHOUT_PERMISSION.keys()].filter((key) => !unguardedAuthed.has(key))
+  ];
+
+  assert.deepEqual(stale, [], `白名单残留了不存在或已收紧的路由：\n${stale.join("\n")}`);
 });
 
 /** 复现审计给出的利用路径：只读账号改写通知渠道凭证 → 劫持全公司预警信道。 */
