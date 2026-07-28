@@ -4,7 +4,7 @@
  * 提供 VAT XML / IIT CSV / 社保 CSV / 公积金 CSV 四个一键下载按钮
  * 展示历史申报提交记录
  */
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Card, Button, Space, Table, Tag, Select, Typography, Alert, Row, Col, Statistic,
   Modal, Input, Tooltip,

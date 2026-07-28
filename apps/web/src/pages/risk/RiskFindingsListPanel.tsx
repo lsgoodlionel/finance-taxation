@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Table, Tag, Typography, Button, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { BusinessEvent, RiskFinding } from "@finance-taxation/domain-model";
@@ -18,6 +19,8 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 type RiskFindingsListPanelProps = {
+  /** 筛选与「执行风险检查」——决定列表看什么、往列表里补什么，所以贴着列表放。 */
+  toolbar?: ReactNode;
   findings: RiskFinding[];
   eventMap: Map<string, BusinessEvent>;
   navEventId: string | null;
@@ -30,6 +33,7 @@ type RiskFindingsListPanelProps = {
 };
 
 export function RiskFindingsListPanel({
+  toolbar,
   findings,
   eventMap,
   navEventId,
@@ -154,6 +158,7 @@ export function RiskFindingsListPanel({
           </Text>
         )}
       </h3>
+      {toolbar}
       <Table<RiskFinding>
         dataSource={findings}
         columns={columns}

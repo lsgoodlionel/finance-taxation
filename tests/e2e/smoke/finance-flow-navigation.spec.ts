@@ -31,7 +31,8 @@ test("finance flow navigation keeps an existing business event context visible a
   await expect(page.getByRole("heading", { name: event.title })).toBeVisible();
 
   // G2 票据中心聚合：/documents 深链现在重定向到 /bills?tab=documents（Tab 容器）。
-  await page.getByRole("button", { name: "前往单据中心 →" }).click();
+  // V10 事项详情重组后，这个出口的文案从「前往单据中心」改为明确指向这一笔。
+  await page.getByRole("button", { name: "在单据中心看这一笔的全部单据 →" }).click();
   await expect(page).toHaveURL(/\/bills\?tab=documents/);
   await expect(page.getByRole("heading", { name: "单据中心" })).toBeVisible();
   // 等待页面默认自动选中的单据详情先加载完成，避免与下面手动选中的异步请求竞态

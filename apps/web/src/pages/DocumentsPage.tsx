@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Typography } from "antd";
+import { Alert } from "antd";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { GeneratedDocument, Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import {
@@ -15,6 +15,7 @@ import {
 } from "../lib/api";
 import { buildPrintableDocumentHtml } from "./document-relations";
 import { normalizeDrilldownState } from "./drilldown";
+import { EntityLink } from "../components/ui/EntityLink";
 import { buildDocumentsSummary } from "./documents/documents-helpers";
 import { DocumentsShell } from "./documents/DocumentsShell";
 import { DocumentsHeader } from "./documents/DocumentsHeader";
@@ -23,7 +24,6 @@ import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentDetailPanel } from "./documents/DocumentDetailPanel";
 import { DocumentsHelpModal } from "./documents/DocumentsHelpModal";
 
-const { Text } = Typography;
 
 const TOKEN_KEY = "finance-taxation-v2-token";
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -186,7 +186,7 @@ export function DocumentsPage() {
       {navEventId && (
         <Alert
           type="info" showIcon style={{ borderRadius: 8, marginBottom: 12 }}
-          message={<>当前经营事项 <Text code>{navEventId}</Text> 的关联单据。</>}
+          message={<>当前经营事项 <EntityLink kind="business_event" id={navEventId} /> 的关联单据。</>}
         />
       )}
       <DocumentsShell

@@ -1,4 +1,6 @@
 import type { BusinessEvent, RiskFinding } from "@finance-taxation/domain-model";
+import type { ObjectFlow } from "../../lib/object-flow";
+import { ObjectFlowBar } from "../../components/ui/ObjectFlowBar";
 import type { DrilldownTarget } from "../drilldown";
 
 function panelStyle() {
@@ -13,6 +15,8 @@ function panelStyle() {
 type RiskResolutionWorkbenchProps = {
   finding: RiskFinding | null;
   event: BusinessEvent | null;
+  /** 这条风险的真实流转（见 risk-finding-flow.ts），替换掉原来写死的流程回看。 */
+  flow: ObjectFlow;
   closureTargets: DrilldownTarget[];
   resolution: string;
   onResolutionChange: (value: string) => void;
@@ -24,6 +28,7 @@ type RiskResolutionWorkbenchProps = {
 export function RiskResolutionWorkbench({
   finding,
   event,
+  flow,
   closureTargets,
   resolution,
   onResolutionChange,
@@ -36,6 +41,7 @@ export function RiskResolutionWorkbench({
       <h3 style={{ marginTop: 0 }}>整改工作台</h3>
       {finding ? (
         <div style={{ display: "grid", gap: "16px" }}>
+          <ObjectFlowBar flow={flow} title="这条风险走到哪了" />
           <div
             style={{
               display: "grid",

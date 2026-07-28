@@ -1,5 +1,7 @@
+import React from "react";
 import type { Task, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import { shortId } from "./documents-helpers";
+import { EntityLink } from "../../components/ui/EntityLink";
 import { Term } from "../../components/ui/Term";
 
 type DocumentRelationsPanelProps = {
@@ -35,7 +37,9 @@ export function DocumentRelationsPanel({
         {tasks.length > 0 ? (
           <ul style={listStyle}>
             {tasks.map((task) => (
-              <li key={task.id}>{task.title}｜{task.assigneeDepartment || "未分配"}｜{task.status}</li>
+              <li key={task.id}>
+                <EntityLink kind="task" id={task.id}>{task.title}</EntityLink>｜{task.assigneeDepartment || "未分配"}｜{task.status}
+              </li>
             ))}
           </ul>
         ) : (
@@ -51,7 +55,9 @@ export function DocumentRelationsPanel({
         {taxItems.length > 0 ? (
           <ul style={listStyle}>
             {taxItems.map((item) => (
-              <li key={item.id}>{item.taxType}｜{item.filingPeriod}｜{item.treatment}</li>
+              <li key={item.id}>
+                <EntityLink kind="tax_item" id={item.id}>{item.taxType}</EntityLink>｜{item.filingPeriod}｜{item.treatment}
+              </li>
             ))}
           </ul>
         ) : (
@@ -67,7 +73,9 @@ export function DocumentRelationsPanel({
         {vouchers.length > 0 ? (
           <ul style={listStyle}>
             {vouchers.map((voucher) => (
-              <li key={voucher.id}>V-{shortId(voucher.id)}｜{voucher.summary}｜{voucher.status}</li>
+              <li key={voucher.id}>
+                <EntityLink kind="voucher" id={voucher.id}>{`V-${shortId(voucher.id)}`}</EntityLink>｜{voucher.summary}｜{voucher.status}
+              </li>
             ))}
           </ul>
         ) : (

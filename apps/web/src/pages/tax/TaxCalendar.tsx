@@ -1,34 +1,17 @@
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { Card, Badge, Tag, Typography, Row, Col, Tooltip } from "antd";
 import { CheckCircleOutlined, ClockCircleOutlined, WarningOutlined, CalendarOutlined } from "@ant-design/icons";
 import type { TaxFilingBatch } from "@finance-taxation/domain-model";
 import { Term } from "../../components/ui/Term";
+import {
+  countFiledObligations,
+  countOverdueObligations,
+  currentFilingPeriod,
+  deriveTaxObligations,
+  type TaxObligation,
+} from "./tax-obligations";
 
 const { Text } = Typography;
-
-// Standard Chinese tax deadlines (day of month)
-const TAX_SCHEDULE = [
-  { taxType: "vat",    label: "增值税",    dueDay: 15, frequency: "monthly",   color: "#2563eb", bg: "#eff6ff" },
-  { taxType: "iit",    label: "个人所得税", dueDay: 15, frequency: "monthly",   color: "#7c3aed", bg: "#f5f3ff" },
-  { taxType: "stamp",  label: "印花税",    dueDay: 15, frequency: "monthly",   color: "#d97706", bg: "#fffbeb" },
-  { taxType: "cit",    label: "企业所得税", dueDay: 15, frequency: "quarterly", color: "#16a34a", bg: "#f0fdf4" },
-] as const;
-
-type TaxType = typeof TAX_SCHEDULE[number]["taxType"];
-
-interface TaxObligation {
-  taxType: TaxType;
-  label: string;
-  dueDay: number;
-  frequency: "monthly" | "quarterly";
-  color: string;
-  bg: string;
-  dueDate: Date;
-  daysRemaining: number;
-  status: "filed" | "pending" | "overdue";
-  batchId: string | null;
-  batchStatus: string | null;
-}
 
 interface Props {
   batches: TaxFilingBatch[];
@@ -36,60 +19,14 @@ interface Props {
   onStartVatDeclaration?: () => void;
 }
 
-function getCurrentPeriod(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function isQuarterEnd(month: number): boolean {
-  return month === 3 || month === 6 || month === 9 || month === 12;
-}
-
 export function TaxCalendar({ batches, currentPeriod, onStartVatDeclaration }: Props) {
-  const period = currentPeriod ?? getCurrentPeriod();
-  const parts = period.split("-");
-  const year = parseInt(parts[0] ?? "2024", 10);
-  const month = parseInt(parts[1] ?? "1", 10);
+  const period = currentPeriod ?? currentFilingPeriod();
 
-  const obligations = useMemo((): TaxObligation[] => {
-    const today = new Date();
+  // 到期/逾期的推导已抽到 tax-obligations.ts：任务切换器的角标要用同一份口径。
+  const obligations = useMemo(() => deriveTaxObligations(batches, period), [batches, period]);
 
-    return TAX_SCHEDULE.map((t) => {
-      // Skip quarterly taxes if not quarter end
-      if (t.frequency === "quarterly" && !isQuarterEnd(month)) {
-        return null;
-      }
-
-      // Due date is next month's 15th (e.g., Jan period → Feb 15)
-      const dueDate = new Date(year, month, t.dueDay); // month is already 1-based, so `month` = next month
-      const daysRemaining = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-      // Find matching batch
-      const batch = batches.find((b) => {
-        const bType = b.taxType.toLowerCase();
-        return bType.includes(t.taxType) && b.filingPeriod.startsWith(period);
-      }) ?? null;
-
-      const status: TaxObligation["status"] =
-        batch && (batch.status === "submitted" || batch.status === "archived")
-          ? "filed"
-          : daysRemaining < 0
-          ? "overdue"
-          : "pending";
-
-      return {
-        ...t,
-        dueDate,
-        daysRemaining,
-        status,
-        batchId: batch?.id ?? null,
-        batchStatus: batch?.status ?? null,
-      } as TaxObligation;
-    }).filter(Boolean) as TaxObligation[];
-  }, [batches, period, year, month]);
-
-  const filedCount = obligations.filter((o) => o.status === "filed").length;
-  const overdueCount = obligations.filter((o) => o.status === "overdue").length;
+  const filedCount = countFiledObligations(obligations);
+  const overdueCount = countOverdueObligations(obligations);
 
   function renderStatusIcon(o: TaxObligation) {
     if (o.status === "filed") return <CheckCircleOutlined style={{ color: "#16a34a", fontSize: 16 }} />;

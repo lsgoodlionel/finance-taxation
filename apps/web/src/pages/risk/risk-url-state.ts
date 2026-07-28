@@ -7,6 +7,8 @@ export type RiskUrlState = {
   eventId: string;
   findingId: string;
   view: RiskViewFilter;
+  /** 当前正在做的那件事（见 risk-tasks.ts）；空串表示由页面取默认值。 */
+  task: string;
 };
 
 export function readRiskUrlState(searchParams: URLSearchParams): RiskUrlState {
@@ -16,7 +18,8 @@ export function readRiskUrlState(searchParams: URLSearchParams): RiskUrlState {
     scope: scopeParam === "contract" || scopeParam === "payroll" ? scopeParam : "all",
     eventId: searchParams.get("event") ?? "",
     findingId: searchParams.get("finding") ?? "",
-    view: viewParam === "open" || viewParam === "closed" ? viewParam : "all"
+    view: viewParam === "open" || viewParam === "closed" ? viewParam : "all",
+    task: searchParams.get("task") ?? ""
   };
 }
 
@@ -33,6 +36,9 @@ export function writeRiskUrlState(state: RiskUrlState) {
   }
   if (state.view !== "all") {
     next.set("view", state.view);
+  }
+  if (state.task) {
+    next.set("task", state.task);
   }
   return next;
 }

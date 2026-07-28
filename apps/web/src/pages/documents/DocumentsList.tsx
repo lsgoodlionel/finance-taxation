@@ -1,6 +1,7 @@
 import type { GeneratedDocument, Voucher } from "@finance-taxation/domain-model";
 import { useI18n, DOC_STATUS_LABELS, DOC_TYPE_LABELS } from "../../lib/i18n";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { EntityLink } from "../../components/ui/EntityLink";
 import { STATUS_COLOR, shortId } from "./documents-helpers";
 
 type DocumentsListProps = {
@@ -55,8 +56,10 @@ export function DocumentsList({ documents, vouchers, selectedDocumentId, onSelec
                   <td style={cellStyle()}>{t(DOC_TYPE_LABELS, item.documentType)}</td>
                   <td style={cellStyle()}>
                     {item.businessEventId ? (
-                      <span style={{ fontFamily: "monospace", fontSize: "11px", color: "#4f8ef7", background: "rgba(79,142,247,0.08)", borderRadius: "4px", padding: "1px 5px" }}>
-                        {shortId(item.businessEventId)}
+                      <span style={{ fontFamily: "monospace", fontSize: "11px", background: "rgba(79,142,247,0.08)", borderRadius: "4px", padding: "1px 5px" }}>
+                        <EntityLink kind="business_event" id={item.businessEventId}>
+                          {shortId(item.businessEventId)}
+                        </EntityLink>
                       </span>
                     ) : (
                       <span style={{ color: "#c4cdd6", fontSize: "12px" }}>—</span>

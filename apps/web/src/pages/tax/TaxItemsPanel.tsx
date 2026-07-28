@@ -2,6 +2,7 @@ import React from "react";
 import type { TaxItem } from "@finance-taxation/domain-model";
 import { useI18n, TAX_STATUS_LABELS } from "../../lib/i18n";
 import { cellStyle, panelStyle } from "./taxStyles";
+import { EntityLink } from "../../components/ui/EntityLink";
 import { Term } from "../../components/ui/Term";
 
 export function TaxItemsPanel({
@@ -27,7 +28,7 @@ export function TaxItemsPanel({
         {(navEventId || navTaxItemId) && (
           <div style={{ padding: "10px 14px", borderRadius: "10px", background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.2)", color: "#2563eb", fontSize: "13px" }}>
             {navEventId
-              ? <>当前仅显示事项 <strong>{navEventId}</strong> 的关联税务事项。</>
+              ? <>当前仅显示事项 <EntityLink kind="business_event" id={navEventId} /> 的关联税务事项。</>
               : <>当前高亮税务事项 <strong>{navTaxItemId}</strong>。</>}
           </div>
         )}
@@ -38,17 +39,19 @@ export function TaxItemsPanel({
               <th style={cellStyle()}>税种</th>
               <th style={cellStyle()}>申报期</th>
               <th style={cellStyle()}>状态</th>
-              <th style={cellStyle()}>事项</th>
+              <th style={cellStyle()}>处理意见</th>
+              <th style={cellStyle()}>关联事项</th>
             </tr>
           </thead>
           <tbody>
             {items.map((item) => (
               <tr key={item.id} style={{ background: navTaxItemId === item.id ? "rgba(37,99,235,0.08)" : "transparent" }}>
-                <td style={cellStyle()}>{item.id}</td>
+                <td style={cellStyle()}><EntityLink kind="tax_item" id={item.id} /></td>
                 <td style={cellStyle()}>{item.taxType}</td>
                 <td style={cellStyle()}>{item.filingPeriod}</td>
                 <td style={cellStyle()}>{t(TAX_STATUS_LABELS, item.status)}</td>
                 <td style={cellStyle()}>{item.treatment}</td>
+                <td style={cellStyle()}><EntityLink kind="business_event" id={item.businessEventId} /></td>
               </tr>
             ))}
           </tbody>
