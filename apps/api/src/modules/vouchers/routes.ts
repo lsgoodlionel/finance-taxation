@@ -653,6 +653,37 @@ export async function updateVoucher(req: ApiRequest, res: ServerResponse, vouche
     return json(res, 404, { error: "Voucher not found" });
   }
   const body = (req.body || {}) as Partial<Voucher>;
+
+  // 已入账凭证不得原地改写 —— 会计上只允许红冲。此前这里对 status/summary 一律
+  // 照单全收，实机可把一张已过账凭证改回 draft 并改掉摘要，而它的总账分录仍留在
+  // 账上；退回 draft 后再走一次过账，要么主键冲突报 500，要么重复记账。
+  if (target.postedAt || target.status === "posted") {
+    return json(res, 409, {
+      error: "凭证已过账，不能修改。如需更正请使用红冲（POST /api/vouchers/:id/reverse）。",
+      code: "VOUCHER_ALREADY_POSTED"
+    });
+  }
+
+  const nextStatus = body.status ?? target.status;
+  if (nextStatus !== target.status) {
+    // 状态推进只能走各自的专用接口：approve 附带状态机校验并记录审核人，
+    // post 附带借贷校验、职责分离、期间锁并生成总账分录。
+    // 从这里改状态会跳过全部这些，最坏的情况是凭证显示已过账而账上根本没有分录。
+    if (nextStatus === "posted") {
+      return json(res, 400, {
+        error: "不能直接把凭证改成已过账。过账请调用 POST /api/vouchers/:id/post，它才会生成总账分录。",
+        code: "VOUCHER_STATUS_NOT_UPDATABLE"
+      });
+    }
+    const validation = validateWorkflowTransition(
+      mapVoucherStatusToWorkflowState(target.status),
+      mapVoucherStatusToWorkflowState(nextStatus)
+    );
+    if (!validation.ok) {
+      return json(res, 400, { error: validation.message, code: validation.errorCode });
+    }
+  }
+
   const updatedAt = new Date().toISOString();
   await queryOne(
     `
@@ -664,14 +695,21 @@ export async function updateVoucher(req: ApiRequest, res: ServerResponse, vouche
       where id = $4 and company_id = $5
       returning id
     `,
-    [
-      body.status ?? target.status,
-      body.summary ?? target.summary,
-      updatedAt,
-      voucherId,
-      req.auth!.companyId
-    ]
+    [nextStatus, body.summary ?? target.summary, updatedAt, voucherId, req.auth!.companyId]
   );
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    userName: req.auth!.username,
+    action: "update",
+    resourceType: "voucher",
+    resourceId: voucherId,
+    resourceLabel: target.summary,
+    changes: {
+      before: { status: target.status, summary: target.summary },
+      after: { status: nextStatus, summary: body.summary ?? target.summary }
+    }
+  });
   const updated = await getVoucherForCompany(req.auth!.companyId, voucherId);
   return json(res, 200, updated);
 }

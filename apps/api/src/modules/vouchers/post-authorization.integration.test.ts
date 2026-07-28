@@ -309,3 +309,130 @@ test("the approver lookup is company-scoped: another tenant's voucher is not fou
     await pool.end();
   }
 });
+
+/**
+ * `PUT /api/vouchers/:id` 的账务完整性。
+ *
+ * 该接口原先把 `body.status` 直接写库，不做任何校验。实机复现（主栈）：
+ * 对一张已过账凭证 `PUT {"status":"draft","summary":"被任意改写"}` 返回 200，
+ * 凭证退回 draft 且摘要被改写，**而它的总账分录仍然留在账上**。
+ *
+ * 两个后果都很坏：
+ * - 已入账凭证被原地改写 —— 会计上只允许红冲，不允许改写；
+ * - 退回 draft 后可以再走一次审核过账。分录 id 是 `ledger-{voucherId}-{n}` 这种
+ *   确定值，第二次过账要么主键冲突报 500，要么在 id 生成方式变化后直接重复记账。
+ *
+ * 状态推进必须各走各的专用接口（approve / post / reverse），它们才附带借贷校验、
+ * 职责分离、期间锁与审计留痕。
+ */
+
+test("updating a posted voucher is refused — posted entries may only be reversed", async () => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const { closePool } = await import("../../db/client.js");
+  try {
+    const voucherId = "vch-update-posted";
+    await seedVoucher(pool, { id: voucherId });
+    assert.equal(await approveAs(voucherId, REVIEWER), 200);
+    assert.equal((await postAs(voucherId, POSTER, authorizedBody)).statusCode, 200);
+
+    const { updateVoucher } = await import("./routes.js");
+    const capture = createResponseCapture();
+    await updateVoucher(
+      {
+        method: "PUT",
+        url: `/api/vouchers/${voucherId}`,
+        auth: createAuthContext(POSTER),
+        body: { status: "draft", summary: "被任意改写" }
+      } as ApiRequest,
+      capture.response,
+      voucherId
+    );
+    const result = capture.readJson<{ code?: string }>();
+    assert.equal(result.statusCode, 409);
+    assert.equal(result.body?.code, "VOUCHER_ALREADY_POSTED");
+
+    // 库内必须原封不动
+    const row = await pool.query<{ status: string; summary: string }>(
+      `select status, summary from vouchers where id = $1`,
+      [voucherId]
+    );
+    assert.equal(row.rows[0]?.status, "posted");
+    assert.equal(row.rows[0]?.summary, "过账职责分离夹具");
+  } finally {
+    await closePool();
+    await pool.end();
+  }
+});
+
+test("updating a voucher cannot jump straight to posted, bypassing ledger creation", async () => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const { closePool } = await import("../../db/client.js");
+  try {
+    const voucherId = "vch-update-jump";
+    await seedVoucher(pool, { id: voucherId });
+
+    const { updateVoucher } = await import("./routes.js");
+    const capture = createResponseCapture();
+    await updateVoucher(
+      {
+        method: "PUT",
+        url: `/api/vouchers/${voucherId}`,
+        auth: createAuthContext(POSTER),
+        body: { status: "posted" }
+      } as ApiRequest,
+      capture.response,
+      voucherId
+    );
+    const result = capture.readJson<{ code?: string }>();
+    assert.equal(result.statusCode, 400);
+    assert.equal(result.body?.code, "VOUCHER_STATUS_NOT_UPDATABLE");
+
+    // 关键：状态没变，且没有凭空产生总账分录
+    const row = await pool.query<{ status: string }>(`select status from vouchers where id = $1`, [
+      voucherId
+    ]);
+    assert.equal(row.rows[0]?.status, "draft");
+    const entries = await pool.query<{ count: string }>(
+      `select count(*)::text as count from ledger_entries where voucher_id = $1`,
+      [voucherId]
+    );
+    assert.equal(entries.rows[0]?.count, "0", "改状态绝不能凭空造出总账分录");
+  } finally {
+    await closePool();
+    await pool.end();
+  }
+});
+
+test("updating a draft voucher's summary still works", async () => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const { closePool } = await import("../../db/client.js");
+  try {
+    const voucherId = "vch-update-draft";
+    await seedVoucher(pool, { id: voucherId });
+
+    const { updateVoucher } = await import("./routes.js");
+    const capture = createResponseCapture();
+    await updateVoucher(
+      {
+        method: "PUT",
+        url: `/api/vouchers/${voucherId}`,
+        auth: createAuthContext(POSTER),
+        body: { summary: "修正后的摘要" }
+      } as ApiRequest,
+      capture.response,
+      voucherId
+    );
+    // 收紧不得误伤正常的草稿编辑
+    assert.equal(capture.readJson().statusCode, 200);
+    const row = await pool.query<{ summary: string }>(`select summary from vouchers where id = $1`, [
+      voucherId
+    ]);
+    assert.equal(row.rows[0]?.summary, "修正后的摘要");
+  } finally {
+    await closePool();
+    await pool.end();
+  }
+});
