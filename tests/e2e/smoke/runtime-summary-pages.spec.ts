@@ -95,7 +95,9 @@ for (const item of CASES) {
 
     await loginAsRole(item.role);
     await page.goto(item.route);
-    await expect(page.getByRole("heading", { name: item.heading })).toBeVisible();
+    // exact 不可省：运行态面板的 h3 标题以页头文案开头（如「工资」→「工资代发运行态与授权态」），
+    // 子串匹配会同时命中两者而触发 strict mode violation。
+    await expect(page.getByRole("heading", { name: item.heading, exact: true })).toBeVisible();
     // 页头统一后，光有 heading 不足以证明深链落对了地方：还要断言选中的正是那件事，
     // 否则归一逻辑把 ?task= 丢了也照样绿。
     if ("selectedTaskLabel" in item && item.selectedTaskLabel) {

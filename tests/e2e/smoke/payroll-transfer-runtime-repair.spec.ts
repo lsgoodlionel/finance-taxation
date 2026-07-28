@@ -190,7 +190,9 @@ test("/payroll/transfer shows mocked runtime repair entry and can compensate bat
   // V10c 工资域把两层 Tab 塌成一层任务切换器，页头统一为「工资」；旧深链
   // /payroll/transfer 仍可用，归一成 /payroll?task=transfer。断言选中的那件事，
   // 而不只是页头 —— 否则归一逻辑把 ?task= 丢了也照样绿。
-  await expect(page.getByRole("heading", { name: "工资" })).toBeVisible();
+  // exact 不可省：运行态面板展开后有个 h3「工资代发运行态与授权态」，
+  // 子串匹配会同时命中它而触发 strict mode violation。
+  await expect(page.getByRole("heading", { name: "工资", exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { selected: true })).toHaveText("发这个月的工资");
   const periodCell = page.getByRole("cell", { name: "2026-05" }).first();
   await expect(periodCell).toBeVisible();
