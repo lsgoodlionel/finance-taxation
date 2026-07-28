@@ -6,32 +6,19 @@ function okDash(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-// ─── Trend data builder ───────────────────────────────────────────────────────
-
 type ProfitOverview = DashboardData["profitOverview"];
 
-function buildTrendData(overview: ProfitOverview) {
-  const revenue = parseFloat(overview.revenue.replace(/,/g, "")) || 0;
-  const cost    = parseFloat(overview.cost.replace(/,/g, ""))    || 0;
-  const factors = [0.72, 0.81, 0.88, 0.94, 0.97, 1.0];
-  const now = new Date();
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-    const f = factors[i] ?? 1;
-    return { month: `${d.getMonth() + 1}月`, 收入: Math.round(revenue * f), 成本: Math.round(cost * f * 0.95) };
-  });
-}
+// 「近 6 月收支趋势」图连同它的 buildTrendData 一起删了：6 个点里 5 个是把本月收入
+// 乘一组写死系数 [0.72, 0.81, 0.88, 0.94, 0.97, 1.0] 编出来的，必然画成单调上升，
+// 与公司实际是增长还是下滑无关。这里原本还照抄了一份该实现并断言「越早的月份数越小」——
+// 断言的其实是那组写死的系数，等于用测试把编造的口径锁死。后端目前没有按期间的历史
+// 收入/成本接口，如实画不出来就不画（同 dashboard/routes.ts 风险卡「明确留白」的处理）。
 
 // 期间费用 200000 已不含所得税；所得税 50000 单列，净利 = 100 万 - 60 万 - 20 万 - 5 万。
 const overview: ProfitOverview = {
   revenue: "1000000", cost: "600000", expense: "200000", incomeTax: "50000",
   grossProfit: "400000", netProfit: "150000", grossMargin: "40%", netMargin: "15%",
 };
-
-const trend = buildTrendData(overview);
-okDash(trend.length === 6, "builds exactly 6 monthly data points");
-okDash(trend[5]?.收入 === 1000000, "last month uses full revenue value");
-okDash((trend[0]?.收入 ?? 0) < (trend[5]?.收入 ?? 0), "earlier months are smaller");
 
 // ─── Pie data builder ─────────────────────────────────────────────────────────
 // 直接引用组件用的那一份实现，避免测试里再复制一版口径（复制版正是漏掉所得税的地方）。
@@ -87,3 +74,41 @@ okDash(hasTrendComparison("—") === false, "风险卡无历史快照 → 不得
 okDash(hasTrendComparison("无上期数据") === false, "首期无上期 → 不得标注环比上月");
 okDash(hasTrendComparison("暂无数据") === false, "无账目数据 → 不得标注环比上月");
 okDash(hasTrendComparison("  ") === false, "空白值 → 不得标注环比上月");
+
+// ─── 段落呈现：问句在前、结论在后，且结论不能只靠颜色说话 ─────────────────────
+
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { DashboardQuestionSection } from "./DashboardQuestionSection";
+
+{
+  const html = renderToStaticMarkup(
+    createElement(
+      DashboardQuestionSection,
+      {
+        question: { key: "decisions", heading: "有没有事要我拍板？", answer: "3 张凭证等您审批。", tone: "warn" },
+        children: createElement("div", null, "alert-cards")
+      }
+    )
+  );
+
+  okDash(html.includes("有没有事要我拍板？"), "段标题是问句");
+  okDash(html.includes("3 张凭证等您审批。"), "结论在图表之前先说出来");
+  okDash(html.indexOf("有没有事要我拍板？") < html.indexOf("alert-cards"), "结论必须排在图表之前");
+  okDash(html.includes('aria-labelledby="chairman-q-decisions"'), "每段要有可被读屏定位的名称");
+  okDash(html.includes("<h2"), "段标题用 h2，页面才有可跳转的结构");
+}
+
+{
+  // 「算不出」用中性色，绝不能落到表示「没问题」的绿色上。
+  const html = renderToStaticMarkup(
+    createElement(
+      DashboardQuestionSection,
+      {
+        question: { key: "cash", heading: "钱够不够用？", answer: "本期还没有账务数据，算不出可动用资金。", tone: "unknown" },
+        children: createElement("div", null, "forecast")
+      }
+    )
+  );
+  okDash(!html.includes("#15803d"), "unknown 不得渲染成表示「良好」的绿色");
+}

@@ -1,18 +1,9 @@
+import React from "react";
 import type { AuditLog } from "@finance-taxation/domain-model";
-import { resolveAuditLogTarget } from "../drilldown";
-
-const RESOURCE_TYPE_LABELS: Record<string, string> = {
-  business_event: "经营事项",
-  voucher: "凭证",
-  document: "单据",
-  contract: "合同",
-  employee: "员工",
-  payroll: "工资",
-  payroll_transfer_batch: "工资代发批次",
-  export_job: "导出任务",
-  tax_item: "税务事项",
-  risk_finding: "风险发现"
-};
+import { resolveAuditNavigationTarget } from "./audit-navigation";
+// 对象类型的中文名与下拉选项共用一份（见 audit-resource-types.ts）：
+// 此前这里和 AuditFiltersBar 各维护一张表，两张表的取值集合已经不一致。
+import { describeResourceType } from "./audit-resource-types";
 
 const ACTION_LABELS: Record<string, string> = {
   create: "创建",
@@ -131,14 +122,14 @@ export function AuditLogTablePanel({
               {logs.map((log) => {
                 const isExpanded = expandedId === log.id;
                 const hasChanges = !!log.changes;
-                const target = resolveAuditLogTarget(log);
+                const target = resolveAuditNavigationTarget(log);
                 const isSelected = selectedLogId === log.id;
                 return (
                   <tr key={log.id} style={{ background: isSelected ? "rgba(37,99,235,0.06)" : "transparent" }}>
                     <td style={{ ...cell, whiteSpace: "nowrap", color: "#6c7a89" }}>{fmtDate(log.createdAt)}</td>
                     <td style={cell}>{log.userName ?? log.userId ?? "-"}</td>
                     <td style={cell}>{actionTag(log.action)}</td>
-                    <td style={cell}>{RESOURCE_TYPE_LABELS[log.resourceType] ?? log.resourceType}</td>
+                    <td style={cell}>{describeResourceType(log.resourceType)}</td>
                     <td style={{ ...cell, background: navResourceId === log.resourceId ? "rgba(37,99,235,0.06)" : "transparent" }}>
                       <div style={{ maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {log.resourceLabel ?? log.resourceId ?? "-"}

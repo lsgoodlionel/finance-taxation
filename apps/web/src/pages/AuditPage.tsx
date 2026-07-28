@@ -1,40 +1,37 @@
-import { useEffect, useMemo, useState } from "react";
+/**
+ * 审计日志（V10 车道：按任务重组）。
+ *
+ * 改造前首屏 6 个平级区块：页头卡（含「AI 审计勾稽」按钮）、「校验完整性」一行、
+ * 全站 10 环节导航条、四项过滤条、日志表、右侧详情面板。这 6 块混了两件性质完全
+ * 不同的事——查日志（筛 → 列 → 详）和验日志本身可不可信（按一下出结论），后者被
+ * 挤成页头里的一个按钮和一个小标签。
+ *
+ * 改造后：两件事（见 audit/audit-tasks.ts），TaskFocusShell 一次只渲染一件事的
+ * 工作区；骨架只剩页头 + 工作区两块。过滤条件仍写在 URL 上，切走再切回不丢。
+ */
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Button, Tag, message as antdMessage } from "antd";
-import { SafetyCertificateOutlined } from "@ant-design/icons";
+import { message as antdMessage } from "antd";
 import type { AuditLog } from "@finance-taxation/domain-model";
-import { type AuditChainVerification, describePageLoadError, listAuditLogs, verifyAuditChain } from "../lib/api";
+import {
+  type AuditChainVerification,
+  type AuditReviewResult,
+  auditReview,
+  describePageLoadError,
+  listAuditLogs,
+  verifyAuditChain
+} from "../lib/api";
+import { TaskFocusShell } from "../components/ui/TaskFocusShell";
 import { normalizeDrilldownState, resolveAuditContextFromState } from "./drilldown";
 import { resolveInitialAuditExpansion } from "./risk-scope";
-import { AuditDetailPanel } from "./audit/AuditDetailPanel";
-import { AuditFiltersBar } from "./audit/AuditFiltersBar";
-import { AuditLogTablePanel } from "./audit/AuditLogTablePanel";
+import { AuditIntegrityPanel } from "./audit/AuditIntegrityPanel";
 import { AuditPageShell } from "./audit/AuditPageShell";
+import { AuditTrailWorkspace } from "./audit/AuditTrailWorkspace";
 import { AuditWorkbenchHeader } from "./audit/AuditWorkbenchHeader";
 import { readAuditUrlState, writeAuditUrlState } from "./audit/audit-url-state";
+import { AUDIT_TASK_KEYS, buildAuditTasks, readAuditTask, writeAuditTask, isAuditTaskKey } from "./audit/audit-tasks";
 
-const RESOURCE_TYPES = ["", "business_event", "voucher", "document", "contract", "employee", "payroll", "payroll_transfer_batch", "export_job", "tax_item", "risk_finding"];
-
-type AuditChainVerifyPanelProps = {
-  verifying: boolean;
-  result: AuditChainVerification | null;
-  onVerify: () => void;
-};
-
-function AuditChainVerifyPanel({ verifying, result, onVerify }: AuditChainVerifyPanelProps) {
-  return (
-    <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-      <Button icon={<SafetyCertificateOutlined />} loading={verifying} onClick={onVerify}>
-        校验完整性
-      </Button>
-      {result && (
-        result.valid
-          ? <Tag color="success">审计链完整（共 {result.total} 条）</Tag>
-          : <Tag color="error">审计链在第 {result.brokenAt} 条断裂（共 {result.total} 条）</Tag>
-      )}
-    </div>
-  );
-}
+const LIMIT = 50;
 
 export function AuditPage() {
   const location = useLocation();
@@ -58,7 +55,20 @@ export function AuditPage() {
   const [selectedLogId, setSelectedLogId] = useState(urlState.logId);
   const [chainVerifying, setChainVerifying] = useState(false);
   const [chainResult, setChainResult] = useState<AuditChainVerification | null>(null);
-  const LIMIT = 50;
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewResult, setReviewResult] = useState<AuditReviewResult | null>(null);
+
+  const activeTask = readAuditTask(searchParams);
+  // 校验出断裂才挂角标：断裂是事故，「还没验」不是待办量。
+  const tasks = useMemo(
+    () => buildAuditTasks({ chainBroken: chainResult !== null && !chainResult.valid }),
+    [chainResult]
+  );
+
+  function selectTask(task: string) {
+    if (!isAuditTaskKey(task)) return;
+    setSearchParams(writeAuditTask(searchParams, task));
+  }
 
   useEffect(() => {
     void load(urlState.offset, resourceType, resourceId, fromDate, toDate, urlState.logId, urlState.expandedId);
@@ -75,6 +85,12 @@ export function AuditPage() {
       logId: selectedLogId,
       expandedId: expandedId ?? ""
     });
+    // 任务不属于检索状态，writeAuditUrlState 不认识它；这里补回去，
+    // 否则每次过滤条件一变就会把用户从「验完整性」踢回「查日志」。
+    const currentTask = searchParams.get("task");
+    if (currentTask) {
+      next.set("task", currentTask);
+    }
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
@@ -125,8 +141,7 @@ export function AuditPage() {
   async function handleVerifyChain() {
     setChainVerifying(true);
     try {
-      const result = await verifyAuditChain();
-      setChainResult(result);
+      setChainResult(await verifyAuditChain());
     } catch (error) {
       antdMessage.error(describePageLoadError(error));
     } finally {
@@ -134,153 +149,82 @@ export function AuditPage() {
     }
   }
 
-  function renderChanges(changes: Record<string, unknown> | null) {
-    if (!changes) return null;
-
-    const fieldLabel: Record<string, string> = {
-      status: "状态", title: "标题", summary: "摘要", type: "类型",
-      amount: "金额", priority: "优先级", name: "名称", description: "描述",
-      postedAt: "过账时间", entryCount: "分录条数", period: "账期",
-      employeeCount: "员工数", contractType: "合同类型", from: "变更前", to: "变更后"
-    };
-    const valueLabel: Record<string, string> = {
-      draft: "草稿", analyzed: "已分析", awaiting_documents: "待资料",
-      awaiting_approval: "待审批", blocked: "已阻塞",
-      review_required: "待审核", approved: "已审核", posted: "已过账",
-      not_started: "待开始", in_progress: "进行中", completed: "已完成",
-      pending: "待处理", cancelled: "已取消", archived: "已归档",
-      confirmed: "已确认", high: "高", medium: "中", low: "低"
-    };
-
-    function fmt(v: unknown): string {
-      if (v === null || v === undefined) return "—";
-      const s = String(v);
-      return valueLabel[s] ?? s;
+  async function handleRunReview() {
+    setReviewLoading(true);
+    try {
+      setReviewResult(await auditReview());
+    } catch (error) {
+      antdMessage.error(describePageLoadError(error));
+    } finally {
+      setReviewLoading(false);
     }
+  }
 
-    if ("before" in changes || "after" in changes) {
-      const before = (changes.before ?? {}) as Record<string, unknown>;
-      const after = (changes.after ?? {}) as Record<string, unknown>;
-      const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+  function renderWorkspace() {
+    if (activeTask === AUDIT_TASK_KEYS.integrity) {
       return (
-        <div style={{ fontSize: "11.5px", lineHeight: 1.7 }}>
-          {keys.map((k) => (
-            <div key={k}>
-              <span style={{ color: "#6c7a89" }}>{fieldLabel[k] ?? k}：</span>
-              <span style={{ color: "#dc2626" }}>{fmt(before[k])}</span>
-              <span style={{ color: "#9aa5b4", margin: "0 4px" }}>→</span>
-              <span style={{ color: "#1a7f5a" }}>{fmt(after[k])}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    if ("data" in changes) {
-      const data = changes.data as Record<string, unknown>;
-      return (
-        <div style={{ fontSize: "11.5px", lineHeight: 1.7 }}>
-          {Object.entries(data).map(([k, v]) => (
-            <div key={k}>
-              <span style={{ color: "#6c7a89" }}>{fieldLabel[k] ?? k}：</span>
-              <span>{fmt(v)}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    const keys = Object.keys(changes);
-    const isFromToFormat = keys.length > 0 && keys.every((k) => {
-      const v = changes[k];
-      return v !== null && typeof v === "object" && ("from" in (v as object) || "to" in (v as object));
-    });
-    if (isFromToFormat) {
-      return (
-        <div style={{ fontSize: "11.5px", lineHeight: 1.7 }}>
-          {keys.map((k) => {
-            const v = changes[k] as Record<string, unknown>;
-            return (
-              <div key={k}>
-                <span style={{ color: "#6c7a89" }}>{fieldLabel[k] ?? k}：</span>
-                <span style={{ color: "#dc2626" }}>{fmt(v.from)}</span>
-                <span style={{ color: "#9aa5b4", margin: "0 4px" }}>→</span>
-                <span style={{ color: "#1a7f5a" }}>{fmt(v.to)}</span>
-              </div>
-            );
-          })}
-        </div>
+        <AuditIntegrityPanel
+          chainVerifying={chainVerifying}
+          chainResult={chainResult}
+          onVerifyChain={() => void handleVerifyChain()}
+          reviewLoading={reviewLoading}
+          reviewResult={reviewResult}
+          onRunReview={() => void handleRunReview()}
+        />
       );
     }
 
     return (
-      <div style={{ fontSize: "11.5px", lineHeight: 1.7 }}>
-        {keys.map((k) => (
-          <div key={k}>
-            <span style={{ color: "#6c7a89" }}>{fieldLabel[k] ?? k}：</span>
-            <span>{fmt(changes[k])}</span>
-          </div>
-        ))}
-      </div>
+      <AuditTrailWorkspace
+        logs={logs}
+        loading={loading}
+        total={total}
+        limit={LIMIT}
+        offset={offset}
+        navResourceId={navResourceId}
+        expandedId={expandedId}
+        selectedLogId={selectedLogId}
+        resourceType={resourceType}
+        resourceId={resourceId}
+        fromDate={fromDate}
+        toDate={toDate}
+        onResourceTypeChange={setResourceType}
+        onResourceIdChange={setResourceId}
+        onFromDateChange={setFromDate}
+        onToDateChange={setToDate}
+        onSearch={handleSearch}
+        onReset={() => {
+          setResourceType("");
+          setResourceId("");
+          setFromDate("");
+          setToDate("");
+          setSelectedLogId("");
+          setExpandedId(null);
+          void load(0, "", "", "", "", "", "");
+        }}
+        onToggleExpanded={(logId) => setExpandedId((current) => (current === logId ? null : logId))}
+        onSelectLog={(logId) => setSelectedLogId(logId)}
+        onNavigate={(path, state) => navigate(path, { state })}
+        onPrevPage={() =>
+          void load(Math.max(0, offset - LIMIT), resourceType, resourceId, fromDate, toDate, selectedLogId, expandedId ?? "")
+        }
+        onNextPage={() =>
+          void load(offset + LIMIT, resourceType, resourceId, fromDate, toDate, selectedLogId, expandedId ?? "")
+        }
+      />
     );
   }
 
   return (
-    <AuditPageShell
-      header={
-        <>
-          <AuditWorkbenchHeader total={total} message={message} navState={navState} />
-          <AuditChainVerifyPanel verifying={chainVerifying} result={chainResult} onVerify={() => void handleVerifyChain()} />
-        </>
-      }
-      filters={
-        <AuditFiltersBar
-          resourceTypes={RESOURCE_TYPES}
-          resourceType={resourceType}
-          resourceId={resourceId}
-          fromDate={fromDate}
-          toDate={toDate}
-          onResourceTypeChange={setResourceType}
-          onResourceIdChange={setResourceId}
-          onFromDateChange={setFromDate}
-          onToDateChange={setToDate}
-          onSearch={handleSearch}
-          onReset={() => {
-            setResourceType("");
-            setResourceId("");
-            setFromDate("");
-            setToDate("");
-            setSelectedLogId("");
-            setExpandedId(null);
-            void load(0, "", "", "", "", "", "");
-          }}
-        />
-      }
-      list={
-        <AuditLogTablePanel
-          logs={logs}
-          loading={loading}
-          navResourceId={navResourceId}
-          expandedId={expandedId}
-          selectedLogId={selectedLogId}
-          total={total}
-          limit={LIMIT}
-          offset={offset}
-          renderChanges={renderChanges}
-          onToggleExpanded={(logId) => setExpandedId((current) => current === logId ? null : logId)}
-          onSelectLog={(logId) => setSelectedLogId(logId)}
-          onNavigate={(path, state) => navigate(path, { state })}
-          onPrevPage={() => void load(Math.max(0, offset - LIMIT), resourceType, resourceId, fromDate, toDate, selectedLogId, expandedId ?? "")}
-          onNextPage={() => void load(offset + LIMIT, resourceType, resourceId, fromDate, toDate, selectedLogId, expandedId ?? "")}
-        />
-      }
-      detail={
-        <AuditDetailPanel
-          log={logs.find((item) => item.id === selectedLogId || item.id === expandedId) ?? null}
-          renderChanges={renderChanges}
-          onNavigate={(path, state) => navigate(path, { state })}
-        />
-      }
-    />
+    <AuditPageShell header={<AuditWorkbenchHeader total={total} message={message} navState={navState} />}>
+      <TaskFocusShell
+        tasks={tasks}
+        activeKey={activeTask}
+        onSelectTask={selectTask}
+        switcherLabel="审计页能办的事"
+      >
+        {renderWorkspace()}
+      </TaskFocusShell>
+    </AuditPageShell>
   );
 }
