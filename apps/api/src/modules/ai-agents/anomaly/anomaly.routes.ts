@@ -13,6 +13,7 @@ import type { ServerResponse } from "node:http";
 import type { ApiRequest } from "../../../types.js";
 import { query } from "../../../db/client.js";
 import { json } from "../../../utils/http.js";
+import { EXCLUDE_PERIOD_CLOSING_SQL } from "../../ledger/closing-entries.js";
 import {
   COST_ACCOUNT_PREFIX,
   NON_OPERATING_EXPENSE_PREFIX,
@@ -161,6 +162,10 @@ async function fetchTaxBurdenPeriods(companyId: string, endPeriod: string): Prom
     (_, i) => `account_code not like $${i + excludeOffset}`
   ).join(" and ");
   const startParamIndex = excludeOffset + REVENUE_EXCLUDED_PREFIXES.length;
+  // 排除结转损益分录（口径见 ledger/closing-entries.ts）：revenue 一列是按属期聚合
+  // 营业收入，属于损益聚合。不排除的话已结转月份 revenue = 0，税负率 = 税额 / 0，
+  // 于是每个正常结账的月份都会被判成「税负率异常」——把月结变成告警制造机。
+  // tax 一列取 2221 应交税费，结转分录不涉及 2xxx，本过滤对它无影响。
   const rows = await query<{ period: string; tax: string; revenue: string }>(
     `select to_char(entry_date, 'YYYY-MM') as period,
             sum(case when account_code like $2 then credit - debit else 0 end) as tax,
@@ -168,6 +173,7 @@ async function fetchTaxBurdenPeriods(companyId: string, endPeriod: string): Prom
                      then credit - debit else 0 end) as revenue
      from ledger_entries
      where company_id = $1
+       and ${EXCLUDE_PERIOD_CLOSING_SQL}
        and to_char(entry_date, 'YYYY-MM') between $${startParamIndex} and $${startParamIndex + 1}
      group by period
      order by period`,

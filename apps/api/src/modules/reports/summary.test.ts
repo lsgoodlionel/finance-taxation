@@ -282,3 +282,120 @@ test("buildCashFlowReport classifies operating and investing cash flows", () => 
   assert.equal(report.totals.financingNetCash, "0");
   assert.equal(report.totals.netCashChange, "800");
 });
+
+// ─── V11：结转损益分录的处理口径（见 ledger/closing-entries.ts） ──────────────
+
+/**
+ * 构造一条结转损益分录。`LedgerEntry.source` 的类型目前被窄化成
+ * `"voucher_posting"` 字面量，而 closePeriod 实际会写入 `"period_closing"`，
+ * 因此这里必须绕过类型（类型与运行时的偏差已在报告中记录）。
+ */
+function makeClosingEntry(
+  id: string,
+  accountCode: string,
+  accountName: string,
+  debit: string,
+  credit: string
+): LedgerEntry {
+  return {
+    ...makeEntry(id, accountCode, accountName, debit, credit),
+    summary: "期末结转 2026-04",
+    source: "period_closing"
+  } as unknown as LedgerEntry;
+}
+
+/**
+ * 2026-04 业务分录：银行存款 1000 / 主营业务收入 1000，主营业务成本 400 / 库存商品 400。
+ * 净利润 600。每张凭证自身平衡，可用于验证资产负债表恒等式。
+ */
+const aprilBusinessEntries: LedgerEntry[] = [
+  makeEntry("v11-1", "1002", "银行存款", "1000.00", "0.00"),
+  makeEntry("v11-2", "6001", "主营业务收入", "0.00", "1000.00"),
+  makeEntry("v11-3", "6001c", "主营业务成本", "400.00", "0.00"),
+  makeEntry("v11-4", "1405", "库存商品", "0.00", "400.00")
+];
+
+/** 4 月的结转分录：借 6001 1000 / 贷 6001c 400 / 贷 3131 600。 */
+const aprilClosingEntries: LedgerEntry[] = [
+  makeClosingEntry("v11-c1", "6001", "主营业务收入", "1000.00", "0.00"),
+  makeClosingEntry("v11-c2", "6001c", "主营业务成本", "0.00", "400.00"),
+  makeClosingEntry("v11-c3", "3131", "本年利润", "0.00", "600.00")
+];
+
+test("profit statement excludes period-closing entries so a closed period keeps its results", () => {
+  // Arrange：同一期间，一份只有业务分录、一份追加了结转分录
+  const period = { periodLabel: "2026-04", entries: aprilBusinessEntries };
+  const closed = { periodLabel: "2026-04", entries: [...aprilBusinessEntries, ...aprilClosingEntries] };
+
+  // Act
+  const before = buildProfitStatementReport(period);
+  const after = buildProfitStatementReport(closed);
+
+  // Assert：结转不是经营活动，利润表必须逐项不变（旧实现全部塌成 0）
+  assert.deepEqual(after.totals, before.totals);
+  assert.equal(after.totals.revenue, "1000");
+  assert.equal(after.totals.cost, "400");
+  assert.equal(after.totals.netProfit, "600");
+  // 明细行同样要保持，否则合计与明细互相矛盾
+  assert.deepEqual(after.revenues, before.revenues);
+  assert.deepEqual(after.costsAndExpenses, before.costsAndExpenses);
+});
+
+test("balance sheet lists 本年利润 exactly once and stays balanced across closing states", () => {
+  const sheetFor = (entries: LedgerEntry[], asOfDate: string) =>
+    buildBalanceSheetReport({ periodLabel: "2026-04", asOfDate, entries });
+
+  const assertBalanced = (sheet: ReturnType<typeof sheetFor>, label: string) => {
+    assert.equal(
+      sheet.equity.filter((line) => line.code === "3131").length,
+      1,
+      `${label}：本年利润只能出现一行`
+    );
+    assert.equal(
+      sheet.totals.assets,
+      sheet.totals.liabilitiesAndEquity,
+      `${label}：资产必须等于负债加所有者权益`
+    );
+  };
+
+  // 状态 A：未结转 —— 3131 无账面余额，利润由合成行承载
+  const open = sheetFor(aprilBusinessEntries, "2026-04-30");
+  assertBalanced(open, "未结转");
+  assert.equal(open.equity.find((l) => l.code === "3131")?.amount, "600");
+
+  // 状态 B：已结转 —— 3131 有账面余额 600，未结转利润为 0，合计不得变化
+  const closed = sheetFor([...aprilBusinessEntries, ...aprilClosingEntries], "2026-04-30");
+  assertBalanced(closed, "已结转");
+  assert.equal(closed.equity.find((l) => l.code === "3131")?.amount, "600");
+  assert.deepEqual(closed.totals, open.totals, "结转不改变资产负债表任何合计");
+
+  // 状态 C：部分结转（月结后的常态）—— 4 月已结转，5 月又有 300 未结转利润。
+  // 旧实现在这里会 push 两行 3131（合成的 300 + 循环里的 900），权益虚增 300。
+  const halfClosed = sheetFor(
+    [
+      ...aprilBusinessEntries,
+      ...aprilClosingEntries,
+      { ...makeEntry("v11-5", "1002", "银行存款", "300.00", "0.00"), entryDate: "2026-05-10" },
+      { ...makeEntry("v11-6", "6001", "主营业务收入", "0.00", "300.00"), entryDate: "2026-05-10" }
+    ],
+    "2026-05-31"
+  );
+  assertBalanced(halfClosed, "部分结转");
+  assert.equal(
+    halfClosed.equity.find((l) => l.code === "3131")?.amount,
+    "900",
+    "本年利润 = 已结转的 600 + 尚未结转的 300"
+  );
+});
+
+test("balance sheet keeps closing entries in scope so 本年利润 is never double counted", () => {
+  // 这条专门守住"不要顺手给资产负债表也加排除过滤"：若排除了结转分录，
+  // netProfit 会回到 600（全部利润），再叠上 3131 的账面 600 → 权益虚增一倍。
+  const sheet = buildBalanceSheetReport({
+    periodLabel: "2026-04",
+    asOfDate: "2026-04-30",
+    entries: [...aprilBusinessEntries, ...aprilClosingEntries]
+  });
+  assert.equal(sheet.equity.find((l) => l.code === "3131")?.amount, "600");
+  assert.equal(sheet.totals.equity, "600");
+});

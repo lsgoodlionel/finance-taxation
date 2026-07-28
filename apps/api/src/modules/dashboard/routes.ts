@@ -16,6 +16,17 @@ import { buildDashboardSnapshot, type DashboardPeriod } from "./summary.js";
 
 const PERIOD_LABEL = /^\d{4}-\d{2}$/;
 
+/**
+ * 余额卡片取数 —— **不排除结转损益分录**（口径见 ledger/closing-entries.ts）。
+ *
+ * 判断依据有二：其一，这是「截至期末的时点余额」而非「期间经营成果」，账簿余额
+ * 必须完整；其二，本函数只被 1002 / 1122 / 2221 三个前缀调用，而结转分录只涉及
+ * 6xxx 与 3131，前缀根本不相交，排除与否结果相同。
+ *
+ * 注意本路由与 buildDashboardSnapshot 共用同一次 listCompanyLedgerEntries 取数：
+ * 盈利概览需要排除结转分录、余额卡片不需要，因此过滤只能落在各自的消费点上，
+ * 绝不能提到取数处统一过滤。
+ */
 function sumAccountBalance(
   entries: Array<{ accountCode: string; debit: string; credit: string }>,
   accountPrefix: string

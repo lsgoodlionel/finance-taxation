@@ -41,6 +41,15 @@ export async function closeIncomeRoute(
   json(res, result.alreadyClosed ? 200 : 201, result);
 }
 
+/**
+ * 明细账 / 总账 / 科目余额三个读路径 —— **一律不排除结转损益分录**
+ * （口径见 ledger/closing-entries.ts）。
+ *
+ * 判断依据：它们是「账簿列示」而非「按期间聚合经营成果」。结转分录是真实、
+ * 必要的账簿内容，藏起来会让账簿不完整、借贷发生额合计对不上试算平衡；
+ * 科目余额表更是要靠它们才能呈现「结转后 6xxx 归零、3131 承载本年利润」这一
+ * 正确结果。排除的是重复计量，不是隐藏凭证。
+ */
 export async function listLedgerEntries(req: ApiRequest, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://127.0.0.1");
   const voucherId = url.searchParams.get("voucherId") || undefined;

@@ -66,6 +66,15 @@ export async function closePeriod(
     };
   }
 
+  // ⚠️ 这里**必须包含**历史结转分录，不要加 EXCLUDE_PERIOD_CLOSING_SQL。
+  //
+  // 本查询取的是 6xxx 截至 asOfDate 的**累计**余额。往期已结转的部分早被往期的
+  // 结转分录冲平，所以累计余额剩下的恰好就是「本期尚未结转的发生额」——这正是
+  // 本次要结转的金额。若在此排除结转分录，累计余额会退回「开业至今全部损益」，
+  // 于是第二个月开始每次月结都会把此前所有期间重复结转一遍，3131 逐月翻倍。
+  //
+  // 与损益聚合读路径的区别在于：那些路径问的是「这一期赚了多少」（结转分录是
+  // 重复计量，必须排除），本查询问的是「还有多少没结转」（结转分录是必要的扣减项）。
   const balanceResult = await client.query<{ account_code: string; balance: string }>(
     `select account_code, sum(debit - credit) as balance
      from ledger_entries

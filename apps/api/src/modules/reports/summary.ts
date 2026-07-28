@@ -6,6 +6,7 @@ import type {
   LedgerEntry,
   ProfitStatementReport
 } from "@finance-taxation/domain-model";
+import { isPeriodClosingEntry } from "../ledger/closing-entries.js";
 import { classifyProfitAccount, summarizeProfitTotals } from "./profit-accounts.js";
 
 interface PeriodInput {
@@ -55,6 +56,25 @@ function hasPrefix(code: string, prefixes: string[]): boolean {
   return prefixes.some((prefix) => code.startsWith(prefix));
 }
 
+/** 本年利润科目：结转损益的对手方，也是资产负债表所有者权益里的利润归集行。 */
+const PROFIT_ACCOUNT_CODE = "3131";
+
+/**
+ * 资产负债表 —— **不排除结转损益分录**（口径见 ledger/closing-entries.ts）。
+ *
+ * 判断依据：这不是「按期间聚合经营成果」，而是「截至某日的时点余额」。结转分录
+ * 的对手方 3131 是权益类的真实余额，排除它反而会让权益凭空少一块、资产负债表不平。
+ *
+ * 更关键的是这两项之间的互补关系：`summarizeProfitTotals(asOfEntries).netProfit`
+ * 在含结转分录时得到的恰好是**尚未结转的那部分损益**（已结转期间的 6xxx 被结转分录
+ * 冲平、净额为 0），而 3131 的账面余额是**已结转的那部分**。两者相加才是截至 asOfDate
+ * 的累计利润，缺一不可：
+ *   - 全部已结转：netProfit = 0，3131 余额 = 全部利润；
+ *   - 全部未结转：netProfit = 全部利润，3131 无余额；
+ *   - 部分结转（月结后的常态）：两者各承担一半，相加仍然完整。
+ * 若在这里排除结转分录，netProfit 会重新变成「全部利润」，与 3131 余额里已结转的
+ * 部分重复计量，A = L + E 立刻被打破。
+ */
 export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetReport {
   const asOfEntries = input.entries.filter((entry) => entry.entryDate <= input.asOfDate);
   const balanceMap = new Map<string, number>();
@@ -74,13 +94,14 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
   // totalRevenue - totalExpense（totalExpense 含所得税）逐项等价。
   const netProfit = summarizeProfitTotals(asOfEntries).netProfit;
 
-  if (Math.abs(netProfit) > 0.0001 && !equityLines.some((item) => item.code === "3131")) {
-    equityLines.push({
-      code: "3131",
-      label: "本年利润",
-      amount: formatAmount(netProfit)
-    });
-  }
+  // 3131 必须且只能出现一次，金额 = 已结转的账面余额 + 尚未结转的 netProfit。
+  //
+  // 此前这里先无条件 push 一行合成的 3131（守卫 `!equityLines.some(...)` 作用在
+  // 刚声明、必然为空的 equityLines 上，恒为真，等于没有守卫），下面的循环遇到
+  // 3131 的真实余额时又 push 了一行 `-amount + netProfit`，netProfit 被计入两次。
+  // 结转过一部分期间、当期尚未结转时（月结之后的常态）两个条件同时成立：权益里
+  // 出现两行同为 3131 的记录，合计虚增一个 netProfit，资产负债表直接不平。
+  let hasProfitAccountBalance = false;
 
   for (const [accountCode, amount] of balanceMap.entries()) {
     if (hasPrefix(accountCode, ["1"])) {
@@ -96,13 +117,25 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
         amount: formatAmount(-amount)
       });
     } else if (hasPrefix(accountCode, ["3"])) {
-      const adjusted = accountCode === "3131" ? -amount + netProfit : -amount;
+      const isProfitAccount = accountCode === PROFIT_ACCOUNT_CODE;
+      if (isProfitAccount) {
+        hasProfitAccountBalance = true;
+      }
       equityLines.push({
         code: accountCode,
-        label: accountCode,
-        amount: formatAmount(adjusted)
+        label: isProfitAccount ? "本年利润" : accountCode,
+        amount: formatAmount(isProfitAccount ? -amount + netProfit : -amount)
       });
     }
+  }
+
+  // 账上还没有 3131 余额（从未结转过）时，未结转利润没有落脚点，补一行合成的。
+  if (!hasProfitAccountBalance && Math.abs(netProfit) > 0.0001) {
+    equityLines.push({
+      code: PROFIT_ACCOUNT_CODE,
+      label: "本年利润",
+      amount: formatAmount(netProfit)
+    });
   }
 
   const normalizedAssetLines = nonZeroLines(assetLines).sort((a, b) => a.code.localeCompare(b.code));
@@ -128,12 +161,26 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
   };
 }
 
+/**
+ * 利润表 —— **排除结转损益分录**（口径见 ledger/closing-entries.ts）。
+ *
+ * 判断依据：这是典型的「按期间聚合经营成果」。结转分录的 entry_date 落在被结转的
+ * 期间之内、金额与该期间业务分录恰好相反，一旦计入，结转后本期收入/成本/费用/净利
+ * 全部塌成 0。而月结是常规操作，不是边缘场景。
+ *
+ * 过滤放在本函数内而不是各调用方：`buildProfitStatementReport` 的语义就是利润表，
+ * 没有任何一个调用方需要「含结转分录的利润表」。放在这里，/api/reports、报表快照、
+ * 企业所得税底稿、底稿打印四条调用链一次性覆盖，也不会有新调用方漏掉。
+ * 明细行（revenues / costsAndExpenses）与合计同源过滤，避免报表内部自相矛盾。
+ */
 export function buildProfitStatementReport(input: PeriodInput): ProfitStatementReport {
   const revenueLines: FinancialReportLine[] = [];
   const costExpenseLines: FinancialReportLine[] = [];
   const sums = new Map<string, { name: string; amount: number }>();
 
-  for (const entry of input.entries) {
+  const operatingEntries = input.entries.filter((entry) => !isPeriodClosingEntry(entry));
+
+  for (const entry of operatingEntries) {
     const current = sums.get(entry.accountCode) || {
       name: entry.accountName,
       amount: 0
@@ -154,7 +201,7 @@ export function buildProfitStatementReport(input: PeriodInput): ProfitStatementR
   }
 
   // 总额与驾驶舱共用同一个纯函数，保证同一份数据在 /reports 与 /home 上完全一致。
-  const totals = summarizeProfitTotals(input.entries);
+  const totals = summarizeProfitTotals(operatingEntries);
 
   return {
     periodLabel: input.periodLabel,
@@ -176,6 +223,14 @@ export function buildProfitStatementReport(input: PeriodInput): ProfitStatementR
   };
 }
 
+/**
+ * 现金流量表 —— **不需要排除结转损益分录**，因为它们根本进不来。
+ *
+ * 判断依据：本函数按凭证分组，只处理含 1001/1002/1012 现金科目分录的凭证
+ * （下方 `if (!cashEntries.length) continue`）。结转凭证只有 6xxx 与 3131 两侧，
+ * 没有任何现金腿，必然被这一行跳过。这里刻意不加 `isPeriodClosingEntry` 过滤：
+ * 加了是死代码，反而会让读者误以为现金流量表存在结转重复计量的风险。
+ */
 function classifyCashFlow(entries: LedgerEntry[]): CashFlowReport["sections"] & CashFlowReport["totals"] {
   const byVoucher = new Map<string, LedgerEntry[]>();
   for (const entry of entries) {

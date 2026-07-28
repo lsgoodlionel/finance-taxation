@@ -2,6 +2,7 @@ import type { ServerResponse } from "node:http";
 import type { ApiRequest } from "../../types.js";
 import { query } from "../../db/client.js";
 import { json } from "../../utils/http.js";
+import { EXCLUDE_PERIOD_CLOSING_SQL } from "../ledger/closing-entries.js";
 import { forecastCashFlow } from "./cash-forecast.js";
 import { comparePeriods, budgetVariance } from "./period-comparison.js";
 
@@ -42,6 +43,9 @@ export async function cashForecastRoute(req: ApiRequest, res: ServerResponse): P
   const url = new URL(req.url || "/", "http://127.0.0.1");
   const periods = Math.min(24, Math.max(1, Number(url.searchParams.get("periods")) || 3));
 
+  // 不排除结转损益分录（口径见 ledger/closing-entries.ts）：这里只取 1001/1002
+  // 货币资金科目的按月净现金流，而结转分录只涉及 6xxx 与 3131，前缀不相交，
+  // 加过滤是死代码。语义上现金流也不是「经营成果」，本就不该排除。
   const rows = await query<{ month: string; net: string }>(
     `select to_char(entry_date, 'YYYY-MM') as month, sum(debit - credit) as net
      from ledger_entries
@@ -79,10 +83,13 @@ export async function revenueComparisonRoute(req: ApiRequest, res: ServerRespons
     const excludeClauses = REVENUE_EXCLUDED_PREFIXES.map(
       (_, i) => `account_code not like $${i + excludeOffset}`
     ).join(" and ");
+    // 排除结转损益分录（口径见 ledger/closing-entries.ts）：按属期聚合收入，
+    // 结转分录会把本期收入冲成 0，两期都结转后环比变成 0 比 0。
     const rows = await query<{ revenue: string }>(
       `select coalesce(sum(credit - debit), 0) as revenue
        from ledger_entries
        where company_id = $1 and to_char(entry_date, 'YYYY-MM') = $2
+         and ${EXCLUDE_PERIOD_CLOSING_SQL}
          and (${includeClauses}) and (${excludeClauses})`,
       [
         req.auth!.companyId,
@@ -126,10 +133,14 @@ export async function budgetVarianceRoute(req: ApiRequest, res: ServerResponse):
   }
 
   const likeClauses = prefixes.map((_, i) => `account_code like $${i + 3}`).join(" or ");
+  // 排除结转损益分录（口径见 ledger/closing-entries.ts）：按属期聚合费用发生额，
+  // 结转分录会把本期费用冲成 0，实际发生额恒为 0 → 预算执行率永远 0%、永远「未超支」。
   const rows = await query<{ actual: string }>(
     `select coalesce(sum(debit - credit), 0) as actual
      from ledger_entries
-     where company_id = $1 and to_char(entry_date, 'YYYY-MM') = $2 and (${likeClauses})`,
+     where company_id = $1 and to_char(entry_date, 'YYYY-MM') = $2
+       and ${EXCLUDE_PERIOD_CLOSING_SQL}
+       and (${likeClauses})`,
     [req.auth!.companyId, period, ...prefixes.map((p) => `${p}%`)]
   );
   const actual = Number(rows[0]?.actual ?? 0);

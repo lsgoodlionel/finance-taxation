@@ -2,6 +2,7 @@ import type { ServerResponse } from "node:http";
 import type { ApiRequest } from "../../types.js";
 import { query } from "../../db/client.js";
 import { json } from "../../utils/http.js";
+import { EXCLUDE_PERIOD_CLOSING_SQL } from "../ledger/closing-entries.js";
 import {
   COST_ACCOUNT_PREFIX,
   NON_OPERATING_EXPENSE_PREFIX,
@@ -57,10 +58,14 @@ async function loadLedgerRevenueCents(companyId: string, period: string): Promis
   const excludeClauses = REVENUE_EXCLUDED_PREFIXES.map(
     (_, i) => `account_code not like $${i + excludeOffset}`
   ).join(" and ");
+  // 排除结转损益分录（口径见 ledger/closing-entries.ts）：这是按属期聚合账面收入，
+  // 结转分录会把本期收入冲成 0，票税核对就会拿 0 去和发票销售额比，
+  // 于是每一个已结转的属期都稳定误报「票账差异 = 全额发票金额」。
   const rows = await query<{ revenue: string }>(
     `select coalesce(sum(credit - debit), 0) as revenue
      from ledger_entries
      where company_id = $1 and to_char(entry_date, 'YYYY-MM') = $2
+       and ${EXCLUDE_PERIOD_CLOSING_SQL}
        and (${includeClauses}) and (${excludeClauses})`,
     [
       companyId,

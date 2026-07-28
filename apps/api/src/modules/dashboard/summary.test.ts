@@ -295,3 +295,110 @@ test("buildDashboardSnapshot reports zero 所得税费用 when the period has no
   assert.equal(profitOverview.incomeTax, "0");
   assert.equal(profitOverview.netProfit, "600");
 });
+
+// ─── V11：结转损益排除 + 整元展示口径自洽 ────────────────────────────────────
+
+/**
+ * 构造一条结转损益分录。`LedgerEntry.source` 的类型目前被窄化成
+ * `"voucher_posting"` 字面量，而 closePeriod 实际写入 `"period_closing"`，
+ * 因此这里必须绕过类型（类型与运行时的偏差已在报告中记录）。
+ */
+function closingLedgerEntry(
+  overrides: Partial<LedgerEntry> & { id: string; accountCode: string }
+): LedgerEntry {
+  return { ...ledgerEntry(overrides), source: "period_closing" } as unknown as LedgerEntry;
+}
+
+test("dashboard profit overview ignores period-closing entries for the closed period", () => {
+  // Arrange：本期业务分录 + 期末结转分录（金额恰好相反，entry_date 落在本期之内）
+  const business: LedgerEntry[] = [
+    ledgerEntry({ id: "le-1", accountCode: "6001", credit: "1000.00" }),
+    ledgerEntry({ id: "le-2", accountCode: "6001c", debit: "400.00" }),
+    ledgerEntry({ id: "le-3", accountCode: "6201", debit: "100.00" })
+  ];
+  const closing: LedgerEntry[] = [
+    closingLedgerEntry({ id: "cl-1", accountCode: "6001", debit: "1000.00", entryDate: "2026-05-31" }),
+    closingLedgerEntry({ id: "cl-2", accountCode: "6001c", credit: "400.00", entryDate: "2026-05-31" }),
+    closingLedgerEntry({ id: "cl-3", accountCode: "6201", credit: "100.00", entryDate: "2026-05-31" }),
+    closingLedgerEntry({ id: "cl-4", accountCode: "3131", credit: "500.00", entryDate: "2026-05-31" })
+  ];
+  const period = { startDate: "2026-05-01", endDate: "2026-05-31" };
+
+  // Act
+  const before = snapshotFor(business, period).profitOverview;
+  const after = snapshotFor([...business, ...closing], period).profitOverview;
+
+  // Assert：月结不改变「本月经营成果」（旧实现结转后全部塌成 0）
+  assert.deepEqual(after, before);
+  assert.equal(after.revenue, "1000");
+  assert.equal(after.netProfit, "500");
+});
+
+test("dashboard profit overview stays internally consistent when totals need rounding", () => {
+  // Arrange：刻意选取会各自向不同方向舍入的小数。
+  // 收入 100.4 → 100，成本 0.5 → 1，费用 0.4 → 0，所得税 0.4 → 0。
+  // 旧实现对毛利/净利各自独立舍入原始值（99.9 → 100、99.5 → 100），
+  // 于是「收入 − 成本 = 毛利」在展示层变成 100 − 1 = 99 ≠ 100。
+  const entries: LedgerEntry[] = [
+    ledgerEntry({ id: "le-1", accountCode: "6001", credit: "100.40" }),
+    ledgerEntry({ id: "le-2", accountCode: "6001c", debit: "0.50" }),
+    ledgerEntry({ id: "le-3", accountCode: "6201", debit: "0.40" }),
+    ledgerEntry({ id: "le-4", accountCode: "6801", debit: "0.40" })
+  ];
+
+  // Act
+  const { profitOverview } = snapshotFor(entries, { startDate: "2026-05-01", endDate: "2026-05-31" });
+  const num = (key: keyof typeof profitOverview) => Number(profitOverview[key]);
+
+  // Assert：展示层的两条会计恒等式必须严格成立
+  assert.equal(num("grossProfit"), num("revenue") - num("cost"), "毛利 = 收入 − 成本");
+  assert.equal(
+    num("netProfit"),
+    num("revenue") - num("cost") - num("expense") - num("incomeTax"),
+    "净利 = 收入 − 成本 − 费用 − 所得税"
+  );
+  // 费用构成饼图：各分块之和必须精确等于营业收入，否则分块比例加起来不是 100%
+  const slices = ["cost", "expense", "incomeTax", "netProfit"] as const;
+  assert.equal(
+    slices.reduce((sum, key) => sum + num(key), 0),
+    num("revenue"),
+    "饼图分块之和 = 营业收入"
+  );
+  // 比率与展示出来的整元金额同源，避免「净利 99 ÷ 收入 100 = 99.60%」这种自相矛盾
+  assert.equal(
+    profitOverview.netMargin,
+    `${((num("netProfit") / num("revenue")) * 100).toFixed(2)}%`
+  );
+  assert.equal(
+    profitOverview.grossMargin,
+    `${((num("grossProfit") / num("revenue")) * 100).toFixed(2)}%`
+  );
+});
+
+test("dashboard profit overview keeps the pie-chart invariant for many rounding combinations", () => {
+  // 把上一条从"一个精心挑的例子"扩展成一小片穷举，防止改动只对某个数字凑巧成立。
+  const period = { startDate: "2026-05-01", endDate: "2026-05-31" };
+  const cents = ["0.05", "0.40", "0.50", "0.55", "0.99", "1.50"];
+
+  for (const cost of cents) {
+    for (const expense of cents) {
+      for (const tax of cents) {
+        const entries: LedgerEntry[] = [
+          ledgerEntry({ id: "le-1", accountCode: "6001", credit: "100.45" }),
+          ledgerEntry({ id: "le-2", accountCode: "6001c", debit: cost }),
+          ledgerEntry({ id: "le-3", accountCode: "6201", debit: expense }),
+          ledgerEntry({ id: "le-4", accountCode: "6801", debit: tax })
+        ];
+        const { profitOverview: o } = snapshotFor(entries, period);
+        const n = (key: keyof typeof o) => Number(o[key]);
+        const label = `cost=${cost} expense=${expense} tax=${tax}`;
+        assert.equal(n("grossProfit"), n("revenue") - n("cost"), `毛利恒等式失败：${label}`);
+        assert.equal(
+          n("netProfit"),
+          n("grossProfit") - n("expense") - n("incomeTax"),
+          `净利恒等式失败：${label}`
+        );
+      }
+    }
+  }
+});

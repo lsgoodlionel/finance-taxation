@@ -7,6 +7,7 @@ import { streamChat, ocrImage, isAiConfigured } from "../../services/ai.js";
 import type { ChatMessage } from "../../services/ai.js";
 import type { ApiRequest } from "../../types.js";
 import { buildDeterministicAssistantReply, buildDeterministicOcrText } from "./fallback.js";
+import { EXCLUDE_PERIOD_CLOSING_SQL } from "../ledger/closing-entries.js";
 import { summarizeProfitTotals } from "../reports/profit-accounts.js";
 
 const BOSS_ROLES = new Set(["role-chairman", "role-finance-director"]);
@@ -209,9 +210,14 @@ async function loadBossContext(companyId: string) {
   const receivables = sumPrefix("1122");
   const taxLiability = -sumPrefix("2221");
 
+  // 排除结转损益分录（口径见 ledger/closing-entries.ts）：本查询限定在本月之内、
+  // 结果只喂给 summarizeProfitTotals，是「按期间聚合经营成果」。不排除的话本月一
+  // 结转，助手回答的「本月收入/支出」就变成 0，而它又是要拿去讲给老板听的。
+  // 注意上面 sumPrefix 用的是另一条不带期间的余额查询（1002/1122/2221），不受影响。
   const monthLedger = await query<{ account_code: string; debit: string; credit: string }>(
     `select account_code, debit::text, credit::text from ledger_entries
-     where company_id = $1 and entry_date >= $2`,
+     where company_id = $1 and entry_date >= $2
+       and ${EXCLUDE_PERIOD_CLOSING_SQL}`,
     [companyId, currentMonth + "-01"]
   );
 
