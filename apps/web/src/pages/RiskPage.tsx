@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type { BusinessEvent, RiskClosureRecord, RiskFinding } from "@finance-taxation/domain-model";
 import {
@@ -8,8 +8,9 @@ import {
   listRiskFindings,
   runEventRiskCheck
 } from "../lib/api";
-import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { HelpPanel } from "../components/ui/HelpPanel";
+import { TaskFocusShell } from "../components/ui/TaskFocusShell";
+import { resolveActiveTask } from "../lib/task-focus";
 import { LevelLegend, RISK_SEVERITY_LEVELS } from "../components/ui/LevelLegend";
 import { ProPageBanner } from "../components/ui/ProPageBanner";
 import { Term } from "../components/ui/Term";
@@ -23,12 +24,16 @@ import {
 } from "./risk-scope";
 import { RiskClosureTimeline } from "./risk/RiskClosureTimeline";
 import { RiskFindingsListPanel } from "./risk/RiskFindingsListPanel";
+import { RiskFindingsToolbar } from "./risk/RiskFindingsToolbar";
+import { RiskFindingsWorkspace } from "./risk/RiskFindingsWorkspace";
 import { RiskKpiCards } from "./risk/RiskKpiCards";
 import { RiskPageShell } from "./risk/RiskPageShell";
 import { RiskResolutionWorkbench } from "./risk/RiskResolutionWorkbench";
 import { RiskWorkbenchHeader } from "./risk/RiskWorkbenchHeader";
 import { AnomalyScanPanel } from "./risk/AnomalyScanPanel";
 import { TaxConsistencyPanel } from "./risk/TaxConsistencyPanel";
+import { buildRiskFindingFlow } from "./risk/risk-finding-flow";
+import { buildRiskTasks, countOpenFindings, RISK_TASK_KEYS } from "./risk/risk-tasks";
 import { readRiskUrlState, writeRiskUrlState, type RiskViewFilter } from "./risk/risk-url-state";
 import { writeAuditUrlState } from "./audit/audit-url-state";
 
@@ -80,6 +85,7 @@ export function RiskPage() {
   const [viewFilter, setViewFilter] = useState<RiskViewFilter>(urlState.view);
   const [message, setMessage] = useState("正在准备风险勾稽。");
   const [showHelp, setShowHelp] = useState(false);
+  const [taskKey, setTaskKey] = useState(urlState.task);
 
   useEffect(() => {
     async function bootstrap() {
@@ -138,12 +144,13 @@ export function RiskPage() {
       scope: scopeFilter,
       eventId,
       findingId: selectedFindingId,
-      view: viewFilter
+      view: viewFilter,
+      task: taskKey
     });
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
-  }, [eventId, scopeFilter, searchParams, selectedFindingId, setSearchParams, viewFilter]);
+  }, [eventId, scopeFilter, searchParams, selectedFindingId, setSearchParams, taskKey, viewFilter]);
 
   async function refreshFindings() {
     const payload = await listRiskFindings();
@@ -187,6 +194,14 @@ export function RiskPage() {
     () => selectedFinding ? buildRiskClosureTargetChain({ findingId: selectedFinding.id, event: selectedFindingEvent }) : [],
     [selectedFinding, selectedFindingEvent]
   );
+  const findingFlow = useMemo(
+    () => buildRiskFindingFlow({ finding: selectedFinding, closureRecords }),
+    [closureRecords, selectedFinding]
+  );
+
+  // 三件事的角标只认真实待办数：处置任务用「还没关闭的风险」条数。
+  const tasks = useMemo(() => buildRiskTasks(countOpenFindings(findings)), [findings]);
+  const activeTaskKey = resolveActiveTask(tasks, taskKey, RISK_TASK_KEYS.findings);
 
   function navigateWithState(path: string, state?: Record<string, string>) {
     navigate(path, { state });
@@ -226,91 +241,102 @@ export function RiskPage() {
     await Promise.all([refreshFindings(), loadClosureRecords(selectedFinding.id)]);
   }
 
+  const findingsToolbar = (
+    <RiskFindingsToolbar
+      scopeFilter={scopeFilter}
+      viewFilter={viewFilter}
+      eventId={eventId}
+      eventSearch={eventSearch}
+      visibleEvents={visibleEvents}
+      showEventDropdown={showEventDropdown}
+      dropdownRef={dropdownRef}
+      onEventSearchChange={(value) => {
+        setEventSearch(value);
+        setShowEventDropdown(true);
+      }}
+      onFocusEventSearch={() => setShowEventDropdown(true)}
+      onSelectEvent={(nextEventId, title) => {
+        setEventId(nextEventId);
+        setEventSearch(title);
+        setShowEventDropdown(false);
+      }}
+      onScopeChange={setScopeFilter}
+      onViewChange={setViewFilter}
+      onRunRiskCheck={() =>
+        void runEventRiskCheck(eventId)
+          .then(() => refreshFindings())
+          .catch((error) => setMessage((error as Error).message))
+      }
+    />
+  );
+
+  const findingsWorkspace = (
+    <RiskFindingsWorkspace
+      kpiCards={<RiskKpiCards findings={findings} />}
+      list={
+        <RiskFindingsListPanel
+          toolbar={findingsToolbar}
+          findings={visibleFindings}
+          eventMap={eventMap}
+          navEventId={navEventId}
+          selectedFindingId={selectedFinding?.id ?? ""}
+          severityLabel={(severity) => t(RISK_SEVERITY_LABELS, severity)}
+          priorityLabel={(priority) => t(RISK_PRIORITY_LABELS, priority)}
+          statusLabel={(status) => t(RISK_STATUS_LABELS, status)}
+          onSelectFinding={(findingId) =>
+            void loadClosureRecords(findingId).catch((error) => setMessage((error as Error).message))
+          }
+          onNavigate={navigateWithState}
+        />
+      }
+      detail={
+        <RiskResolutionWorkbench
+          finding={selectedFinding}
+          event={selectedFindingEvent}
+          flow={findingFlow}
+          closureTargets={closureTargets}
+          resolution={resolution}
+          onResolutionChange={setResolution}
+          onNavigate={navigateWithState}
+          onOpenAudit={openAuditForSelectedFinding}
+          onCloseFinding={() =>
+            void closeSelectedFinding().catch((error) => setMessage((error as Error).message))
+          }
+        />
+      }
+      timeline={<RiskClosureTimeline selectedFindingId={selectedFinding?.id ?? ""} records={closureRecords} />}
+    />
+  );
+
+  const RISK_TASK_PANELS: Record<string, JSX.Element> = {
+    [RISK_TASK_KEYS.findings]: findingsWorkspace,
+    [RISK_TASK_KEYS.consistency]: <TaxConsistencyPanel />,
+    [RISK_TASK_KEYS.anomaly]: <AnomalyScanPanel />
+  };
+
   return (
     <section style={{ display: "grid", gap: "20px" }}>
       <RiskHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
-      <ProPageBanner
-        pageName="风险中心"
-        plain="系统自动扫出来的账务、税务疑点清单，以及每条疑点的核实和处理记录，财务会逐条销掉。您只需要留意有没有高等级风险一直没人处理。"
-      />
       <RiskPageShell
         header={
-          <Fragment>
-            <RiskWorkbenchHeader
-              message={message}
-              navState={navState}
-              scopeFilter={scopeFilter}
-              viewFilter={viewFilter}
-              eventId={eventId}
-              eventSearch={eventSearch}
-              visibleEvents={visibleEvents}
-              selectedFinding={selectedFinding}
-              resolution={resolution}
-              showEventDropdown={showEventDropdown}
-              dropdownRef={dropdownRef}
-              onShowHelp={() => setShowHelp(true)}
-              onEventSearchChange={(value) => {
-                setEventSearch(value);
-                setShowEventDropdown(true);
-              }}
-              onFocusEventSearch={() => setShowEventDropdown(true)}
-              onSelectEvent={(nextEventId, title) => {
-                setEventId(nextEventId);
-                setEventSearch(title);
-                setShowEventDropdown(false);
-              }}
-              onResolutionChange={setResolution}
-              onScopeChange={setScopeFilter}
-              onViewChange={setViewFilter}
-              onRunRiskCheck={() =>
-                void runEventRiskCheck(eventId)
-                  .then(() => refreshFindings())
-                  .catch((error) => setMessage((error as Error).message))
-              }
+          <>
+            <ProPageBanner
+              pageName="风险中心"
+              plain="系统自动扫出来的账务、税务疑点清单，以及每条疑点的核实和处理记录，财务会逐条销掉。您只需要留意有没有高等级风险一直没人处理。"
             />
-            <ProcessFlowStageSection
-              title="风险检查流程回看"
-              subtitle="风险检查主要来源于 AI 初判与资料校验阶段，并会联动事项、凭证和税务处理结果。当前页可从两类业务主线回看风险来源并跳转到相关业务页面。"
-              currentNodeId="ai_precheck"
-              branch={null}
-              businessEventId={eventId || undefined}
-            />
-          </Fragment>
+            <RiskWorkbenchHeader message={message} navState={navState} onShowHelp={() => setShowHelp(true)} />
+          </>
         }
-        kpiCards={<RiskKpiCards findings={findings} />}
-        list={
-          <RiskFindingsListPanel
-            findings={visibleFindings}
-            eventMap={eventMap}
-            navEventId={navEventId}
-            selectedFindingId={selectedFinding?.id ?? ""}
-            severityLabel={(severity) => t(RISK_SEVERITY_LABELS, severity)}
-            priorityLabel={(priority) => t(RISK_PRIORITY_LABELS, priority)}
-            statusLabel={(status) => t(RISK_STATUS_LABELS, status)}
-            onSelectFinding={(findingId) =>
-              void loadClosureRecords(findingId).catch((error) => setMessage((error as Error).message))
-            }
-            onNavigate={navigateWithState}
-          />
-        }
-        detail={
-          <RiskResolutionWorkbench
-            finding={selectedFinding}
-            event={selectedFindingEvent}
-            closureTargets={closureTargets}
-            resolution={resolution}
-            onResolutionChange={setResolution}
-            onNavigate={navigateWithState}
-            onOpenAudit={openAuditForSelectedFinding}
-            onCloseFinding={() =>
-              void closeSelectedFinding().catch((error) => setMessage((error as Error).message))
-            }
-          />
-        }
-        timeline={<RiskClosureTimeline selectedFindingId={selectedFinding?.id ?? ""} records={closureRecords} />}
-      />
-      <TaxConsistencyPanel />
-      <AnomalyScanPanel />
+      >
+        <TaskFocusShell
+          tasks={tasks}
+          activeKey={activeTaskKey}
+          onSelectTask={setTaskKey}
+          switcherLabel="风险中心当前要做的事"
+        >
+          {activeTaskKey ? RISK_TASK_PANELS[activeTaskKey] ?? null : null}
+        </TaskFocusShell>
+      </RiskPageShell>
     </section>
   );
 }

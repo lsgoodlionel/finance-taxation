@@ -301,6 +301,14 @@ export function LedgerPage() {
               setSelectedEventId("");
               void filterLedger({});
             }}
+            onFilterByVoucher={(voucherId) => {
+              // 点击来源凭证 = 就地过滤（用户仍在总账里追这一张凭证的全部分录），
+              // 而不是跳去凭证中心：跳走会丢掉当前场景。想看凭证本身，
+              // 上方「过账批次」表的凭证列是可点的跳转链接。
+              setSelectedVoucherId(voucherId);
+              setSelectedEventId("");
+              void filterLedger({ voucherId });
+            }}
           />
         );
       case "periods":

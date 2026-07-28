@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { PageHeader } from "../components/ui/PageHeader";
 import { useLocation } from "react-router-dom";
 import { Card, Space, Tag, Alert, Tooltip, Button, Segmented, Skeleton, Typography } from "antd";
@@ -12,6 +12,7 @@ import { listTasks, remindTask, updateTaskStatus } from "../lib/api";
 import { TASK_STATUS_LABELS } from "../lib/i18n";
 import { buildResultPageSubtitle } from "../lib/entry-guidance";
 import { normalizeDrilldownState } from "./drilldown";
+import { EntityLink } from "../components/ui/EntityLink";
 import { useQueryState } from "../hooks/useQueryState";
 import { TaskKanbanView } from "./tasks/TaskKanbanView";
 import { TaskListView } from "./tasks/TaskListView";
@@ -31,7 +32,14 @@ type ViewMode = "list" | "kanban";
 
 export function TasksPage() {
   const location = useLocation();
-  const navEventId = normalizeDrilldownState(location.state).businessEventId ?? null;
+  const navState = normalizeDrilldownState(location.state);
+  const navEventId = navState.businessEventId ?? null;
+  /**
+   * 从别处点「任务」链接过来时，本页要真的定位到那一条任务。
+   * 任务没有独立详情路由，DrilldownState 也没有 taskId 字段，
+   * 因此复用既有的 resourceType / resourceId 约定（EntityLink 一定会带上）。
+   */
+  const navTaskId = navState.resourceType === "task" ? navState.resourceId ?? null : null;
 
   const [tasks, setTasks] = useState<TaskWithOverdue[]>([]);
   const [overdueOnly, setOverdueOnly] = useState(false);
@@ -57,6 +65,20 @@ export function TasksPage() {
   }
 
   useEffect(() => { void loadTasks(false); }, [navEventId]);
+
+  // 只在首次匹配到目标任务时打开抽屉：用户关掉后不应被状态更新重新弹开。
+  const openedNavTaskIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!navTaskId || openedNavTaskIdRef.current === navTaskId) {
+      return;
+    }
+    const target = tasks.find((task) => task.id === navTaskId);
+    if (!target) {
+      return;
+    }
+    openedNavTaskIdRef.current = navTaskId;
+    setDetailTask(target);
+  }, [navTaskId, tasks]);
 
   async function handleStatusChange(taskId: string, newStatus: TaskStatus) {
     setUpdatingId(taskId);
@@ -212,7 +234,7 @@ export function TasksPage() {
           type="info"
           showIcon
           style={{ borderRadius: 8 }}
-          message={<>当前仅显示事项 <Text code>{navEventId}</Text> 的关联任务。</>}
+          message={<>当前仅显示事项 <EntityLink kind="business_event" id={navEventId} /> 的关联任务。</>}
         />
       )}
       {workflowGuidance && (

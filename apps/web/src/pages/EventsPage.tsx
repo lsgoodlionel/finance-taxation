@@ -21,7 +21,7 @@ import { ResultBanner } from "../components/ui/ResultBanner";
 import { useQueryState } from "../hooks/useQueryState";
 import { EventsShell } from "./events/EventsShell";
 import { EventListPanel } from "./events/EventListPanel";
-import { EventCreatePanel } from "./events/EventCreatePanel";
+import { EventCreateModal } from "./events/EventCreateModal";
 import { EventDetailPanel } from "./events/EventDetailPanel";
 import { EventDetailActions } from "./events/EventDetailActions";
 import { EventDetailBody } from "./events/EventDetailBody";
@@ -39,6 +39,7 @@ export function EventsPage() {
   const [loading, setLoading] = useState("idle");
   const [message, setMessage] = useState("");
   const [showHelp, setShowHelp] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
     type: "general",
     title: "",
@@ -101,6 +102,8 @@ export function EventsPage() {
       await refreshDetail(created.id);
       setMessage(`已创建：${created.title}`);
       setForm((f) => ({ ...f, title: "", description: "", amount: "" }));
+      // 创建成功即关闭对话框：用户接下来要看的是这一笔办到哪了，不是继续填表。
+      setShowCreate(false);
     } catch (err) {
       setMessage((err as Error).message);
     } finally {
@@ -171,32 +174,43 @@ export function EventsPage() {
     [events, t]
   );
 
+  // 页头 = guided 兜底提示 + 标题 + 帮助。新建事项的入口只有一个：列表区的按钮
+  //（就在「有哪些事项」旁边），页头再放一个只会让人以为是两件事。
   const header = (
-    <PageHeader
-      title="经营事项总线"
-      subtitle={EVENTS_ENTRY_SUBTITLE}
-      actions={(
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <HelpTriggerButton onClick={() => setShowHelp(true)} label="查看经营事项页说明" />
-        </div>
-      )}
-    />
+    <>
+      <ProPageBanner
+        pageName="经营事项总线"
+        plain="全公司的业务事项都按财务口径登记在这里，字段和状态偏专业，还能看到别人提交的事。只想确认自己那件事办到哪一步，回「今天」页看进展更清楚。"
+      />
+      <PageHeader
+        title="经营事项总线"
+        subtitle={EVENTS_ENTRY_SUBTITLE}
+        actions={(
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <HelpTriggerButton onClick={() => setShowHelp(true)} label="查看经营事项页说明" />
+          </div>
+        )}
+      />
+    </>
   );
 
-  const createPanel = (
-    <EventCreatePanel
+  const createModal = (
+    <EventCreateModal
+      open={showCreate}
       form={form}
       isBusy={isBusy}
       isSaving={loading === "saving"}
       options={eventTypeOptions}
       onChange={(next) => setForm((prev) => ({ ...prev, ...next }))}
       onSubmit={() => void handleCreate()}
+      onClose={() => setShowCreate(false)}
     />
   );
 
   const listPanel = (
     <EventListPanel
       count={events.length}
+      onCreate={() => setShowCreate(true)}
       events={eventListItems}
       selectedEventId={selectedEventId}
       onSelect={(eventId, status) => {
@@ -225,14 +239,10 @@ export function EventsPage() {
   return (
     <>
       <EventsHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
-      <ProPageBanner
-        pageName="经营事项总线"
-        plain="全公司的业务事项都按财务口径登记在这里，字段和状态偏专业，还能看到别人提交的事。只想确认自己那件事办到哪一步，回「今天」页看进展更清楚。"
-      />
+      {createModal}
       <EventsShell
         header={header}
         banner={message ? <ResultBanner tone="info" message={message} /> : null}
-        createPanel={createPanel}
         listPanel={listPanel}
         detailPanel={(
           <EventDetailPanel

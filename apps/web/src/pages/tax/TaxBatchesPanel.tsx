@@ -5,6 +5,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { useI18n, REVIEW_RESULT_LABELS, TAX_BATCH_STATUS_LABELS, TAX_STATUS_LABELS } from "../../lib/i18n";
 import type { TaxBatchDetail } from "./taxTypes";
 import { actionButtonStyle, cellStyle, panelStyle } from "./taxStyles";
+import { EntityLink } from "../../components/ui/EntityLink";
 import { Term } from "../../components/ui/Term";
 
 type ValidationResult = { valid: boolean; issues: string[]; itemCount: number } | null;
@@ -196,7 +197,15 @@ export function TaxBatchesPanel({
               <ul style={{ paddingLeft: "22px", lineHeight: 1.8, margin: 0 }}>
                 {selectedBatchDetail.items.map((item) => (
                   <li key={item.id}>
+                    <EntityLink kind="tax_item" id={item.id} />
+                    {" | "}
                     {item.taxType} | {item.filingPeriod} | {t(TAX_STATUS_LABELS, item.status)} | {item.treatment}
+                    {item.businessEventId ? (
+                      <>
+                        {" | "}
+                        <EntityLink kind="business_event" id={item.businessEventId} />
+                      </>
+                    ) : null}
                   </li>
                 ))}
               </ul>

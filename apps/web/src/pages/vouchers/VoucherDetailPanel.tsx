@@ -7,6 +7,7 @@ import {
 import type { VoucherDetail, VoucherTemplate } from "../../lib/api";
 import { VOUCHER_STATUS_LABELS, VOUCHER_TYPE_LABELS, useI18n } from "../../lib/i18n";
 import { ValidationHintPanel } from "./ValidationHintPanel";
+import { EntityLink } from "../../components/ui/EntityLink";
 import { Term } from "../../components/ui/Term";
 
 const { Text, Title } = Typography;
@@ -110,7 +111,9 @@ export function VoucherDetailPanel({
       <Descriptions size="small" column={2} bordered>
         <Descriptions.Item label="凭证类型">{t(VOUCHER_TYPE_LABELS, detail.voucherType)}</Descriptions.Item>
         <Descriptions.Item label="关联事项">
-          <Text copyable style={{ fontSize: 12 }}>{detail.businessEventId || "—"}</Text>
+          <span style={{ fontSize: 12 }}>
+            <EntityLink kind="business_event" id={detail.businessEventId} />
+          </span>
         </Descriptions.Item>
         <Descriptions.Item label="摘要" span={2}>
           {!isPosted ? (

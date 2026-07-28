@@ -4,6 +4,7 @@ import type { ColumnsType } from "antd/es/table";
 import type { LedgerEntry, LedgerPostingBatch } from "@finance-taxation/domain-model";
 import { DataTableShell } from "../../components/ui/DataTableShell";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { EntityLink } from "../../components/ui/EntityLink";
 import { Term } from "../../components/ui/Term";
 import { useQueryState } from "../../hooks/useQueryState";
 
@@ -20,6 +21,18 @@ type LedgerEntriesPanelProps = {
   onEventIdChange: (value: string) => void;
   onFilter: () => void;
   onClear: () => void;
+  /** 点击分录的来源凭证：就地把总账收敛到该凭证，免去手工把编号抄进上方输入框。 */
+  onFilterByVoucher: (voucherId: string) => void;
+};
+
+const sourceVoucherButtonStyle: React.CSSProperties = {
+  padding: 0,
+  border: "none",
+  background: "none",
+  color: "var(--v3-color-primary, #2563eb)",
+  cursor: "pointer",
+  font: "inherit",
+  textAlign: "left",
 };
 
 const BATCH_COLUMNS: ColumnsType<LedgerPostingBatch> = [
@@ -33,13 +46,13 @@ const BATCH_COLUMNS: ColumnsType<LedgerPostingBatch> = [
     title: "凭证",
     dataIndex: "voucherId",
     key: "voucherId",
-    render: (value: string) => <Text>{value}</Text>,
+    render: (value: string) => <EntityLink kind="voucher" id={value} />,
   },
   {
     title: "事项",
     dataIndex: "businessEventId",
     key: "businessEventId",
-    render: (value: string) => <Text type="secondary">{value}</Text>,
+    render: (value: string) => <EntityLink kind="business_event" id={value} />,
   },
   {
     title: "分录数",
@@ -57,7 +70,10 @@ const BATCH_COLUMNS: ColumnsType<LedgerPostingBatch> = [
   },
 ];
 
-const ENTRY_COLUMNS: ColumnsType<LedgerEntry> = [
+function buildEntryColumns(
+  onFilterByVoucher: (voucherId: string) => void
+): ColumnsType<LedgerEntry> {
+  return [
   {
     title: "日期",
     dataIndex: "entryDate",
@@ -102,9 +118,22 @@ const ENTRY_COLUMNS: ColumnsType<LedgerEntry> = [
     dataIndex: "voucherId",
     key: "voucherId",
     width: 150,
-    render: (value: string) => <Text type="secondary">{value}</Text>,
+    render: (value: string) =>
+      value ? (
+        <button
+          type="button"
+          onClick={() => onFilterByVoucher(value)}
+          style={sourceVoucherButtonStyle}
+          aria-label={`按凭证 ${value} 过滤总账`}
+        >
+          {value}
+        </button>
+      ) : (
+        <Text type="secondary">—</Text>
+      ),
   },
-];
+  ];
+}
 
 export function LedgerEntriesPanel(props: LedgerEntriesPanelProps) {
   const {
@@ -116,7 +145,13 @@ export function LedgerEntriesPanel(props: LedgerEntriesPanelProps) {
     onEventIdChange,
     onFilter,
     onClear,
+    onFilterByVoucher,
   } = props;
+
+  const entryColumns = React.useMemo(
+    () => buildEntryColumns(onFilterByVoucher),
+    [onFilterByVoucher]
+  );
 
   const [batchPageStr, setBatchPageStr] = useQueryState("batchPage", "1");
   const [entryPageStr, setEntryPageStr] = useQueryState("entryPage", "1");
@@ -133,6 +168,7 @@ export function LedgerEntriesPanel(props: LedgerEntriesPanelProps) {
       <DataTableShell title="过滤条件">
         <p className="v3-section-description" style={{ marginBottom: "12px" }}>
           先按<Term k="voucher">凭证</Term>编号或事项编号收缩范围，再查看对应<Term k="posting">过账</Term>批次和<Term k="general-ledger">总账</Term>分录。
+          也可以直接点下方分录里的来源凭证编号，一键收敛到那张凭证，不必手工把编号抄进这里。
         </p>
         <Space wrap size={10}>
           <Input
@@ -203,7 +239,7 @@ export function LedgerEntriesPanel(props: LedgerEntriesPanelProps) {
           <div style={{ display: "grid", gap: 12 }}>
             <Table<LedgerEntry>
               dataSource={entryItems}
-              columns={ENTRY_COLUMNS}
+              columns={entryColumns}
               rowKey="id"
               size="small"
               pagination={false}

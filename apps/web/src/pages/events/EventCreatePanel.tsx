@@ -1,3 +1,11 @@
+/**
+ * 新建经营事项的表单主体。
+ *
+ * 只负责字段与提交，不带卡片外壳：它现在由 EventCreateModal 装进对话框里，
+ * 由列表区的「新建事项」按钮触发。改造前这张表单和事项列表左右并排常驻首屏，
+ * 占了 1.2fr 的宽度——而用户此刻要么想登记一笔新的、要么想查已有的某一笔，
+ * 不会同时做这两件事。
+ */
 import React from "react";
 
 type EventFormState = {
@@ -27,11 +35,7 @@ type EventCreatePanelProps = {
 
 export function EventCreatePanel({ form, isBusy, isSaving, options, onChange, onSubmit }: EventCreatePanelProps) {
   return (
-    <div className="card">
-      <div className="card-header">
-        <span className="card-title">新建经营事项</span>
-      </div>
-      <div className="card-body">
+    <div>
         <div className="grid-2" style={{ gap: 12 }}>
           <div className="form-group">
             <label className="form-label">类型</label>
@@ -98,7 +102,6 @@ export function EventCreatePanel({ form, isBusy, isSaving, options, onChange, on
             {isSaving ? "创建中…" : "创建事项"}
           </button>
         </div>
-      </div>
     </div>
   );
 }

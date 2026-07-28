@@ -10,6 +10,7 @@ import {
   validateVoucher, type VoucherDetail, type VoucherTemplate, type WorkflowRunDetail,
 } from "../lib/api";
 import { normalizeDrilldownState } from "./drilldown";
+import { EntityLink } from "../components/ui/EntityLink";
 import { resolveProcessFlowContext } from "../features/process-flow/resolve";
 import { ProcessFlowStageSection } from "../features/process-flow/ProcessFlowStageSection";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -386,7 +387,7 @@ export function VouchersPage() {
       {navEventId && (
         <Alert
           type="info" showIcon style={{ borderRadius: 8 }}
-          message={<>当前筛选事项 <Text code>{navEventId}</Text> 的关联凭证。</>}
+          message={<>当前筛选事项 <EntityLink kind="business_event" id={navEventId} /> 的关联凭证。</>}
         />
       )}
       <WorkflowRuntimePanel
