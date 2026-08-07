@@ -138,6 +138,7 @@ test("deriveVoucherRuntimeSummary exposes validation retry action for invalid de
     mappingId: "map-1",
     voucherType: "general",
     accountingDate: "2026-05-15",
+    voucherNumber: null,
     summary: "测试凭证",
     status: "draft",
     lines: [

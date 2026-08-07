@@ -65,6 +65,7 @@ const vouchers: Voucher[] = [
     mappingId: "map-vou-1",
     voucherType: "accrual",
     accountingDate: "2026-05-15",
+    voucherNumber: null,
     summary: "收入确认草稿",
     status: "review_required",
     lines: [],

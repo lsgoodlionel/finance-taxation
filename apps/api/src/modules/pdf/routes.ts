@@ -1,6 +1,7 @@
 import type { ServerResponse } from "node:http";
 import { query, queryOne } from "../../db/client.js";
 import { toDateOnly } from "../../db/date-column.js";
+import { formatVoucherNumber, type VoucherWord } from "../vouchers/voucher-number.js";
 import { json } from "../../utils/http.js";
 import type { ApiRequest } from "../../types.js";
 import { wrapHtml, fmt, escHtml } from "./template.js";
@@ -188,6 +189,10 @@ interface VoucherRow {
   // 解析器，见 db/date-column.ts）。此前这里声明成 string，类型撒了谎，下面的
   // `.slice()` 在运行时必然抛 TypeError —— 凭证 PDF 导出实测恒 500。
   created_at: string | Date;
+  accounting_date: string | Date;
+  voucher_word: string | null;
+  voucher_seq: number | null;
+  period: string | null;
 }
 
 interface LineRow {
@@ -203,7 +208,7 @@ export async function voucherPdf(req: ApiRequest, res: ServerResponse, voucherId
 
   const [voucher, lines, companyRes] = await Promise.all([
     queryOne<VoucherRow>(
-      "select id, voucher_type, summary, status, created_at from vouchers where id=$1 and company_id=$2",
+      "select id, voucher_type, summary, status, created_at, accounting_date, voucher_word, voucher_seq, period from vouchers where id=$1 and company_id=$2",
       [voucherId, req.auth.companyId]
     ),
     query<LineRow>(
@@ -216,8 +221,15 @@ export async function voucherPdf(req: ApiRequest, res: ServerResponse, voucherId
   if (!voucher) { json(res, 404, { error: "凭证不存在" }); return; }
   const companyName = companyRes?.name ?? "";
 
-  const voucherDate = toDateOnly(voucher.created_at) ?? "";
-  const voucherNo = `V-${voucherDate.replace(/-/g, "")}-${voucher.id.slice(-6).toUpperCase()}`;
+  // 打印用会计日期（这笔账属于哪天），不是记录创建时间。
+  const voucherDate = toDateOnly(voucher.accounting_date) ?? "";
+  // 凭证号现在是落库的真实字号（迁移 048）。此前这里临时拼一个
+  // `V-{日期}-{id 后 6 位}`，既不连续也不可预测，账证核对根本用不了。
+  // 未过账凭证没有号 —— 如实标注，不要拼一个假的出来。
+  const voucherNo =
+    voucher.voucher_word && voucher.period && voucher.voucher_seq !== null
+      ? formatVoucherNumber(voucher.voucher_word as VoucherWord, voucher.period, voucher.voucher_seq)
+      : "（未过账，尚未编号）";
 
   let totalDebit = 0, totalCredit = 0;
   const lineRows = lines.map((l) => {

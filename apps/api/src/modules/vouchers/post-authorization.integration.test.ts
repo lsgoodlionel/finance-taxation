@@ -532,3 +532,96 @@ test("the period lock is judged by the accounting period, not the current month"
     await pool.end();
   }
 });
+
+/**
+ * 凭证号（V12-A6）。
+ *
+ * 《会计基础工作规范》第五十一条要求记账凭证连续编号。此前 vouchers 表没有任何
+ * 编号列，唯一「像凭证号」的东西在打印 PDF 时临时拼出且不落库，系统无法回答
+ * 「6 月共有多少张凭证」这类账证核对、审计抽凭、税务稽查的基本问题。
+ *
+ * 号码在**过账那一刻**分配而不是创建时 —— 草稿不占号，否则删草稿会留下断号。
+ */
+
+test("voucher numbers are allocated on posting, are consecutive per period, and drafts hold none", async () => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const { closePool } = await import("../../db/client.js");
+  try {
+    // Arrange：同一期间三张凭证，其中一张始终保持草稿
+    const ids = ["vch-no-1", "vch-no-2", "vch-no-draft"];
+    for (const id of ids) {
+      await seedVoucherOn(pool, id, "2026-04-10");
+    }
+
+    // Act：只过账前两张
+    for (const id of ids.slice(0, 2)) {
+      assert.equal(await approveAs(id, REVIEWER), 200);
+      assert.equal((await postAs(id, POSTER, authorizedBody)).statusCode, 200);
+    }
+
+    // Assert：连续编号，从 1 起
+    const posted = await pool.query<{ id: string; period: string; voucher_word: string; voucher_seq: number }>(
+      `select id, period, voucher_word, voucher_seq from vouchers
+       where id = any($1::text[]) and status = 'posted' order by voucher_seq`,
+      [ids]
+    );
+    assert.equal(posted.rows.length, 2);
+    assert.deepEqual(
+      posted.rows.map((r) => r.voucher_seq),
+      [1, 2],
+      "同期同字的序号必须连续且从 1 起"
+    );
+    for (const row of posted.rows) {
+      assert.equal(row.period, "2026-04", "期间取自会计日期");
+      assert.equal(row.voucher_word, "记", "accrual 类型对应记账凭证");
+    }
+
+    // 草稿不占号
+    const draft = await pool.query<{ voucher_seq: number | null }>(
+      `select voucher_seq from vouchers where id = 'vch-no-draft'`
+    );
+    assert.equal(draft.rows[0]?.voucher_seq, null, "未过账凭证不得占用编号");
+  } finally {
+    await closePool();
+    await pool.end();
+  }
+});
+
+test("a voucher cannot be reversed twice even under concurrent requests", async () => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const { closePool } = await import("../../db/client.js");
+  try {
+    const voucherId = "vch-rev-race";
+    await seedVoucher(pool, { id: voucherId });
+    assert.equal(await approveAs(voucherId, REVIEWER), 200);
+    assert.equal((await postAs(voucherId, POSTER, authorizedBody)).statusCode, 200);
+
+    const { reverseVoucher } = await import("./routes.js");
+    const fire = async () => {
+      const capture = createResponseCapture();
+      await reverseVoucher(
+        { method: "POST", url: "/x", auth: createAuthContext(POSTER) } as ApiRequest,
+        capture.response,
+        voucherId
+      );
+      return capture.readJson<{ code?: string }>().statusCode;
+    };
+
+    // 并发两次红冲：canReverseVoucher 的检查与插入之间没有锁，两个请求可以都通过
+    // 检查。迁移 048 的部分唯一索引是最后一道防线 —— 重复红冲会把账冲成反方向。
+    const results = await Promise.allSettled([fire(), fire()]);
+    const created = results.filter((r) => r.status === "fulfilled" && r.value === 201).length;
+    assert.equal(created, 1, `只应有一张红冲凭证成功，实际 ${created} 张`);
+
+    const reversals = await pool.query<{ count: string }>(
+      `select count(*)::text as count from vouchers where reverses_voucher_id = $1`,
+      [voucherId]
+    );
+    assert.equal(reversals.rows[0]?.count, "1", "数据库里最终只能有一张红冲凭证");
+  } finally {
+    await closePool();
+    await pool.end();
+  }
+});

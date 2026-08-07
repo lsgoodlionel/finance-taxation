@@ -112,6 +112,7 @@ const vouchers: Voucher[] = [
     mappingId: "vou-map-1",
     voucherType: "payment",
     accountingDate: "2026-05-15",
+    voucherNumber: null,
     summary: "费用报销草稿",
     status: "review_required",
     lines: [],

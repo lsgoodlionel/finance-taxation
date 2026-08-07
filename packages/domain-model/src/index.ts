@@ -402,6 +402,12 @@ export interface Voucher {
    * 不该还能补记进去。此前两者混用同一个过账时间戳，导致报表错期且期间锁失效。
    */
   accountingDate: string;
+  /**
+   * 凭证号，如 `记-2026-06-0037`。**未过账凭证为 null** —— 号码在过账那一刻才
+   * 被消耗，草稿不占号，否则删草稿会留下断号，而《会计基础工作规范》第五十一条
+   * 要求记账凭证连续编号。
+   */
+  voucherNumber: string | null;
   approvedAt: string | null;
   postedAt: string | null;
   source: "analysis";

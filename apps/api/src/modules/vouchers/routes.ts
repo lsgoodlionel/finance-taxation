@@ -34,6 +34,7 @@ import {
   validateWorkflowTransition
 } from "../workflows/runtime.js";
 import { buildReversalLines, canReverseVoucher } from "./reversal.js";
+import { formatVoucherNumber, resolveVoucherWord, type VoucherWord } from "./voucher-number.js";
 
 interface VoucherRow {
   id: string;
@@ -45,6 +46,9 @@ interface VoucherRow {
   status: Voucher["status"];
   source: Voucher["source"];
   accounting_date: string | Date;
+  voucher_word: string | null;
+  voucher_seq: number | null;
+  period: string | null;
   approved_at: string | Date | null;
   posted_at: string | Date | null;
   created_at: string | Date;
@@ -130,6 +134,11 @@ function mapVoucherRow(row: VoucherRow, lines: VoucherLineRow[]): Voucher {
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(mapVoucherLineRow),
     accountingDate: toDateOnly(row.accounting_date) ?? "",
+    // 三者齐备才成号：草稿没有 voucher_seq，此时如实给 null 而不是拼一个假号出来
+    voucherNumber:
+      row.voucher_word && row.period && row.voucher_seq !== null
+        ? formatVoucherNumber(row.voucher_word as VoucherWord, row.period, row.voucher_seq)
+        : null,
     approvedAt: toIsoString(row.approved_at),
     postedAt: toIsoString(row.posted_at),
     source: row.source,
@@ -187,7 +196,8 @@ export async function listCompanyVouchers(
     `
       select
         id, company_id, business_event_id, mapping_id, voucher_type, summary, status,
-        source, accounting_date, approved_at, posted_at, created_at, updated_at
+        source, accounting_date, voucher_word, voucher_seq, period,
+        approved_at, posted_at, created_at, updated_at
       from vouchers
       ${where}
       order by
@@ -394,6 +404,7 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
     status: "draft",
     // 会计日期取业务发生日，不是「今天」——这笔账属于业务发生的那个期间。
     accountingDate: toDateOnly(event.occurred_on) ?? now.slice(0, 10),
+    voucherNumber: null,
     lines: draft.lines.map((line, index) => ({
       ...line,
       id: `${voucherId}-line-${index + 1}`
@@ -903,6 +914,11 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
   if (await isPeriodLocked(req.auth!.companyId, voucherPeriod)) {
     return json(res, 400, { error: `会计期间 ${voucherPeriod} 已锁账，无法过账。请先解锁该期间。` });
   }
+  // 凭证号在过账这一刻分配，不在创建时 —— 草稿不占号，否则删草稿会留下断号，
+  // 而《会计基础工作规范》要求编号连续。序号在同一事务内用 max+1 取，
+  // 并发安全由迁移 048 的部分唯一索引兜底（冲突则整个事务回滚，调用方重试）。
+  const voucherWord = resolveVoucherWord(target.voucherType);
+
   const postingRecord: VoucherPostingRecord = {
     id: `post-${voucherId}-${Date.now()}`,
     companyId: target.companyId,
@@ -942,10 +958,23 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
         set
           status = 'posted',
           posted_at = $1::timestamptz,
-          updated_at = $1::timestamptz
+          updated_at = $1::timestamptz,
+          period = $4,
+          voucher_word = $5,
+          voucher_seq = coalesce(
+            (
+              select max(v2.voucher_seq) + 1
+              from vouchers v2
+              where v2.company_id = $3
+                and v2.period = $4
+                and v2.voucher_word = $5
+                and v2.status = 'posted'
+            ),
+            1
+          )
         where id = $2 and company_id = $3
       `,
-      [postedAt, voucherId, req.auth!.companyId]
+      [postedAt, voucherId, req.auth!.companyId, voucherPeriod, voucherWord]
     );
 
     await client.query(

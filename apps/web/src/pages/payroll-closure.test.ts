@@ -63,6 +63,7 @@ const summary = buildPayrollArtifactSummary({
       mappingId: "map-1",
       voucherType: "accrual",
       accountingDate: "2026-05-15",
+      voucherNumber: null,
       summary: "计提工资",
       status: "review_required",
       lines: [],

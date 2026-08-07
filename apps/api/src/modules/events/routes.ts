@@ -852,6 +852,7 @@ function toVouchers(
     mappingId: draft.id,
     voucherType: draft.voucherType,
     accountingDate: occurredOn,
+    voucherNumber: null,
     summary: draft.summary,
     status: draft.status === "ready" ? "posted" : draft.status,
     lines: draft.lines,
