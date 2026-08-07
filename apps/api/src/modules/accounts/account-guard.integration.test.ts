@@ -37,12 +37,20 @@ test("every company gets its own chart of accounts, seeded automatically", async
   await prepareDatabase();
   const pool = new pg.Pool({ connectionString: databaseUrl });
   try {
+    // 断言的是「每家公司的科目数 = 模板数」，不写死具体数字 ——
+    // 后续批次还会往模板里加科目（如 B8 的增值税专栏），写死会让那些改动无端变红。
+    const templateCount = await pool.query<{ count: string }>(
+      `select count(*)::text as count from account_templates where template_key = 'default'`
+    );
+    const expected = templateCount.rows[0]!.count;
+    assert.ok(Number(expected) > 0, "模板不应为空");
+
     const counts = await pool.query<{ company_id: string; count: string }>(
       `select company_id, count(*)::text as count from accounts group by company_id order by company_id`
     );
     assert.ok(counts.rows.length >= 2, "至少两家公司应各有一套科目");
     for (const row of counts.rows) {
-      assert.equal(row.count, "63", `${row.company_id} 应有 63 个科目`);
+      assert.equal(row.count, expected, `${row.company_id} 的科目数应等于模板数`);
     }
 
     // 建公司时自动铺科目 —— 靠触发器而不是靠建公司的代码路径记得调用。
@@ -53,7 +61,7 @@ test("every company gets its own chart of accounts, seeded automatically", async
     const fresh = await pool.query<{ count: string }>(
       `select count(*)::text as count from accounts where company_id = 'cmp-guard-new'`
     );
-    assert.equal(fresh.rows[0]?.count, "63", "新建公司应自动获得整套科目");
+    assert.equal(fresh.rows[0]?.count, expected, "新建公司应自动获得整套模板科目");
   } finally {
     await pool.end();
   }

@@ -75,6 +75,18 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   { code: "222104",  name: "应交税费-应交个人所得税",      category: "liability", direction: "credit",level: 2, parentCode: "2221", isLeaf: true  },
   { code: "222105",  name: "应交税费-应交印花税",          category: "liability", direction: "credit",level: 2, parentCode: "2221", isLeaf: true  },
   { code: "222106",  name: "应交税费-城建税及附加",        category: "liability", direction: "credit",level: 2, parentCode: "2221", isLeaf: true  },
+  // 增值税专栏与二级明细（迁移 060）。这份常量是「已登记科目」的第二真相源
+  // （account-code-guard.test.ts 用它做静态守卫），与 account_templates 表必须同步，
+  // 否则守卫会把真实存在的科目判成未登记。
+  { code: "222107",  name: "应交税费-应交增值税（进项税额转出）", category: "liability", direction: "credit",level: 2, parentCode: "2221", isLeaf: true  },
+  { code: "222108",  name: "应交税费-应交增值税（已交税金）",     category: "liability", direction: "debit", level: 2, parentCode: "2221", isLeaf: true  },
+  { code: "222109",  name: "应交税费-应交增值税（转出未交增值税）", category: "liability", direction: "debit", level: 2, parentCode: "2221", isLeaf: true  },
+  { code: "222110",  name: "应交税费-应交增值税（转出多交增值税）", category: "liability", direction: "credit",level: 2, parentCode: "2221", isLeaf: true  },
+  { code: "222111",  name: "应交税费-未交增值税",              category: "liability", direction: "credit",level: 2, parentCode: "2221", isLeaf: true  },
+  { code: "222112",  name: "应交税费-预交增值税",              category: "liability", direction: "debit", level: 2, parentCode: "2221", isLeaf: true  },
+  { code: "222113",  name: "应交税费-待认证进项税额",           category: "liability", direction: "debit", level: 2, parentCode: "2221", isLeaf: true  },
+  { code: "222114",  name: "应交税费-待抵扣进项税额",           category: "liability", direction: "debit", level: 2, parentCode: "2221", isLeaf: true  },
+  { code: "222115",  name: "应交税费-简易计税",                category: "liability", direction: "credit",level: 2, parentCode: "2221", isLeaf: true  },
   { code: "2231",    name: "应付利息",                  category: "liability", direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "2241",    name: "其他应付款",                 category: "liability", direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "2401",    name: "长期借款",                  category: "liability", direction: "credit",level: 1, parentCode: null,   isLeaf: true  },

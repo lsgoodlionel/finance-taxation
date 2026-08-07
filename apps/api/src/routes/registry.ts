@@ -34,6 +34,16 @@ import {
   closeIncomeRoute
 } from "../modules/ledger/routes.js";
 import {
+  createOpeningBalancesRoute,
+  deleteOpeningBalancesRoute,
+  getOpeningBalancesRoute
+} from "../modules/ledger/opening-balance.routes.js";
+import {
+  balanceCheckRoute,
+  closeFiscalYearRoute,
+  listFiscalYearsRoute
+} from "../modules/ledger/fiscal-year.routes.js";
+import {
   getChairmanReportSummary,
   createReportSnapshot,
   getReportDiff,
@@ -43,6 +53,7 @@ import {
   getProfitStatement,
   listReportSnapshots
 } from "../modules/reports/routes.js";
+import { getTrialBalance } from "../modules/reports/trial-balance.routes.js";
 import { buildClosingPackageExport, buildClosingPackageHtml } from "../modules/packages/closing-bundle.js";
 import {
   createRndCostLine,
@@ -89,6 +100,10 @@ import {
   validateTaxFilingBatch,
   archiveTaxFilingBatch
 } from "../modules/tax/routes.js";
+import {
+  createVatSettlementVoucher,
+  previewVatSettlement
+} from "../modules/tax/vat-settlement.routes.js";
 import {
   approveVoucher,
   createVoucherFromTemplate,
@@ -469,6 +484,24 @@ const routes: RouteDef[] = [
     handler: (req, res, p) => unlockAccountingPeriod(req, res, p.id!)
   },
 
+  // 期初建账（V12-B4）。录入与撤销都是记账动作 —— 期初余额直接决定所有后续报表的
+  // 起点，比新建一张凭证重得多，故挂 ledger.post 而不是 ledger.view。
+  { method: "GET", path: "/api/ledger/opening-balances", auth: true, permission: "ledger.view", handler: getOpeningBalancesRoute },
+  { method: "POST", path: "/api/ledger/opening-balances", auth: true, permission: "ledger.post", handler: createOpeningBalancesRoute },
+  { method: "DELETE", path: "/api/ledger/opening-balances", auth: true, permission: "ledger.post", handler: deleteOpeningBalancesRoute },
+
+  // 会计年度与年末结转（V12-B5）
+  { method: "GET", path: "/api/ledger/fiscal-years", auth: true, permission: "ledger.view", handler: listFiscalYearsRoute },
+  {
+    method: "POST",
+    path: "/api/ledger/fiscal-years/:id/close",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => closeFiscalYearRoute(req, res, p.id!)
+  },
+  // 资产负债表恒等式自检：把「上年未结账」变成报表上看得见的一行，而不是静默错数。
+  { method: "GET", path: "/api/ledger/balance-check", auth: true, permission: "ledger.view", handler: balanceCheckRoute },
+
   // accounts
   { method: "GET", path: "/api/accounts", auth: true, permission: "ledger.view", handler: listAccounts },
   // 科目维护归记账权：建科目会影响所有后续分录的归类，比查看账簿重得多。
@@ -493,6 +526,7 @@ const routes: RouteDef[] = [
   { method: "GET", path: "/api/reports/balance-sheet", auth: true, permission: "ledger.view", handler: getBalanceSheet },
   { method: "GET", path: "/api/reports/profit-statement", auth: true, permission: "ledger.view", handler: getProfitStatement },
   { method: "GET", path: "/api/reports/cash-flow", auth: true, permission: "ledger.view", handler: getCashFlow },
+  { method: "GET", path: "/api/reports/trial-balance", auth: true, permission: "ledger.view", handler: getTrialBalance },
   { method: "GET", path: "/api/reports/snapshots", auth: true, permission: "ledger.view", handler: listReportSnapshots },
   // 快照是对外可引用的正式报表留档，属记账产出而非查阅动作。
   { method: "POST", path: "/api/reports/snapshots", auth: true, permission: "ledger.post", handler: createReportSnapshot },
@@ -610,6 +644,8 @@ const routes: RouteDef[] = [
   { method: "GET", path: "/api/taxpayer-profiles", auth: true, permission: "tax.view", handler: listTaxpayerProfiles },
   { method: "POST", path: "/api/taxpayer-profiles", auth: true, permission: "tax.manage", handler: createTaxpayerProfile },
   { method: "GET", path: "/api/tax/vat-working-paper", auth: true, permission: "tax.view", handler: getVatWorkingPaper },
+  { method: "GET", path: "/api/tax/vat-settlement", auth: true, permission: "tax.view", handler: previewVatSettlement },
+  { method: "POST", path: "/api/tax/vat-settlement", auth: true, permission: "tax.manage", handler: createVatSettlementVoucher },
   { method: "GET", path: "/api/tax/rules", auth: true, permission: "tax.view", handler: getTaxRuleProfile },
   { method: "GET", path: "/api/tax/individual-income-tax-materials", auth: true, permission: "tax.view", handler: getIndividualIncomeTaxMaterials },
   { method: "GET", path: "/api/tax/stamp-and-surtax-summary", auth: true, permission: "tax.view", handler: getStampAndSurtaxSummary },

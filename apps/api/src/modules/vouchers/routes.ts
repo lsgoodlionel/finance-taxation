@@ -248,9 +248,30 @@ export async function listCompanyVoucherPostingRecords(
   return rows.map(mapVoucherPostingRecordRow);
 }
 
+export interface ListLedgerEntriesOptions {
+  voucherId?: string;
+  businessEventId?: string;
+  /** 会计日期下界（含），`YYYY-MM-DD`。省略即不设下界。 */
+  dateFrom?: string;
+  /** 会计日期上界（含），`YYYY-MM-DD`。省略即不设上界。 */
+  dateTo?: string;
+}
+
+/**
+ * 总账分录读取。
+ *
+ * `dateFrom` / `dateTo` 按 `entry_date`（会计日期，非过账时间 `posted_at`）过滤，
+ * 且**下推到 SQL**。加这两个参数是因为此前多个调用方（利润表、现金流量表、
+ * 资产负债表、驾驶舱）都是先把公司全部历史分录拉进 Node 内存、再 `.filter()`
+ * 按日期筛——分录上万条后每次请求都要全表扫一遍并在堆上物化，是确定的性能悬崖。
+ *
+ * 两个参数都是可选的：不传时 SQL、排序与返回值与加参数之前**完全一致**，
+ * 既有调用方（凭证详情、税务、风险）无需改动。对应断言见
+ * reports/trial-balance.integration.test.ts 的「不传参行为不变」一组。
+ */
 export async function listCompanyLedgerEntries(
   companyId: string,
-  options: { voucherId?: string; businessEventId?: string } = {}
+  options: ListLedgerEntriesOptions = {}
 ): Promise<LedgerEntry[]> {
   const params: unknown[] = [companyId];
   let where = "where company_id = $1";
@@ -261,6 +282,14 @@ export async function listCompanyLedgerEntries(
   if (options.businessEventId) {
     params.push(options.businessEventId);
     where += ` and business_event_id = $${params.length}`;
+  }
+  if (options.dateFrom) {
+    params.push(options.dateFrom);
+    where += ` and entry_date >= $${params.length}::date`;
+  }
+  if (options.dateTo) {
+    params.push(options.dateTo);
+    where += ` and entry_date <= $${params.length}::date`;
   }
   const rows = await query<LedgerEntryRow>(
     `

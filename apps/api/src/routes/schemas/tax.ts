@@ -48,6 +48,10 @@ export const taxBodySchemas: Record<string, ObjectSchema> = {
     notes: { type: "string" }
   },
 
+  "POST /api/tax/vat-settlement": {
+    period: { type: "string", required: true, pattern: /^\d{4}-(0[1-9]|1[0-2])$/ }
+  },
+
   "PUT /api/tax-items/:id": {
     status: { type: "string", enum: ["pending", "review_required", "ready"] },
     treatment: { type: "string" },

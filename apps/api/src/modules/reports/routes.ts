@@ -75,10 +75,20 @@ function resolvePeriod(req: ApiRequest) {
   };
 }
 
+/**
+ * 三张报表的取数一律把日期区间下推到 SQL（V12-B6）。
+ *
+ * 此前它们都是 `listCompanyLedgerEntries(companyId)` 拉回公司**全部历史分录**、
+ * 再在 Node 里 `.filter()` 按日期筛。分录上万条后，每个请求都要全表扫一遍、把
+ * 结果在堆上物化一份，然后丢掉绝大部分——这是确定会到来的性能悬崖，不是假想。
+ *
+ * 资产负债表是时点表，只需要 `dateTo`（截至期末的累计余额，无下界）；
+ * 利润表与现金流量表是期间表，两端都给。
+ */
 export async function getBalanceSheet(req: ApiRequest, res: ServerResponse) {
   const companyId = req.auth!.companyId;
   const period = resolvePeriod(req);
-  const entries = await listCompanyLedgerEntries(companyId);
+  const entries = await listCompanyLedgerEntries(companyId, { dateTo: period.endDate });
   const report = buildBalanceSheetReport({
     periodLabel: period.periodLabel,
     asOfDate: period.endDate,
@@ -93,9 +103,10 @@ export async function getBalanceSheet(req: ApiRequest, res: ServerResponse) {
 export async function getProfitStatement(req: ApiRequest, res: ServerResponse) {
   const companyId = req.auth!.companyId;
   const period = resolvePeriod(req);
-  const entries = (await listCompanyLedgerEntries(companyId)).filter(
-    (entry) => entry.entryDate >= period.startDate && entry.entryDate <= period.endDate
-  );
+  const entries = await listCompanyLedgerEntries(companyId, {
+    dateFrom: period.startDate,
+    dateTo: period.endDate
+  });
   return json(
     res,
     200,
@@ -109,9 +120,10 @@ export async function getProfitStatement(req: ApiRequest, res: ServerResponse) {
 export async function getCashFlow(req: ApiRequest, res: ServerResponse) {
   const companyId = req.auth!.companyId;
   const period = resolvePeriod(req);
-  const entries = (await listCompanyLedgerEntries(companyId)).filter(
-    (entry) => entry.entryDate >= period.startDate && entry.entryDate <= period.endDate
-  );
+  const entries = await listCompanyLedgerEntries(companyId, {
+    dateFrom: period.startDate,
+    dateTo: period.endDate
+  });
   return json(
     res,
     200,
@@ -127,17 +139,17 @@ async function buildReportPayload(
   reportType: ReportSnapshot["reportType"],
   period: ReturnType<typeof resolvePeriod>
 ) {
-  const entries = await listCompanyLedgerEntries(companyId);
   if (reportType === "balance_sheet") {
     return buildBalanceSheetReport({
       periodLabel: period.periodLabel,
       asOfDate: period.endDate,
-      entries
+      entries: await listCompanyLedgerEntries(companyId, { dateTo: period.endDate })
     });
   }
-  const periodEntries = entries.filter(
-    (entry) => entry.entryDate >= period.startDate && entry.entryDate <= period.endDate
-  );
+  const periodEntries = await listCompanyLedgerEntries(companyId, {
+    dateFrom: period.startDate,
+    dateTo: period.endDate
+  });
   if (reportType === "profit_statement") {
     return buildProfitStatementReport({
       periodLabel: period.periodLabel,

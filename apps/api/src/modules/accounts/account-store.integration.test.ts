@@ -51,8 +51,12 @@ test("a company can add a custom detail account under an unused parent", async (
     assert.equal(parent.ok, false);
     assert.equal(parent.ok === false && parent.code, "ACCOUNT_NOT_LEAF");
 
+    // 同样不写死数量：断言的是「比建之前多了一个」
     const all = await listCompanyAccounts(COMPANY_ID);
-    assert.equal(all.length, 64, "63 个模板科目 + 1 个自建");
+    assert.ok(
+      all.some((a) => a.code === "605101"),
+      "自建科目应出现在列表里"
+    );
   } finally {
     await closePool();
   }

@@ -1,0 +1,396 @@
+# V12 升级蓝图与执行计划 — 会计内核补完：从「能记账」到「敢交付」
+
+> 日期：2026-08-07
+> 编制方式：四个成熟开源财会系统的**设计对标**（Odoo 19 `account`+`l10n_cn` / ERPNext v16 `accounts`+`assets` / GnuCash `libgnucash/engine` / Akaunting `app/Models`+`migrations`），三路独立分析车道 + 主控逐条代码核实
+> 基线：`main`（V11 已合入：过账修复、红冲、结转口径统一、越权修复、V10c 一次一件事收尾六页）
+> 承接：`https://claude.ai/code/artifact/26104250-f5d6-4ce9-b178-38552e432ae9`（一个月开发回顾，P0 为「把验收抬到路径级」）
+> 定位：V10/V11 解决「界面怎么组织」和「已有功能能不能用」；**V12 解决「账做得对不对、老企业能不能迁进来」——补完会计内核，让 FT 从"能给新设公司记流水"变成"敢承接一家已经运营三年的公司"。**
+
+---
+
+## 零、方法与边界
+
+### 参考系统与许可证
+
+| 系统 | 许可证 | 检出范围 | 定位 |
+|---|---|---|---|
+| Odoo 19 | LGPL-3.0 | `addons/account`、`l10n_cn` | 通用 ERP，会计模型最完整 |
+| ERPNext v16 | GPL-3.0 | `erpnext/accounts`（192 DocType）、`assets` | 全功能 ERP，分层治理最严 |
+| GnuCash | GPL-2.0+ | `libgnucash/engine`、`gnucash/report` | 复式记账引擎打磨最深 |
+| Akaunting | GPL-3.0 | `app/Models`、`Controllers`、`migrations` | 中小企业会计，定位与 FT 最近 |
+
+**这四个全是 copyleft，代码不能进 FT。** 复制进来会要求 FT 整体开源；且 Python/C++/PHP 到 TypeScript 跨语言逐行搬运没有工程意义。
+
+**本蓝图提取的是设计**——数据模型、业务规则、状态机、边界处理。这些属于思想，不受版权保护。每一项都注明来源系统与「怎么做」，实现一律用 FT 自己的 TS/Postgres 栈重写。
+
+### 一条重要的前置约束
+
+上一份回顾把 **P0 定为「把验收从函数级抬到路径级」**，理由是本月最严重的四个缺陷（过账恒 400、PDF 恒 500、对账链路崩溃、结转后损益归零）都是"功能自上线起从未可用"而 809 个测试全绿。
+
+**V12 不得挤掉那两项。** 本蓝图新增的每一个会计能力，都必须自带路由级测试；`run-web-tests.mjs` 的"首错即停"应在 V12 第一批次内修掉，否则后续所有前端验证都不可信。
+
+---
+
+## 一、核心发现：八条正在发生的错账
+
+这一节全部经过主控独立代码核实，**不是推测**。它们比任何功能缺失都紧急——功能缺失是"做不了"，这些是"做了但是错的"。
+
+### E1. 会计日期 = 过账时间戳 【严重 · 已核实】
+
+`apps/api/src/modules/vouchers/routes.ts:892,911`
+
+```ts
+const postedAt = new Date().toISOString();
+const voucherPeriod = postedAt.slice(0, 7);        // 期间锁判定用「当前月」
+entryDate: postedAt.slice(0, 10),                  // 分录日期 = 点击过账那天
+```
+
+**后果三条**：
+1. 6 月的业务 7 月过账 → 分录落在 **7 月**总账，利润表与资产负债表全部错期。而 `business_events.occurred_on`（真实业务发生日）就在库里，从未被使用
+2. **期间锁形同虚设**：锁了 6 月，仍可在 7 月过账一张 6 月的凭证——因为判定用的是当前月
+3. 凭证重新过账时（`routes.ts:939-978` 先删旧分录再插新的），`entryDate` 会跳到新的过账日，历史账被静默改期
+
+**讽刺的是红冲路径做对了**（`routes.ts:558`，用原凭证分录的实际 `entry_date` 判定期间，注释明确写了"跨月红冲用当前月判定会绕过对原期间的锁"）。**同一个 `isPeriodLocked()` 三个调用点两种口径。**
+
+参考做法（Odoo）：`account.move.date` 是用户可编辑的会计日期，与 `create_date` 完全分离；过账时若落在锁定期间不是拒绝而是自动顺延。
+
+### E2. 科目代码在写入路径上零校验 【严重 · 已核实】
+
+`findChartAccount()` 全仓库只有 **6 处调用，5 处在测试文件，1 处在读路径**（`reports/profit-accounts.ts:95`）。`createVoucherFromTemplate` / `updateVoucher` / `postVoucher` **一次都没调**。
+
+表侧 `voucher_lines.account_code`、`ledger_entries.account_code` 是裸 `text`，**无外键、无 CHECK**。任何客户端（包括 AI 助手）调 `POST /api/vouchers` 都能写进任意字符串并过账。
+
+**这个洞已经造成两次线上错账，有迁移文件留档**：
+- `migrations/041_fix_seed_account_codes.sql` — 788,679 元收入与实收资本在报表中静默消失、资产负债表不平
+- `migrations/042_fix_seed_non_leaf_accounts.sql` — 分录挂到非叶子科目 2211 导致前缀汇总重复计量
+
+两次都是**事后 SQL UPDATE 补救**，不是从写入端拦住。当前唯一防线 `account-code-guard.test.ts` 只静态遍历已知代码路径，不覆盖 API 任意输入。
+
+### E3. 进项发票不区分可抵扣性 【严重 · 已核实】
+
+`apps/api/src/modules/invoices/invoice-voucher.ts` 的 `buildInvoiceVoucherDraft` **只 switch 了 `direction`（input/output）**，进项一律挂 `222102 应交税费-应交增值税（进项）`。
+
+**普通发票不可抵扣，却被当专用发票做了进项抵扣** → 增值税申报少缴税。
+
+`invoices.invoice_type` 列存在（4 个取值 `vat_special|vat_general|electronic|receipt`），但**无 CHECK 约束**，且种子数据用的是 `'vat_common'`（`025_seed_demo_invoices.sql:12`），与注释的 `vat_general` 拼法不一致，两种并存。
+
+### E4. 成本类科目 4001/4101 永久丢失 【严重】
+
+`reports/profit-accounts.ts:66-70` 的注释自述：生产成本 4001 / 制造费用 4101 归入 `other`，"要先结转到主营业务成本才进损益"——**但全仓没有任何代码做这个结转**。`ledger/closing.ts` 的 `generateClosingEntries` 只遍历 revenue/expense。
+
+而 `buildBalanceSheetReport`（`reports/summary.ts:105+`）按首位数字分类，只处理 `1`/`2`/`3` 开头，**4 开头既不进资产也不进负债权益，被静默丢弃**。
+
+任何用 4001/4101 记账的制造业客户：成本永久挂账、不进利润表、**资产负债表不平**。
+
+### E5. 期初余额概念完全不存在 【严重 · 三方独立发现】
+
+`grep '期初|opening_balance|openingBalance'` 在 `apps/api/src/modules` 下**零命中**（只有术语词典和一句测试注释）。
+
+**这不是"少个功能"，是产品无法交付**：一家运营三年的公司迁到 FT，账只能从上线那天从零开始记——银行存款 0、应收账款 0、实收资本 0。唯一变通是手工造凭证（`015_startup_year1_simulation.sql` 就是这么干的），但那会把期初数混进本期发生额，利润表直接错。
+
+**FT 目前只能服务从零建账的新设公司。** 这是获客层面的封死。
+
+### E6. 没有会计年度，年末不结转，3131 跨年累积 【严重】
+
+`grep '3141'` 只有两处：科目定义、现金流量表把它列为筹资活动对手科目。**没有任何代码把 3131 本年利润结转到 3141 利润分配。**
+
+`generateClosingEntries` 的查询是 `entry_date <= $2::date`（建库至今全量），意味着 3131 里累积的是**所有年度**的利润。利润表因为按期间过滤且排除结转分录还能对，但**资产负债表的"本年利润"行会是历年累计数**。
+
+**这个系统跑满一个自然年就会出错。**
+
+### E7. 凭证号不持久化 【合规硬伤 · 三方独立发现】
+
+`vouchers` 表**没有任何编号列**。主键是拼接字符串且各路径规则不同（`tpl-voucher-${Date.now()}`、`vch-rev-${...}-${Date.now()}`、`vch-close-${companyId}-${periodLabel}`）。唯一"像凭证号"的东西在 PDF 打印时临时算出且不落库（`pdf/routes.ts:220`）。
+
+《会计基础工作规范》第五十一条要求记账凭证连续编号、第五十二条要求注明附件张数。FT 现在**无法回答"6 月共有多少张凭证""记-2026-06-0037 在哪里"**。账证核对、审计抽凭、税务稽查全部依赖凭证字号。
+
+### E8. 结转损益绕过全部治理 【严重 · 两方独立发现】
+
+`ledger/close-period.ts:97-120` 直接 `insert into vouchers (status='posted', source='period_closing')` 并直接 insert `ledger_entries`，**绕过借贷平衡校验、审核流程、职责分离校验、期间锁**。
+
+全仓只有两处 `insert into ledger_entries`：`postVoucher()` 和这里。**所以"凭证是唯一入账口径"这个不变式已经被破坏了**——总账有两个入口。
+
+参考做法（ERPNext）：`create()` 明确禁止直接生成 posted 状态；所有凭证——包括汇兑损益、系统自动生成的——都必须走同一个 `_post()`。
+
+---
+
+## 二、功能缺口矩阵
+
+「✓」= 该系统有成熟实现且值得借鉴；「—」= 该系统也没有或不适合参考。
+
+| # | 能力 | Odoo | ERPNext | GnuCash | Akaunting | FT 现状 | 优先级 |
+|---|---|:---:|:---:|:---:|:---:|---|:---:|
+| F1 | 科目表落库 + 可自定义 | ✓ | ✓ | ✓ | — | 63 条 TS 常量，全租户共用 | **P1** |
+| F2 | 期初建账 + 会计年度 + 年结 | ✓ | ✓ | ✓ | — | 完全没有 | **P1** |
+| F3 | 试算平衡表（期初/发生/期末六栏） | ✓ | ✓ | ✓ | — | 只在注释里被提到 | **P1** |
+| F4 | 增值税科目链条 + 月末结转未交 | 部分 | — | — | — | 缺"未交增值税"等 5 个科目 | **P1** |
+| F5 | 固定资产台账与折旧 | ✓* | ✓ | — | — | 只有一个布尔标记 | **P2** |
+| F6 | 往来辅助核算 + 账龄 + 核销 | ✓ | ✓ | ✓ | ✓ | 按发票抬头字符串汇总，不扣已收 | **P2** |
+| F7 | 银行对账闭环（会话 + 余额调节表） | ✓ | — | ✓ | ✓ | 只有逐笔匹配，无会话无调节表 | **P2** |
+| F8 | 周期性凭证 | — | ✓ | ✓ | ✓ | 只有通用任务调度 | **P2** |
+| F9 | 成本中心 / 分析维度 | ✓ | ✓ | — | — | 完全没有 | **P3** |
+| F10 | 税率主数据表 | ✓ | ✓ | — | ✓ | 全部硬编码在 TS 常量 | **P3** |
+| F11 | 多币种与汇率折算 | ✓ | ✓ | ✓ | ✓ | 会计核心表连 currency 列都没有 | **P4** |
+
+\* Odoo 的 `account_asset` 模块不在本次检出范围，判断基于 `account` 模块里留下的 `asset_fixed`/`expense_depreciation` 接口痕迹。
+
+### 各缺口的关键设计要点
+
+**F1 科目表落库**（参考 Odoo `account.account` + ERPNext `Account`）
+
+- **`account_type` 语义枚举比 `category`+`direction` 信息量大得多**。Odoo 的 19 值（`asset_receivable`/`asset_fixed`/`liability_payable`/`equity_unaffected`/`expense_depreciation`…）**直接可推导出**「能否核销」「期初是否结转」「报表归属」三件事。FT 现在到处硬编码 `"1122"`、`"1601"` 的根因就是没有语义标签
+- **层级用 Postgres `ltree` 而非 NestedSet**。ERPNext 的 `lft/rgt` 插入要挪全表指针；`ltree` + GiST 索引对"含下级"查询同样快且好维护。这同时能把遍地的 `like '6%'` 前缀判定换成基于树的查询
+- **编码体系当前是三套准则混搭**：`3131/3141` 是《企业会计制度》(2001)、`6001/6801` 是《企业会计准则》(2006)、`4001/4101` 是《小企业会计准则》。且 `6001c`（主营业务成本）与 `6301e`（管理费用）是自造的字母编码，与 `6001`/`6301` 前缀重叠——**CAS2006 里主营业务成本是 6401、管理费用是 6602，根本不冲突，是编码选错了**
+- **迁移建议拆两步**：先建表 + 以现有 63 条 seed（保持编码不变，解决"可自定义/按公司隔离"），编码国标化**单独立项**
+
+**F2 期初建账 + 年结**（参考 ERPNext `is_opening` + Odoo `equity_unaffected`）
+
+- ERPNext 的做法：GL Entry 上 `is_opening` 标志，报表侧「无论过账日期如何都算入期初」
+- Odoo 更优雅：`account_type='equity_unaffected'` + `include_initial_balance=false`，**损益类科目不结转期初，每个财年自动从 0 开始，不需要显式年结操作**
+- **建议两者都做**：Odoo 方案保证报表在任何时候都对（即使忘了年结），ERPNext 方案保证账簿符合国内习惯（审计要看到年结凭证）
+- 中国财年恒等于自然年，不需要 ERPNext 的 `is_short_year` 和多公司财年子表
+
+**F3 试算平衡表**（参考 ERPNext `trial_balance.py`）
+
+- 六栏固定：期初借/贷、本期发生借/贷、期末借/贷
+- 一条 SQL 用 `FILTER (WHERE entry_date < :start)` / `FILTER (WHERE entry_date BETWEEN ...)` 算完，**不要拉进 Node 内存**
+- 加合计行 + 借贷相等断言。FT 数据库层没有任何借贷平衡约束，**试算平衡表正好是发现问题的探针**
+- 顺带修性能定时炸弹：`getLedgerSummary`/`getLedgerBalances` 现在是把全部历史分录拉进内存用 Map 累加，无分页无期间过滤
+
+**F4 增值税科目链条**（**这是中国特色，四个参考系统都抄不到，必须自己设计**）
+
+现有 6 个二级科目缺以下 5 个，导致**月末"结转未交增值税"这一步做不了**：
+- 应交税费-应交增值税（进项税额转出）
+- 应交税费-应交增值税（转出未交增值税）/（转出多交增值税）
+- **应交税费-未交增值税** ← 最关键
+- 应交税费-待认证进项税额 / 待抵扣进项税额
+- 应交税费-预交增值税
+
+Odoo `l10n_cn` 在这块反而是四个系统里做得最细的（2221 下 27 个明细，含 11 个三级），**值得直接照搬科目结构**。但它的税率 CSV 只有 13/9/6 三档且全记一级科目，质量低于 FT 现有 tax 模块，不必参考。
+
+**F5 固定资产**（参考 ERPNext `Asset` + `Asset Depreciation Schedule`）
+
+- **折旧计划是独立的可提交单据，不是资产的子表**。资产参数变更时作废旧计划、生成新计划，旧计划作为历史版本保留
+- **已过账期次不可变**：重算时保留有 `voucher_id` 的行，从第一个未过账期次开始重建
+- **末期强制配平**：`Σ各期折旧 ≡ 起算净值 − 残值`，最后一期用减法倒挤，不能用公式算
+- **中国规则与 ERPNext 不同**：中国是"当月增加当月不提、下月起提；当月减少当月照提"，ERPNext 是按天 prorata。**把每期金额计算做成策略接口**
+- **多账簿从第一天设计进去**（会计口径 vs 税务口径），中国税会差异是刚需，事后加会很痛
+- ⚠️ **不要抄 ERPNext 的凭证回写方式**——它靠"日期+金额"模糊匹配，同一天两期同额会误配。凭证行上直接存 `schedule_line_id`
+- 接入点已全部就位：科目 1601/1602/6301e02 在、采购模板在、事项分类识别得出 `fixed_asset`、月结步骤位在。**只差中间的台账和排期表**
+
+**F6 往来核销 + 账龄**（参考 Odoo `account.partial.reconcile` + ERPNext `Payment Ledger Entry`）
+
+- **不存"已核销多少"，存匹配关系，残额靠减法**：`amount_residual = balance − Σ(作为借方的匹配) + Σ(作为贷方的匹配)`。解核销 = 删匹配记录，残额自动恢复
+- **符号归一化**（ERPNext PLE）：应收 `debit−credit`、应付 `credit−debit`，消掉借贷方向，outstanding 变成简单求和
+- **`against_voucher` 无核销目标时指向自己**：发票自身的应收行指向自己，付款单指向被核销的发票
+- **硬前提**：`ledger_entries` 现在**没有 `counterparty_id` 列**，`counterparties` 与 `invoices` 之间无外键（靠 `buyer_name` 字符串分组）。没有往来辅助核算就算不了账龄
+- 当前的"应收应付画像"是**开票总额累计，不扣已收款，随时间只增不减**
+
+**F7 银行对账闭环**（参考 Akaunting `reconciliations` + GnuCash 三口径余额）
+
+- GnuCash 的 `n/c/y/f` 四状态 + **三个余额口径**（账面 / 已清账 / 已对账）是精髓：`c`（银行流水已出现）与 `y`（已纳入某次对账并锁定）的区别就是对账闭环
+- Akaunting 的会话对象：`{started_at, ended_at, closing_balance, reconciled}` + 实时 `difference` 反馈
+- **关闭会话时强制断言差额为零**
+- 产出**银行存款余额调节表**——这是中国年审会计师一定会要的
+- FT 的匹配算法本身做得不错（多因子评分 + 可配规则），缺的是会话对象和调节表
+- ⚠️ 当前"确认匹配"只做 UPDATE 关联，**不生成凭证**；且未匹配超 5 天自动建事项后又把流水状态设回 `unmatched`
+
+**F8 周期性凭证**（参考 Akaunting `recurring` + GnuCash `SchedXaction`）
+
+- Akaunting 的组合值得照搬设计：**模板行同表 + `parent_id` 回指 + 差集幂等 + 成熟递归库**
+- **幂等键用 `unique(rule_id, period)`**，不要靠"查最近一次生成日期"
+- **late-fire 窗口上限**（ERPNext `Subscription` 的设计）：停机三个月后重启不应一次补生成三张凭证
+- **生成的必须是 `draft`，绝不自动过账**——FT 有职责分离校验，系统自动过账会绕过复核
+- 日期递推用 `rrule`（RFC-5545），不要手写——"每月最后一个工作日"这类规则手写必错
+- 借鉴 GnuCash 的 `SXTmpStateData`：提供"预览未来 N 期但一条都不落库"
+- 主要用途：折旧摊销（若 F5 做了则不走这条）、待摊费用分摊、预提费用、租金分摊、社保计提
+
+**F9 成本中心**（参考 ERPNext `Cost Center`，但**大幅简化**）
+
+- ERPNext 的 `Accounting Dimension` 元机制（55 张表 × N 维度的动态 `ALTER TABLE`）对只做财税的 FT 是**过度设计**，且与 FT 的手写 SQL 迁移体系冲突
+- **推荐做固定的两个维度**（成本中心 + 项目），落成 `ledger_entries` 上的真外键列
+- **必抄一条**：ERPNext 分摊规则的「深度 1 二部图」不变式——`main_cost_center` 不能出现在自己的子表里，且分摊目标不能是其他规则的 main。**用结构约束替代运行时环检测**
+- 维度是**分录行**的属性不是凭证头的属性；维度**不参与借贷平衡**，是纯统计标签
+
+**F10 税率主数据表**（参考 Akaunting `taxes`）
+
+- 中国税率**是会变的**（2019 增值税 16%→13%，小规模疫情期 3%→1% 又调回）。现在全部硬编码在 `tax/rules.ts`、`corporate-income-tax.ts`、`payroll/routes.ts`，政策一变就要改代码发版
+- **带 `effective_from`/`effective_to` 是关键**——历史期间重算必须用当时的税率
+- 只做 `normal`（价外，一般计税）+ `inclusive`（价内，简易计税倒算）两种，**不要 Akaunting 的复合税/预扣税**（那是为拉美/加拿大税制设计的）
+
+**F11 多币种**（参考 Akaunting 单据级快照，**不要** GnuCash Trading Accounts）
+
+- **先问产品问题：目标客户里有多少真有外币业务？** 中国中小企业绝大多数纯 CNY。**优先级最低**
+- 若要做，走 Akaunting 路线：单据级汇率快照，`debit`/`credit` 保持本位币语义（现有报表零改动）
+- **借贷平衡只校验本位币**，外币金额不平是正常的
+- ⚠️ 取不到汇率**必须抛错**，ERPNext 的 `get_exchange_rate` 返回 `0.0` 会静默产生金额为 0 的分录，是个真 bug
+
+---
+
+## 三、FT 已优于参考系统的地方（避免误重构）
+
+这一节同样重要——防止后续开发盲目"向大厂看齐"而破坏已经正确的设计。
+
+| 方面 | FT 的做法 | 对比 |
+|---|---|---|
+| **红冲** | 原凭证 100% 不改动，生成 draft 反向凭证走完整审核过账 | **优于 ERPNext**。ERPNext 默认模式把原凭证 `is_cancelled=1` 从报表里抹掉，**在中国是不合规的**——准则要求红字冲销是新增凭证、原凭证保持完整。ERPNext 的 Immutable Ledger 模式才对，但那是个全局开关，切换会造成历史口径不一致。FT 语义唯一，更安全 |
+| **借贷平衡** | 过账时硬拒绝不平衡 | **优于 GnuCash**。GnuCash 自动往 `Imbalance-CNY` 账户塞配平分录，那个科目会出现在资产负债表上，中国审计当场就废。FT 只需补"不平衡草稿的可见性"（一个查询参数），**不要改校验策略** |
+| **租户隔离** | 数据库层 RLS（`039_core_table_rls.sql`） | **优于 Akaunting** 的 ORM 全局 Scope。但 RLS 只覆盖 5/79 张表且只 `ENABLE` 未 `FORCE`，`voucher_lines` 甚至没有 `company_id` 列——**这是要补的** |
+| **中国报表** | 三大报表 + 税务申报底稿完整实现 | **优于 Odoo `l10n_cn`**。后者的 `account_report.xml` 全文 17 行，只注册了一个凭证打印按钮，**没有任何中国式报表**；真正的报表引擎在企业版 |
+| **审计哈希链** | `036_audit_hash_chain.sql` 对审计日志做链式防篡改 | 方向正确。注意**不要**引入 Odoo 的凭证级 `inalterable_hash`（为法国 NF525/德国 GoBD 设计），中国无对应强制要求，启用后凭证永久冻结，改错了救不回来 |
+
+---
+
+## 四、明确不引入清单
+
+| 不引入 | 来源 | 理由 |
+|---|---|---|
+| Imbalance 自动配平 | GnuCash | 中国准则不接受"不平衡科目"，审计当场废 |
+| Trading Accounts 多币种 | GnuCash | 借贷平衡从一条规则变三条，纯人民币核算是纯负担 |
+| commodity 统一模型（股票/基金/货币同构） | GnuCash | 个人理财需求，中小企业账上没有需按市价重估的证券 |
+| 整套税引擎（`fiscal_position`/`tax_scope`） | Odoo | 为欧盟 VAT/美国销售税/印度 GST 设计，`tax_scope` 的货物-服务二分与中国按税目分档粒度不对 |
+| 收付实现制税金（Cash Basis Tax） | Odoo | 为意/法设计，中国全部权责发生制，零价值 |
+| 凭证级不可篡改哈希链 | Odoo | 法国 NF525/德国 GoBD 专用，中国无强制要求 |
+| 五种锁定日期 + 例外机制 | Odoo | 为跨国集团设计，中国小微只需要一个结账日期 |
+| 早付折扣（EPD）、部分可抵扣、自开票 | Odoo | 欧美/欧盟惯例，中国罕见 |
+| `sequence_override_regex` | Odoo | 让用户写正则定义编号格式，是"把复杂度推给用户" |
+| Accounting Dimension 的 `ALTER TABLE` 元机制 | ERPNext | 55 张表 × N 维度动态 DDL，与 FT 手写迁移体系冲突 |
+| 人类可读字符串作主键 | ERPNext | ERPNext 自己承认是设计债，改名要级联全库 |
+| Budget 四组开关 × 两层级 | ERPNext | 为制造业采购流程设计，FT 没有采购订单/物料申请 |
+| Payment Entry 全套（3327 行） | ERPNext | 只需抄 `against_voucher` 核销概念 |
+| 多公司树 / 母子公司科目同步 / 合并报表 | ERPNext | FT 用户与公司 1:1 硬绑定，集团合并是另一个产品 |
+| `documents` 多态大表 | Akaunting | Laravel 生态省代码的做法，TS/Postgres 下牺牲类型安全和外键完整性 |
+| 客户门户 | Akaunting | FT 是内部财税平台，引入外部登录大幅扩大攻击面 |
+| 复合税 / 预扣税 | Akaunting | 为加拿大 GST+PST、拉美预扣税设计 |
+| 商品目录 / 库存 | Akaunting | Akaunting 自己在 v300 就 drop 了 `items.quantity` |
+
+---
+
+## 五、执行计划
+
+### 分批原则
+
+1. **先修错账，再补功能**。E1–E8 是"做了但是错的"，优先级高于任何新能力
+2. **每批自带路径级测试**。承接上一份回顾的 P0——本批次新增的每个接口都要有"成功 + 越权被拒 + 前置校验被拒"三段式路由级测试
+3. **F1 是多数功能的前置依赖**（F5/F6/F9 都要挂科目），但**不阻塞 E 批次**
+
+---
+
+### 批次 A · 止血（全部小工作量，无新表）
+
+| 项 | 内容 | 验收标准 |
+|---|---|---|
+| A1 | **修 `run-web-tests.mjs` 首错即停** | 跑完全部用例再汇总失败；顺带并行化（126 个文件已在串行） |
+| A2 | **E1 会计日期**：`vouchers` 加 `accounting_date`，过账时 `entry_date = accounting_date`，期间锁按它判 | 集成测试：6 月业务 7 月过账，分录落 6 月；锁 6 月后 7 月不能补记 6 月凭证 |
+| A3 | **E8 结转走正常通道**：`closePeriod` 生成 draft 再走 `postVoucher` 同一路径 | 断言全仓 `insert into ledger_entries` 只有一处 |
+| A4 | **E3 进项可抵扣性**：`invoice_type` 加 CHECK 统一取值；非专票进项税额并入成本，不进 222102 | 单测覆盖四种发票类型 × 进销项 |
+| A5 | **E4 成本类科目**：`buildBalanceSheetReport` 对 4 开头显式处理或报错，不再静默丢弃 | 断言"任意科目都不会被静默丢弃" |
+| A6 | **E7 凭证号**：`vouchers` 加 `voucher_word`/`voucher_seq`/`period`，过账时事务内分配 | 唯一索引 `(company_id, period, voucher_word, voucher_seq) where status='posted'`；并发测试 |
+| A7 | **DB 层平衡约束**：`ledger_entries` 加 `check(debit>=0 and credit>=0)` + `check(debit=0 or credit=0)` | 直接 INSERT 违规数据被数据库拒绝 |
+| A8 | **红冲并发保护**：部分唯一索引 `unique(company_id, reverses_voucher_id) where not null` | 并发两次红冲只成功一次 |
+| A9 | **`voucher_lines` 补 `company_id` + RLS** | RLS 覆盖率从 5/79 提升；跨租户查询返回空 |
+
+---
+
+### 批次 B · 让老企业能迁进来（F1 + F2 + F3）
+
+这三项是**一体的**——期初余额要挂科目，试算平衡表要有期初栏。
+
+| 项 | 内容 | 依赖 |
+|---|---|---|
+| B1 | `accounts` 表（`account_type` 19 值语义枚举 + `ltree` 层级 + 按公司隔离），以现有 63 条 seed，**编码暂不变** | — |
+| B2 | `voucher_lines`/`ledger_entries` 加 `account_id` 复合外键（含 `company_id`） | B1 |
+| B3 | 「只有叶子科目可被分录引用」做成数据库不变量（把 042 修的问题变成约束） | B1 |
+| B4 | 期初建账：`is_opening` 标志 + 建账向导（录入 → 借贷平衡校验 → 生成 opening 凭证） | B1 |
+| B5 | `fiscal_years` 表 + 年末结转（3131 → 3141）+ 资产负债表自检（资产−负债−权益≠0 时显式告警） | B4 |
+| B6 | 试算平衡表六栏 + 借贷相等断言；`getLedgerBalances`/`getLedgerSummary` 改 SQL 聚合 | B1 |
+| B7 | 前端科目管理页（树形 CRUD + 停用） | B1 |
+| B8 | **F4 增值税科目链条补全** + 月末结转未交增值税凭证 | B1 |
+
+---
+
+### 批次 C · 核心功能补齐
+
+| 项 | 内容 | 依赖 |
+|---|---|---|
+| C1 | **F5 固定资产**（台账 + 直线法 + 月度计提 + 处置）；接进月结向导的 `depreciation` 步骤 | B1 |
+| C2 | **F6 往来核销 + 账龄**：`ledger_entries` 加 `counterparty_id`；`settlements` 匹配表；账龄分桶 | B1 |
+| C3 | **F7 银行对账闭环**：会话对象 + 余额调节表 + 关闭时差额断言 | C2 |
+| C4 | **F8 周期性凭证**：模板表 + 幂等键 + late-fire 上限 + 预览不落库 | B1 |
+| C5 | 合并两套月结向导（`close/close.routes.ts` 7 步 vs `ledger/close-plan.ts` 8 步，当前并存且步骤不一致） | C1、C3 |
+
+---
+
+### 批次 D · 按需触发
+
+| 项 | 触发条件 |
+|---|---|
+| D1 | **F9 成本中心**（简化版两列） | 客户提出分部门/分项目核算需求 |
+| D2 | **F10 税率主数据表** | 下一次税率政策调整前 |
+| D3 | 科目编码国标化迁移（`6001c`→`6401`、`6301e0x`→`6602xx`、`3131`→`4103`） | 独立立项，越晚越贵 |
+| D4 | **F5 第二期**：多账簿（税会差异）、加速折旧、一次性扣除优惠 | 所得税汇算需求 |
+| D5 | **F11 多币种最小版本** | 出现真实外币业务客户 |
+
+---
+
+## 六、待核实项
+
+以下几条车道报告提出但主控尚未独立验证，**执行前需确认**：
+
+1. **`vouchers.status` 可能有类型外的脏数据**：`vouchers/routes.ts:192` 的排序表达式含 `'validated'`/`'approved'`，但 `VoucherStatus` 只有 `draft|review_required|posted`。跑 `select distinct status from vouchers` 确认
+2. **跨年 3131 累积（E6）的实际表现**：需造一组跨年数据实跑验证。若确认资产负债表"本年利润"行显示历年累计，E6 应从 P1 提到 P0
+3. **两个 `.claude/worktrees/` 副本**（`serene-kilby-47f06e`、`clever-archimedes-278825`）里是否有未合入的相关工作，可能影响"确认缺失"的结论
+4. **前端工作量未估**：所有工作量估计只覆盖后端 + 数据库。固定资产卡片、科目树选择器、核销界面、试算平衡表都是重前端功能，实际工期会显著高于估计
+
+---
+
+## 附：车道分工与交叉验证
+
+三个分析车道独立工作，**互不可见对方结论**。以下问题被两个及以上车道独立发现，可信度最高：
+
+- **期初余额缺失**（Odoo / ERPNext / GnuCash 三方）
+- **凭证号不持久化**（Odoo / ERPNext / GnuCash 三方）
+- **科目表硬编码**（四方）
+- **结转损益绕过治理**（ERPNext / GnuCash 两方）
+- **年结缺失、3131 跨年累积**（Odoo / ERPNext 两方）
+- **`ledger_entries` 无 `counterparty_id` 导致账龄不可能**（ERPNext / GnuCash 两方）
+- **报表全量拉内存无期间过滤**（Odoo / ERPNext / GnuCash 三方）
+
+三个车道还各自纠正了主控初始清单的错误：科目数是 **63 不是 65**；多币种问题比"只有 currency 字段"更严重（**会计核心四张表连该字段都没有**）；科目表问题比"没落库"更严重（**写路径零校验，已致两次线上错账**）。
+
+---
+
+## 执行记录 · 批次 A / B
+
+### 批次 A（PR #32）· 全 9 项，5 个提交
+
+修掉八条错账中的五条：会计日期与过账时间分离（E1）、进项发票可抵扣性（E3）、成本科目静默丢弃（E4）、凭证号持久化（E7）、结转绕过治理（E8）。另含测试运行器首错即停、借贷完整性下沉数据库、`voucher_lines` 租户隔离、红冲并发保护。
+
+**两处改错方向后调头**：
+
+- **A9** 最初按「每个插入点都补 `company_id`」改，改完发现全仓 8 处插入 `voucher_lines`，当场漏两处、还误伤了 `voucher_draft_lines`。更要命的是填**错**公司比不填更危险——RLS 会把分录隔离到错误租户。改用触发器：`company_id` 完全由 `voucher_id` 决定，属派生数据，应由数据库计算。
+- **A3** 没有让结转去走完整的 `postVoucher`（蓝图原本那么写）。职责分离判的是**人的动作**，期末结转是系统按月自动生成的，硬给它编一个审核人只会让职责分离变成走过场。改为抽出账务闸门两边共用，职责分离留在 HTTP 层。
+
+### 批次 B · B1/B4/B5/B6/B7/B8
+
+科目表落库闭合了最后一条错账（E2 写路径零校验）。B1 过程中有个 bug 恰好证明了设计的必要性：最初直接 `cross join companies` 做 seed，结果只有迁移执行时已存在的公司拿到科目，后建的公司一个都没有 → 改成模板表 + 建公司触发器。
+
+**三处车道纠正了蓝图或指令的判断**：
+
+1. **`cost_production` 不是损益类**（B4/B5 纠正）。4001/4101 期末余额是在产品、属存货，A5 已按 `category='cost'` → 资产归类。若判成损益类，制造业客户录不进在产品期初余额，年结还会把在产品当利润转进 3141。
+2. **增值税科目链条需要 9 个而非 5 组**（B8 纠正）。缺「已交税金」的话，「转出多交增值税」永远不可能发生，那个科目是死的。
+3. **期初余额存成真实凭证而非独立表**（B4/B5 选型）。独立表会制造第二个余额事实来源，逼每个读路径记得「再加上期初表」，漏一个就是量级很大的静默错账——正是 A3 刚收敛掉的失败模式。
+
+**两个贯穿全批的设计取舍**：
+
+- **差额不凑平**。试算平衡表（B6）与资产负债表自检（B5）都选择照实报差额并点名成因，而不是合成一行把表凑平。凑平会让一个真实的待办变得看不见。
+- **系统生成的凭证一律 draft，不自动过账**。红冲、期末结转、增值税结转都遵循这条——FT 有职责分离校验，系统自动过账会绕过复核。
+
+### 已知残留（按优先级）
+
+1. **共享测试库并发争用**（两个车道独立报告）。多个车道同时 `resetTestDatabase` 会互相 DROP SCHEMA，表现为随机的 `relation "companies" does not exist` / deadlock。安静窗口下全绿，但**并行执行模型需要 per-lane 数据库**，否则 CI 会随机红。测试已统一读 `V4_TEST_DATABASE_URL`，隔离只需为每条车道传不同的库名。
+2. **`ledger_entries.source` 无 CHECK 约束**。整套结转口径机制依赖它的取值来自已知集合（`voucher_posting`/`period_closing`/`annual_closing`/`opening_balance`），写错就是静默失真。
+3. **报表侧接线未做**：`checkBalanceSheet` 的差额需要渲染成报表上的一行；`fiscalYearProfitFilterSql` 需要报表侧采用才能真正走上「忘了年结报表也对」的路线。
+4. **增值税底稿与账务科目脱节**。底稿从 `tax_items` 按字符串匹配 + 重算税率，账务从 `ledger_entries` 按科目取余额，两者算同一个数但取数源与口径全不同，必然对不上。**正确的下一步是反过来让底稿从账簿取数**，底稿变成账簿的一个视图。前置是 F10 税率主数据表（现有 `resolveVatRate` 只会返回 13 或 3，产不出 9%/6%）。
+5. **`closePeriod` 不写 `voucher_lines`**，期末结转凭证的详情页是空的。
+6. 进项转出、已交税金、待认证、待抵扣、简易计税五个科目目前**没有写入路径**，是为手工凭证与 C 批次准备的。
