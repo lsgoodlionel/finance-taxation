@@ -394,6 +394,14 @@ export interface Voucher {
   summary: string;
   status: VoucherStatus;
   lines: VoucherDraftLine[];
+  /**
+   * 会计日期（`YYYY-MM-DD`）：这笔账归属哪个期间。
+   *
+   * 与 `postedAt`（什么时候点的过账按钮）是两件事。过账时 `ledger_entries.entry_date`
+   * 取的是它，期间锁也按它判 —— 6 月的业务 7 月过账，账要记在 6 月，且锁了 6 月就
+   * 不该还能补记进去。此前两者混用同一个过账时间戳，导致报表错期且期间锁失效。
+   */
+  accountingDate: string;
   approvedAt: string | null;
   postedAt: string | null;
   source: "analysis";

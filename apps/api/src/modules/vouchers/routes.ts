@@ -44,6 +44,7 @@ interface VoucherRow {
   summary: string;
   status: Voucher["status"];
   source: Voucher["source"];
+  accounting_date: string | Date;
   approved_at: string | Date | null;
   posted_at: string | Date | null;
   created_at: string | Date;
@@ -128,6 +129,7 @@ function mapVoucherRow(row: VoucherRow, lines: VoucherLineRow[]): Voucher {
       .filter((line) => line.voucher_id === row.id)
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(mapVoucherLineRow),
+    accountingDate: toDateOnly(row.accounting_date) ?? "",
     approvedAt: toIsoString(row.approved_at),
     postedAt: toIsoString(row.posted_at),
     source: row.source,
@@ -185,7 +187,7 @@ export async function listCompanyVouchers(
     `
       select
         id, company_id, business_event_id, mapping_id, voucher_type, summary, status,
-        source, approved_at, posted_at, created_at, updated_at
+        source, accounting_date, approved_at, posted_at, created_at, updated_at
       from vouchers
       ${where}
       order by
@@ -353,9 +355,10 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
     return json(res, 400, { error: "templateKey, amount and businessEventId are required" });
   }
 
-  const event = await queryOne<{ id: string }>(
+  // 一并取业务发生日：它是这张凭证的会计日期来源，决定账记在哪个期间。
+  const event = await queryOne<{ id: string; occurred_on: string | Date }>(
     `
-      select id
+      select id, occurred_on
       from business_events
       where id = $1 and company_id = $2
     `,
@@ -389,6 +392,8 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
     voucherType: draft.voucherType,
     summary: draft.summary,
     status: "draft",
+    // 会计日期取业务发生日，不是「今天」——这笔账属于业务发生的那个期间。
+    accountingDate: toDateOnly(event.occurred_on) ?? now.slice(0, 10),
     lines: draft.lines.map((line, index) => ({
       ...line,
       id: `${voucherId}-line-${index + 1}`
@@ -889,8 +894,12 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
     }
   }
 
+  // postedAt 只是「什么时候点的过账按钮」，accountingDate 才是「这笔账归属哪个期间」。
+  // 两者必须分开：6 月的业务 7 月过账，账要记在 6 月；期间锁也要按 6 月判，
+  // 否则锁了 6 月仍能在 7 月补记 6 月的凭证（此前正是如此）。
   const postedAt = new Date().toISOString();
-  const voucherPeriod = postedAt.slice(0, 7);
+  const accountingDate = target.accountingDate;
+  const voucherPeriod = accountingDate.slice(0, 7);
   if (await isPeriodLocked(req.auth!.companyId, voucherPeriod)) {
     return json(res, 400, { error: `会计期间 ${voucherPeriod} 已锁账，无法过账。请先解锁该期间。` });
   }
@@ -908,7 +917,7 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
     companyId: target.companyId,
     voucherId: target.id,
     businessEventId: target.businessEventId,
-    entryDate: postedAt.slice(0, 10),
+    entryDate: accountingDate,
     summary: line.summary || target.summary,
     accountCode: line.accountCode,
     accountName: line.accountName,

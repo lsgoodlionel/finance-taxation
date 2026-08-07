@@ -436,3 +436,99 @@ test("updating a draft voucher's summary still works", async () => {
     await pool.end();
   }
 });
+
+/**
+ * 会计日期与过账时间的分离（V12-A2）。
+ *
+ * 此前 postVoucher 把过账那一刻的系统时间同时当成分录日期和期间锁的判定依据：
+ *   const postedAt = new Date().toISOString();
+ *   const voucherPeriod = postedAt.slice(0, 7);   // 期间锁按「当前月」判
+ *   entryDate: postedAt.slice(0, 10);             // 分录日期 = 点过账那天
+ *
+ * 于是 6 月的业务 7 月过账，账就记进了 7 月；锁了 6 月也拦不住 7 月补记 6 月的
+ * 凭证——因为判定的是当前月，不是这笔账所属的期间。而 business_events.occurred_on
+ * 一直就在库里没被用。
+ *
+ * 这两条断言必须用「与今天不同的会计日期」，否则用当天日期测，错误实现同样能通过。
+ */
+
+/** 造一张指定会计日期的待审核凭证。 */
+async function seedVoucherOn(pool: pg.Pool, voucherId: string, accountingDate: string): Promise<void> {
+  await seedVoucher(pool, { id: voucherId });
+  await pool.query(`update vouchers set accounting_date = $2::date where id = $1`, [
+    voucherId,
+    accountingDate
+  ]);
+}
+
+test("posting writes ledger entries on the accounting date, not the day the button was clicked", async () => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const { closePool } = await import("../../db/client.js");
+  try {
+    // Arrange：一张会计日期在过去的凭证（模拟「上个月的业务这个月才过账」）
+    const voucherId = "vch-acctdate-past";
+    const accountingDate = "2026-03-17";
+    await seedVoucherOn(pool, voucherId, accountingDate);
+    assert.equal(await approveAs(voucherId, REVIEWER), 200);
+
+    // Act
+    const result = await postAs(voucherId, POSTER, authorizedBody);
+    assert.equal(result.statusCode, 200, `过账应成功，实际：${JSON.stringify(result.body)}`);
+
+    // Assert：分录落在会计日期，而不是今天
+    const entries = await pool.query<{ entry_date: string }>(
+      `select to_char(entry_date, 'YYYY-MM-DD') as entry_date from ledger_entries where voucher_id = $1`,
+      [voucherId]
+    );
+    assert.ok(entries.rows.length > 0, "应产生总账分录");
+    for (const row of entries.rows) {
+      assert.equal(row.entry_date, accountingDate, "分录日期必须等于会计日期");
+    }
+
+    // 过账时间戳仍然记录「什么时候点的按钮」，两者是两件事
+    const posted = await pool.query<{ posted_at: Date }>(
+      `select posted_at from vouchers where id = $1`,
+      [voucherId]
+    );
+    const postedDay = posted.rows[0]!.posted_at.toISOString().slice(0, 10);
+    assert.notEqual(postedDay, accountingDate, "过账时间应是今天，与会计日期不同");
+  } finally {
+    await closePool();
+    await pool.end();
+  }
+});
+
+test("the period lock is judged by the accounting period, not the current month", async () => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const { closePool } = await import("../../db/client.js");
+  try {
+    // Arrange：会计日期在 2026-03，且把 2026-03 锁账
+    const voucherId = "vch-acctdate-locked";
+    await seedVoucherOn(pool, voucherId, "2026-03-17");
+    assert.equal(await approveAs(voucherId, REVIEWER), 200);
+    await pool.query(
+      `insert into accounting_periods (company_id, period, is_locked)
+       values ($1, '2026-03', true)
+       on conflict (company_id, period) do update set is_locked = true`,
+      [COMPANY_ID]
+    );
+
+    // Act：在「当前月」过账一张属于已锁期间的凭证
+    const result = await postAs(voucherId, POSTER, authorizedBody);
+
+    // Assert：必须被拦住。错误实现判的是当前月（未锁），会放行
+    assert.equal(result.statusCode, 400, "已锁期间的凭证不得过账");
+    assert.match(String(result.body?.error), /2026-03.*已锁账/);
+
+    const entries = await pool.query<{ count: string }>(
+      `select count(*)::text as count from ledger_entries where voucher_id = $1`,
+      [voucherId]
+    );
+    assert.equal(entries.rows[0]?.count, "0", "被拦下的过账不得留下分录");
+  } finally {
+    await closePool();
+    await pool.end();
+  }
+});
