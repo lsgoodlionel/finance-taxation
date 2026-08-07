@@ -1,7 +1,7 @@
 import { env } from "../config/env.js";
 import { query } from "../db/client.js";
 import { getMenu } from "../modules/access/routes.js";
-import { listAccounts, getAccountByCode } from "../modules/accounts/routes.js";
+import { listAccounts, getAccountByCode, createAccount, updateAccount } from "../modules/accounts/routes.js";
 import { handleAuthMeta } from "../modules/auth/routes.js";
 import { handleChairmanDashboard, handleChairmanTrend } from "../modules/dashboard/routes.js";
 import {
@@ -471,6 +471,16 @@ const routes: RouteDef[] = [
 
   // accounts
   { method: "GET", path: "/api/accounts", auth: true, permission: "ledger.view", handler: listAccounts },
+  // 科目维护归记账权：建科目会影响所有后续分录的归类，比查看账簿重得多。
+  // 不提供 DELETE —— 科目被分录引用过就不能删，只能停用（见 account-store.ts）。
+  { method: "POST", path: "/api/accounts", auth: true, permission: "ledger.post", handler: createAccount },
+  {
+    method: "PATCH",
+    path: "/api/accounts/:code",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => updateAccount(req, res, p.code!)
+  },
   {
     method: "GET",
     path: "/api/accounts/:code",
