@@ -514,6 +514,18 @@ export interface BalanceSheetReport {
   assets: FinancialReportLine[];
   liabilities: FinancialReportLine[];
   equity: FinancialReportLine[];
+  /**
+   * 无法归入资产/负债/权益、也不属于损益的科目（V12-A5）。
+   *
+   * 正常情况下恒为空数组。非空说明账上出现了报表口径覆盖不到的科目代码——此前
+   * 这类科目（如 4 开头的生产成本）会被**静默丢弃**，资产负债表因此不平且无从
+   * 察觉。现在显式列出来，金额照常给出，配合 `warnings` 让问题可见、可定位。
+   *
+   * 这些行**不计入任何合计**：把成因不明的余额掺进合计只会掩盖不平。
+   */
+  unclassified: FinancialReportLine[];
+  /** 面向使用者的报表告警（当前只有未分类科目一种）。正常为空数组。 */
+  warnings: string[];
   totals: {
     assets: string;
     liabilities: string;

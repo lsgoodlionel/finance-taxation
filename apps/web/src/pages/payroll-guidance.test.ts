@@ -52,6 +52,7 @@ const existingVouchers: Voucher[] = [
     businessEventId: "evt-payroll-1",
     mappingId: "map-1",
     voucherType: "accrual",
+    accountingDate: "2026-05-15",
     summary: "工资计提凭证",
     status: "posted",
     lines: [],

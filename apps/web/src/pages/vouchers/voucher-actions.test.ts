@@ -22,6 +22,7 @@ function makeVoucher(id: string, status: Voucher["status"], debits: string[] = [
     businessEventId: "",
     mappingId: "",
     voucherType: "general",
+    accountingDate: "2026-05-15",
     summary: `voucher-${id}`,
     status,
     lines: debits.map((debit, index) => ({

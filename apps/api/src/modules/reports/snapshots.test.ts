@@ -10,6 +10,8 @@ test("buildReportDiff compares two balance sheet snapshots", () => {
     assets: [{ code: "1002", label: "银行存款", amount: "100" }],
     liabilities: [],
     equity: [{ code: "3131", label: "本年利润", amount: "100" }],
+    unclassified: [],
+    warnings: [],
     totals: {
       assets: "100",
       liabilities: "0",
@@ -23,6 +25,8 @@ test("buildReportDiff compares two balance sheet snapshots", () => {
     assets: [{ code: "1002", label: "银行存款", amount: "180" }],
     liabilities: [],
     equity: [{ code: "3131", label: "本年利润", amount: "180" }],
+    unclassified: [],
+    warnings: [],
     totals: {
       assets: "180",
       liabilities: "0",

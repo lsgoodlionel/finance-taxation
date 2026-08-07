@@ -62,6 +62,7 @@ const summary = buildPayrollArtifactSummary({
       businessEventId: "evt-payroll-1",
       mappingId: "map-1",
       voucherType: "accrual",
+      accountingDate: "2026-05-15",
       summary: "计提工资",
       status: "review_required",
       lines: [],
