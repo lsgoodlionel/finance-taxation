@@ -35,6 +35,7 @@ import {
 } from "../workflows/runtime.js";
 import { buildReversalLines, canReverseVoucher } from "./reversal.js";
 import { formatVoucherNumber, resolveVoucherWord, type VoucherWord } from "./voucher-number.js";
+import { insertLedgerEntries } from "./ledger-writer.js";
 
 interface VoucherRow {
   id: string;
@@ -1032,40 +1033,9 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
       ]
     );
 
-    for (const entry of createdLedgerEntries) {
-      await client.query(
-        `
-          insert into ledger_entries (
-            id,
-            company_id,
-            voucher_id,
-            business_event_id,
-            entry_date,
-            summary,
-            account_code,
-            account_name,
-            debit,
-            credit,
-            source,
-            posted_at
-          ) values ($1, $2, $3, $4, $5::date, $6, $7, $8, $9::numeric, $10::numeric, $11, $12::timestamptz)
-        `,
-        [
-          entry.id,
-          entry.companyId,
-          entry.voucherId,
-          entry.businessEventId,
-          entry.entryDate,
-          entry.summary,
-          entry.accountCode,
-          entry.accountName,
-          entry.debit,
-          entry.credit,
-          entry.source,
-          entry.postedAt
-        ]
-      );
-    }
+    // 总账写入统一走 ledger-writer —— 期末结转也用同一个函数，
+    // 「凭证是唯一入账口径」这个不变式才不是口头约定。
+    await insertLedgerEntries(client, createdLedgerEntries);
 
     await client.query(
       `
