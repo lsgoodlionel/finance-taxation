@@ -117,7 +117,7 @@ test("guided 冒烟：/reports 默认老板摘要视图，不以专业三表为�
   ).toBeVisible({ timeout: 15_000 });
 });
 
-test("pro 冒烟：/inbox AI 草稿批量批准 + /close 月结 8 步看板", async ({ page, apiClient }, testInfo) => {
+test("pro 冒烟：/inbox AI 草稿批量批准 + /close 月结看板", async ({ page, apiClient }, testInfo) => {
   // Arrange：独立属期准备一条属于本用例的待批准草稿
   const period = pickPeriodForProject(testInfo, "2025-11", "2025-05");
   const { eventTitle } = await ensureDraftForPeriod(apiClient, period, "采购报销");
@@ -144,11 +144,20 @@ test("pro 冒烟：/inbox AI 草稿批量批准 + /close 月结 8 步看板", as
   await page.getByRole("button", { name: /确认批准/ }).click();
   await expect(page.getByText(/批量批准完成：成功 1 条/).first()).toBeVisible({ timeout: 15_000 });
 
-  // /close：8 步月结看板，含「结转损益」步骤
+  // /close：月结看板。V12-C5 把旧的 /api/close/status 清单并入状态机后，
+  // 步数从 8 变为 11（新增工资确认、社保关账、银行对账）。
+  //
+  // 断言改为「至少 8 步 + 关键步骤在场」而不是精确步数：这条用例要守的是
+  // "月结看板渲染得出、含结转损益这一步"，而不是把步数钉死——步数会随
+  // 会计流程本身演进，钉死它只会让每次正当的流程调整都红一次。
+  // 步骤集合的正确性由 close-plan.test.ts 的 CLOSE_STEP_ORDER 断言守着。
   await page.goto("/close");
   await expect(page.getByRole("heading", { name: /月度结账/ })).toBeVisible();
-  await expect(page.locator(".ant-steps-item")).toHaveCount(8, { timeout: 15_000 });
+  const steps = page.locator(".ant-steps-item");
+  await expect(steps.first()).toBeVisible({ timeout: 15_000 });
+  expect(await steps.count()).toBeGreaterThanOrEqual(8);
   await expect(page.getByText("结转损益").first()).toBeVisible();
+  await expect(page.getByText("银行对账").first()).toBeVisible();
 });
 
 test("旧路由重定向回归：pdf-export / archive-package / boss-qa / documents", async ({ page }) => {

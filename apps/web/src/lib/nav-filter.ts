@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import {
   AlertOutlined, AuditOutlined, BarChartOutlined, BookOutlined, CalculatorOutlined,
-  DashboardOutlined, ExperimentOutlined, ExportOutlined, FileSearchOutlined, FileTextOutlined, FormOutlined,
+  DashboardOutlined, ExperimentOutlined, ExportOutlined, FileSearchOutlined, FileTextOutlined, FormOutlined, GoldOutlined,
   InboxOutlined, LineChartOutlined, ProfileOutlined, RobotOutlined, SettingOutlined,
   TeamOutlined, UnorderedListOutlined,
 } from "@ant-design/icons";
@@ -49,6 +49,7 @@ export const proNavItems: readonly NavEntry[] = [
       { key: "/bills", icon: createElement(ProfileOutlined), label: "票据中心" },
       { key: "/vouchers", icon: createElement(AuditOutlined), label: "凭证中心" },
       { key: "/ledger", icon: createElement(BarChartOutlined), label: "总账中心" },
+      { key: "/asset-center", icon: createElement(GoldOutlined), label: "资产与往来" },
       { key: "/reports", icon: createElement(LineChartOutlined), label: "财务报表" },
       { key: "/export-center", icon: createElement(ExportOutlined), label: "导出与归档" },
     ],

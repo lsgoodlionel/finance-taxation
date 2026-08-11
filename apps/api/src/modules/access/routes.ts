@@ -43,6 +43,7 @@ const ALL_MENU_ITEMS: readonly MenuItem[] = [
   { key: "bills", label: "票据中心", route: "/bills", permissionKey: "documents.view", ...GROUP_FINANCE },
   { key: "vouchers", label: "凭证中心", route: "/vouchers", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "ledger", label: "总账中心", route: "/ledger", permissionKey: "ledger.view", ...GROUP_FINANCE },
+  { key: "asset-center", label: "资产与往来", route: "/asset-center", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "reports", label: "财务报表", route: "/reports", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "export-center", label: "导出与归档", route: "/export-center", permissionKey: "documents.view", ...GROUP_FINANCE },
   { key: "tax", label: "税务中心", route: "/tax", permissionKey: "tax.view", ...GROUP_TAX },
@@ -51,6 +52,9 @@ const ALL_MENU_ITEMS: readonly MenuItem[] = [
   { key: "audit", label: "审计日志", route: "/audit", permissionKey: "audit.view", ...GROUP_RISK },
   { key: "knowledge", label: "制度库", route: "/knowledge", permissionKey: "knowledge.view", ...GROUP_TOOLS },
   { key: "settings", label: "系统中心", route: "/settings", permissionKey: "settings.manage", ...GROUP_SYS },
+  // 余额调节表不进侧栏（它是月结流程里的一步，由向导跳转进入），
+  // 但深链权限判断要认得它，故列在这里。
+  { key: "bank-reconciliation", label: "银行余额调节表", route: "/banking/reconciliation", permissionKey: "ledger.view", ...GROUP_FINANCE },
   // 旧路由兼容项（路由层已重定向，仅供深链权限判断）
   { key: "tasks", label: "任务中心", route: "/tasks", permissionKey: "tasks.view", ...GROUP_ENTRY },
   { key: "documents", label: "单据中心", route: "/documents", permissionKey: "documents.view", ...GROUP_FINANCE }

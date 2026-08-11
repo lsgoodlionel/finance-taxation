@@ -36,6 +36,8 @@ const ContractsDomainPage = lazy(() => import("./pages/contracts/ContractsDomain
 const SystemHubPage = lazy(() => import("./pages/system/SystemHubPage").then((m) => ({ default: m.SystemHubPage })));
 const PayrollDomainPage = lazy(() => import("./pages/payroll/PayrollDomainPage").then((m) => ({ default: m.PayrollDomainPage })));
 const MonthEndClosePage = lazy(() => import("./pages/MonthEndClosePage").then((m) => ({ default: m.MonthEndClosePage })));
+const AssetsCenterPage = lazy(() => import("./pages/assets/AssetsCenterPage").then((m) => ({ default: m.AssetsCenterPage })));
+const BankReconciliationPage = lazy(() => import("./pages/banking/BankReconciliationPage").then((m) => ({ default: m.BankReconciliationPage })));
 const MyDayPage = lazy(() => import("./pages/MyDayPage").then((m) => ({ default: m.MyDayPage })));
 const HomePage = lazy(() => import("./pages/home").then((m) => ({ default: m.HomePage })));
 const QuickEntryPage = lazy(() => import("./pages/quick-entry").then((m) => ({ default: m.QuickEntryPage })));
@@ -75,6 +77,13 @@ const router = createBrowserRouter([
       { path: "invoices", element: <RedirectWithState to="/bills?tab=invoices" /> },
       { path: "banking", element: <RedirectWithState to="/bills?tab=banking" /> },
       { path: "vouchers", element: <VouchersPage /> },
+      // V12 批次 C：固定资产 / 往来账龄 / 定期凭证三合一，与 /bills 同一套 ?tab= 约定。
+      // 路径**不能**叫 /assets——Vite 打包产物在 /assets/ 下，nginx.conf 为它单开了
+      // 静态资源规则，用 /assets 做前端路由会被 301 掉（浏览器实测发现，前端单测
+      // 不经 nginx，测不出来）。
+      { path: "asset-center", element: <AssetsCenterPage /> },
+      // 余额调节表是月结流程里的一个步骤，由月结向导直接跳来，也要能单独深链给审计看
+      { path: "banking/reconciliation", element: <BankReconciliationPage /> },
       { path: "ledger", element: <LedgerPage /> },
       { path: "reports", element: <ReportsPage /> },
       // G1 导出与归档中心：合并 PDF 导出 + 财税资料包

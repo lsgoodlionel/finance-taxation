@@ -158,6 +158,12 @@ export interface VoucherDraftLine {
   accountName: string;
   debit: string;
   credit: string;
+  /**
+   * 往来核算维度（V12-C2）。只有往来科目（应收/应付/预付）需要，其余留空。
+   * 过账时随分录进 `ledger_entries.counterparty_id`，账龄表按它分户 ——
+   * 缺了它这笔就只是科目余额里的一个数字，看不出是谁欠的、欠了多久。
+   */
+  counterpartyId?: string | null;
 }
 
 export type VoucherDraftStatus = "draft" | "review_required" | "ready";
@@ -448,6 +454,8 @@ export interface LedgerEntry {
    */
   source: "voucher_posting" | "period_closing";
   postedAt: string;
+  /** 往来核算维度（V12-C2）。非往来科目为空，详见 VoucherDraftLine.counterpartyId。 */
+  counterpartyId?: string | null;
 }
 
 export interface LedgerPostingBatch {

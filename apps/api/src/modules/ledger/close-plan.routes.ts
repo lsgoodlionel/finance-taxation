@@ -4,9 +4,12 @@
  *
  * 汇总某属期已知的结账事实（未过账事项、待审草稿、票税一致性、结转/快照/
  * 申报底稿/归档状态），交给纯函数 buildClosePlan（见 close-plan.ts）派生结账
- * 向导每一步的状态，供前端渲染。部分事实在当前 schema 中尚无可靠数据源
- * （折旧是否已计提过账、票税差异是否已人工确认），使用保守默认值 false，
- * 并在响应 factSources 中标注每个字段的来源，避免向导因缺数据而误报完成。
+ * 向导每一步的状态，供前端渲染。仍有事实在当前 schema 中无可靠数据源
+ * （票税差异是否已人工确认），使用保守默认值 false，并在响应 factSources 中
+ * 标注每个字段的来源，避免向导因缺数据而误报完成。
+ *
+ * V12-C1：折旧是否已计提过账原本也在上面那一档，现已接上真实数据源
+ * （见 loadDepreciationPosted）。
  */
 
 import type { ServerResponse } from "node:http";
@@ -29,7 +32,16 @@ const FACT_SOURCES: Record<keyof ClosePlanInput, string> = {
   unpostedEventCount:
     "business_events：company_id + occurred_on 落在本期，且 status 不在 ('posted','archived') 之列",
   depreciationPosted:
-    "当前 schema 无折旧凭证类型/表，无法可靠取得，默认 false（需人工确认或后续接入折旧模块）",
+    "vouchers：本期存在 source='depreciation' 且 status='posted' 的凭证（草稿不算——草稿不进总账）；" +
+    "或 fixed_assets 中本期没有处于计提区间的资产（无固定资产的公司不该被这一步堵住月结）",
+  unconfirmedPayrollCount:
+    "payroll_records：company_id + period 且 status <> 'confirmed' 的条数（口径自旧 /api/close/status 迁入，V12-C5）",
+  socialSecurityClosed:
+    "business_events：type='social_security_filing' 且 occurred_on = 期初日、status <> 'archived' 的事项存在即视为已关账（同上迁入）",
+  bankReconciliationClosed:
+    "bank_reconciliations：本期存在 status='closed' 的对账结论（V12-C3 的余额调节表提供判据）；旧清单只能数未匹配流水笔数，而未匹配未必是问题",
+  bankAccountCount:
+    "bank_accounts：本公司银行账户数；为 0 时银行对账不该拦住月结",
   pendingDraftCount:
     "event_voucher_drafts：status 属于待批集合（'draft' + 'review_required'，见 ai-agents/close/draft-status.ts），关联 business_events.occurred_on 落在本期；未区分\"权责发生制专属\"草稿，按全部待审草稿计",
   taxConsistencyOverall:
@@ -72,6 +84,72 @@ async function loadIncomeClosed(companyId: string, period: string): Promise<bool
     [companyId, period]
   );
   return row !== null;
+}
+
+/**
+ * 本期折旧是否已完成（V12-C1 接线）。
+ *
+ * 此前这一步硬编码 false —— 当时确实没有折旧模块，注释也如实写了。现在有了。
+ *
+ * 判据是两条的并集，缺一条都会让月结卡死：
+ * - 折旧凭证已**过账**（不是生成草稿就算完，草稿不进总账，费用还没入账）；
+ * - 或者本期压根没有处于计提区间的固定资产 —— 纯服务型公司一台设备都没有，
+ *   若只看凭证，这一步会永远停在"待办"，把整个月结流程堵死。
+ */
+async function loadDepreciationPosted(companyId: string, period: string): Promise<boolean> {
+  const posted = await count(
+    `select count(*)::text n from vouchers
+     where company_id = $1 and period = $2 and source = 'depreciation' and status = 'posted'`,
+    [companyId, period]
+  );
+  if (posted > 0) return true;
+
+  const depreciable = await count(
+    `select count(*)::text n from fixed_assets
+     where company_id = $1
+       and depreciation_start_period <= $2
+       and (disposed_period is null or disposed_period >= $2)`,
+    [companyId, period]
+  );
+  return depreciable === 0;
+}
+
+/** 未确认的工资记录数。口径自旧 /api/close/status 原样迁入（V12-C5）。 */
+async function loadUnconfirmedPayrollCount(companyId: string, period: string): Promise<number> {
+  return count(
+    `select count(*)::text n from payroll_records
+     where company_id = $1 and period = $2 and status <> 'confirmed'`,
+    [companyId, period]
+  );
+}
+
+async function loadSocialSecurityClosed(companyId: string, period: string): Promise<boolean> {
+  const n = await count(
+    `select count(*)::text n from business_events
+     where company_id = $1 and type = 'social_security_filing'
+       and occurred_on = $2::date and status <> 'archived'`,
+    [companyId, `${period}-01`]
+  );
+  return n > 0;
+}
+
+/**
+ * 本期是否已封存银行余额调节表。
+ *
+ * 旧清单这一步数的是"未匹配流水笔数"，而未匹配未必是问题 —— 在途存款按定义
+ * 就该是未匹配的。封存动作才代表人看过并给出了结论，这是 C3 才有的判据。
+ */
+async function loadBankReconciliationClosed(companyId: string, period: string): Promise<boolean> {
+  const n = await count(
+    `select count(*)::text n from bank_reconciliations
+     where company_id = $1 and to_char(as_of_date, 'YYYY-MM') = $2 and status = 'closed'`,
+    [companyId, period]
+  );
+  return n > 0;
+}
+
+async function loadBankAccountCount(companyId: string): Promise<number> {
+  return count(`select count(*)::text n from bank_accounts where company_id = $1`, [companyId]);
 }
 
 async function loadSnapshotTaken(companyId: string, period: string): Promise<boolean> {
@@ -167,10 +245,28 @@ async function loadTaxConsistencyOverall(
 }
 
 async function loadClosePlanInput(companyId: string, period: string): Promise<ClosePlanInput> {
-  const [unpostedEventCount, pendingDraftCount, incomeClosed, snapshotTaken, filingDraftReady, archived, taxConsistencyOverall] =
+  const [
+    unpostedEventCount,
+    pendingDraftCount,
+    depreciationPosted,
+    unconfirmedPayrollCount,
+    socialSecurityClosed,
+    bankReconciliationClosed,
+    bankAccountCount,
+    incomeClosed,
+    snapshotTaken,
+    filingDraftReady,
+    archived,
+    taxConsistencyOverall
+  ] =
     await Promise.all([
       loadUnpostedEventCount(companyId, period),
       loadPendingDraftCount(companyId, period),
+      loadDepreciationPosted(companyId, period),
+      loadUnconfirmedPayrollCount(companyId, period),
+      loadSocialSecurityClosed(companyId, period),
+      loadBankReconciliationClosed(companyId, period),
+      loadBankAccountCount(companyId),
       loadIncomeClosed(companyId, period),
       loadSnapshotTaken(companyId, period),
       loadFilingDraftReady(companyId, period),
@@ -180,7 +276,11 @@ async function loadClosePlanInput(companyId: string, period: string): Promise<Cl
 
   return {
     unpostedEventCount,
-    depreciationPosted: false,
+    depreciationPosted,
+    unconfirmedPayrollCount,
+    socialSecurityClosed,
+    bankReconciliationClosed,
+    bankAccountCount,
     pendingDraftCount,
     taxConsistencyOverall,
     taxConsistencyAcknowledged: false,

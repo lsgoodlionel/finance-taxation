@@ -50,10 +50,14 @@ assert(fallback !== items, "expected fallback to return a copy");
 // 空集合 → 空导航
 assert(filterNavByAllowedRoutes(items, new Set()).length === 0, "expected empty set to filter everything");
 
-// pro 导航常量：7 组 17 项
+// pro 导航常量：7 组 18 项。
+// 这两个数字是**防膨胀护栏**，不是随代码变动的快照：每加一项都该先问
+// "能不能并进已有的中心"。V12 批次 C 新增四个能力（固定资产 / 往来账龄 /
+// 定期凭证 / 余额调节表），只加了一项 /assets——前三个并成同一页的三件事，
+// 余额调节表由月结向导跳转、不进侧栏。
 assert(proNavItems.length === 7, "expected 7 pro nav groups");
 const proLeafCount = proNavItems.reduce((count, group) => count + (group.children?.length ?? 0), 0);
-assert(proLeafCount === 17, "expected 17 pro nav leaves");
+assert(proLeafCount === 18, "expected 18 pro nav leaves");
 
 // guided 导航常量：扁平且 ≤6 项，路由必须是 pro 导航或 guided 专属路由清单的成员
 assert(guidedNavItems.length <= 6, "expected guided nav to stay minimal");

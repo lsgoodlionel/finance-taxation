@@ -54,6 +54,30 @@ import {
   listReportSnapshots
 } from "../modules/reports/routes.js";
 import { getTrialBalance } from "../modules/reports/trial-balance.routes.js";
+import {
+  createRecurringRoute,
+  generateRecurringRoute,
+  listRecurringRoute,
+  updateRecurringStatusRoute
+} from "../modules/recurring/routes.js";
+import {
+  closeReconciliationRoute,
+  getBalanceReconciliationRoute,
+  listReconciliationSessionsRoute
+} from "../modules/banking/reconciliation-session.routes.js";
+import {
+  deleteSettlementRoute,
+  getAgingRoute,
+  getOpenItemsRoute,
+  settleRoute
+} from "../modules/settlement/routes.js";
+import {
+  createAssetRoute,
+  disposeAssetRoute,
+  listAssetsRoute,
+  previewDepreciationRoute,
+  runDepreciationRoute
+} from "../modules/assets/routes.js";
 import { buildClosingPackageExport, buildClosingPackageHtml } from "../modules/packages/closing-bundle.js";
 import {
   createRndCostLine,
@@ -149,7 +173,6 @@ import {
 } from "../modules/payroll/transfer.routes.js";
 import { socialSecurityClosureRoute } from "../modules/payroll/social-security.routes.js";
 import { syncStatementsRoute, submitTransferApiRoute } from "../modules/banking/bank-api.routes.js";
-import { getCloseStatus } from "../modules/close/close.routes.js";
 import { getInbox } from "../modules/inbox/inbox.routes.js";
 import { globalSearch } from "../modules/search/search.routes.js";
 import { getSetupStatus } from "../modules/setup/setup.routes.js";
@@ -520,6 +543,65 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "ledger.view",
     handler: (req, res, p) => getAccountByCode(req, res, p.code!)
+  },
+
+  // 定期凭证（V12-C4）
+  //
+  // 生成的是草稿，不进总账，因此归 ledger.post 而非更高的权限：它省的是
+  // 重复劳动，过账仍要走正常审批。
+  { method: "GET", path: "/api/recurring-vouchers", auth: true, permission: "ledger.view", handler: listRecurringRoute },
+  { method: "POST", path: "/api/recurring-vouchers", auth: true, permission: "ledger.post", handler: createRecurringRoute },
+  { method: "POST", path: "/api/recurring-vouchers/generate", auth: true, permission: "ledger.post", handler: generateRecurringRoute },
+  {
+    method: "PATCH",
+    path: "/api/recurring-vouchers/:id",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => updateRecurringStatusRoute(req, res, p.id!)
+  },
+
+  // 银行余额调节表与对账封存（V12-C3）
+  //
+  // 封存归 banking.manage：它是对账动作的收口，与导入流水、确认匹配同一类
+  // 职责；查调节表归 ledger.view，出纳之外的人（会计、审计）也要能看。
+  { method: "GET", path: "/api/banking/reconciliation/balance", auth: true, permission: "ledger.view", handler: getBalanceReconciliationRoute },
+  { method: "GET", path: "/api/banking/reconciliation/sessions", auth: true, permission: "ledger.view", handler: listReconciliationSessionsRoute },
+  { method: "POST", path: "/api/banking/reconciliation/close", auth: true, permission: "banking.manage", handler: closeReconciliationRoute },
+
+  // 往来账龄与核销（V12-C2）
+  //
+  // 核销不产生凭证、不改任何科目余额，只声明"这笔收款抵的是那笔欠款"，
+  // 因此归 ledger.post 而非独立权限：它仍是记账人员的日常动作，
+  // 而查账龄表的人（如销售、管理层）只要 ledger.view。
+  { method: "GET", path: "/api/settlement/aging", auth: true, permission: "ledger.view", handler: getAgingRoute },
+  { method: "GET", path: "/api/settlement/open-items", auth: true, permission: "ledger.view", handler: getOpenItemsRoute },
+  { method: "POST", path: "/api/settlement/settle", auth: true, permission: "ledger.post", handler: settleRoute },
+  {
+    method: "DELETE",
+    path: "/api/settlement/settlements/:id",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => deleteSettlementRoute(req, res, p.id!)
+  },
+
+  // 固定资产（V12-C1）
+  //
+  // 权限沿用 ledger.*：建卡、计提、处置产出的都是凭证，是记账动作；查台账与
+  // 预览折旧是查阅动作。不新造 asset.* 权限——权限点越多越难说清谁能干什么，
+  // 而这里的动作与"记账/查账"的边界完全重合。
+  //
+  // 折旧的 GET 路径必须排在 `/api/assets/:id/dispose` 之前登记？不必：两者
+  // 方法与形状都不同（GET vs POST，且 depreciation 段不含第二级），不会互相遮蔽。
+  { method: "GET", path: "/api/assets", auth: true, permission: "ledger.view", handler: listAssetsRoute },
+  { method: "POST", path: "/api/assets", auth: true, permission: "ledger.post", handler: createAssetRoute },
+  { method: "GET", path: "/api/assets/depreciation", auth: true, permission: "ledger.view", handler: previewDepreciationRoute },
+  { method: "POST", path: "/api/assets/depreciation", auth: true, permission: "ledger.post", handler: runDepreciationRoute },
+  {
+    method: "POST",
+    path: "/api/assets/:id/dispose",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => disposeAssetRoute(req, res, p.id!)
   },
 
   // reports
@@ -1099,7 +1181,6 @@ const routes: RouteDef[] = [
   // 收件箱与月结向导都是跨模块的**计数**聚合，不返回明细；权限键对齐各自页面的
   // 菜单键（/inbox → tasks.view，月结清单归口总账）。
   { method: "GET", path: "/api/inbox", auth: true, permission: "tasks.view", handler: getInbox },
-  { method: "GET", path: "/api/close/status", auth: true, permission: "ledger.view", handler: getCloseStatus },
 
   // invoices (P1) — ocr + sub-paths before the /:id catch-all
   // 发票录入/识别/验真与既有的 /api/invoices/parse 对齐到 documents.manage；

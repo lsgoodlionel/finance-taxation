@@ -46,6 +46,12 @@ export interface LedgerEntryInput {
    */
   source: "voucher_posting" | "period_closing" | "annual_closing" | "opening_balance";
   postedAt: string;
+  /**
+   * 往来核算维度（V12-C2）。可空：绝大多数分录（费用、税金、结转）没有往来单位。
+   * 往来科目上缺了它，这笔就进不了账龄表——由 settlement 模块按 account_type
+   * 判断该不该有，这里不强制，否则结转凭证也得编一个假值。
+   */
+  counterpartyId?: string | null;
 }
 
 export interface PostabilityInput {
@@ -118,8 +124,8 @@ export async function insertLedgerEntries(
       `
         insert into ledger_entries (
           id, company_id, voucher_id, business_event_id, entry_date, summary,
-          account_code, account_name, debit, credit, source, posted_at
-        ) values ($1, $2, $3, $4, $5::date, $6, $7, $8, $9::numeric, $10::numeric, $11, $12::timestamptz)
+          account_code, account_name, debit, credit, source, posted_at, counterparty_id
+        ) values ($1, $2, $3, $4, $5::date, $6, $7, $8, $9::numeric, $10::numeric, $11, $12::timestamptz, $13)
       `,
       [
         entry.id,
@@ -133,7 +139,8 @@ export async function insertLedgerEntries(
         entry.debit,
         entry.credit,
         entry.source,
-        entry.postedAt
+        entry.postedAt,
+        entry.counterpartyId ?? null
       ]
     );
   }
