@@ -31,6 +31,7 @@ import { TaxHelpModal } from "./tax/TaxHelpModal";
 import { TaxItemsPanel } from "./tax/TaxItemsPanel";
 import { TaxMaterialsPanel, type TaxMaterialKey } from "./tax/TaxMaterialsPanel";
 import { TaxProfilePanel } from "./tax/TaxProfilePanel";
+import { TaxRatePanel } from "./tax/TaxRatePanel";
 import { TaxShell } from "./tax/TaxShell";
 import { TaxCalendar } from "./tax/TaxCalendar";
 import { VatDeclarationWizard } from "./tax/VatDeclarationWizard";
@@ -244,6 +245,8 @@ export function TaxPage() {
     switch (activeTask) {
       case TAX_TASK_KEYS.materials:
         return renderMaterialsWorkspace();
+      case TAX_TASK_KEYS.rates:
+        return <TaxRatePanel />;
       case TAX_TASK_KEYS.calendar:
         return <TaxCalendar batches={batches} onStartVatDeclaration={() => setVatWizardOpen(true)} />;
       case TAX_TASK_KEYS.items:

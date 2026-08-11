@@ -26,11 +26,18 @@ export const REPORTS_TASK_KEYS = {
 
 export type ReportsTaskKey = (typeof REPORTS_TASK_KEYS)[keyof typeof REPORTS_TASK_KEYS];
 
-/** 「看三张报表」这件事内部可切换的三张表。 */
+/**
+ * 「看报表」这件事内部可切换的几张表。
+ *
+ * 前三张是法定报表，第四张「部门费用」是管理口径（V12-D1）——它不对外报送，
+ * 但和三张表看的是同一期数据，放在同一个切换器里最符合"我现在要看什么"的直觉，
+ * 强行分到另一件事只会让用户为看一眼费用多点两次。
+ */
 export const STATEMENT_VIEWS: readonly ReportsWorkbenchView[] = [
   "balanceSheet",
   "profitStatement",
-  "cashFlow"
+  "cashFlow",
+  "costCenter"
 ];
 
 const TASK_DEFS: Record<ReportsTaskKey, TaskDef> = {
@@ -41,8 +48,8 @@ const TASK_DEFS: Record<ReportsTaskKey, TaskDef> = {
   },
   [REPORTS_TASK_KEYS.statements]: {
     key: REPORTS_TASK_KEYS.statements,
-    label: "看三张报表",
-    description: "本期法定报表：家底、赚钱、现金三个角度，可切表、可看图。"
+    label: "看报表",
+    description: "本期法定报表（家底、赚钱、现金）与部门费用，可切表、可看图。"
   },
   [REPORTS_TASK_KEYS.compare]: {
     key: REPORTS_TASK_KEYS.compare,

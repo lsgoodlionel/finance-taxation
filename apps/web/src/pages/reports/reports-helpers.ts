@@ -45,6 +45,8 @@ export function getWorkbenchViewLabel(view: ReportsWorkbenchView): string {
       return "老板摘要";
     case "budgetVariance":
       return "预算差异";
+    case "costCenter":
+      return "部门费用";
     default:
       return "财务报表";
   }

@@ -2684,3 +2684,110 @@ export async function generateRecurringVouchers(period: string) {
     body: JSON.stringify({ period })
   });
 }
+
+// ── V12-D1 成本中心 / D2 税率与账簿口径底稿 ──────────────────────────────
+
+export interface CostCenter {
+  id: string;
+  code: string;
+  name: string;
+  departmentId: string | null;
+  departmentName: string | null;
+  notes: string;
+  isActive: boolean;
+}
+
+export async function listCostCenters(includeInactive = false) {
+  const qs = includeInactive ? "?includeInactive=true" : "";
+  return request<{ items: CostCenter[]; total: number }>(`/api/cost-centers${qs}`);
+}
+
+export async function createCostCenter(body: { code: string; name: string; notes?: string }) {
+  return request<CostCenter>("/api/cost-centers", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function setCostCenterActive(id: string, isActive: boolean) {
+  return request<{ id: string; isActive: boolean }>(`/api/cost-centers/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ isActive })
+  });
+}
+
+export interface CostCenterReportRow {
+  costCenterId: string | null;
+  costCenterName: string;
+  total: string;
+  share: number;
+  accounts: { accountCode: string; accountName: string; amount: string }[];
+}
+
+export async function getCostCenterReport(period: string) {
+  return request<{
+    period: string;
+    total: string;
+    unassigned: string;
+    unassignedNotice: string | null;
+    rows: CostCenterReportRow[];
+  }>(`/api/reports/cost-centers?period=${encodeURIComponent(period)}`);
+}
+
+export interface TaxRateView {
+  id: string;
+  taxType: string;
+  code: string;
+  name: string;
+  rate: number;
+  levyRate: number | null;
+  /** 算税实际该用的比例——不必自己判断有没有减征。 */
+  effectiveRate: number;
+  description: string;
+  taxpayerType: string | null;
+  applicableScope: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  isSystem: boolean;
+}
+
+export async function listTaxRates(taxType: string, on?: string) {
+  const params = new URLSearchParams({ taxType });
+  if (on) params.set("on", on);
+  return request<{ items: TaxRateView[]; total: number; on: string | null }>(
+    `/api/tax/rates?${params.toString()}`
+  );
+}
+
+export interface LedgerVatPaperView {
+  ledger: {
+    period: string;
+    outputTax: string;
+    inputTax: string;
+    inputTransferOut: string;
+    taxPaid: string;
+    simplified: string;
+    payable: string;
+    lines: {
+      entryId: string;
+      voucherId: string;
+      entryDate: string;
+      summary: string;
+      accountCode: string;
+      accountName: string;
+      amount: string;
+      role: string;
+    }[];
+  };
+  items: { payable: string; lineCount: number } | null;
+  reconciliation: {
+    consistent: boolean;
+    message: string;
+    ledgerPayable?: string;
+    itemsPayable?: string;
+    difference?: string;
+  };
+}
+
+export async function getLedgerVatPaper(period: string) {
+  return request<LedgerVatPaperView>(
+    `/api/tax/vat-working-paper/ledger?period=${encodeURIComponent(period)}`
+  );
+}

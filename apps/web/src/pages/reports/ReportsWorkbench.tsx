@@ -12,6 +12,7 @@ import { getWorkbenchViewLabel } from "./reports-helpers";
 import { STATEMENT_VIEWS, isStatementView } from "./reports-tasks";
 import { BalanceSheetPanel } from "./panels/BalanceSheetPanel";
 import { BudgetVariancePanel } from "./panels/BudgetVariancePanel";
+import { CostCenterPanel } from "./panels/CostCenterPanel";
 import { CashFlowPanel } from "./panels/CashFlowPanel";
 import { ChairmanSummaryPanel } from "./panels/ChairmanSummaryPanel";
 import { ProfitStatementPanel } from "./panels/ProfitStatementPanel";
@@ -134,6 +135,7 @@ export function ReportsWorkbench({
       {activeView === "diff" ? comparePanel : null}
       {activeView === "chairman" ? <ChairmanSummaryPanel summary={chairmanSummary} /> : null}
       {activeView === "budgetVariance" ? <BudgetVariancePanel defaultPeriod={defaultPeriod} /> : null}
+      {activeView === "costCenter" ? <CostCenterPanel /> : null}
     </>
   );
 }
