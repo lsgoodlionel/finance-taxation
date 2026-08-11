@@ -64,13 +64,19 @@ assert(countOpenBatches([]) === 0, "expected zero for an empty batch list");
 assert(countUnreadyItems(items) === 2, `expected 2 unready items, got ${countUnreadyItems(items)}`);
 assert(countUnreadyItems([makeItem("i-4", "ready")]) === 0, "expected zero when everything is ready");
 
-// ── 任务划分：13 个平级区块收敛成 5 件事 ────────────────────────────────────
+// ── 任务划分：13 个平级区块收敛成 6 件事 ────────────────────────────────────
+//
+// V12-D2 新增「核对税率与账簿」，排在「准备申报材料」之后：算材料时要用税率，
+// 算完要与账簿对差，两件事挨着做。顺序是刻意的，不是追加在末尾。
 const tasks = buildTaxTasks({ batches, items, overdueCount: 2 });
 assert(
-  tasks.map((task) => task.key).join(",") === "declare,materials,calendar,items,profile",
+  tasks.map((task) => task.key).join(",") === "declare,materials,rates,calendar,items,profile",
   `expected the declared task order, got ${tasks.map((task) => task.key).join(",")}`
 );
-assert(tasks.length === 5, "expected five tasks");
+// 这个数字是防膨胀护栏而非快照：税务中心每加一件事都该先问能不能并进已有的。
+// V12-D2 的「核对税率与账簿」是新增的第 6 件——它既不属于申报流程也不属于
+// 材料准备，塞进任一件都会让那件事变成两件事。
+assert(tasks.length === 6, "expected six tasks");
 assert(
   tasks.every((task) => typeof task.description === "string" && task.description.length > 0),
   "expected every task to explain itself in one sentence"

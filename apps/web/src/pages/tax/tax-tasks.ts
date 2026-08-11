@@ -21,7 +21,9 @@ export const TAX_TASK_KEYS = {
   materials: "materials",
   calendar: "calendar",
   items: "items",
-  profile: "profile"
+  profile: "profile",
+  /** 税率主数据与账簿口径底稿（V12-D2）。 */
+  rates: "rates"
 } as const;
 
 export type TaxTaskKey = (typeof TAX_TASK_KEYS)[keyof typeof TAX_TASK_KEYS];
@@ -65,6 +67,11 @@ export function buildTaxTasks({ batches, items, overdueCount }: TaxTaskInput): T
       key: TAX_TASK_KEYS.materials,
       label: "准备申报材料",
       description: "按税种生成申报要用的计算表和资料清单，算错了在这里改，改完回上一件事提交。"
+    },
+    {
+      key: TAX_TASK_KEYS.rates,
+      label: "核对税率与账簿",
+      description: "看这个属期该用哪档税率，以及按账簿算出来的增值税与税目记录差多少。"
     },
     {
       key: TAX_TASK_KEYS.calendar,

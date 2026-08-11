@@ -444,4 +444,6 @@ Odoo `l10n_cn` 在这块反而是四个系统里做得最细的（2221 下 27 �
    真正的收敛仍待独立立项：`classifyProfitAccount` / `classifyBalanceSheetAccount` 是同步纯函数，改成读库要么变异步、要么把科目表作为参数贯穿十余个调用点（`closing.ts`、`risk/engine.ts`、`reports/summary.ts`、`trial-balance.ts`、`balance-check.ts`、`dashboard/*`、`assistant`、`boss-qa`），触及报表核心口径，不该顺手夹带在功能批次里。
 8. **预收账款（2203）未纳入核销**。它的 `account_type` 目前是泛化的 `liability_current`，049 没有为它单列。与其在 `settleable-accounts.ts` 里按科目码 2203 开特例（那就回到硬编码科目码了），不如等 `account_type` 补齐。
 9. **定期凭证前端只支持一借一贷等额模板**，后端支持任意多行。多行模板目前只能通过 API 建。
+
+10. **E2E 有两条既有 flaky**：`login-and-navigation › expired session` 与 `runtime-summary-pages › /payroll/transfer`。全量并行跑时偶发红、单独重跑必绿，已多次观察到。与 V12 的改动无关（两处代码均未触及），但**没有定位就等于放着不管**——下一个人看到红灯会先怀疑自己的改动。
 10. **`toCents` 仍有四份副本**。新代码统一走 `utils/money.ts`，但 `trial-balance.ts`、`close-drafts.routes.ts`、`einvoice-parse.ts`、`journal-entry-bench.ts` 四处未动——它们语义并不完全一致（einvoice-parse 那份对非法输入返回 null），收敛需要逐个确认差异，不该顺手夹带。

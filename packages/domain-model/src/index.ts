@@ -164,6 +164,12 @@ export interface VoucherDraftLine {
    * 缺了它这笔就只是科目余额里的一个数字，看不出是谁欠的、欠了多久。
    */
   counterpartyId?: string | null;
+  /**
+   * 成本中心维度（V12-D1）。只有费用类与成本类科目需要，其余留空。
+   * 缺了它这笔费用会落进部门费用报表的「未指定」一行——不丢弃也不摊派，
+   * 但也就无法归到任何一个部门头上。
+   */
+  costCenterId?: string | null;
 }
 
 export type VoucherDraftStatus = "draft" | "review_required" | "ready";
@@ -456,6 +462,8 @@ export interface LedgerEntry {
   postedAt: string;
   /** 往来核算维度（V12-C2）。非往来科目为空，详见 VoucherDraftLine.counterpartyId。 */
   counterpartyId?: string | null;
+  /** 成本中心维度（V12-D1）。非费用科目为空，详见 VoucherDraftLine.costCenterId。 */
+  costCenterId?: string | null;
 }
 
 export interface LedgerPostingBatch {

@@ -68,6 +68,7 @@ interface VoucherLineRow {
   credit: string | number;
   sort_order: number;
   counterparty_id: string | null;
+  cost_center_id: string | null;
 }
 
 interface VoucherPostingRecordRow {
@@ -148,7 +149,8 @@ function mapVoucherLineRow(row: VoucherLineRow): VoucherDraftLine {
     accountName: row.account_name,
     debit: toAmountString(row.debit),
     credit: toAmountString(row.credit),
-    counterpartyId: row.counterparty_id
+    counterpartyId: row.counterparty_id,
+    costCenterId: row.cost_center_id
   };
 }
 
@@ -246,7 +248,7 @@ export async function listCompanyVouchers(
     `
       select
         id, voucher_id, summary, account_code, account_name, debit, credit, sort_order,
-        counterparty_id
+        counterparty_id, cost_center_id
       from voucher_lines
       where voucher_id = any($1::text[])
       order by sort_order asc
@@ -588,8 +590,9 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
             debit,
             credit,
             sort_order,
-            counterparty_id
-          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8, $9)
+            counterparty_id,
+            cost_center_id
+          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8, $9, $10)
         `,
         [
           line.id,
@@ -600,7 +603,8 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
           line.debit,
           line.credit,
           index,
-          line.counterpartyId ?? null
+          line.counterpartyId ?? null,
+          line.costCenterId ?? null
         ]
       );
     }
@@ -1035,7 +1039,9 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
     postedAt,
     // 往来维度随凭证行进总账（V12-C2）。凭证行没填就是 null——非往来科目本就
     // 不该有，往来科目漏填的后果是这笔进不了账龄表，由 settlement 侧提示补录。
-    counterpartyId: line.counterpartyId ?? null
+    counterpartyId: line.counterpartyId ?? null,
+    // 成本中心维度同理（V12-D1）：漏填的后果是落进部门费用报表的「未指定」一行。
+    costCenterId: line.costCenterId ?? null
   }));
   const createdBatch: LedgerPostingBatch = {
     id: `ledger-batch-${voucherId}`,

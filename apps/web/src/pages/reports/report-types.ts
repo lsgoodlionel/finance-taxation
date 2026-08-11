@@ -13,7 +13,9 @@ export type ReportsWorkbenchView =
   | "cashFlow"
   | "diff"
   | "chairman"
-  | "budgetVariance";
+  | "budgetVariance"
+  // 管理口径，不是法定报表：按成本中心归集本期费用（V12-D1）
+  | "costCenter";
 
 export type ReportsStatus = {
   tone: "info" | "success" | "error";
