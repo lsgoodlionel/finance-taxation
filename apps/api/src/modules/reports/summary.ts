@@ -7,6 +7,7 @@ import type {
   ProfitStatementReport
 } from "@finance-taxation/domain-model";
 import { isPeriodClosingEntry } from "../ledger/closing-entries.js";
+import { classifyBalanceSheetAccount } from "./balance-sheet-accounts.js";
 import { classifyProfitAccount, summarizeProfitTotals } from "./profit-accounts.js";
 
 interface PeriodInput {
@@ -86,6 +87,7 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
   const assetLines: FinancialReportLine[] = [];
   const liabilityLines: FinancialReportLine[] = [];
   const equityLines: FinancialReportLine[] = [];
+  const unclassifiedLines: FinancialReportLine[] = [];
 
   // 本年利润与利润表共用同一个汇总函数（V8-P）：此前资产负债表自带一套「精确匹配
   // 4 个收入科目、其余 6 开头一律当费用」的平行判定，与利润表的前缀表口径不同，
@@ -103,20 +105,27 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
   // 出现两行同为 3131 的记录，合计虚增一个 netProfit，资产负债表直接不平。
   let hasProfitAccountBalance = false;
 
+  // 每个科目都必须有明确去向（V12-A5 / 蓝图 E4）。此前这里是
+  // `if 1 / else if 2 / else if 3` 且**没有 else**：4 开头的生产成本 4001 与
+  // 制造费用 4101 既不进资产也不进负债权益，被静默丢弃，制造业客户的资产负债表
+  // 直接不平。现在改用全函数 classifyBalanceSheetAccount，兜底走 unclassified
+  // 并显式告警，不再有「掉到 else 外面」的可能。
   for (const [accountCode, amount] of balanceMap.entries()) {
-    if (hasPrefix(accountCode, ["1"])) {
+    const section = classifyBalanceSheetAccount(accountCode);
+
+    if (section === "asset") {
       assetLines.push({
         code: accountCode,
         label: accountCode,
         amount: formatAmount(amount)
       });
-    } else if (hasPrefix(accountCode, ["2"])) {
+    } else if (section === "liability") {
       liabilityLines.push({
         code: accountCode,
         label: accountCode,
         amount: formatAmount(-amount)
       });
-    } else if (hasPrefix(accountCode, ["3"])) {
+    } else if (section === "equity") {
       const isProfitAccount = accountCode === PROFIT_ACCOUNT_CODE;
       if (isProfitAccount) {
         hasProfitAccountBalance = true;
@@ -126,7 +135,15 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
         label: isProfitAccount ? "本年利润" : accountCode,
         amount: formatAmount(isProfitAccount ? -amount + netProfit : -amount)
       });
+    } else if (section === "unclassified") {
+      unclassifiedLines.push({
+        code: accountCode,
+        label: accountCode,
+        amount: formatAmount(amount)
+      });
     }
+    // section === "profitAndLoss"：损益类净额已由 summarizeProfitTotals 汇总进
+    // 上面权益的「本年利润」行，单列会重复计量。这是**显式**的不成行，不是丢弃。
   }
 
   // 账上还没有 3131 余额（从未结转过）时，未结转利润没有落脚点，补一行合成的。
@@ -141,10 +158,22 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
   const normalizedAssetLines = nonZeroLines(assetLines).sort((a, b) => a.code.localeCompare(b.code));
   const normalizedLiabilityLines = nonZeroLines(liabilityLines).sort((a, b) => a.code.localeCompare(b.code));
   const normalizedEquityLines = nonZeroLines(equityLines).sort((a, b) => a.code.localeCompare(b.code));
+  const normalizedUnclassifiedLines = nonZeroLines(unclassifiedLines).sort((a, b) => a.code.localeCompare(b.code));
 
   const assetsTotal = normalizedAssetLines.reduce((sum, item) => sum + parseAmount(item.amount), 0);
   const liabilitiesTotal = normalizedLiabilityLines.reduce((sum, item) => sum + parseAmount(item.amount), 0);
   const equityTotal = normalizedEquityLines.reduce((sum, item) => sum + parseAmount(item.amount), 0);
+
+  // 未分类科目不计入任何合计——掺进去只会把「有科目没归好类」伪装成「表是平的」。
+  // 所以必须同时给出告警，否则使用者只会看到一张莫名不平的表。
+  const warnings = normalizedUnclassifiedLines.length > 0
+    ? [
+        `有 ${normalizedUnclassifiedLines.length} 个科目未纳入资产负债表口径（`
+        + `${normalizedUnclassifiedLines.map((item) => item.code).join("、")}`
+        + `），其余额未计入任何合计，资产负债表可能不平。请检查这些科目代码是否有效，`
+        + `或在 accounts/chart-of-accounts.ts 中补登记。`
+      ]
+    : [];
 
   return {
     periodLabel: input.periodLabel,
@@ -152,6 +181,8 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
     assets: normalizedAssetLines,
     liabilities: normalizedLiabilityLines,
     equity: normalizedEquityLines,
+    unclassified: normalizedUnclassifiedLines,
+    warnings,
     totals: {
       assets: formatAmount(assetsTotal),
       liabilities: formatAmount(liabilitiesTotal),

@@ -31,7 +31,13 @@ export const invoicesBankingBodySchemas: Record<string, ObjectSchema> = {
     invoiceDate: { type: "string", required: true, pattern: /^\d{4}-\d{2}-\d{2}$/ },
     sellerName: { type: "string", required: true, min: 1, max: 200 },
     direction: { type: "string", enum: ["input", "output"] },
-    invoiceType: { type: "string", max: 50 },
+    // 取值必须与 migrations/046 的 CHECK 约束、modules/invoices/invoice-types.ts
+    // 的规范取值三处一致 —— 发票类型决定进项能否抵扣，放任自由文本会让不可识别的
+    // 值一路写到库里，再由可抵扣性判定当成「无法识别」处理，问题被推到最深处才暴露。
+    invoiceType: {
+      type: "string",
+      enum: ["vat_special", "vat_general", "electronic", "receipt", "other"]
+    },
     invoiceCode: { type: "string", max: 20 },
     sellerTaxNo: { type: "string", max: 30 },
     buyerName: { type: "string", max: 200 },

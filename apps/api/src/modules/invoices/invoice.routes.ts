@@ -15,6 +15,7 @@ import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { verifyInvoiceWithConfig, verifyInvoiceLocally, ocrExtractInvoice } from "./invoice-verify.js";
 import { buildInvoiceVoucherDraft, isVoucherBalanced } from "./invoice-voucher.js";
+import { INVOICE_TYPES, normalizeInvoiceType } from "./invoice-types.js";
 
 // ── 发票列表 ──────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,12 @@ export async function createInvoice(req: ApiRequest, res: ServerResponse): Promi
   if (!body.invoiceNo || !body.invoiceDate || !body.sellerName) {
     json(res, 400, { error: "invoiceNo, invoiceDate, sellerName 为必填项" }); return;
   }
+  // 发票类型决定进项税能否抵扣，写进来的必须是已知取值：此前是 `max:50` 的自由文本，
+  // 任意字符串都能落库，而未知取值在凭证生成时只能保守当作不可抵扣，等于静默错账。
+  const invoiceType = normalizeInvoiceType(body.invoiceType ?? "vat_special");
+  if (invoiceType === null) {
+    json(res, 400, { error: `invoiceType 取值非法，允许：${INVOICE_TYPES.join(" | ")}` }); return;
+  }
   const id = `inv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const totalAmount = body.totalAmount ?? ((body.amount ?? 0) + (body.taxAmount ?? 0));
   const taxRate = body.taxRate ?? (body.amount && body.taxAmount && body.amount > 0 ? body.taxAmount / body.amount : 0);
@@ -80,7 +87,7 @@ export async function createInvoice(req: ApiRequest, res: ServerResponse): Promi
         amount, tax_amount, total_amount, tax_rate,
         business_event_id, document_id, source, notes, created_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,now(),now())`,
-    [id, cid, body.direction ?? "input", body.invoiceType ?? "vat_special",
+    [id, cid, body.direction ?? "input", invoiceType,
      body.invoiceCode ?? null, body.invoiceNo, body.invoiceDate,
      body.sellerName, body.sellerTaxNo ?? "", body.buyerName ?? "", body.buyerTaxNo ?? "",
      body.amount ?? 0, body.taxAmount ?? 0, totalAmount, taxRate,
@@ -164,14 +171,18 @@ export async function deleteInvoice(req: ApiRequest, res: ServerResponse, invoic
 export async function generateInvoiceVoucher(req: ApiRequest, res: ServerResponse, invoiceId: string): Promise<void> {
   const cid = req.auth!.companyId;
   const inv = await queryOne<{
-    id: string; direction: string; seller_name: string; buyer_name: string; invoice_no: string;
+    id: string; direction: string; invoice_type: string | null;
+    seller_name: string; buyer_name: string; invoice_no: string;
     amount: string; tax_amount: string; total_amount: string; business_event_id: string | null; voucher_id: string | null;
   }>("SELECT * FROM invoices WHERE id=$1 AND company_id=$2", [invoiceId, cid]);
   if (!inv) { json(res, 404, { error: "发票不存在" }); return; }
   if (inv.voucher_id) { json(res, 400, { error: "该发票已生成凭证" }); return; }
 
+  // `invoice_type` 决定进项税能否抵扣。此前行类型里根本没声明这一列，`SELECT *`
+  // 取回来了也没往下传，进项一律走了抵扣分支（蓝图 E3）。
   const draft = buildInvoiceVoucherDraft({
-    direction: inv.direction, sellerName: inv.seller_name, buyerName: inv.buyer_name, invoiceNo: inv.invoice_no,
+    direction: inv.direction, invoiceType: inv.invoice_type,
+    sellerName: inv.seller_name, buyerName: inv.buyer_name, invoiceNo: inv.invoice_no,
     amount: Number(inv.amount), taxAmount: Number(inv.tax_amount), totalAmount: Number(inv.total_amount),
   });
   if (!isVoucherBalanced(draft)) { json(res, 500, { error: "生成的凭证借贷不平衡，已中止" }); return; }

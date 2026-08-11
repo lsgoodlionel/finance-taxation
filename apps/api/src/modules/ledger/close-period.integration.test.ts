@@ -564,3 +564,66 @@ test("closing the same period twice keeps the profit statement stable", async ()
     await pool.end();
   }
 });
+
+/**
+ * 期末结转必须过与普通过账同一道账务闸门（V12-A3）。
+ *
+ * 此前 closePeriod 直接 insert 已过账凭证与总账分录，**完全不查期间锁** ——
+ * 也就是说可以对一个已经锁账的期间做结转，把新分录塞进本该冻结的账里。
+ * 全仓当时有两处 insert into ledger_entries，约束散在两处的后果不是「少一道校验」，
+ * 而是「没人知道到底有几道」。
+ */
+test("closing a locked period is refused by the same gate that guards normal posting", async () => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const { closePool } = await import("../../db/client.js");
+  try {
+    await seedLedgerFixtures(pool, MAY_ENTRIES);
+
+    // Arrange：把待结转的期间锁上
+    await pool.query(
+      `insert into accounting_periods (company_id, period, is_locked)
+       values ($1, '2026-05', true)
+       on conflict (company_id, period) do update set is_locked = true`,
+      [COMPANY_ID]
+    );
+
+    // Act + Assert：结转必须被拦下，且错误里点明是哪个期间
+    const { PeriodClosingBlockedError } = await import("./close-period.js");
+    await assert.rejects(
+      () => runClosePeriod("2026-05", "2026-05-31"),
+      (err: Error & { code?: string }) => {
+        assert.ok(err instanceof PeriodClosingBlockedError, `应抛 PeriodClosingBlockedError，实际：${err.name}`);
+        assert.equal(err.code, "PERIOD_LOCKED");
+        assert.match(err.message, /2026-05.*已锁账/);
+        return true;
+      }
+    );
+
+    // 被拦下的结转不得留下任何痕迹
+    const leftovers = await pool.query<{ vouchers: string; entries: string; closings: string }>(
+      `select
+         (select count(*)::text from vouchers where source = 'period_closing') as vouchers,
+         (select count(*)::text from ledger_entries where source = 'period_closing') as entries,
+         (select count(*)::text from period_closings where company_id = $1) as closings`,
+      [COMPANY_ID]
+    );
+    assert.deepEqual(
+      leftovers.rows[0],
+      { vouchers: "0", entries: "0", closings: "0" },
+      "被拦下的结转不得留下凭证、分录或结转记录"
+    );
+
+    // 解锁后应当能正常结转 —— 闸门不能变成永久拦路
+    await pool.query(
+      `update accounting_periods set is_locked = false where company_id = $1 and period = '2026-05'`,
+      [COMPANY_ID]
+    );
+    const result = await runClosePeriod("2026-05", "2026-05-31");
+    assert.equal(result.alreadyClosed, false);
+    assert.ok(result.lineCount > 0, "解锁后结转应产生分录");
+  } finally {
+    await closePool();
+    await pool.end();
+  }
+});

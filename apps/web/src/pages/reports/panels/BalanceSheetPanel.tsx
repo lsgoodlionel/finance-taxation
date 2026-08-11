@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { Segmented, Table, Typography } from "antd";
+// 显式引入 React：Node 下的 SSR 单测走 classic JSX transform，缺它会 ReferenceError。
+// （与 ProfitStatementPanel 同因；此前本文件没有 SSR 单测，所以一直没暴露。）
+import React, { useState } from "react";
+import { Alert, Segmented, Table, Typography } from "antd";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell,
@@ -73,6 +75,36 @@ export function BalanceSheetPanel({ report }: Props) {
     liabAmount: liabEquityItems[idx]?.amount ?? "",
   }));
 
+  // 未分类科目告警（V12-A5）。后端此前会把归类不到的科目（如 4 开头的生产成本）
+  // 静默丢弃，用户只看到一张莫名不平的表、无从查起。现在后端显式列出这些科目，
+  // 这里必须把它呈出来——只在 API 响应里带着而界面不显示，等于没修。
+  //
+  // 用可选链是因为这是外部数据边界：老版本 API 或缓存响应可能没有这两个字段。
+  const unclassifiedLines = report.unclassified ?? [];
+  const warnings = report.warnings ?? [];
+  const warningBanner = warnings.length > 0 || unclassifiedLines.length > 0 ? (
+    <Alert
+      type="warning"
+      showIcon
+      style={{ marginBottom: 12 }}
+      title="有科目未纳入资产负债表口径"
+      description={
+        <div style={{ fontSize: 12 }}>
+          {warnings.map((text) => <div key={text}>{text}</div>)}
+          {unclassifiedLines.length > 0 && (
+            <div style={{ marginTop: 6 }}>
+              {unclassifiedLines.map((item) => (
+                <div key={item.code}>
+                  {item.code} {item.label}：{item.amount}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      }
+    />
+  ) : null;
+
   const columns: ColumnsType<typeof tableData[0]> = [
     { title: "资产", dataIndex: "assetLabel" },
     { title: "金额", dataIndex: "assetAmount", align: "right" as const, render: (v: string) => <Text strong>{v}</Text> },
@@ -95,6 +127,7 @@ export function BalanceSheetPanel({ report }: Props) {
         </div>
       }
     >
+      {warningBanner}
       {view === "chart" ? (
         <div style={{ display: "grid", gap: 24 }}>
           {/* Overview bar */}

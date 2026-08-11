@@ -1,5 +1,21 @@
 import type { PoolClient } from "pg";
 import { generateClosingEntries, PROFIT_ACCOUNT, type AccountBalance } from "./closing.js";
+import { checkPostable, insertLedgerEntries } from "../vouchers/ledger-writer.js";
+import { resolveVoucherWord } from "../vouchers/voucher-number.js";
+
+/**
+ * 期末结转被账务闸门拦下。调用方（月结路由）应把它转成对用户可读的错误，
+ * 而不是让整个月结流程静默失败。
+ */
+export class PeriodClosingBlockedError extends Error {
+  constructor(
+    readonly code: "VOUCHER_NOT_BALANCED" | "PERIOD_LOCKED",
+    message: string
+  ) {
+    super(message);
+    this.name = "PeriodClosingBlockedError";
+  }
+}
 
 /**
  * Persist the period-end income-summary closing voucher (结转损益) into the real
@@ -93,32 +109,73 @@ export async function closePeriod(
   }
 
   const voucherId = `vch-close-${companyId}-${periodLabel}`;
+
+  // 账务闸门与普通过账走同一个函数（vouchers/ledger-writer.ts）。
+  // 此前这里直接 insert，绕过了借贷平衡校验和**期间锁**——也就是说可以对一个
+  // 已锁账的期间做结转。职责分离不在这里判：它管的是人的动作，而期末结转是系统
+  // 按月自动生成的，没有真人可填。
+  // ClosingLine 的金额是 number，而闸门与写入口用字符串——与 numeric(18,2) 列
+  // 一致，避免浮点在边界上抖动。toFixed(2) 是这里唯一的转换点。
+  const postingLines = lines.map((line) => ({
+    debit: line.debit.toFixed(2),
+    credit: line.credit.toFixed(2)
+  }));
+  const postable = await checkPostable(client, {
+    companyId,
+    accountingDate: asOfDate,
+    lines: postingLines
+  });
+  if (!postable.ok) {
+    throw new PeriodClosingBlockedError(postable.code, postable.message);
+  }
+
   await client.query(
-    `insert into vouchers (id, company_id, voucher_type, summary, status, source, posted_at, created_at, updated_at)
-     values ($1, $2, 'closing', $3, 'posted', 'period_closing', $4::timestamptz, now(), now())`,
-    [voucherId, companyId, `期末结转损益 ${periodLabel}`, now]
+    `insert into vouchers (
+       id, company_id, voucher_type, summary, status, source,
+       accounting_date, period, voucher_word, voucher_seq,
+       posted_at, created_at, updated_at
+     )
+     values (
+       $1, $2, 'closing', $3, 'posted', 'period_closing',
+       $5::date, $6, $7,
+       coalesce(
+         (select max(v2.voucher_seq) + 1 from vouchers v2
+          where v2.company_id = $2 and v2.period = $6 and v2.voucher_word = $7
+            and v2.status = 'posted'),
+         1
+       ),
+       $4::timestamptz, now(), now()
+     )`,
+    [
+      voucherId,
+      companyId,
+      `期末结转损益 ${periodLabel}`,
+      now,
+      asOfDate,
+      periodLabel,
+      resolveVoucherWord("closing")
+    ]
   );
 
+  const entries = [];
   for (const line of lines) {
     const accountName = await lookupAccountName(client, companyId, line.accountCode);
-    await client.query(
-      `insert into ledger_entries
-        (id, company_id, voucher_id, entry_date, summary, account_code, account_name, debit, credit, source, posted_at)
-       values ($1, $2, $3, $4::date, $5, $6, $7, $8::numeric, $9::numeric, 'period_closing', $10::timestamptz)`,
-      [
-        `led-close-${voucherId}-${line.accountCode}`,
-        companyId,
-        voucherId,
-        asOfDate,
-        `期末结转 ${periodLabel}`,
-        line.accountCode,
-        accountName,
-        line.debit,
-        line.credit,
-        now
-      ]
-    );
+    entries.push({
+      id: `led-close-${voucherId}-${line.accountCode}`,
+      companyId,
+      voucherId,
+      businessEventId: null,
+      entryDate: asOfDate,
+      summary: `期末结转 ${periodLabel}`,
+      accountCode: line.accountCode,
+      accountName,
+      debit: line.debit.toFixed(2),
+      credit: line.credit.toFixed(2),
+      source: "period_closing" as const,
+      postedAt: now
+    });
   }
+  await insertLedgerEntries(client, entries);
 
   await client.query(
     `insert into period_closings (id, company_id, period_label, voucher_id, net_profit)

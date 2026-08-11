@@ -394,6 +394,20 @@ export interface Voucher {
   summary: string;
   status: VoucherStatus;
   lines: VoucherDraftLine[];
+  /**
+   * 会计日期（`YYYY-MM-DD`）：这笔账归属哪个期间。
+   *
+   * 与 `postedAt`（什么时候点的过账按钮）是两件事。过账时 `ledger_entries.entry_date`
+   * 取的是它，期间锁也按它判 —— 6 月的业务 7 月过账，账要记在 6 月，且锁了 6 月就
+   * 不该还能补记进去。此前两者混用同一个过账时间戳，导致报表错期且期间锁失效。
+   */
+  accountingDate: string;
+  /**
+   * 凭证号，如 `记-2026-06-0037`。**未过账凭证为 null** —— 号码在过账那一刻才
+   * 被消耗，草稿不占号，否则删草稿会留下断号，而《会计基础工作规范》第五十一条
+   * 要求记账凭证连续编号。
+   */
+  voucherNumber: string | null;
   approvedAt: string | null;
   postedAt: string | null;
   source: "analysis";
@@ -506,6 +520,18 @@ export interface BalanceSheetReport {
   assets: FinancialReportLine[];
   liabilities: FinancialReportLine[];
   equity: FinancialReportLine[];
+  /**
+   * 无法归入资产/负债/权益、也不属于损益的科目（V12-A5）。
+   *
+   * 正常情况下恒为空数组。非空说明账上出现了报表口径覆盖不到的科目代码——此前
+   * 这类科目（如 4 开头的生产成本）会被**静默丢弃**，资产负债表因此不平且无从
+   * 察觉。现在显式列出来，金额照常给出，配合 `warnings` 让问题可见、可定位。
+   *
+   * 这些行**不计入任何合计**：把成因不明的余额掺进合计只会掩盖不平。
+   */
+  unclassified: FinancialReportLine[];
+  /** 面向使用者的报表告警（当前只有未分类科目一种）。正常为空数组。 */
+  warnings: string[];
   totals: {
     assets: string;
     liabilities: string;

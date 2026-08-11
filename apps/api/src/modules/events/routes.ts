@@ -836,13 +836,23 @@ function toTaxItems(bundle: BusinessEventMappingBundle, generatedAt: string): Ta
   }));
 }
 
-function toVouchers(bundle: BusinessEventMappingBundle, generatedAt: string): Voucher[] {
+/**
+ * `occurredOn` 是这批凭证的会计日期 —— 事项分析出来的凭证，账要记在业务发生的
+ * 那个期间，而不是跑分析的那天。
+ */
+function toVouchers(
+  bundle: BusinessEventMappingBundle,
+  generatedAt: string,
+  occurredOn: string
+): Voucher[] {
   return bundle.voucherDrafts.map((draft) => ({
     id: `voucher-${draft.businessEventId}-${draft.voucherType}`,
     companyId: draft.companyId,
     businessEventId: draft.businessEventId,
     mappingId: draft.id,
     voucherType: draft.voucherType,
+    accountingDate: occurredOn,
+    voucherNumber: null,
     summary: draft.summary,
     status: draft.status === "ready" ? "posted" : draft.status,
     lines: draft.lines,
@@ -1746,7 +1756,7 @@ export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId
     ...toTaxItems(bundle, now)
   ];
   const nextVouchers = [
-    ...toVouchers(bundle, now)
+    ...toVouchers(bundle, now, analyzedEvent.occurredOn)
   ];
   const contractObjectLinks = analyzedEvent.contractId
     ? buildContractObjectLinks({
