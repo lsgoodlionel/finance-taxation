@@ -55,6 +55,12 @@ import {
 } from "../modules/reports/routes.js";
 import { getTrialBalance } from "../modules/reports/trial-balance.routes.js";
 import {
+  createRecurringRoute,
+  generateRecurringRoute,
+  listRecurringRoute,
+  updateRecurringStatusRoute
+} from "../modules/recurring/routes.js";
+import {
   closeReconciliationRoute,
   getBalanceReconciliationRoute,
   listReconciliationSessionsRoute
@@ -538,6 +544,21 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "ledger.view",
     handler: (req, res, p) => getAccountByCode(req, res, p.code!)
+  },
+
+  // 定期凭证（V12-C4）
+  //
+  // 生成的是草稿，不进总账，因此归 ledger.post 而非更高的权限：它省的是
+  // 重复劳动，过账仍要走正常审批。
+  { method: "GET", path: "/api/recurring-vouchers", auth: true, permission: "ledger.view", handler: listRecurringRoute },
+  { method: "POST", path: "/api/recurring-vouchers", auth: true, permission: "ledger.post", handler: createRecurringRoute },
+  { method: "POST", path: "/api/recurring-vouchers/generate", auth: true, permission: "ledger.post", handler: generateRecurringRoute },
+  {
+    method: "PATCH",
+    path: "/api/recurring-vouchers/:id",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => updateRecurringStatusRoute(req, res, p.id!)
   },
 
   // 银行余额调节表与对账封存（V12-C3）
