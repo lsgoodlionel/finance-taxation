@@ -32,6 +32,7 @@
     "v4:test:db:reset": "V4_TEST_DATABASE_URL=${V4_TEST_DATABASE_URL:-postgres://finance_taxation:finance_taxation@127.0.0.1:55433/finance_taxation_v4_test} tsx tools/v4/reset-test-db.ts",
     "v4:test:seed": "V4_TEST_DATABASE_URL=${V4_TEST_DATABASE_URL:-postgres://finance_taxation:finance_taxation@127.0.0.1:55433/finance_taxation_v4_test} tsx tools/v4/seed-acceptance-data.ts",
     "v4:test:setup": "npm run v4:test:db:start && npm run v4:test:db:reset && npm run v4:test:seed && npm run v4:test:app:start",
+    "v4:test:lane": "node tools/v4/lane-db.mjs",
     "typecheck:v4:tools": "node tools/v4/typecheck.mjs",
     "test:load": "node --import tsx tools/v4/production-gates.ts load",
     "test:backup-restore": "node --import tsx tools/v4/production-gates.ts backup-restore",
