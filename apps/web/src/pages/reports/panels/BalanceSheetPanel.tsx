@@ -9,6 +9,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import type { BalanceSheetReport, FinancialReportLine } from "@finance-taxation/domain-model";
 import { DataTableShell } from "../../../components/ui/DataTableShell";
+import { Term } from "../../../components/ui/Term";
 import { EmptyState } from "../../../components/ui/EmptyState";
 
 const { Text } = Typography;
@@ -105,6 +106,48 @@ export function BalanceSheetPanel({ report }: Props) {
     />
   ) : null;
 
+  // 恒等式自检（V12 收尾）。这一段的存在理由与上面的 warningBanner 完全相同：
+  // 自检从 B5 起就算得出「差额是多少、能不能被未结转损益解释」，但只在
+  // /api/ledger/balance-check 里，而看报表的人不会去调另一个接口。
+  //
+  // 三档呈现刻意分开：
+  // - residual ≠ 0 → 总账借贷不平，是真错账，报 error；
+  // - 有未结账年度 → 差额可解释但需要人去做年结，报 warning；
+  // - 其余 notice → 信息性提示。
+  const selfCheck = report.selfCheck;
+  const selfCheckBanner = selfCheck && selfCheck.notice ? (
+    <Alert
+      type={selfCheck.residual !== 0 ? "error" : "warning"}
+      showIcon
+      style={{ marginBottom: 12 }}
+      title={
+        selfCheck.residual !== 0
+          ? "资产负债表不平，且差额无法被未结转损益解释"
+          : "资产负债表差额可被解释，但仍有待办"
+      }
+      description={
+        <div style={{ fontSize: 12 }}>
+          <div>{selfCheck.notice}</div>
+          <div style={{ marginTop: 6, color: "#64748b" }}>
+            资产 {selfCheck.assets.toFixed(2)} − 负债 {selfCheck.liabilities.toFixed(2)} − 权益{" "}
+            {selfCheck.equity.toFixed(2)} = {selfCheck.difference.toFixed(2)}
+            ；其中未<Term k="close-income">结转损益</Term> {selfCheck.unclosedProfitLoss.toFixed(2)}
+            {selfCheck.unclassified !== 0 ? `，未分类科目 ${selfCheck.unclassified.toFixed(2)}` : ""}
+            {selfCheck.residual !== 0 ? `，无法解释的残差 ${selfCheck.residual.toFixed(2)}` : ""}
+          </div>
+          {selfCheck.openFiscalYears.length > 0 && (
+            <div style={{ marginTop: 6 }}>
+              尚未年结的年度：
+              {selfCheck.openFiscalYears
+                .map((item) => `${item.year} 年（本年利润 ${item.currentYearProfitBalance.toFixed(2)}）`)
+                .join("、")}
+            </div>
+          )}
+        </div>
+      }
+    />
+  ) : null;
+
   const columns: ColumnsType<typeof tableData[0]> = [
     { title: "资产", dataIndex: "assetLabel" },
     { title: "金额", dataIndex: "assetAmount", align: "right" as const, render: (v: string) => <Text strong>{v}</Text> },
@@ -128,6 +171,7 @@ export function BalanceSheetPanel({ report }: Props) {
       }
     >
       {warningBanner}
+      {selfCheckBanner}
       {view === "chart" ? (
         <div style={{ display: "grid", gap: 24 }}>
           {/* Overview bar */}

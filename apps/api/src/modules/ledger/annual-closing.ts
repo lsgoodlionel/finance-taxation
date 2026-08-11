@@ -350,6 +350,28 @@ export async function closeFiscalYear(
     }))
   );
 
+  // 与期末结转同一处遗漏：只写 ledger_entries 的话，年结凭证在凭证详情页上
+  // 是空的。年结凭证是一年里最该被翻看的一张——它决定本年利润怎么转进
+  // 未分配利润，审计必看。
+  for (const [index, line] of lines.entries()) {
+    await client.query(
+      `insert into voucher_lines (
+         id, company_id, voucher_id, summary, account_code, account_name, debit, credit, sort_order
+       ) values ($1, $2, $3, $4, $5, $6, $7::numeric, $8::numeric, $9)`,
+      [
+        `vl-annual-close-${companyId}-${year}-${index + 1}`,
+        companyId,
+        voucherId,
+        summary,
+        line.accountCode,
+        names.get(line.accountCode)!,
+        line.debit,
+        line.credit,
+        index
+      ]
+    );
+  }
+
   const updated = await markYearClosed(client, {
     companyId,
     year,

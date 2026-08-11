@@ -177,6 +177,29 @@ export async function closePeriod(
   }
   await insertLedgerEntries(client, entries);
 
+  // 凭证分录也写。此前只写 ledger_entries 不写 voucher_lines，于是期末结转
+  // 凭证在凭证详情页上是**空的**——用户点进去只看到一张没有任何分录的凭证，
+  // 而它恰恰是每期金额最大的那张。期初建账（opening-balance.ts）当初就已经
+  // 按「用户与审计都要翻看的正式凭证」写了 voucher_lines，这里补齐同一件事。
+  for (const [index, entry] of entries.entries()) {
+    await client.query(
+      `insert into voucher_lines (
+         id, company_id, voucher_id, summary, account_code, account_name, debit, credit, sort_order
+       ) values ($1, $2, $3, $4, $5, $6, $7::numeric, $8::numeric, $9)`,
+      [
+        `vl-close-${voucherId}-${index + 1}`,
+        companyId,
+        voucherId,
+        entry.summary,
+        entry.accountCode,
+        entry.accountName,
+        entry.debit,
+        entry.credit,
+        index
+      ]
+    );
+  }
+
   await client.query(
     `insert into period_closings (id, company_id, period_label, voucher_id, net_profit)
      values ($1, $2, $3, $4, $5::numeric)`,
