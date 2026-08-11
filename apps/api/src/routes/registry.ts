@@ -55,6 +55,11 @@ import {
 } from "../modules/reports/routes.js";
 import { getTrialBalance } from "../modules/reports/trial-balance.routes.js";
 import {
+  closeReconciliationRoute,
+  getBalanceReconciliationRoute,
+  listReconciliationSessionsRoute
+} from "../modules/banking/reconciliation-session.routes.js";
+import {
   deleteSettlementRoute,
   getAgingRoute,
   getOpenItemsRoute,
@@ -534,6 +539,14 @@ const routes: RouteDef[] = [
     permission: "ledger.view",
     handler: (req, res, p) => getAccountByCode(req, res, p.code!)
   },
+
+  // 银行余额调节表与对账封存（V12-C3）
+  //
+  // 封存归 banking.manage：它是对账动作的收口，与导入流水、确认匹配同一类
+  // 职责；查调节表归 ledger.view，出纳之外的人（会计、审计）也要能看。
+  { method: "GET", path: "/api/banking/reconciliation/balance", auth: true, permission: "ledger.view", handler: getBalanceReconciliationRoute },
+  { method: "GET", path: "/api/banking/reconciliation/sessions", auth: true, permission: "ledger.view", handler: listReconciliationSessionsRoute },
+  { method: "POST", path: "/api/banking/reconciliation/close", auth: true, permission: "banking.manage", handler: closeReconciliationRoute },
 
   // 往来账龄与核销（V12-C2）
   //
