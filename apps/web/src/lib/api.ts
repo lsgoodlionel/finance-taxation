@@ -1613,23 +1613,10 @@ export async function getInbox() {
   return request<{ items: InboxItem[]; totalPending: number }>("/api/inbox");
 }
 
-// ── 月度结账状态 ─────────────────────────────────────────────────────────────
-
-export interface CloseStep {
-  key: string;
-  label: string;
-  status: "done" | "pending" | "todo";
-  detail: string;
-  count: number;
-  actionPath: string;
-}
-
-export async function getCloseStatus(period: string) {
-  return request<{
-    period: string; steps: CloseStep[]; doneCount: number; total: number;
-    canLock: boolean; locked: boolean;
-  }>(`/api/close/status?period=${encodeURIComponent(period)}`);
-}
+// 月度结账状态原有两套并行来源：P0-2 的 /api/close/status 清单与 H2-w2 的
+// /api/ledger/close-plan 状态机。前者已无消费者且口径更粗（银行对账只数
+// 未匹配笔数），V12-C5 已把它独有的三项（工资确认、社保关账、银行对账）
+// 并入状态机并删除。月结状态一律走 getClosePlan。
 
 // ── P4 社保联动 ───────────────────────────────────────────────────────────────
 
@@ -2431,7 +2418,7 @@ export interface CloseWizardPlan {
   overall: "not_started" | "in_progress" | "blocked" | "completed";
 }
 
-/** 月结编排：某属期各步骤状态机（只读）。区别于 getCloseStatus 的旧 checklist。 */
+/** 月结编排：某属期各步骤状态机（只读）。这是月结状态的唯一来源。 */
 export async function getClosePlan(period: string) {
   return request<{ period: string; plan: CloseWizardPlan }>(
     `/api/ledger/close-plan?period=${encodeURIComponent(period)}`

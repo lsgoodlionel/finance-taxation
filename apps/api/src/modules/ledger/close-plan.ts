@@ -14,7 +14,10 @@
 /** 结账步骤，固定顺序；前一步未完成，后一步即为 blocked。 */
 export type CloseStepKey =
   | "sweep_unposted"
+  | "payroll_confirmed"
+  | "social_security"
   | "depreciation"
+  | "bank_reconciled"
   | "accrual_review"
   | "tax_consistency"
   | "close_income"
@@ -25,7 +28,13 @@ export type CloseStepKey =
 /** 步骤的固定顺序，供 UI 渲染或遍历使用。 */
 export const CLOSE_STEP_ORDER: readonly CloseStepKey[] = [
   "sweep_unposted",
+  // 工资与社保排在折旧之前：它们是本月最大的一笔费用，且社保关账依赖工资已确认。
+  "payroll_confirmed",
+  "social_security",
   "depreciation",
+  // 银行对账排在结转损益之前：对账最常发现的就是漏记的收付款，
+  // 而漏记的收付款一旦被结转进本年利润，改起来要红冲一串凭证。
+  "bank_reconciled",
   "accrual_review",
   "tax_consistency",
   "close_income",
@@ -49,6 +58,14 @@ export interface ClosePlanInput {
   unpostedEventCount: number;
   /** 本期折旧计提凭证是否已过账。 */
   depreciationPosted: boolean;
+  /** 本期尚未确认的工资记录数（V12-C5 自旧 /api/close/status 并入）。 */
+  unconfirmedPayrollCount: number;
+  /** 本期社保关账事项是否已办结（V12-C5 并入）。 */
+  socialSecurityClosed: boolean;
+  /** 本期是否已封存银行余额调节表（V12-C3 提供判据，C5 并入）。 */
+  bankReconciliationClosed: boolean;
+  /** 公司的银行账户数；为 0 时银行对账这一步不该拦住月结。 */
+  bankAccountCount: number;
   /** 权责发生制调整（应计/预提）待人工审阅批准的草稿数。 */
   pendingDraftCount: number;
   /** 票税一致性核对结果（tax-integration/consistency.ts 的 overall）；尚未运行核对为 null。 */
@@ -102,6 +119,42 @@ function resolveDepreciation(input: ClosePlanInput): StepResolution {
   return { done: input.depreciationPosted, pendingStatus: "ready" };
 }
 
+function resolvePayrollConfirmed(input: ClosePlanInput): StepResolution {
+  const done = input.unconfirmedPayrollCount <= 0;
+  if (done) return { done, pendingStatus: "ready" };
+  return {
+    done,
+    pendingStatus: "ready",
+    reason: `还有 ${input.unconfirmedPayrollCount} 条工资记录未确认`
+  };
+}
+
+function resolveSocialSecurity(input: ClosePlanInput): StepResolution {
+  return { done: input.socialSecurityClosed, pendingStatus: "ready" };
+}
+
+/**
+ * 银行对账。
+ *
+ * 判据是「本期已有封存的对账结论」而非「没有未匹配流水」——未匹配流水
+ * 未必是问题（在途存款就该未匹配），而封存动作代表人已经看过并给出了结论。
+ * 这正是 C3 的余额调节表提供的东西；在它之前，这一步没有可靠判据，
+ * 也正因如此旧清单里的「银行对账」只能数未匹配笔数。
+ */
+function resolveBankReconciled(input: ClosePlanInput): StepResolution {
+  if (input.bankReconciliationClosed) {
+    return { done: true, pendingStatus: "ready" };
+  }
+  return {
+    done: false,
+    pendingStatus: input.bankAccountCount === 0 ? "ready" : "in_review",
+    reason:
+      input.bankAccountCount === 0
+        ? undefined
+        : "本期尚未封存银行余额调节表；对账最常发现的就是漏记的收付款，应在结转损益前完成"
+  };
+}
+
 function resolveAccrualReview(input: ClosePlanInput): StepResolution {
   const done = input.pendingDraftCount <= 0;
   if (done) {
@@ -147,7 +200,10 @@ function resolveArchive(input: ClosePlanInput): StepResolution {
 
 const STEP_DEFINITIONS: readonly StepDefinition[] = [
   { key: "sweep_unposted", label: "清理未过账事项", resolve: resolveSweepUnposted },
+  { key: "payroll_confirmed", label: "工资确认", resolve: resolvePayrollConfirmed },
+  { key: "social_security", label: "社保关账", resolve: resolveSocialSecurity },
   { key: "depreciation", label: "计提折旧", resolve: resolveDepreciation },
+  { key: "bank_reconciled", label: "银行对账", resolve: resolveBankReconciled },
   { key: "accrual_review", label: "权责发生制调整复核", resolve: resolveAccrualReview },
   { key: "tax_consistency", label: "票税一致性核对", resolve: resolveTaxConsistency },
   { key: "close_income", label: "结转损益", resolve: resolveCloseIncome },

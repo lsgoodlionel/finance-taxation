@@ -7,6 +7,12 @@ import { buildClosePlan, CLOSE_STEP_ORDER, type ClosePlan, type CloseStepKey, ty
 const initial: ClosePlanInput = {
   unpostedEventCount: 3,
   depreciationPosted: false,
+  // V12-C5：自旧 /api/close/status 并入的三步。基线取"已完成"，
+  // 这样既有用例断言的仍是它们各自关心的那一步，而不会被新步骤挡在 blocked。
+  unconfirmedPayrollCount: 0,
+  socialSecurityClosed: true,
+  bankReconciliationClosed: true,
+  bankAccountCount: 1,
   pendingDraftCount: 0,
   taxConsistencyOverall: null,
   taxConsistencyAcknowledged: false,
@@ -34,8 +40,10 @@ test("empty/initial state: first step is ready, every later step is blocked", ()
   for (const key of CLOSE_STEP_ORDER.slice(1)) {
     assert.equal(statusOf(plan, key), "blocked", `${key} should be blocked`);
   }
-  const depreciation = plan.steps.find((s) => s.key === "depreciation")!;
-  assert.match(depreciation.blockingReason ?? "", /清理未过账事项/);
+  // 阻塞原因指向**紧邻的前一步**。不写死步骤名——V12-C5 在中间插入了
+  // 工资确认与社保关账后，写死名字的断言会因为顺序变化而误报。
+  const second = plan.steps.find((s) => s.key === CLOSE_STEP_ORDER[1])!;
+  assert.match(second.blockingReason ?? "", /清理未过账事项/);
   assert.equal(plan.nextActionableStep, "sweep_unposted");
   assert.equal(plan.overall, "not_started");
 });
@@ -54,6 +62,10 @@ test("accrual review stays in_review while drafts are pending, blocking tax_cons
     ...initial,
     unpostedEventCount: 0,
     depreciationPosted: true,
+    unconfirmedPayrollCount: 0,
+    socialSecurityClosed: true,
+    bankReconciliationClosed: true,
+    bankAccountCount: 1,
     pendingDraftCount: 2
   });
   assert.equal(statusOf(plan, "accrual_review"), "in_review");
@@ -71,6 +83,10 @@ test("tax consistency ok auto-completes and readies close_income", () => {
     ...initial,
     unpostedEventCount: 0,
     depreciationPosted: true,
+    unconfirmedPayrollCount: 0,
+    socialSecurityClosed: true,
+    bankReconciliationClosed: true,
+    bankAccountCount: 1,
     pendingDraftCount: 0,
     taxConsistencyOverall: "ok"
   });
@@ -84,6 +100,10 @@ test("tax consistency alert is stuck in_review and does not auto-complete", () =
     ...initial,
     unpostedEventCount: 0,
     depreciationPosted: true,
+    unconfirmedPayrollCount: 0,
+    socialSecurityClosed: true,
+    bankReconciliationClosed: true,
+    bankAccountCount: 1,
     pendingDraftCount: 0,
     taxConsistencyOverall: "alert",
     taxConsistencyAcknowledged: false
@@ -101,6 +121,10 @@ test("acknowledging a tax consistency alert lets the step complete and unlocks c
     ...initial,
     unpostedEventCount: 0,
     depreciationPosted: true,
+    unconfirmedPayrollCount: 0,
+    socialSecurityClosed: true,
+    bankReconciliationClosed: true,
+    bankAccountCount: 1,
     pendingDraftCount: 0,
     taxConsistencyOverall: "alert",
     taxConsistencyAcknowledged: true
@@ -115,6 +139,10 @@ test("a warning severity also requires acknowledgement before completing", () =>
     ...initial,
     unpostedEventCount: 0,
     depreciationPosted: true,
+    unconfirmedPayrollCount: 0,
+    socialSecurityClosed: true,
+    bankReconciliationClosed: true,
+    bankAccountCount: 1,
     pendingDraftCount: 0,
     taxConsistencyOverall: "warning",
     taxConsistencyAcknowledged: false
@@ -125,6 +153,10 @@ test("a warning severity also requires acknowledgement before completing", () =>
     ...initial,
     unpostedEventCount: 0,
     depreciationPosted: true,
+    unconfirmedPayrollCount: 0,
+    socialSecurityClosed: true,
+    bankReconciliationClosed: true,
+    bankAccountCount: 1,
     pendingDraftCount: 0,
     taxConsistencyOverall: "warning",
     taxConsistencyAcknowledged: true
@@ -136,6 +168,10 @@ test("everything completed: all steps done, no next action, overall completed", 
   const plan = buildClosePlan({
     unpostedEventCount: 0,
     depreciationPosted: true,
+    unconfirmedPayrollCount: 0,
+    socialSecurityClosed: true,
+    bankReconciliationClosed: true,
+    bankAccountCount: 1,
     pendingDraftCount: 0,
     taxConsistencyOverall: "ok",
     taxConsistencyAcknowledged: false,
@@ -153,6 +189,10 @@ test("archive remains blocked until every prior step, including filing_draft, is
   const plan = buildClosePlan({
     unpostedEventCount: 0,
     depreciationPosted: true,
+    unconfirmedPayrollCount: 0,
+    socialSecurityClosed: true,
+    bankReconciliationClosed: true,
+    bankAccountCount: 1,
     pendingDraftCount: 0,
     taxConsistencyOverall: "ok",
     taxConsistencyAcknowledged: false,

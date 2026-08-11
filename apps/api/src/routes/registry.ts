@@ -173,7 +173,6 @@ import {
 } from "../modules/payroll/transfer.routes.js";
 import { socialSecurityClosureRoute } from "../modules/payroll/social-security.routes.js";
 import { syncStatementsRoute, submitTransferApiRoute } from "../modules/banking/bank-api.routes.js";
-import { getCloseStatus } from "../modules/close/close.routes.js";
 import { getInbox } from "../modules/inbox/inbox.routes.js";
 import { globalSearch } from "../modules/search/search.routes.js";
 import { getSetupStatus } from "../modules/setup/setup.routes.js";
@@ -1182,7 +1181,6 @@ const routes: RouteDef[] = [
   // 收件箱与月结向导都是跨模块的**计数**聚合，不返回明细；权限键对齐各自页面的
   // 菜单键（/inbox → tasks.view，月结清单归口总账）。
   { method: "GET", path: "/api/inbox", auth: true, permission: "tasks.view", handler: getInbox },
-  { method: "GET", path: "/api/close/status", auth: true, permission: "ledger.view", handler: getCloseStatus },
 
   // invoices (P1) — ocr + sub-paths before the /:id catch-all
   // 发票录入/识别/验真与既有的 /api/invoices/parse 对齐到 documents.manage；
