@@ -33,7 +33,18 @@ export interface LedgerEntryInput {
   accountName: string;
   debit: string;
   credit: string;
-  source: "voucher_posting" | "period_closing";
+  /**
+   * 分录来源。四种「谁生成了这条分录」：
+   * - `voucher_posting` —— 凭证过账，业务分录
+   * - `period_closing` —— 月末结转损益（6xxx → 3131）
+   * - `annual_closing` —— 年末结转（3131 → 3141）
+   * - `opening_balance` —— 期初建账
+   *
+   * 后三种是系统生成的、不代表业务发生额的分录。**排除规则并不统一**：损益聚合
+   * 要排除 period_closing，但 3131 待结转余额两者都不能排除，账簿列示则一个都不排除。
+   * 判断依据见 ledger/closing-entries.ts 与 ledger/closing-sources.ts。
+   */
+  source: "voucher_posting" | "period_closing" | "annual_closing" | "opening_balance";
   postedAt: string;
 }
 

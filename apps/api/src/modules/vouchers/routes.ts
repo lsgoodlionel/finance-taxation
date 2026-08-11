@@ -36,6 +36,7 @@ import {
 import { buildReversalLines, canReverseVoucher } from "./reversal.js";
 import { formatVoucherNumber, resolveVoucherWord, type VoucherWord } from "./voucher-number.js";
 import { insertLedgerEntries } from "./ledger-writer.js";
+import { checkAccountsUsable } from "../accounts/account-guard.js";
 
 interface VoucherRow {
   id: string;
@@ -247,9 +248,30 @@ export async function listCompanyVoucherPostingRecords(
   return rows.map(mapVoucherPostingRecordRow);
 }
 
+export interface ListLedgerEntriesOptions {
+  voucherId?: string;
+  businessEventId?: string;
+  /** 会计日期下界（含），`YYYY-MM-DD`。省略即不设下界。 */
+  dateFrom?: string;
+  /** 会计日期上界（含），`YYYY-MM-DD`。省略即不设上界。 */
+  dateTo?: string;
+}
+
+/**
+ * 总账分录读取。
+ *
+ * `dateFrom` / `dateTo` 按 `entry_date`（会计日期，非过账时间 `posted_at`）过滤，
+ * 且**下推到 SQL**。加这两个参数是因为此前多个调用方（利润表、现金流量表、
+ * 资产负债表、驾驶舱）都是先把公司全部历史分录拉进 Node 内存、再 `.filter()`
+ * 按日期筛——分录上万条后每次请求都要全表扫一遍并在堆上物化，是确定的性能悬崖。
+ *
+ * 两个参数都是可选的：不传时 SQL、排序与返回值与加参数之前**完全一致**，
+ * 既有调用方（凭证详情、税务、风险）无需改动。对应断言见
+ * reports/trial-balance.integration.test.ts 的「不传参行为不变」一组。
+ */
 export async function listCompanyLedgerEntries(
   companyId: string,
-  options: { voucherId?: string; businessEventId?: string } = {}
+  options: ListLedgerEntriesOptions = {}
 ): Promise<LedgerEntry[]> {
   const params: unknown[] = [companyId];
   let where = "where company_id = $1";
@@ -260,6 +282,14 @@ export async function listCompanyLedgerEntries(
   if (options.businessEventId) {
     params.push(options.businessEventId);
     where += ` and business_event_id = $${params.length}`;
+  }
+  if (options.dateFrom) {
+    params.push(options.dateFrom);
+    where += ` and entry_date >= $${params.length}::date`;
+  }
+  if (options.dateTo) {
+    params.push(options.dateTo);
+    where += ` and entry_date <= $${params.length}::date`;
   }
   const rows = await query<LedgerEntryRow>(
     `
@@ -416,6 +446,14 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
     createdAt: now,
     updatedAt: now
   };
+
+  // 科目闸门：分录只能挂在这家公司真实存在的叶子科目上。此前三个写入函数
+  // 一次都没校验过科目码，任何客户端调 POST /api/vouchers 都能写进任意字符串
+  // 并过账 —— 迁移 041/042 就是这个洞造成的两次线上错账的事后补救。
+  const templateAccounts = await checkAccountsUsable(req.auth!.companyId, voucher.lines);
+  if (!templateAccounts.ok) {
+    return json(res, 400, { error: templateAccounts.message, code: templateAccounts.code });
+  }
 
   await withTransaction(async (client) => {
     await client.query(
@@ -596,6 +634,13 @@ export async function reverseVoucher(req: ApiRequest, res: ServerResponse, vouch
   const now = new Date().toISOString();
   const reversalId = `vch-rev-${voucherId}-${Date.now()}`;
   const reversalLines = buildReversalLines(target.lines);
+
+  // 红冲沿用原凭证的科目，但原科目可能在这期间被停用了 —— 那样红冲凭证要等到
+  // 过账时才失败，不如在生成这一步就说清楚。
+  const reversalAccounts = await checkAccountsUsable(req.auth!.companyId, reversalLines);
+  if (!reversalAccounts.ok) {
+    return json(res, 400, { error: reversalAccounts.message, code: reversalAccounts.code });
+  }
 
   await withTransaction(async (client) => {
     await client.query(
@@ -915,6 +960,13 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
   if (await isPeriodLocked(req.auth!.companyId, voucherPeriod)) {
     return json(res, 400, { error: `会计期间 ${voucherPeriod} 已锁账，无法过账。请先解锁该期间。` });
   }
+  // 过账前再校验一次科目：草稿可能建于科目停用之前，或由绕过创建接口的路径产生。
+  // 这是分录进总账前的最后一道闸。
+  const postingAccounts = await checkAccountsUsable(req.auth!.companyId, target.lines);
+  if (!postingAccounts.ok) {
+    return json(res, 400, { error: postingAccounts.message, code: postingAccounts.code });
+  }
+
   // 凭证号在过账这一刻分配，不在创建时 —— 草稿不占号，否则删草稿会留下断号，
   // 而《会计基础工作规范》要求编号连续。序号在同一事务内用 max+1 取，
   // 并发安全由迁移 048 的部分唯一索引兜底（冲突则整个事务回滚，调用方重试）。

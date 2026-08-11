@@ -19,6 +19,12 @@ import type { ObjectSchema } from "../../utils/validate.js";
  *   `period` URL param + req.auth.
  * - POST /api/ledger/periods/:id/unlock — unlockAccountingPeriod only uses
  *   the `period` URL param.
+ * - POST /api/ledger/fiscal-years/:id/close — closeFiscalYearRoute only uses
+ *   the `year` URL param.
+ * - POST /api/ledger/opening-balances — 请求体含 `lines` 数组，而 utils/validate.ts
+ *   只支持 string/number/boolean 且**会丢弃未白名单的键**：登记 schema 反而会把
+ *   `lines` 整个丢掉。该路由在 handler 内做逐字段整形校验，见
+ *   modules/ledger/opening-balance.routes.ts 的 parseLines。
  */
 export const vouchersLedgerBodySchemas: Record<string, ObjectSchema> = {
   "POST /api/vouchers": {

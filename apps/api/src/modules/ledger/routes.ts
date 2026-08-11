@@ -54,9 +54,14 @@ export async function listLedgerEntries(req: ApiRequest, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://127.0.0.1");
   const voucherId = url.searchParams.get("voucherId") || undefined;
   const eventId = url.searchParams.get("businessEventId") || undefined;
+  // 会计日期区间下推到 SQL；两个参数都可省略，省略时与加参数之前行为一致。
+  const dateFrom = url.searchParams.get("from") || undefined;
+  const dateTo = url.searchParams.get("to") || undefined;
   const rows = await listCompanyLedgerEntries(req.auth!.companyId, {
     voucherId,
-    businessEventId: eventId
+    businessEventId: eventId,
+    dateFrom,
+    dateTo
   });
   return json(res, 200, { items: rows, total: rows.length });
 }
@@ -68,65 +73,66 @@ export async function listLedgerPostingBatches(req: ApiRequest, res: ServerRespo
   return json(res, 200, { items: rows, total: rows.length });
 }
 
+interface AccountTotalsRow {
+  account_code: string;
+  account_name: string;
+  debit: string;
+  credit: string;
+}
+
+/**
+ * 每科目的借贷累计 —— **聚合下推到 SQL**（V12-B6）。
+ *
+ * 此前 `getLedgerSummary` / `getLedgerBalances` 都是 `listCompanyLedgerEntries(companyId)`
+ * 把公司全部历史分录拉进 Node，再用 Map 逐条累加。返回给前端的却只有「每科目一行」，
+ * 也就是说搬运了 N 条分录只为了得到几十行——分录上万条后内存与延迟都会明显劣化。
+ * 改成 `group by` 之后，传输量与内存占用都退化成科目数，与分录数无关。
+ *
+ * 分组键保持 `(account_code, account_name)` 不变：历史上同一编码可能配过不同名称，
+ * 旧实现按 `编码:名称` 分组会各成一行，调用方（含 close-period 集成测试）依赖
+ * 「同编码多行求和」的形状，改成只按编码分组会静默改变返回结构。
+ *
+ * 与旧实现一样**不排除结转分录**——账簿列示口径，依据见 ledger/closing-entries.ts。
+ * 需要分期间的期初/本期/期末六栏时用 `/api/reports/trial-balance`，不要在这里加口径。
+ */
+async function queryAccountTotals(companyId: string): Promise<AccountTotalsRow[]> {
+  return query<AccountTotalsRow>(
+    `select account_code, account_name,
+            coalesce(sum(debit), 0)::text  as debit,
+            coalesce(sum(credit), 0)::text as credit
+     from ledger_entries
+     where company_id = $1
+     group by account_code, account_name
+     order by account_code asc, account_name asc`,
+    [companyId]
+  );
+}
+
 export async function getLedgerSummary(req: ApiRequest, res: ServerResponse) {
-  const rows = await listCompanyLedgerEntries(req.auth!.companyId);
-  const totalsByAccount = new Map<
-    string,
-    { accountCode: string; accountName: string; debit: number; credit: number }
-  >();
-  for (const row of rows) {
-    const key = `${row.accountCode}:${row.accountName}`;
-    const current = totalsByAccount.get(key) || {
-      accountCode: row.accountCode,
-      accountName: row.accountName,
-      debit: 0,
-      credit: 0
-    };
-    current.debit += Number(row.debit || 0);
-    current.credit += Number(row.credit || 0);
-    totalsByAccount.set(key, current);
-  }
-  return json(res, 200, {
-    items: Array.from(totalsByAccount.values()).map((item) => ({
-      ...item,
-      debit: item.debit.toFixed(2),
-      credit: item.credit.toFixed(2)
-    })),
-    total: totalsByAccount.size
-  });
+  const rows = await queryAccountTotals(req.auth!.companyId);
+  const items = rows.map((row) => ({
+    accountCode: row.account_code,
+    accountName: row.account_name,
+    debit: Number(row.debit).toFixed(2),
+    credit: Number(row.credit).toFixed(2)
+  }));
+  return json(res, 200, { items, total: items.length });
 }
 
 export async function getLedgerBalances(req: ApiRequest, res: ServerResponse) {
-  const rows = await listCompanyLedgerEntries(req.auth!.companyId);
-  const balances = new Map<
-    string,
-    { accountCode: string; accountName: string; debit: number; credit: number; balance: number }
-  >();
-  for (const row of rows) {
-    const key = `${row.accountCode}:${row.accountName}`;
-    const current = balances.get(key) || {
-      accountCode: row.accountCode,
-      accountName: row.accountName,
-      debit: 0,
-      credit: 0,
-      balance: 0
+  const rows = await queryAccountTotals(req.auth!.companyId);
+  const items = rows.map((row) => {
+    const debit = Number(row.debit);
+    const credit = Number(row.credit);
+    return {
+      accountCode: row.account_code,
+      accountName: row.account_name,
+      debit: debit.toFixed(2),
+      credit: credit.toFixed(2),
+      balance: (debit - credit).toFixed(2)
     };
-    const debit = Number(row.debit || 0);
-    const credit = Number(row.credit || 0);
-    current.debit += debit;
-    current.credit += credit;
-    current.balance += debit - credit;
-    balances.set(key, current);
-  }
-  return json(res, 200, {
-    items: Array.from(balances.values()).map((item) => ({
-      ...item,
-      debit: item.debit.toFixed(2),
-      credit: item.credit.toFixed(2),
-      balance: item.balance.toFixed(2)
-    })),
-    total: balances.size
   });
+  return json(res, 200, { items, total: items.length });
 }
 
 export async function getCashJournal(req: ApiRequest, res: ServerResponse) {
@@ -146,8 +152,11 @@ export async function getCashJournal(req: ApiRequest, res: ServerResponse) {
   const params: unknown[] = [companyId, `${prefix}%`];
   let idx = 3;
 
-  if (from) { conditions.push(`le.posted_at >= $${idx++}`); params.push(from); }
-  if (to) { conditions.push(`le.posted_at <= $${idx++}`); params.push(to); }
+  // 按会计日期而非过账时间筛选与排序（迁移 045 把两者分开了）。
+  // 用 posted_at 的话，6 月的业务 7 月才过账就会出现在 7 月的现金日记账里，
+  // 而且余额栏是按「谁先被点过账」滚动的 —— 那不是账簿的顺序。
+  if (from) { conditions.push(`le.entry_date >= $${idx++}::date`); params.push(from); }
+  if (to) { conditions.push(`le.entry_date <= $${idx++}::date`); params.push(to); }
 
   const rows = await query<{
     id: string;
@@ -156,16 +165,19 @@ export async function getCashJournal(req: ApiRequest, res: ServerResponse) {
     summary: string;
     debit: string;
     credit: string;
+    entry_date: string;
     posted_at: string;
     voucher_id: string;
   }>(
     `select le.id, le.account_code, le.account_name, le.summary,
             le.debit::text, le.credit::text,
+            le.entry_date::text as entry_date,
             le.posted_at::text,
             le.voucher_id
      from ledger_entries le
      where ${conditions.join(" and ")}
-     order by le.posted_at asc`,
+     -- 同一天内按 id 稳定排序，否则余额栏在两次查询间可能跳动
+     order by le.entry_date asc, le.id asc`,
     params
   );
 
@@ -182,6 +194,9 @@ export async function getCashJournal(req: ApiRequest, res: ServerResponse) {
       debit: debit.toFixed(2),
       credit: credit.toFixed(2),
       balance: runningBalance.toFixed(2),
+      // 日记账要显示的是会计日期（这笔账属于哪天）；过账时间一并给出，
+      // 供「什么时候录进系统的」这类追溯用。
+      entryDate: r.entry_date,
       postedAt: r.posted_at,
       voucherId: r.voucher_id
     };
