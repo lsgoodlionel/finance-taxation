@@ -125,6 +125,11 @@ import {
   archiveTaxFilingBatch
 } from "../modules/tax/routes.js";
 import {
+  createTaxRateRoute,
+  expireTaxRateRoute,
+  listTaxRatesRoute
+} from "../modules/tax/tax-rate.routes.js";
+import {
   createVatSettlementVoucher,
   previewVatSettlement
 } from "../modules/tax/vat-settlement.routes.js";
@@ -543,6 +548,21 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "ledger.view",
     handler: (req, res, p) => getAccountByCode(req, res, p.code!)
+  },
+
+  // 税率主数据（V12-D2）
+  //
+  // 查税率归 tax.view；改税率归 tax.manage —— 税率错了整期申报都错，
+  // 与录税目不是一个量级的动作。系统内置税率不可运行期修改（沿革由迁移维护），
+  // 这里能改的只有公司自定义的那部分。
+  { method: "GET", path: "/api/tax/rates", auth: true, permission: "tax.view", handler: listTaxRatesRoute },
+  { method: "POST", path: "/api/tax/rates", auth: true, permission: "tax.manage", handler: createTaxRateRoute },
+  {
+    method: "POST",
+    path: "/api/tax/rates/:id/expire",
+    auth: true,
+    permission: "tax.manage",
+    handler: (req, res, p) => expireTaxRateRoute(req, res, p.id!)
   },
 
   // 定期凭证（V12-C4）

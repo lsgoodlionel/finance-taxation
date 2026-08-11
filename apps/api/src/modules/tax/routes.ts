@@ -27,6 +27,7 @@ import { resolveActiveTaxpayerProfile } from "./profile.js";
 import { resolveFilingPeriod, resolveTaxRuleProfile } from "./rules.js";
 import { buildStampAndSurtaxSummary } from "./stamp-surtax.js";
 import { buildVatWorkingPaper } from "./vat-working-paper.js";
+import { listTaxRates } from "./tax-rate-store.js";
 import { validateWorkflowAuthorization } from "../workflows/authorization.js";
 import { buildWorkflowCommandExecution, buildWorkflowRun, markWorkflowCommandStatus } from "../workflows/commands.js";
 import {
@@ -999,7 +1000,9 @@ export async function getVatWorkingPaper(req: ApiRequest, res: ServerResponse) {
   if (!profile) {
     return json(res, 404, { error: "Active taxpayer profile not found" });
   }
-  const paper: VatWorkingPaper = buildVatWorkingPaper(profile, items, filingPeriod);
+  // 税率主数据按属期解析（V12-D2）：历史属期取当时的税率，小规模取减征后的征收率
+  const rates = await listTaxRates(req.auth!.companyId, "vat");
+  const paper: VatWorkingPaper = buildVatWorkingPaper(profile, items, filingPeriod, rates);
   return json(res, 200, paper);
 }
 
@@ -1093,7 +1096,8 @@ export async function getTaxWorkingPaperPrintable(req: ApiRequest, res: ServerRe
     res.end("Active taxpayer profile not found");
     return;
   }
-  const paper = buildVatWorkingPaper(profile, items, filingPeriod);
+  const rates = await listTaxRates(req.auth!.companyId, "vat");
+  const paper = buildVatWorkingPaper(profile, items, filingPeriod, rates);
   const html = buildTaxWorkingPaperPrintableHtml("增值税底稿", paper);
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");

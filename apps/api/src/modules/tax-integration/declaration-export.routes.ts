@@ -16,6 +16,7 @@ import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { resolveActiveTaxpayerProfile } from "../tax/profile.js";
 import { buildVatWorkingPaper } from "../tax/vat-working-paper.js";
+import { listTaxRates } from "../tax/tax-rate-store.js";
 import { buildVatDeclarationXml } from "./vat-xml-builder.js";
 import { buildIitCsv } from "./iit-csv-builder.js";
 import { buildSiCsv, buildHousingFundCsv } from "./si-csv-builder.js";
@@ -80,7 +81,8 @@ export async function exportVatXml(req: ApiRequest, res: ServerResponse): Promis
     source: r.source as TaxItem["source"], createdAt: r.created_at, updatedAt: r.updated_at,
   }));
 
-  const paper = buildVatWorkingPaper(profile, taxItems, period);
+  const rates = await listTaxRates(req.auth!.companyId, "vat");
+  const paper = buildVatWorkingPaper(profile, taxItems, period, rates);
   const xml = buildVatDeclarationXml(
     { name: company.name, creditCode: company.credit_code ?? "", bankName: company.bank_name ?? undefined, bankAccount: company.bank_account ?? undefined },
     paper,
