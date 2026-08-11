@@ -124,6 +124,7 @@ import {
   validateTaxFilingBatch,
   archiveTaxFilingBatch
 } from "../modules/tax/routes.js";
+import { getLedgerVatWorkingPaper } from "../modules/tax/vat-ledger-paper.routes.js";
 import {
   createTaxRateRoute,
   expireTaxRateRoute,
@@ -556,6 +557,8 @@ const routes: RouteDef[] = [
   // 与录税目不是一个量级的动作。系统内置税率不可运行期修改（沿革由迁移维护），
   // 这里能改的只有公司自定义的那部分。
   { method: "GET", path: "/api/tax/rates", auth: true, permission: "tax.view", handler: listTaxRatesRoute },
+  // 账簿口径的增值税底稿：与账簿同源，附带与税目口径的差额
+  { method: "GET", path: "/api/tax/vat-working-paper/ledger", auth: true, permission: "tax.view", handler: getLedgerVatWorkingPaper },
   { method: "POST", path: "/api/tax/rates", auth: true, permission: "tax.manage", handler: createTaxRateRoute },
   {
     method: "POST",
