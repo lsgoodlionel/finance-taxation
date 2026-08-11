@@ -36,6 +36,7 @@ import {
 import { buildReversalLines, canReverseVoucher } from "./reversal.js";
 import { formatVoucherNumber, resolveVoucherWord, type VoucherWord } from "./voucher-number.js";
 import { insertLedgerEntries } from "./ledger-writer.js";
+import { SETTLEABLE_TYPE_CODES } from "../settlement/settleable-accounts.js";
 import { checkAccountsUsable } from "../accounts/account-guard.js";
 
 interface VoucherRow {
@@ -66,6 +67,7 @@ interface VoucherLineRow {
   debit: string | number;
   credit: string | number;
   sort_order: number;
+  counterparty_id: string | null;
 }
 
 interface VoucherPostingRecordRow {
@@ -111,6 +113,33 @@ function toAmountString(value: string | number | null | undefined): string {
   return typeof value === "number" ? value.toFixed(2) : String(value);
 }
 
+/**
+ * 把业务事件上的往来单位贴到凭证行（V12-C2）。
+ *
+ * 只贴往来科目 —— 判据是 `account_type` 落在 SETTLEABLE_TYPE_CODES 里，
+ * 而不是科目码前缀。**就地修改传入的行**：这些行是本函数调用方刚刚构造出来
+ * 的、尚未落库的临时对象，此处改它不会影响任何别处持有的状态。
+ */
+async function attachCounterparty(
+  companyId: string,
+  lines: { accountCode: string; counterpartyId?: string | null }[],
+  counterpartyId: string | null
+): Promise<void> {
+  if (!counterpartyId || lines.length === 0) return;
+  const codes = [...new Set(lines.map((line) => line.accountCode))];
+  const rows = await query<{ code: string }>(
+    `select code from accounts
+     where company_id = $1 and code = any($2::text[]) and account_type = any($3::text[])`,
+    [companyId, codes, [...SETTLEABLE_TYPE_CODES]]
+  );
+  const settleable = new Set(rows.map((row) => row.code));
+  for (const line of lines) {
+    if (settleable.has(line.accountCode)) {
+      line.counterpartyId = counterpartyId;
+    }
+  }
+}
+
 function mapVoucherLineRow(row: VoucherLineRow): VoucherDraftLine {
   return {
     id: row.id,
@@ -118,7 +147,8 @@ function mapVoucherLineRow(row: VoucherLineRow): VoucherDraftLine {
     accountCode: row.account_code,
     accountName: row.account_name,
     debit: toAmountString(row.debit),
-    credit: toAmountString(row.credit)
+    credit: toAmountString(row.credit),
+    counterpartyId: row.counterparty_id
   };
 }
 
@@ -215,7 +245,8 @@ export async function listCompanyVouchers(
   const lineRows = await query<VoucherLineRow>(
     `
       select
-        id, voucher_id, summary, account_code, account_name, debit, credit, sort_order
+        id, voucher_id, summary, account_code, account_name, debit, credit, sort_order,
+        counterparty_id
       from voucher_lines
       where voucher_id = any($1::text[])
       order by sort_order asc
@@ -397,9 +428,11 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
   }
 
   // 一并取业务发生日：它是这张凭证的会计日期来源，决定账记在哪个期间。
-  const event = await queryOne<{ id: string; occurred_on: string | Date }>(
+  // 一并取往来单位：事件上早就记了它（business_events.counterparty_id），
+  // 凭证由事件生成，理应继承，而不是让用户在凭证上再填一次同一个客户。
+  const event = await queryOne<{ id: string; occurred_on: string | Date; counterparty_id: string | null }>(
     `
-      select id, occurred_on
+      select id, occurred_on, counterparty_id
       from business_events
       where id = $1 and company_id = $2
     `,
@@ -454,6 +487,10 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
   if (!templateAccounts.ok) {
     return json(res, 400, { error: templateAccounts.message, code: templateAccounts.code });
   }
+
+  // 往来维度只贴到往来科目的行上（V12-C2）。给每一行都贴会让"银行存款-甲客户"
+  // 这种无意义的组合进总账；判据用 account_type 而非科目码，D3 换编码时不用改这里。
+  await attachCounterparty(req.auth!.companyId, voucher.lines, event.counterparty_id);
 
   await withTransaction(async (client) => {
     await client.query(
@@ -550,8 +587,9 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
             account_name,
             debit,
             credit,
-            sort_order
-          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8)
+            sort_order,
+            counterparty_id
+          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8, $9)
         `,
         [
           line.id,
@@ -561,7 +599,8 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
           line.accountName,
           line.debit,
           line.credit,
-          index
+          index,
+          line.counterpartyId ?? null
         ]
       );
     }
@@ -993,7 +1032,10 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
     debit: line.debit,
     credit: line.credit,
     source: "voucher_posting",
-    postedAt
+    postedAt,
+    // 往来维度随凭证行进总账（V12-C2）。凭证行没填就是 null——非往来科目本就
+    // 不该有，往来科目漏填的后果是这笔进不了账龄表，由 settlement 侧提示补录。
+    counterpartyId: line.counterpartyId ?? null
   }));
   const createdBatch: LedgerPostingBatch = {
     id: `ledger-batch-${voucherId}`,

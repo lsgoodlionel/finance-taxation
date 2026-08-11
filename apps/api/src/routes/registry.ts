@@ -55,6 +55,12 @@ import {
 } from "../modules/reports/routes.js";
 import { getTrialBalance } from "../modules/reports/trial-balance.routes.js";
 import {
+  deleteSettlementRoute,
+  getAgingRoute,
+  getOpenItemsRoute,
+  settleRoute
+} from "../modules/settlement/routes.js";
+import {
   createAssetRoute,
   disposeAssetRoute,
   listAssetsRoute,
@@ -527,6 +533,22 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "ledger.view",
     handler: (req, res, p) => getAccountByCode(req, res, p.code!)
+  },
+
+  // 往来账龄与核销（V12-C2）
+  //
+  // 核销不产生凭证、不改任何科目余额，只声明"这笔收款抵的是那笔欠款"，
+  // 因此归 ledger.post 而非独立权限：它仍是记账人员的日常动作，
+  // 而查账龄表的人（如销售、管理层）只要 ledger.view。
+  { method: "GET", path: "/api/settlement/aging", auth: true, permission: "ledger.view", handler: getAgingRoute },
+  { method: "GET", path: "/api/settlement/open-items", auth: true, permission: "ledger.view", handler: getOpenItemsRoute },
+  { method: "POST", path: "/api/settlement/settle", auth: true, permission: "ledger.post", handler: settleRoute },
+  {
+    method: "DELETE",
+    path: "/api/settlement/settlements/:id",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => deleteSettlementRoute(req, res, p.id!)
   },
 
   // 固定资产（V12-C1）
