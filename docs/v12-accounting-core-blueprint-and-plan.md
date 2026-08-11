@@ -427,7 +427,11 @@ Odoo `l10n_cn` 在这块反而是四个系统里做得最细的（2221 下 27 �
 
 批次 B 的残留 1（共享测试库）已解决，其余 2–6 项仍在。新增：
 
-7. **049 的双事实来源仍未收敛**。报表侧 `profit-accounts.ts` 读的是硬编码 `chart-of-accounts.ts` 而非落库的 `accounts` 表。C1 新增 6115 时必须两处同改——只改数据库会让处置收益走"6 开头且不是收入→一律计费用"的兜底被算成费用。目前靠人记得同步，迟早漏。
+7. **049 的双事实来源仍未收敛**，但已加护栏。报表侧 `profit-accounts.ts` / `balance-sheet-accounts.ts` 读的是硬编码 `chart-of-accounts.ts` 而非落库的 `accounts` 表。C1 新增 6115 时必须两处同改——只改数据库会让处置收益走"6 开头且不是收入→一律计费用"的兜底被算成费用。
+
+   `chart-parity.integration.test.ts` 现在比对两张表的科目集合、`category`、`direction`（名称不比对：迁移里的名称常带「应交税费-」这类限定前缀，逐字比对只是噪音），任一侧漏改立刻红。已用「临时删掉 6115」实测护栏确实会拦，不是永远绿的假护栏。
+
+   真正的收敛仍待独立立项：`classifyProfitAccount` / `classifyBalanceSheetAccount` 是同步纯函数，改成读库要么变异步、要么把科目表作为参数贯穿十余个调用点（`closing.ts`、`risk/engine.ts`、`reports/summary.ts`、`trial-balance.ts`、`balance-check.ts`、`dashboard/*`、`assistant`、`boss-qa`），触及报表核心口径，不该顺手夹带在功能批次里。
 8. **预收账款（2203）未纳入核销**。它的 `account_type` 目前是泛化的 `liability_current`，049 没有为它单列。与其在 `settleable-accounts.ts` 里按科目码 2203 开特例（那就回到硬编码科目码了），不如等 `account_type` 补齐。
 9. **定期凭证前端只支持一借一贷等额模板**，后端支持任意多行。多行模板目前只能通过 API 建。
 10. **`toCents` 仍有四份副本**。新代码统一走 `utils/money.ts`，但 `trial-balance.ts`、`close-drafts.routes.ts`、`einvoice-parse.ts`、`journal-entry-bench.ts` 四处未动——它们语义并不完全一致（einvoice-parse 那份对非法输入返回 null），收敛需要逐个确认差异，不该顺手夹带。
