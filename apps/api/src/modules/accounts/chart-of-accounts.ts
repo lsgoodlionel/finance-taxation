@@ -51,6 +51,8 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   // 因此 1601 本身就是叶子。
   { code: "1601",    name: "固定资产",                  category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "1602",    name: "累计折旧",                  category: "asset",     direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
+  // 固定资产处置的过渡科目。处置完成后余额应结平，长期挂账说明有资产处置没走完流程。
+  { code: "1606",    name: "固定资产清理",               category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "1701",    name: "无形资产",                  category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "1702",    name: "累计摊销",                  category: "asset",     direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "1801",    name: "长期待摊费用",               category: "asset",     direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
@@ -103,6 +105,11 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   { code: "6001",    name: "主营业务收入",               category: "revenue",   direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "6051",    name: "其他业务收入",               category: "revenue",   direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "6111",    name: "投资收益",                  category: "revenue",   direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
+  // 6115 归 revenue 而非 expense：准则把「资产处置收益」列在营业利润的加项，
+  // 与投资收益并列，损失时在同一行以负数列示。归成 expense 会让处置收益变成
+  // 负费用——营业利润仍对，但利润表「资产处置收益」这一行永远是 0。
+  // 它不进 REVENUE_ACCOUNT_PREFIXES：那份前缀表是「营业收入」口径。
+  { code: "6115",    name: "资产处置损益",               category: "revenue",   direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "6301",    name: "营业外收入",                 category: "revenue",   direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   // ─── 费用 ───────────────────────────────────────────────
   { code: "6001c",   name: "主营业务成本",               category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },

@@ -54,6 +54,13 @@ import {
   listReportSnapshots
 } from "../modules/reports/routes.js";
 import { getTrialBalance } from "../modules/reports/trial-balance.routes.js";
+import {
+  createAssetRoute,
+  disposeAssetRoute,
+  listAssetsRoute,
+  previewDepreciationRoute,
+  runDepreciationRoute
+} from "../modules/assets/routes.js";
 import { buildClosingPackageExport, buildClosingPackageHtml } from "../modules/packages/closing-bundle.js";
 import {
   createRndCostLine,
@@ -520,6 +527,26 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "ledger.view",
     handler: (req, res, p) => getAccountByCode(req, res, p.code!)
+  },
+
+  // 固定资产（V12-C1）
+  //
+  // 权限沿用 ledger.*：建卡、计提、处置产出的都是凭证，是记账动作；查台账与
+  // 预览折旧是查阅动作。不新造 asset.* 权限——权限点越多越难说清谁能干什么，
+  // 而这里的动作与"记账/查账"的边界完全重合。
+  //
+  // 折旧的 GET 路径必须排在 `/api/assets/:id/dispose` 之前登记？不必：两者
+  // 方法与形状都不同（GET vs POST，且 depreciation 段不含第二级），不会互相遮蔽。
+  { method: "GET", path: "/api/assets", auth: true, permission: "ledger.view", handler: listAssetsRoute },
+  { method: "POST", path: "/api/assets", auth: true, permission: "ledger.post", handler: createAssetRoute },
+  { method: "GET", path: "/api/assets/depreciation", auth: true, permission: "ledger.view", handler: previewDepreciationRoute },
+  { method: "POST", path: "/api/assets/depreciation", auth: true, permission: "ledger.post", handler: runDepreciationRoute },
+  {
+    method: "POST",
+    path: "/api/assets/:id/dispose",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => disposeAssetRoute(req, res, p.id!)
   },
 
   // reports
