@@ -124,6 +124,12 @@ import {
   validateTaxFilingBatch,
   archiveTaxFilingBatch
 } from "../modules/tax/routes.js";
+import {
+  createCostCenterRoute,
+  getCostCenterReportRoute,
+  listCostCentersRoute,
+  updateCostCenterRoute
+} from "../modules/cost-center/routes.js";
 import { getLedgerVatWorkingPaper } from "../modules/tax/vat-ledger-paper.routes.js";
 import {
   createTaxRateRoute,
@@ -550,6 +556,21 @@ const routes: RouteDef[] = [
     permission: "ledger.view",
     handler: (req, res, p) => getAccountByCode(req, res, p.code!)
   },
+
+  // 成本中心（V12-D1）
+  //
+  // 建成本中心归 ledger.post（它决定费用往哪个部门归集，是记账口径的一部分）；
+  // 查报表归 ledger.view——部门负责人要能看自己的费用，不该为此拿到记账权限。
+  { method: "GET", path: "/api/cost-centers", auth: true, permission: "ledger.view", handler: listCostCentersRoute },
+  { method: "POST", path: "/api/cost-centers", auth: true, permission: "ledger.post", handler: createCostCenterRoute },
+  {
+    method: "PATCH",
+    path: "/api/cost-centers/:id",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => updateCostCenterRoute(req, res, p.id!)
+  },
+  { method: "GET", path: "/api/reports/cost-centers", auth: true, permission: "ledger.view", handler: getCostCenterReportRoute },
 
   // 税率主数据（V12-D2）
   //

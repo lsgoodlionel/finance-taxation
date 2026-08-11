@@ -52,6 +52,11 @@ export interface LedgerEntryInput {
    * 判断该不该有，这里不强制，否则结转凭证也得编一个假值。
    */
   counterpartyId?: string | null;
+  /**
+   * 成本中心维度（V12-D1）。可空，理由同 counterpartyId：绝大多数分录
+   * （银行存款、应交税费、实收资本）不属于任何部门。
+   */
+  costCenterId?: string | null;
 }
 
 export interface PostabilityInput {
@@ -124,8 +129,8 @@ export async function insertLedgerEntries(
       `
         insert into ledger_entries (
           id, company_id, voucher_id, business_event_id, entry_date, summary,
-          account_code, account_name, debit, credit, source, posted_at, counterparty_id
-        ) values ($1, $2, $3, $4, $5::date, $6, $7, $8, $9::numeric, $10::numeric, $11, $12::timestamptz, $13)
+          account_code, account_name, debit, credit, source, posted_at, counterparty_id, cost_center_id
+        ) values ($1, $2, $3, $4, $5::date, $6, $7, $8, $9::numeric, $10::numeric, $11, $12::timestamptz, $13, $14)
       `,
       [
         entry.id,
@@ -140,7 +145,8 @@ export async function insertLedgerEntries(
         entry.credit,
         entry.source,
         entry.postedAt,
-        entry.counterpartyId ?? null
+        entry.counterpartyId ?? null,
+        entry.costCenterId ?? null
       ]
     );
   }
