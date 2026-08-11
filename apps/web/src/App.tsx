@@ -4,6 +4,7 @@ import { LanguageProvider } from "./lib/i18n";
 import { PeriodProvider } from "./lib/period-context";
 import { WorkspaceModeProvider, useWorkspaceMode } from "./lib/workspace-mode";
 import { AppLayout } from "./components/AppLayout";
+import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { LEGACY_ENTRY_ALIASES } from "./lib/entry-guidance";
 
 /**
@@ -55,6 +56,11 @@ const router = createBrowserRouter([
   {
     path: "/",
     element: <AppLayout />,
+    // 挂在根节点：子路由未自行处理的错误都会冒泡到这里。此前整个 router 没有
+    // errorElement，任何未捕获错误都摔到 React Router 的默认页（一句英文
+    // 「Unexpected Application Error!」）。它同时负责「部署后旧页面 chunk 失效」
+    // 的自动刷新，见 lib/stale-chunk.ts。
+    errorElement: <RouteErrorBoundary />,
     children: [
       { index: true, element: <ModeAwareIndexRedirect /> },
       // K1/K2 引导模式：老板工作台 + 记一笔向导
