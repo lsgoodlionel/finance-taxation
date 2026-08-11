@@ -7,6 +7,7 @@ import { json } from "../../utils/http.js";
 import { listCompanyRiskFindings } from "../risk/routes.js";
 import { listCompanyTaxpayerProfiles } from "../tax/routes.js";
 import { listCompanyLedgerEntries } from "../vouchers/routes.js";
+import { checkBalanceSheet } from "../ledger/balance-check.js";
 import { resolveActiveTaxpayerProfile } from "../tax/profile.js";
 import {
   buildBalanceSheetReport,
@@ -94,8 +95,20 @@ export async function getBalanceSheet(req: ApiRequest, res: ServerResponse) {
     asOfDate: period.endDate,
     entries
   });
+
+  // 恒等式自检随报表一起返回（V12 收尾）。checkBalanceSheet 从 B5 起就备好了
+  // 一句可直接列示的 notice，但报表侧一直没接——于是「资产 ≠ 负债 + 权益」
+  // 这件事只有主动调另一个接口才看得到，而看报表的人不会去调。
+  //
+  // 差额不凑平：报表照实列示恒等式两边与差额的成因（未结转损益 / 未分类科目 /
+  // 真实不平），而不是合成一行把表凑平。
+  const selfCheck = await withTransaction((client) =>
+    checkBalanceSheet(client, companyId, period.endDate)
+  );
+
   return json(res, 200, {
     ...report,
+    selfCheck,
     accountCatalogSize: CHART_OF_ACCOUNTS.length
   });
 }

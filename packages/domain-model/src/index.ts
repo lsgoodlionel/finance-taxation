@@ -540,6 +540,32 @@ export interface BalanceSheetReport {
   unclassified: FinancialReportLine[];
   /** 面向使用者的报表告警（当前只有未分类科目一种）。正常为空数组。 */
   warnings: string[];
+  /**
+   * 恒等式自检（V12 收尾接线）。
+   *
+   * 「资产 = 负债 + 权益」差在哪、能不能被未结转损益解释，此前只有单独调
+   * `/api/ledger/balance-check` 才看得到——而看报表的人不会去调另一个接口。
+   * 现在随报表一起返回，由界面直接列示。
+   *
+   * 可选是因为这是外部数据边界：旧版本 API 或缓存响应可能没有这个字段。
+   */
+  selfCheck?: {
+    asOfDate: string;
+    assets: number;
+    liabilities: number;
+    equity: number;
+    /** 尚未结转到权益的损益净额——差额的正常来源。 */
+    unclosedProfitLoss: number;
+    unclassified: number;
+    /** 资产 − 负债 − 权益。 */
+    difference: number;
+    /** 差额减去可解释部分后的残差；不为 0 说明总账借贷不平，是真错账。 */
+    residual: number;
+    balanced: boolean;
+    openFiscalYears: { year: number; netProfit: number; currentYearProfitBalance: number }[];
+    /** 可直接列示的一句话，无异常时为 null。 */
+    notice: string | null;
+  };
   totals: {
     assets: string;
     liabilities: string;
