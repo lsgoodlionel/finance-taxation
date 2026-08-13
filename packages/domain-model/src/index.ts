@@ -457,8 +457,13 @@ export interface LedgerEntry {
    * 在往库里写 `period_closing`，测试只能用 `as unknown as LedgerEntry` 绕过。
    * 两者的区别有实际后果 —— 损益聚合必须排除结转分录、账簿列示必须保留，
    * 判断依据见 apps/api 的 modules/ledger/closing-entries.ts。
+   *
+   * V12：补齐 `annual_closing`（年末结转）与 `opening_balance`（期初建账）。
+   * 它们从批次 B 起就在往库里写，但类型一直停在两种——写 E6 的跨年用例时才
+   * 暴露出来。取值集合与迁移 067 的 CHECK 约束、`ledger/closing-sources.ts`
+   * 的判定三处必须一致。
    */
-  source: "voucher_posting" | "period_closing";
+  source: "voucher_posting" | "period_closing" | "annual_closing" | "opening_balance";
   postedAt: string;
   /** 往来核算维度（V12-C2）。非往来科目为空，详见 VoucherDraftLine.counterpartyId。 */
   counterpartyId?: string | null;

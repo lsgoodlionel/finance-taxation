@@ -8,6 +8,7 @@ import type {
 } from "@finance-taxation/domain-model";
 import { isPeriodClosingEntry } from "../ledger/closing-entries.js";
 import { classifyBalanceSheetAccount } from "./balance-sheet-accounts.js";
+import { RETAINED_EARNINGS_CODE } from "../ledger/account-semantics.js";
 import { classifyProfitAccount, summarizeProfitTotals } from "./profit-accounts.js";
 
 interface PeriodInput {
@@ -60,6 +61,67 @@ function hasPrefix(code: string, prefixes: string[]): boolean {
 /** 本年利润科目：结转损益的对手方，也是资产负债表所有者权益里的利润归集行。 */
 const PROFIT_ACCOUNT_CODE = "3131";
 
+/** 金额比较容差。金额是 numeric(18,2)，半分钱的差已不可能来自正常数据。 */
+const AMOUNT_EPSILON = 0.0001;
+
+interface ProfitSplitInput {
+  asOfDate: string;
+  asOfEntries: readonly LedgerEntry[];
+  /** 3131 账面余额（贷方为正）。 */
+  profitAccountBalance: number;
+  /** 3141 账面余额（贷方为正）。 */
+  retainedAccountBalance: number;
+  /** 尚未结转的损益净额，可能跨年（见 buildBalanceSheetReport 的互补关系说明）。 */
+  unclosedProfit: number;
+}
+
+export interface ProfitSplit {
+  /** 本财年利润，落在「本年利润」行。 */
+  currentYear: number;
+  /** 以前年度累计，落在「利润分配」行。 */
+  retained: number;
+}
+
+/**
+ * 把「本年利润 + 未分配利润」按财年切开。
+ *
+ * ## 为什么两个来源都要切
+ *
+ * 以前年度的利润会藏在两个地方，只处理一个都不够：
+ *
+ * 1. **3131 的账面余额**——往年做过月结但没做年结，利润结转进了 3131 就一直躺着；
+ * 2. **往年尚未结转的损益**——往年连月结都没做，损益还留在 6xxx 上，
+ *    被 `summarizeProfitTotals` 算进了 `unclosedProfit`。
+ *
+ * 只切第一个，一家从没做过月结的公司的往年利润仍会算进「本年」。
+ *
+ * ## 中国财年恒等于自然年
+ *
+ * 所以起始日是纯字符串运算（`YYYY-01-01`），不经 `Date` —— 经 `Date` 往返会在
+ * 非 UTC 运行时把 1 月 1 日前移一天，把当年第一天的分录算成去年的。
+ * 同一个理由见 ledger/fiscal-year.ts 与 db/date-column.ts。
+ */
+export function resolveProfitSplit(input: ProfitSplitInput): ProfitSplit {
+  const fiscalYearStart = `${input.asOfDate.slice(0, 4)}-01-01`;
+  const priorEntries = input.asOfEntries.filter((entry) => entry.entryDate < fiscalYearStart);
+
+  // 3131 上属于以前年度的部分：贷方为正（权益类）
+  const priorProfitAccount = priorEntries
+    .filter((entry) => entry.accountCode === PROFIT_ACCOUNT_CODE)
+    .reduce((sum, entry) => sum + parseAmount(entry.credit) - parseAmount(entry.debit), 0);
+
+  // 以前年度尚未结转的损益。这里**沿用**含结转分录的口径（与 unclosedProfit 一致）：
+  // 往年已结转的部分被结转分录冲平、净额为 0，剩下的正是往年还没结转的。
+  const priorUnclosed = summarizeProfitTotals(priorEntries).netProfit;
+
+  const priorYears = priorProfitAccount + priorUnclosed;
+
+  return {
+    currentYear: input.profitAccountBalance + input.unclosedProfit - priorYears,
+    retained: input.retainedAccountBalance + priorYears
+  };
+}
+
 /**
  * 资产负债表 —— **不排除结转损益分录**（口径见 ledger/closing-entries.ts）。
  *
@@ -104,6 +166,11 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
   // 结转过一部分期间、当期尚未结转时（月结之后的常态）两个条件同时成立：权益里
   // 出现两行同为 3131 的记录，合计虚增一个 netProfit，资产负债表直接不平。
   let hasProfitAccountBalance = false;
+  let hasRetainedAccountBalance = false;
+  /** 3131 的账面余额（贷方为正）。 */
+  let profitAccountBalance = 0;
+  /** 3141 的账面余额（贷方为正）。 */
+  let retainedAccountBalance = 0;
 
   // 每个科目都必须有明确去向（V12-A5 / 蓝图 E4）。此前这里是
   // `if 1 / else if 2 / else if 3` 且**没有 else**：4 开头的生产成本 4001 与
@@ -126,15 +193,21 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
         amount: formatAmount(-amount)
       });
     } else if (section === "equity") {
-      const isProfitAccount = accountCode === PROFIT_ACCOUNT_CODE;
-      if (isProfitAccount) {
+      // 3131 与 3141 不在循环里成行：它们之间要做一次跨年重分类（见下方
+      // resolveProfitSplit），在循环里各自 push 会让重分类无处落脚。
+      if (accountCode === PROFIT_ACCOUNT_CODE) {
         hasProfitAccountBalance = true;
+        profitAccountBalance = -amount;
+      } else if (accountCode === RETAINED_EARNINGS_CODE) {
+        hasRetainedAccountBalance = true;
+        retainedAccountBalance = -amount;
+      } else {
+        equityLines.push({
+          code: accountCode,
+          label: accountCode,
+          amount: formatAmount(-amount)
+        });
       }
-      equityLines.push({
-        code: accountCode,
-        label: isProfitAccount ? "本年利润" : accountCode,
-        amount: formatAmount(isProfitAccount ? -amount + netProfit : -amount)
-      });
     } else if (section === "unclassified") {
       unclassifiedLines.push({
         code: accountCode,
@@ -146,12 +219,38 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
     // 上面权益的「本年利润」行，单列会重复计量。这是**显式**的不成行，不是丢弃。
   }
 
-  // 账上还没有 3131 余额（从未结转过）时，未结转利润没有落脚点，补一行合成的。
-  if (!hasProfitAccountBalance && Math.abs(netProfit) > 0.0001) {
+  // ── 本年利润 / 未分配利润的跨年重分类（V12 蓝图 E6）────────────────────
+  //
+  // 「本年利润」必须只含**本财年**的利润。漏做年末结转时，3131 上会累积着
+  // 历年已结转的利润，报表就会把开业至今的累计数标成「本年利润」——数字看着
+  // 合理，只是把三年的利润当成了今年赚的。
+  //
+  // 这是 Odoo 路线（见 ledger/fiscal-year.ts 头注）：**报表在任何时候都对，
+  // 哪怕上年没做年结**。它与年结凭证路线并存，不替代后者——账簿上仍需要那张
+  // 「借 3131 / 贷 3141」的凭证供审计查看。
+  //
+  // 重分类只在**权益内部**发生，权益合计分文不动，A = L + E 不受影响：
+  // 从 3131 挪走多少，3141 就增加多少。
+  const profitSplit = resolveProfitSplit({
+    asOfDate: input.asOfDate,
+    asOfEntries,
+    profitAccountBalance,
+    retainedAccountBalance,
+    unclosedProfit: netProfit
+  });
+
+  if (hasProfitAccountBalance || Math.abs(profitSplit.currentYear) > AMOUNT_EPSILON) {
     equityLines.push({
       code: PROFIT_ACCOUNT_CODE,
       label: "本年利润",
-      amount: formatAmount(netProfit)
+      amount: formatAmount(profitSplit.currentYear)
+    });
+  }
+  if (hasRetainedAccountBalance || Math.abs(profitSplit.retained) > AMOUNT_EPSILON) {
+    equityLines.push({
+      code: RETAINED_EARNINGS_CODE,
+      label: "利润分配",
+      amount: formatAmount(profitSplit.retained)
     });
   }
 
