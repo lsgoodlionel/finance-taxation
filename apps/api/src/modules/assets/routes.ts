@@ -20,6 +20,7 @@ import { writeAudit } from "../../services/audit.js";
 import { createFixedAsset, listFixedAssets } from "./asset-store.js";
 import { computeDepreciation, runDepreciation } from "./depreciation-run.js";
 import { disposeAsset } from "./disposal.js";
+import { describeReport, loadTaxDepreciationRows } from "./tax-depreciation-report.js";
 
 const PERIOD_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -220,4 +221,49 @@ export async function disposeAssetRoute(
   });
 
   json(res, 201, result.summary);
+}
+
+/**
+ * 资产折旧纳税调整明细表（V12-D4）。
+ *
+ * `GET /api/assets/tax-depreciation?taxYear=2026`
+ *
+ * 对应所得税年度纳税申报表 A105080。汇算是年度动作，所以入参是年度而非属期。
+ */
+export async function getTaxDepreciationRoute(
+  req: ApiRequest,
+  res: ServerResponse
+): Promise<void> {
+  const url = new URL(req.url || "/", "http://127.0.0.1");
+  const taxYear = Number(url.searchParams.get("taxYear"));
+  if (!Number.isInteger(taxYear) || taxYear < 2000 || taxYear > 2100) {
+    json(res, 400, { error: "taxYear 必填，为四位年份", code: "TAX_YEAR_INVALID" });
+    return;
+  }
+
+  const report = await withTransaction((client) =>
+    loadTaxDepreciationRows(client, req.auth!.companyId, taxYear)
+  );
+
+  json(res, 200, {
+    taxYear: report.taxYear,
+    accountingTotal: fromCents(report.accountingTotalCents),
+    taxTotal: fromCents(report.taxTotalCents),
+    adjustmentTotal: fromCents(report.adjustmentTotalCents),
+    summary: describeReport(report),
+    rows: report.rows.map((row) => ({
+      assetId: row.assetId,
+      assetNo: row.assetNo,
+      assetName: row.assetName,
+      category: row.category,
+      originalCost: fromCents(row.originalCostCents),
+      accountingLifeMonths: row.accountingLifeMonths,
+      taxLifeMonths: row.taxLifeMonths,
+      accountingDepreciation: fromCents(row.accountingDepreciationCents),
+      taxDeduction: fromCents(row.taxDeductionCents),
+      adjustment: fromCents(row.adjustmentCents),
+      reason: row.reason,
+      explanation: row.explanation
+    }))
+  });
 }

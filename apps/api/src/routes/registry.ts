@@ -74,6 +74,7 @@ import {
 import {
   createAssetRoute,
   disposeAssetRoute,
+  getTaxDepreciationRoute,
   listAssetsRoute,
   previewDepreciationRoute,
   runDepreciationRoute
@@ -639,6 +640,8 @@ const routes: RouteDef[] = [
   { method: "GET", path: "/api/assets", auth: true, permission: "ledger.view", handler: listAssetsRoute },
   { method: "POST", path: "/api/assets", auth: true, permission: "ledger.post", handler: createAssetRoute },
   { method: "GET", path: "/api/assets/depreciation", auth: true, permission: "ledger.view", handler: previewDepreciationRoute },
+  // 折旧纳税调整明细表（A105080）：归 tax.view，看它的是做汇算的人
+  { method: "GET", path: "/api/assets/tax-depreciation", auth: true, permission: "tax.view", handler: getTaxDepreciationRoute },
   { method: "POST", path: "/api/assets/depreciation", auth: true, permission: "ledger.post", handler: runDepreciationRoute },
   {
     method: "POST",
