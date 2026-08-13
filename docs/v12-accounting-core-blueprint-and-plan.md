@@ -445,5 +445,19 @@ Odoo `l10n_cn` 在这块反而是四个系统里做得最细的（2221 下 27 �
 8. **预收账款（2203）未纳入核销**。它的 `account_type` 目前是泛化的 `liability_current`，049 没有为它单列。与其在 `settleable-accounts.ts` 里按科目码 2203 开特例（那就回到硬编码科目码了），不如等 `account_type` 补齐。
 9. **定期凭证前端只支持一借一贷等额模板**，后端支持任意多行。多行模板目前只能通过 API 建。
 
-10. **E2E 有两条既有 flaky**：`login-and-navigation › expired session` 与 `runtime-summary-pages › /payroll/transfer`。全量并行跑时偶发红、单独重跑必绿，已多次观察到。与 V12 的改动无关（两处代码均未触及），但**没有定位就等于放着不管**——下一个人看到红灯会先怀疑自己的改动。
+10. **E2E 曾两次失败，未能复现**（原记为「flaky」，现修正）。
+
+    失败的两条是 `login-and-navigation › expired session` 与 `runtime-summary-pages › /payroll/transfer`，两次都发生在 **`docker compose up --build` 重建容器后的首次运行**。
+
+    专门做过一轮定位，**排除了三个假设**：
+
+    | 假设 | 验证方式 | 结论 |
+    |---|---|---|
+    | 登录接口限流 | 查 `docker-compose.test.yml` | 排除：测试栈已把 `AUTH_RATE_LIMIT_MAX` 放到 10 万 |
+    | 跨视口 project 并行改共享库状态 | 单 project 全量跑 ×2、两 project 跑 runtime spec ×3 | 排除：均全绿 |
+    | 浏览器验证遗留的演示数据污染 | 手工插入成本中心/银行账户/费用分录后跑全量 | 排除：仍 66/66 |
+
+    此后全量连跑 **8 次（含上述各变体）均 66/66 全绿**，未能复现。剩下的唯一怀疑是**容器冷启动**（`--wait` 只等 healthcheck 通过，不保证 JIT 预热与连接池就绪），但没有证据。
+
+    留给下一个人的可操作结论：**若在 `--build` 之后立刻跑 E2E 见到这两条红，先重跑一次再怀疑代码**；若在未重建容器的情况下也能稳定复现，那就是新问题，上面三个假设已经排除，不必重走。
 10. **`toCents` 仍有四份副本**。新代码统一走 `utils/money.ts`，但 `trial-balance.ts`、`close-drafts.routes.ts`、`einvoice-parse.ts`、`journal-entry-bench.ts` 四处未动——它们语义并不完全一致（einvoice-parse 那份对非法输入返回 null），收敛需要逐个确认差异，不该顺手夹带。
