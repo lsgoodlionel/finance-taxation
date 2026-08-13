@@ -7,7 +7,7 @@ import {
   daysBetween,
   type OpenItem
 } from "./aging.js";
-import { classifyEntrySide } from "./settleable-accounts.js";
+import { classifyEntrySide, SETTLEABLE_ACCOUNT_TYPES } from "./settleable-accounts.js";
 
 const AS_OF = "2026-06-30";
 
@@ -171,4 +171,44 @@ test("classifyEntrySide：应付方向完全相反", () => {
 test("classifyEntrySide：非往来科目一律 none", () => {
   assert.equal(classifyEntrySide("expense_direct_cost", 100, 0), "none");
   assert.equal(classifyEntrySide("asset_receivable", 0, 0), "none");
+});
+
+test("classifyEntrySide：预收账款收款是发生、发货结转是核销", () => {
+  // 收到客户预付款：借 银行存款 / 贷 预收账款 —— 贷方形成「我欠客户货」
+  assert.equal(classifyEntrySide("liability_advance_receipt", 0, 100), "open");
+  // 发货确认收入：借 预收账款 / 贷 主营业务收入 —— 借方了结这笔义务
+  assert.equal(classifyEntrySide("liability_advance_receipt", 100, 0), "settle");
+});
+
+/**
+ * 往来科目的资产/负债对称性护栏。
+ *
+ * 049 把负债侧的往来科目单边漏掉了：资产侧 1131 应收利息、1221 其他应收款都进了
+ * `asset_receivable`，负债侧对称的 2231 应付利息、2241 其他应付款却留在泛化的
+ * `liability_current` 里，于是**有真实写入路径的科目核销不了**——员工垫付款挂
+ * 2241（差旅、采购、事项路由、凭证模板四处在写），却查不出「谁垫了多少、还欠多少」。
+ *
+ * 这条钉住对称关系本身。将来再加一个可核销的资产类型而忘了负债侧（或反过来），
+ * 立刻红——而不是等到某个客户发现账龄表少了一半。
+ */
+test("每个可核销的资产类型都有对称的负债类型，反之亦然", () => {
+  const SYMMETRY = [
+    { asset: "asset_receivable", liability: "liability_payable" },
+    { asset: "asset_prepayment", liability: "liability_advance_receipt" }
+  ];
+
+  const settleable = new Set(SETTLEABLE_ACCOUNT_TYPES.map((item) => item.accountType));
+  const missing = SYMMETRY.flatMap((pair) =>
+    [pair.asset, pair.liability].filter((type) => !settleable.has(type))
+  );
+  assert.deepEqual(missing, [], `这些往来类型没有纳入核销，账龄表会缺一半：${missing.join("、")}`);
+
+  // 对称两侧的发生方必须相反：资产侧借方发生，负债侧贷方发生。
+  // 搞反的话账龄表会把收款当成新欠款、把欠款当成核销，数字全反。
+  for (const pair of SYMMETRY) {
+    const asset = SETTLEABLE_ACCOUNT_TYPES.find((item) => item.accountType === pair.asset);
+    const liability = SETTLEABLE_ACCOUNT_TYPES.find((item) => item.accountType === pair.liability);
+    assert.equal(asset?.openSide, "debit", `${pair.asset} 的发生方应在借方`);
+    assert.equal(liability?.openSide, "credit", `${pair.liability} 的发生方应在贷方`);
+  }
 });
