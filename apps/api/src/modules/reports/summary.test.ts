@@ -44,7 +44,7 @@ const entries: LedgerEntry[] = [
     businessEventId: "evt-cost",
     entryDate: "2026-05-11",
     summary: "主营成本",
-    accountCode: "6001c",
+    accountCode: "6401",
     accountName: "主营业务成本",
     debit: "300.00",
     credit: "0.00",
@@ -175,7 +175,7 @@ test("buildBalanceSheetReport builds assets and equity totals as of end date", (
   assert.equal(report.totals.assets, "700");
   assert.equal(report.totals.liabilitiesAndEquity, "700");
   assert.equal(report.assets.some((item) => item.code === "1002"), true);
-  assert.equal(report.equity.some((item) => item.code === "3131"), true);
+  assert.equal(report.equity.some((item) => item.code === "4103"), true);
 });
 
 function makeEntry(
@@ -206,7 +206,7 @@ function makeEntry(
 const unregisteredAccountEntries: LedgerEntry[] = [
   makeEntry("ue-1", "1002", "银行存款", "300000.00", "0.00"),
   makeEntry("ue-2", "6001", "主营业务收入", "0.00", "300000.00"),
-  makeEntry("ue-3", "6401", "财务费用", "183000.00", "0.00"),
+  makeEntry("ue-3", "6603", "财务费用", "183000.00", "0.00"),
   makeEntry("ue-4", "6601", "职工薪酬（成本）", "15000.00", "0.00"),
   makeEntry("ue-5", "6602", "管理费用-工资", "8000.00", "0.00"),
   makeEntry("ue-6", "2211", "应付职工薪酬", "0.00", "206000.00")
@@ -237,7 +237,7 @@ test("profit statement and balance sheet agree on net profit for the same entrie
   // Act
   const profitReport = buildProfitStatementReport(period);
   const balanceSheet = buildBalanceSheetReport({ ...period, asOfDate: "2026-04-30" });
-  const retainedEarnings = balanceSheet.equity.find((line) => line.code === "3131");
+  const retainedEarnings = balanceSheet.equity.find((line) => line.code === "4103");
 
   // Assert：资产负债表的本年利润 = 利润表净利润（修复前分别是 94000 与 102000）
   assert.equal(retainedEarnings?.amount, profitReport.totals.netProfit);
@@ -267,7 +267,7 @@ test("both reports subtract income tax exactly once and stay in agreement", () =
   assert.equal(profitReport.totals.netProfit, "74000");
   // 资产负债表的本年利润按净利润口径（含所得税），与利润表一致
   assert.equal(
-    balanceSheet.equity.find((line) => line.code === "3131")?.amount,
+    balanceSheet.equity.find((line) => line.code === "4103")?.amount,
     profitReport.totals.netProfit
   );
 });
@@ -312,15 +312,15 @@ function makeClosingEntry(
 const aprilBusinessEntries: LedgerEntry[] = [
   makeEntry("v11-1", "1002", "银行存款", "1000.00", "0.00"),
   makeEntry("v11-2", "6001", "主营业务收入", "0.00", "1000.00"),
-  makeEntry("v11-3", "6001c", "主营业务成本", "400.00", "0.00"),
+  makeEntry("v11-3", "6401", "主营业务成本", "400.00", "0.00"),
   makeEntry("v11-4", "1405", "库存商品", "0.00", "400.00")
 ];
 
 /** 4 月的结转分录：借 6001 1000 / 贷 6001c 400 / 贷 3131 600。 */
 const aprilClosingEntries: LedgerEntry[] = [
   makeClosingEntry("v11-c1", "6001", "主营业务收入", "1000.00", "0.00"),
-  makeClosingEntry("v11-c2", "6001c", "主营业务成本", "0.00", "400.00"),
-  makeClosingEntry("v11-c3", "3131", "本年利润", "0.00", "600.00")
+  makeClosingEntry("v11-c2", "6401", "主营业务成本", "0.00", "400.00"),
+  makeClosingEntry("v11-c3", "4103", "本年利润", "0.00", "600.00")
 ];
 
 test("profit statement excludes period-closing entries so a closed period keeps its results", () => {
@@ -348,7 +348,7 @@ test("balance sheet lists 本年利润 exactly once and stays balanced across cl
 
   const assertBalanced = (sheet: ReturnType<typeof sheetFor>, label: string) => {
     assert.equal(
-      sheet.equity.filter((line) => line.code === "3131").length,
+      sheet.equity.filter((line) => line.code === "4103").length,
       1,
       `${label}：本年利润只能出现一行`
     );
@@ -362,12 +362,12 @@ test("balance sheet lists 本年利润 exactly once and stays balanced across cl
   // 状态 A：未结转 —— 3131 无账面余额，利润由合成行承载
   const open = sheetFor(aprilBusinessEntries, "2026-04-30");
   assertBalanced(open, "未结转");
-  assert.equal(open.equity.find((l) => l.code === "3131")?.amount, "600");
+  assert.equal(open.equity.find((l) => l.code === "4103")?.amount, "600");
 
   // 状态 B：已结转 —— 3131 有账面余额 600，未结转利润为 0，合计不得变化
   const closed = sheetFor([...aprilBusinessEntries, ...aprilClosingEntries], "2026-04-30");
   assertBalanced(closed, "已结转");
-  assert.equal(closed.equity.find((l) => l.code === "3131")?.amount, "600");
+  assert.equal(closed.equity.find((l) => l.code === "4103")?.amount, "600");
   assert.deepEqual(closed.totals, open.totals, "结转不改变资产负债表任何合计");
 
   // 状态 C：部分结转（月结后的常态）—— 4 月已结转，5 月又有 300 未结转利润。
@@ -383,7 +383,7 @@ test("balance sheet lists 本年利润 exactly once and stays balanced across cl
   );
   assertBalanced(halfClosed, "部分结转");
   assert.equal(
-    halfClosed.equity.find((l) => l.code === "3131")?.amount,
+    halfClosed.equity.find((l) => l.code === "4103")?.amount,
     "900",
     "本年利润 = 已结转的 600 + 尚未结转的 300"
   );
@@ -397,7 +397,7 @@ test("balance sheet keeps closing entries in scope so 本年利润 is never doub
     asOfDate: "2026-04-30",
     entries: [...aprilBusinessEntries, ...aprilClosingEntries]
   });
-  assert.equal(sheet.equity.find((l) => l.code === "3131")?.amount, "600");
+  assert.equal(sheet.equity.find((l) => l.code === "4103")?.amount, "600");
   assert.equal(sheet.totals.equity, "600");
 });
 
@@ -442,7 +442,7 @@ test("A5 断言：任意科目代码的余额都不会从资产负债表上静�
   // 覆盖已登记科目 + 当前未使用的编码段 + 畸形代码。非损益科目必须能在表上找到；
   // 损益科目必须体现在「本年利润」里。两者都不允许「哪儿都找不到」。
   const probeCodes = [
-    "1001", "1002", "1602", "2202", "222102", "3001", "3131",
+    "1001", "1002", "1602", "2202", "222102", "3001", "4103",
     "4001", "4101", "400199",          // 成本类：此前被丢弃的那一段
     "5001", "7001", "8888", "9999",    // 尚未启用的编码段
     "abc", "中文科目", "1;DROP TABLE"    // 畸形输入（写入路径目前不校验，见蓝图 E2）
@@ -468,7 +468,7 @@ test("A5 断言：任意科目代码的余额都不会从资产负债表上静�
     if (isProfitAndLoss) {
       // 损益类不单独成行，但其净额必须体现在权益的本年利润上，否则也是丢弃。
       assert.ok(
-        report.equity.some((l) => l.code === "3131"),
+        report.equity.some((l) => l.code === "4103"),
         `损益科目 ${code} 的余额没有汇入本年利润，等同被丢弃`
       );
       continue;

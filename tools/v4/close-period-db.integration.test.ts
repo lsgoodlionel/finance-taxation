@@ -76,7 +76,7 @@ test("closePeriod posts a balanced closing voucher and zeroes P&L accounts", asy
   // After closing: revenue and expense accounts net to zero; 本年利润 carries the profit.
   assert.equal(await accountBalance("6001"), 0, "revenue must be closed to zero");
   assert.equal(await accountBalance("6601"), 0, "expense must be closed to zero");
-  assert.equal(await accountBalance("3131"), -600, "本年利润 holds net credit of the profit");
+  assert.equal(await accountBalance("4103"), -600, "本年利润 holds net credit of the profit");
 
   // The closing voucher itself must balance.
   const totals = await pool.query<{ d: string; c: string }>(

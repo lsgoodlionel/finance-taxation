@@ -300,7 +300,7 @@ export function FixedAssetsPanel() {
             rules={[{ required: true, message: "请填写费用科目" }]}
             extra="管理用设备填 6301e02（管理费用-折旧），车间设备应填制造费用科目。"
           >
-            <Input placeholder="6301e02" />
+            <Input placeholder="660202" />
           </Form.Item>
         </Form>
       </Modal>

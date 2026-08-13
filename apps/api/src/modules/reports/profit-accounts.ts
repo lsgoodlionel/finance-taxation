@@ -22,11 +22,18 @@ import { findChartAccount } from "../accounts/chart-of-accounts.js";
 /** 收入类科目前缀（主营业务收入 / 其他业务收入 / 投资收益 / 营业外收入）。 */
 export const REVENUE_ACCOUNT_PREFIXES = ["6001", "6051", "6111", "6301"] as const;
 
-/** 主营业务成本前缀（本系统以 6001c 表示，与收入 6001 前缀重叠，需先排除）。 */
-export const COST_ACCOUNT_PREFIX = "6001c";
-
-/** 管理费用前缀（本系统以 6301e 表示，与营业外收入 6301 前缀重叠，需先排除）。 */
-export const NON_OPERATING_EXPENSE_PREFIX = "6301e";
+/**
+ * 主营业务成本编码（国标 6401）。
+ *
+ * **V12-D3 之后这不再是「特例」。** 此前它是 `6001c`，落在收入 `6001` 的前缀里，
+ * 于是每一处按前缀判定的地方都必须先把它排除掉——一条靠人记得的规则，漏一次
+ * 就是主营业务成本被计成收入。现在 `6401` 与任何收入编码都没有前缀关系。
+ *
+ * 保留这个常量的理由变了：不是为了「排除」，而是因为利润表要把主营业务成本
+ * 单列成 `cost` 一档来算毛利，而科目主数据的 `category` 只到 `expense` 粒度，
+ * 区分不出这一档。这是一条正当的业务规则，不是编码冲突的补丁。
+ */
+export const MAIN_BUSINESS_COST_PREFIX = "6401";
 
 /** 损益类科目的编码段。6 开头且不是收入的科目一律计入费用，杜绝静默漏算。 */
 export const PROFIT_AND_LOSS_CODE_PREFIX = "6";
@@ -67,7 +74,7 @@ function hasPrefix(code: string, prefixes: readonly string[]): boolean {
  *
  * `cost`（生产成本 4001 / 制造费用 4101）归入 `other`：这两个科目要先结转到
  * 主营业务成本才进损益，直接计入利润表会重复计量。利润表的 `cost` 一档只服务
- * 主营业务成本 6001c，由 classifyProfitAccount 的前置分支单独判定。
+ * 主营业务成本 6401，由 classifyProfitAccount 单独判定。
  */
 function fromAccountCategory(category: AccountCategory): ProfitAccountKind {
   if (category === "revenue") return "revenue";
@@ -78,19 +85,21 @@ function fromAccountCategory(category: AccountCategory): ProfitAccountKind {
 /**
  * 把科目代码归入利润表的收入 / 成本 / 费用 / 其他四类。
  *
- * 优先级链（顺序不可调换）：
- * 1. `6001c*` → 成本。必须先于 `6001` 收入前缀，否则主营业务成本会被当成收入。
- * 2. `6301e*` → 费用。必须先于 `6301` 收入前缀，否则管理费用会被当成营业外收入。
- * 3. 科目主数据 `category` 精确命中 → 权威分类。收入/费用直接采信，资产/负债/
+ * 判定链：
+ * 1. `6401*` → 成本。**V12-D3 之前这一档必须排在最前面**，因为当时主营业务成本
+ *    编码是 `6001c`，会被下面的 `6001` 收入前缀吃掉。国标化之后 `6401` 与收入
+ *    编码无任何前缀关系，这一档放哪都不影响正确性——它现在只是「毛利要单列
+ *    成本」这条业务规则的落点。同理，此前还有一条 `6301e*` → 费用的前置分支，
+ *    专为避开 `6301` 营业外收入而存在，现在管理费用是 `6602`，那一档已删除。
+ * 2. 科目主数据 `category` 精确命中 → 权威分类。收入/费用直接采信，资产/负债/
  *    权益/成本类归 other。这一档取代了此前那张硬编码费用前缀表——前缀表漏了
- *    `6602` 之类未列举的科目，导致费用被静默丢弃、利润虚高。
- * 4. 科目表未登记时的兜底：命中收入前缀 → 收入；否则只要是 6 开头 → 费用。
+ *    未列举的科目，导致费用被静默丢弃、利润虚高。
+ * 3. 科目表未登记时的兜底：命中收入前缀 → 收入；否则只要是 6 开头 → 费用。
  *    兜底与资产负债表历史行为一致（非收入的 6 开头一律当费用），保证未登记科目
  *    与将来新增的子科目都不会从报表里消失。
  */
 export function classifyProfitAccount(code: string): ProfitAccountKind {
-  if (code.startsWith(COST_ACCOUNT_PREFIX)) return "cost";
-  if (code.startsWith(NON_OPERATING_EXPENSE_PREFIX)) return "expense";
+  if (code.startsWith(MAIN_BUSINESS_COST_PREFIX)) return "cost";
 
   const account = findChartAccount(code);
   if (account) return fromAccountCategory(account.category);

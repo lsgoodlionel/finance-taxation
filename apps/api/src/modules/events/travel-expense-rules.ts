@@ -161,7 +161,7 @@ function buildVoucherLines(event: BusinessEvent, scenario: TravelExpenseScenario
     {
       id: `vou-line-${event.id}-transport`,
       summary: "交通差旅费用",
-      accountCode: "6301e04",
+      accountCode: "660204",
       accountName: "管理费用-差旅费",
       debit: transportAmount,
       credit: "0.00"
@@ -169,7 +169,7 @@ function buildVoucherLines(event: BusinessEvent, scenario: TravelExpenseScenario
     {
       id: `vou-line-${event.id}-hotel`,
       summary: "住宿差旅费用",
-      accountCode: "6301e04",
+      accountCode: "660204",
       accountName: "管理费用-差旅费",
       debit: hotelAmount,
       credit: "0.00"
@@ -177,7 +177,7 @@ function buildVoucherLines(event: BusinessEvent, scenario: TravelExpenseScenario
     {
       id: `vou-line-${event.id}-meal`,
       summary: scenario.accountingPeriodConflict ? "餐饮及跨期调整待复核" : "餐饮及补贴复核",
-      accountCode: "6301e04",
+      accountCode: "660204",
       accountName: "管理费用-差旅费",
       debit: mealAmount,
       credit: "0.00"

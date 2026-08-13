@@ -148,7 +148,7 @@ const EQUIPMENT = {
   originalCost: "120000.00",
   salvageValue: "6000.00",
   usefulLifeMonths: 60,
-  expenseAccountCode: "6301e02"
+  expenseAccountCode: "660202"
 };
 
 test("固定资产台账、折旧计提与处置的完整路径", async (t) => {

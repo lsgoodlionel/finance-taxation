@@ -109,7 +109,7 @@ const MAY_ENTRIES: EntryFixture[] = [
   { id: "cp-le-1", entryDate: "2026-05-12", accountCode: "1002", accountName: "银行存款", debit: "1300.00", credit: "0.00" },
   { id: "cp-le-2", entryDate: "2026-05-12", accountCode: "6001", accountName: "主营业务收入", debit: "0.00", credit: "1000.00" },
   { id: "cp-le-3", entryDate: "2026-05-12", accountCode: "6051", accountName: "其他业务收入", debit: "0.00", credit: "300.00" },
-  { id: "cp-le-4", entryDate: "2026-05-13", accountCode: "6001c", accountName: "主营业务成本", debit: "400.00", credit: "0.00" },
+  { id: "cp-le-4", entryDate: "2026-05-13", accountCode: "6401", accountName: "主营业务成本", debit: "400.00", credit: "0.00" },
   { id: "cp-le-5", entryDate: "2026-05-13", accountCode: "1405", accountName: "库存商品", debit: "0.00", credit: "400.00" },
   { id: "cp-le-6", entryDate: "2026-05-14", accountCode: "6201", accountName: "销售费用", debit: "100.00", credit: "0.00" },
   { id: "cp-le-7", entryDate: "2026-05-14", accountCode: "1002", accountName: "银行存款", debit: "0.00", credit: "100.00" },
@@ -465,10 +465,10 @@ test("period closing entries stay visible in the account-balance ledger view", a
     // 损益科目全部归零，3131 本年利润承载 740（贷方余额，debit − credit = −740）。
     assert.equal(balanceOf("6001"), 0, "结转后主营业务收入必须归零");
     assert.equal(balanceOf("6051"), 0, "结转后其他业务收入必须归零");
-    assert.equal(balanceOf("6001c"), 0, "结转后主营业务成本必须归零");
+    assert.equal(balanceOf("6401"), 0, "结转后主营业务成本必须归零");
     assert.equal(balanceOf("6201"), 0, "结转后销售费用必须归零");
     assert.equal(balanceOf("6801"), 0, "结转后所得税费用必须归零");
-    assert.equal(balanceOf("3131"), -740, "本年利润承载净利润，且必须出现在账簿里");
+    assert.equal(balanceOf("4103"), -740, "本年利润承载净利润，且必须出现在账簿里");
 
     // 试算平衡：全部分录（含结转分录）借贷合计必须相等。若哪天有人"顺手"
     // 在账簿读路径上加了排除过滤，这条会立刻失败。
@@ -500,14 +500,14 @@ test("balance sheet stays balanced before closing, after closing, and half-close
         sheet.totals.liabilitiesAndEquity,
         `${label}：资产必须等于负债加所有者权益`
       );
-      const profitLines = sheet.equity.filter((line) => line.code === "3131");
+      const profitLines = sheet.equity.filter((line) => line.code === "4103");
       assert.equal(profitLines.length, 1, `${label}：本年利润只能出现一行，不得重复计量`);
     };
 
     // ── 状态 A：完全未结转。3131 无账面余额，全部利润由合成行承载。
     const beforeMay = await fetchBalanceSheet(MAY_END);
     assertBalanced(beforeMay, "未结转");
-    assert.equal(beforeMay.equity.find((l) => l.code === "3131")?.amount, "740");
+    assert.equal(beforeMay.equity.find((l) => l.code === "4103")?.amount, "740");
     // 资产 = 银行 1200 + 库存商品 −400 = 800；负债 = 应交税费 60；权益 = 740
     assert.equal(beforeMay.totals.assets, "800");
 
@@ -516,7 +516,7 @@ test("balance sheet stays balanced before closing, after closing, and half-close
     // ── 状态 B：当期全部结转。3131 有账面余额 740，未结转利润为 0。
     const afterMay = await fetchBalanceSheet(MAY_END);
     assertBalanced(afterMay, "已结转");
-    assert.equal(afterMay.equity.find((l) => l.code === "3131")?.amount, "740");
+    assert.equal(afterMay.equity.find((l) => l.code === "4103")?.amount, "740");
     assert.equal(afterMay.totals.assets, "800");
     assert.deepEqual(afterMay.totals, beforeMay.totals, "结转不改变资产负债表任何合计");
 
@@ -527,7 +527,7 @@ test("balance sheet stays balanced before closing, after closing, and half-close
     const halfClosed = await fetchBalanceSheet(JUNE_END);
     assertBalanced(halfClosed, "部分结转");
     assert.equal(
-      halfClosed.equity.find((l) => l.code === "3131")?.amount,
+      halfClosed.equity.find((l) => l.code === "4103")?.amount,
       "1240",
       "本年利润 = 已结转的 740 + 尚未结转的 500"
     );

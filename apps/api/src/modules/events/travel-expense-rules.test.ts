@@ -52,7 +52,7 @@ test("buildTravelExpenseBundle generates standard travel chain with required tra
   assert.equal(bundle.voucherDrafts[0]?.status, "review_required");
   // 差旅费落 6301e04（管理费用-差旅费）。此前断言的 6601 是「职工薪酬（成本）」，
   // 与分录上写的科目名「销售费用-差旅费」既不同码也不同义。
-  assert.equal(bundle.voucherDrafts[0]?.lines[0]?.accountCode, "6301e04");
+  assert.equal(bundle.voucherDrafts[0]?.lines[0]?.accountCode, "660204");
   assert.equal(bundle.voucherDrafts[0]?.lines[0]?.accountName, "管理费用-差旅费");
 });
 

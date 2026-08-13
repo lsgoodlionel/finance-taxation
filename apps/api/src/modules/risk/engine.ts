@@ -323,7 +323,7 @@ export function evaluateRiskFindings(input: RiskEvaluationInput): RiskFinding[] 
   const hasRndSpending = eventLedgerEntries.some((entry) =>
     entry.accountCode.startsWith("1801001") ||
     entry.accountCode.startsWith("1801002") ||
-    entry.accountCode.startsWith("6301e06")
+    entry.accountCode.startsWith("660206")
   );
   if (relatedRndEvent && hasRndSpending && !input.rndProjects.some((project) => project.businessEventId === event.id)) {
     findings.push(
@@ -358,7 +358,7 @@ export function evaluateRiskFindings(input: RiskEvaluationInput): RiskFinding[] 
 
   const hasPayrollSpending = eventLedgerEntries.some((entry) =>
     entry.accountCode.startsWith("22110101") ||
-    entry.accountCode.startsWith("6301e01") ||
+    entry.accountCode.startsWith("660201") ||
     entry.accountCode.startsWith("6601")
   );
   if (event.type === "payroll" && hasPayrollSpending) {

@@ -59,7 +59,7 @@ test("往年已结转的利润归入利润分配，不算进本年利润", () =>
     }),
     entry({
       id: "e4",
-      accountCode: "3131",
+      accountCode: "4103",
       entryDate: "2025-12-31",
       credit: "100000.00",
       source: "period_closing"
@@ -75,8 +75,8 @@ test("往年已结转的利润归入利润分配，不算进本年利润", () =>
     entries
   });
 
-  assert.equal(equityOf(report, "3131"), 30000, "本年利润只含 2026 年的 3 万");
-  assert.equal(equityOf(report, "3141"), 100000, "2025 年的 10 万归入利润分配");
+  assert.equal(equityOf(report, "4103"), 30000, "本年利润只含 2026 年的 3 万");
+  assert.equal(equityOf(report, "4104"), 100000, "2025 年的 10 万归入利润分配");
   assert.equal(equityTotal(report), 130000, "权益合计不变——重分类只在权益内部发生");
 });
 
@@ -95,8 +95,8 @@ test("往年连月结都没做时，未结转的往年损益同样归入利润�
     entries
   });
 
-  assert.equal(equityOf(report, "3131"), 20000, "本年利润只含 2026 年的 2 万");
-  assert.equal(equityOf(report, "3141"), 80000, "2025 年未结转的 8 万也归以前年度");
+  assert.equal(equityOf(report, "4103"), 20000, "本年利润只含 2026 年的 2 万");
+  assert.equal(equityOf(report, "4104"), 80000, "2025 年未结转的 8 万也归以前年度");
   assert.equal(equityTotal(report), 100000);
 });
 
@@ -105,10 +105,10 @@ test("做过年结时行为不变——年结凭证已经把利润转进 3141", 
     entry({ id: "e1", accountCode: "1002", entryDate: "2025-06-01", debit: "50000.00" }),
     entry({ id: "e2", accountCode: "6001", entryDate: "2025-06-01", credit: "50000.00" }),
     entry({ id: "e3", accountCode: "6001", entryDate: "2025-12-31", debit: "50000.00", source: "period_closing" }),
-    entry({ id: "e4", accountCode: "3131", entryDate: "2025-12-31", credit: "50000.00", source: "period_closing" }),
+    entry({ id: "e4", accountCode: "4103", entryDate: "2025-12-31", credit: "50000.00", source: "period_closing" }),
     // 年结：借 3131 / 贷 3141
-    entry({ id: "e5", accountCode: "3131", entryDate: "2025-12-31", debit: "50000.00", source: "annual_closing" }),
-    entry({ id: "e6", accountCode: "3141", entryDate: "2025-12-31", credit: "50000.00", source: "annual_closing" })
+    entry({ id: "e5", accountCode: "4103", entryDate: "2025-12-31", debit: "50000.00", source: "annual_closing" }),
+    entry({ id: "e6", accountCode: "4104", entryDate: "2025-12-31", credit: "50000.00", source: "annual_closing" })
   ];
 
   const report = buildBalanceSheetReport({
@@ -117,8 +117,8 @@ test("做过年结时行为不变——年结凭证已经把利润转进 3141", 
     entries
   });
 
-  assert.equal(equityOf(report, "3131"), 0, "年结已把 3131 清零，重分类无事可做");
-  assert.equal(equityOf(report, "3141"), 50000);
+  assert.equal(equityOf(report, "4103"), 0, "年结已把 3131 清零，重分类无事可做");
+  assert.equal(equityOf(report, "4104"), 50000);
   assert.equal(equityTotal(report), 50000, "两条路线并存，不会互相重复计量");
 });
 
@@ -134,9 +134,9 @@ test("只有本年数据时，利润分配不凭空出现", () => {
     entries
   });
 
-  assert.equal(equityOf(report, "3131"), 10000);
+  assert.equal(equityOf(report, "4103"), 10000);
   assert.equal(
-    report.equity.find((line) => line.code === "3141"),
+    report.equity.find((line) => line.code === "4104"),
     undefined,
     "没有以前年度利润时不该多出一行 0 的利润分配"
   );
@@ -145,7 +145,7 @@ test("只有本年数据时，利润分配不凭空出现", () => {
 test("往年亏损同样归以前年度，不冲减本年利润", () => {
   const entries: LedgerEntry[] = [
     // 2025 年亏 4 万
-    entry({ id: "e1", accountCode: "6001c", entryDate: "2025-06-01", debit: "40000.00" }),
+    entry({ id: "e1", accountCode: "6401", entryDate: "2025-06-01", debit: "40000.00" }),
     entry({ id: "e2", accountCode: "1002", entryDate: "2025-06-01", credit: "40000.00" }),
     // 2026 年赚 6 万
     entry({ id: "e3", accountCode: "1002", entryDate: "2026-03-01", debit: "60000.00" }),
@@ -158,8 +158,8 @@ test("往年亏损同样归以前年度，不冲减本年利润", () => {
     entries
   });
 
-  assert.equal(equityOf(report, "3131"), 60000, "本年赚的 6 万不被往年亏损冲减");
-  assert.equal(equityOf(report, "3141"), -40000, "往年亏损如实以负数列示");
+  assert.equal(equityOf(report, "4103"), 60000, "本年赚的 6 万不被往年亏损冲减");
+  assert.equal(equityOf(report, "4104"), -40000, "往年亏损如实以负数列示");
   assert.equal(equityTotal(report), 20000);
 });
 

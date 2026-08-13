@@ -22,6 +22,7 @@ import { notify } from "../../notifications/dispatch.js";
 import { buildCloseDraftsNotification } from "../../notifications/events.js";
 import { suggestAccountingEntry, type EventForAccounting } from "../accounting-agent.js";
 import { buildDraftProposalFromSuggestion } from "./draft-proposal.js";
+import { toCents } from "../../../utils/money.js";
 import {
   PENDING_DRAFT_STATUSES,
   PENDING_STATUS_FILTER,
@@ -90,11 +91,6 @@ function toAmountString(value: string | number | null | undefined): string {
 }
 
 /** DB numeric(18,2) 值转整数分；批准时硬校验借贷平衡只信任整数比较，不信任浮点。 */
-function toCents(value: string | number): number {
-  const normalized = typeof value === "number" ? value : Number(value);
-  return Math.round(normalized * 100);
-}
-
 /** 查询该期内「未生成已过账凭证」的经营事项，并标记是否已存在草稿（供幂等跳过）。 */
 async function findEligibleEvents(companyId: string, period: string): Promise<EligibleEventRow[]> {
   return query<EligibleEventRow>(

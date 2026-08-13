@@ -9,7 +9,7 @@ test("buildReportDiff compares two balance sheet snapshots", () => {
     asOfDate: "2026-04-30",
     assets: [{ code: "1002", label: "银行存款", amount: "100" }],
     liabilities: [],
-    equity: [{ code: "3131", label: "本年利润", amount: "100" }],
+    equity: [{ code: "4103", label: "本年利润", amount: "100" }],
     unclassified: [],
     warnings: [],
     totals: {
@@ -24,7 +24,7 @@ test("buildReportDiff compares two balance sheet snapshots", () => {
     asOfDate: "2026-05-31",
     assets: [{ code: "1002", label: "银行存款", amount: "180" }],
     liabilities: [],
-    equity: [{ code: "3131", label: "本年利润", amount: "180" }],
+    equity: [{ code: "4103", label: "本年利润", amount: "180" }],
     unclassified: [],
     warnings: [],
     totals: {

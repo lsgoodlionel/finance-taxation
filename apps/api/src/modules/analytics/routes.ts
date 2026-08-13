@@ -14,25 +14,23 @@ const PERIOD_LABEL = /^\d{4}-\d{2}$/;
  */
 export const REVENUE_PREFIXES = ["6001", "6051", "6111", "6301"];
 
-/**
- * 与收入前缀重叠、但实为费用的科目：主营业务成本 6001c 落在 `6001%` 里，
- * 管理费用 6301e 落在 `6301%` 里。SQL 用 like 匹配前缀，必须显式排除，
- * 否则成本与管理费用会被当作负收入冲减营业收入。
- */
-export const REVENUE_EXCLUDED_PREFIXES = ["6001c", "6301e"];
+// V12-D3：这里曾有一个 REVENUE_EXCLUDED_PREFIXES，把主营业务成本 `6001c` 与
+// 管理费用 `6301e` 从 `6001%` / `6301%` 的 like 匹配里剔出去。国标化之后它们是
+// `6401` / `6602`，与收入前缀再无交集，排除子句已删除。
 
 /**
- * 默认费用科目前缀：税金及附加 6101、销售费用 6201、管理费用 6301e、
- * 财务费用 6401、职工薪酬（成本）6601、营业外支出 6711。
+ * 默认费用科目前缀：税金及附加 6403、销售费用 6201、管理费用 6602、
+ * 财务费用 6603、职工薪酬（成本）6601、营业外支出 6711。
  *
- * 旧口径写的是 5601/6601/6602/6603/6711——其中 5601/6602/6603 在本系统科目表里
- * 根本不存在（是国标编码，本系统另有约定），6601 也不是销售费用而是职工薪酬，
- * 于是「实际发生额」长期漏计销售费用、管理费用与财务费用。
+ * 旧口径写的是 5601/6601/6602/6603/6711——其中 5601 在科目表里根本不存在，
+ * 6601 也不是销售费用而是职工薪酬，于是「实际发生额」长期漏计销售费用、
+ * 管理费用与财务费用。（6602/6603 当时也不存在；D3 之后它们成了管理费用与
+ * 财务费用的真实编码，但那是巧合，不是当年那份口径写对了。）
  *
- * 不含主营业务成本 6001c 与所得税费用 6801：预算差异比的是期间费用，
+ * 不含主营业务成本 6401 与所得税费用 6801：预算差异比的是期间费用，
  * 与 reports/profit-accounts.ts 的 `expense` 口径（同样剔除 6801）保持一致。
  */
-export const EXPENSE_PREFIXES = ["6101", "6201", "6301e", "6401", "6601", "6711"];
+export const EXPENSE_PREFIXES = ["6403", "6201", "6602", "6603", "6601", "6711"];
 
 /**
  * GET /api/analytics/cash-forecast?periods=3
@@ -79,10 +77,6 @@ export async function revenueComparisonRoute(req: ApiRequest, res: ServerRespons
 
   const revenueFor = async (period: string): Promise<number> => {
     const includeClauses = REVENUE_PREFIXES.map((_, i) => `account_code like $${i + 3}`).join(" or ");
-    const excludeOffset = REVENUE_PREFIXES.length + 3;
-    const excludeClauses = REVENUE_EXCLUDED_PREFIXES.map(
-      (_, i) => `account_code not like $${i + excludeOffset}`
-    ).join(" and ");
     // 排除结转损益分录（口径见 ledger/closing-entries.ts）：按属期聚合收入，
     // 结转分录会把本期收入冲成 0，两期都结转后环比变成 0 比 0。
     const rows = await query<{ revenue: string }>(
@@ -90,13 +84,8 @@ export async function revenueComparisonRoute(req: ApiRequest, res: ServerRespons
        from ledger_entries
        where company_id = $1 and to_char(entry_date, 'YYYY-MM') = $2
          and ${EXCLUDE_PERIOD_CLOSING_SQL}
-         and (${includeClauses}) and (${excludeClauses})`,
-      [
-        req.auth!.companyId,
-        period,
-        ...REVENUE_PREFIXES.map((p) => `${p}%`),
-        ...REVENUE_EXCLUDED_PREFIXES.map((p) => `${p}%`)
-      ]
+         and (${includeClauses})`,
+      [req.auth!.companyId, period, ...REVENUE_PREFIXES.map((p) => `${p}%`)]
     );
     return Number(rows[0]?.revenue ?? 0);
   };

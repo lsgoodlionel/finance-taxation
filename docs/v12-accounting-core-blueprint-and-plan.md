@@ -447,7 +447,7 @@ Odoo `l10n_cn` 在这块反而是四个系统里做得最细的（2221 下 27 �
 
    真正的收敛仍待独立立项：`classifyProfitAccount` / `classifyBalanceSheetAccount` 是同步纯函数，改成读库要么变异步、要么把科目表作为参数贯穿十余个调用点（`closing.ts`、`risk/engine.ts`、`reports/summary.ts`、`trial-balance.ts`、`balance-check.ts`、`dashboard/*`、`assistant`、`boss-qa`），触及报表核心口径，不该顺手夹带在功能批次里。
 8. **预收账款（2203）未纳入核销**。它的 `account_type` 目前是泛化的 `liability_current`，049 没有为它单列。与其在 `settleable-accounts.ts` 里按科目码 2203 开特例（那就回到硬编码科目码了），不如等 `account_type` 补齐。
-9. **定期凭证前端只支持一借一贷等额模板**，后端支持任意多行。多行模板目前只能通过 API 建。
+9. ~~**定期凭证前端只支持一借一贷等额模板**~~ —— **已处理**，改为动态多行（`Form.List`），少于两行不给删。
 
 10. **E2E 曾两次失败，未能复现**（原记为「flaky」，现修正）。
 
@@ -464,4 +464,6 @@ Odoo `l10n_cn` 在这块反而是四个系统里做得最细的（2221 下 27 �
     此后全量连跑 **8 次（含上述各变体）均 66/66 全绿**，未能复现。剩下的唯一怀疑是**容器冷启动**（`--wait` 只等 healthcheck 通过，不保证 JIT 预热与连接池就绪），但没有证据。
 
     留给下一个人的可操作结论：**若在 `--build` 之后立刻跑 E2E 见到这两条红，先重跑一次再怀疑代码**；若在未重建容器的情况下也能稳定复现，那就是新问题，上面三个假设已经排除，不必重走。
-10. **`toCents` 仍有四份副本**。新代码统一走 `utils/money.ts`，但 `trial-balance.ts`、`close-drafts.routes.ts`、`einvoice-parse.ts`、`journal-entry-bench.ts` 四处未动——它们语义并不完全一致（einvoice-parse 那份对非法输入返回 null），收敛需要逐个确认差异，不该顺手夹带。
+10. ~~**`toCents` 仍有四份副本**~~ —— **已收敛三份**。`trial-balance.ts`、`close-drafts.routes.ts`、`journal-entry-bench.ts` 行为与共用版完全一致，已改为引用 `utils/money.ts`。
+
+    第四份**刻意保留并改名**：`einvoice-parse.ts` 的 `toCentsOrNull` 对非法输入返回 null 而非 0。它解析的是外部电子发票文件，分不清「金额确实是 0」和「这个字段根本没解析出来」会让一张坏票被当成零元票静默入库；而报表汇总里缺失即 0 才是对的。两处需求相反，合并只会逼其中一处将就——改名以示区别，比强行统一诚实。

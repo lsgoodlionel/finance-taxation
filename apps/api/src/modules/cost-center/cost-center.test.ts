@@ -12,7 +12,7 @@ function entry(overrides: Partial<CostEntry> & Pick<CostEntry, "amountCents">): 
   return {
     costCenterId: "cc-sales",
     costCenterName: "销售部",
-    accountCode: "6301e03",
+    accountCode: "660203",
     accountName: "管理费用-差旅费",
     ...overrides
   };
@@ -20,7 +20,7 @@ function entry(overrides: Partial<CostEntry> & Pick<CostEntry, "amountCents">): 
 
 test("费用类与成本类科目适用成本中心", () => {
   assert.equal(
-    isCostCenterApplicable({ code: "6301e03", category: "expense", accountType: "expense" }),
+    isCostCenterApplicable({ code: "660203", category: "expense", accountType: "expense" }),
     true
   );
   assert.equal(
@@ -56,7 +56,7 @@ test("判据用 category 而非逐个列举 account_type", () => {
   // 一个将来才会出现的新 account_type，只要 category 对就该适用——
   // 逐个列举的话，漏掉新类型会让那一档费用悄悄从部门报表里消失
   assert.equal(
-    isCostCenterApplicable({ code: "6301e99", category: "expense", accountType: "expense_brand_new" }),
+    isCostCenterApplicable({ code: "660299", category: "expense", accountType: "expense_brand_new" }),
     true
   );
 });
@@ -64,7 +64,7 @@ test("判据用 category 而非逐个列举 account_type", () => {
 test("按成本中心汇总，同科目合并、按金额倒序", () => {
   const report = buildCostCenterReport("2026-06", [
     entry({ amountCents: 30_000_00 }),
-    entry({ amountCents: 20_000_00, accountCode: "6301e01", accountName: "管理费用-办公费" }),
+    entry({ amountCents: 20_000_00, accountCode: "660201", accountName: "管理费用-办公费" }),
     entry({ amountCents: 10_000_00 }),
     entry({ amountCents: 80_000_00, costCenterId: "cc-rd", costCenterName: "研发部" })
   ]);

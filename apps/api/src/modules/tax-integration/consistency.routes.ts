@@ -3,11 +3,7 @@ import type { ApiRequest } from "../../types.js";
 import { query } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import { EXCLUDE_PERIOD_CLOSING_SQL } from "../ledger/closing-entries.js";
-import {
-  COST_ACCOUNT_PREFIX,
-  NON_OPERATING_EXPENSE_PREFIX,
-  REVENUE_ACCOUNT_PREFIXES
-} from "../reports/profit-accounts.js";
+import { REVENUE_ACCOUNT_PREFIXES } from "../reports/profit-accounts.js";
 import { checkTaxConsistency } from "./consistency.js";
 
 const PERIOD_LABEL = /^\d{4}-\d{2}$/;
@@ -15,16 +11,14 @@ const PERIOD_LABEL = /^\d{4}-\d{2}$/;
 /** 收入科目前缀，与 reports/profit-accounts.ts 同源，避免两侧口径漂移。 */
 export const REVENUE_PREFIXES: string[] = [...REVENUE_ACCOUNT_PREFIXES];
 
-/**
- * 与收入前缀重叠、但实为成本/费用的科目：主营业务成本 6001c 落在 `6001%` 里，
- * 管理费用 6301e 落在 `6301%` 里。SQL 用 like 匹配前缀，必须显式排除，否则
- * 账面收入被成本与管理费用当作负收入冲减，票税一致性核对会拿一个被低估的
- * 账面收入去和发票销售额比容差，凭空产生差异告警。
- */
-export const REVENUE_EXCLUDED_PREFIXES: string[] = [
-  COST_ACCOUNT_PREFIX,
-  NON_OPERATING_EXPENSE_PREFIX
-];
+// V12-D3：这里曾有一个 REVENUE_EXCLUDED_PREFIXES，用来把主营业务成本 `6001c`
+// 和管理费用 `6301e` 从 `6001%` / `6301%` 的 like 匹配里剔出去 —— 不剔的话账面
+// 收入会被这两个成本费用科目当作负收入冲减，票税核对拿一个被低估的收入去比
+// 容差，凭空产生差异告警。
+//
+// 国标化之后主营业务成本是 `6401`、管理费用是 `6602`，与收入前缀再无交集，
+// 排除子句整个删掉了。这就是 D3 想要的效果：不是多写一层防护，是让防护变得
+// 不必要。
 
 const DEFAULT_TOLERANCE_CENTS = 100;
 const DEFAULT_ALERT_THRESHOLD_CENTS = 10_000;
@@ -54,10 +48,6 @@ async function loadInvoiceTotals(companyId: string, period: string) {
 
 async function loadLedgerRevenueCents(companyId: string, period: string): Promise<number> {
   const includeClauses = REVENUE_PREFIXES.map((_, i) => `account_code like $${i + 3}`).join(" or ");
-  const excludeOffset = REVENUE_PREFIXES.length + 3;
-  const excludeClauses = REVENUE_EXCLUDED_PREFIXES.map(
-    (_, i) => `account_code not like $${i + excludeOffset}`
-  ).join(" and ");
   // 排除结转损益分录（口径见 ledger/closing-entries.ts）：这是按属期聚合账面收入，
   // 结转分录会把本期收入冲成 0，票税核对就会拿 0 去和发票销售额比，
   // 于是每一个已结转的属期都稳定误报「票账差异 = 全额发票金额」。
@@ -66,13 +56,8 @@ async function loadLedgerRevenueCents(companyId: string, period: string): Promis
      from ledger_entries
      where company_id = $1 and to_char(entry_date, 'YYYY-MM') = $2
        and ${EXCLUDE_PERIOD_CLOSING_SQL}
-       and (${includeClauses}) and (${excludeClauses})`,
-    [
-      companyId,
-      period,
-      ...REVENUE_PREFIXES.map((p) => `${p}%`),
-      ...REVENUE_EXCLUDED_PREFIXES.map((p) => `${p}%`)
-    ]
+       and (${includeClauses})`,
+    [companyId, period, ...REVENUE_PREFIXES.map((p) => `${p}%`)]
   );
   return Math.round(Number(rows[0]?.revenue ?? 0) * 100);
 }

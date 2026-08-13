@@ -7,10 +7,20 @@
  * 现在把纯数据与查询函数抽到本模块，routes.ts 只保留 HTTP 处理并原样再导出，
  * 报表侧直接以 `category` 字段为准。
  *
- * 注意本系统的编码约定与国标存在偏差，改动前务必先读懂：
- * - 管理费用用 `6301e` 系列（`6301e01`…`6301e06`），与营业外收入 `6301` 前缀重叠；
- * - 主营业务成本用 `6001c`，与主营业务收入 `6001` 前缀重叠；
- * - 因此凡是按前缀判定的地方，`6001c` / `6301e` 必须先于 `6001` / `6301` 排除。
+ * ## 编码已国标化（V12-D3，迁移 070）
+ *
+ * 这里曾有一段警告：管理费用用 `6301e` 系列、主营业务成本用 `6001c`，两者分别与
+ * 营业外收入 `6301`、主营业务收入 `6001` **前缀重叠**，所以凡是按前缀判定的地方
+ * 都必须先把它们排除掉。那是一条靠人记得的规则，漏排一次就是利润表反向。
+ *
+ * 现在编码按《企业会计准则——应用指南》改成了 `6602` / `6401`，与收入编码再无
+ * 前缀关系，那些「先排除」的分支已全部删除（见 reports/profit-accounts.ts、
+ * tax-integration/consistency.routes.ts、ai-agents/anomaly/anomaly.routes.ts）。
+ *
+ * 仍未国标化的一处：`6201` 销售费用。它的国标编码 `6601` 被本系统的「职工薪酬
+ * （成本）」占着，而后者在国标里根本没有对应的损益类科目——那是科目设置本身
+ * 存疑，需要独立立项，不是改个编码能解决的。`6201` 不与任何编码冲突、不产生
+ * 前缀陷阱，留着的代价仅是名义上不合规。
  */
 
 export type AccountCategory =
@@ -96,8 +106,8 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   { code: "3001",    name: "实收资本",                  category: "equity",    direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "3002",    name: "资本公积",                  category: "equity",    direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "3101",    name: "盈余公积",                  category: "equity",    direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
-  { code: "3131",    name: "本年利润",                  category: "equity",    direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
-  { code: "3141",    name: "利润分配",                  category: "equity",    direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
+  { code: "4103",    name: "本年利润",                  category: "equity",    direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
+  { code: "4104",    name: "利润分配",                  category: "equity",    direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   // ─── 成本 ───────────────────────────────────────────────
   { code: "4001",    name: "生产成本",                  category: "cost",      direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "4101",    name: "制造费用",                  category: "cost",      direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
@@ -112,22 +122,22 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   { code: "6115",    name: "资产处置损益",               category: "revenue",   direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   { code: "6301",    name: "营业外收入",                 category: "revenue",   direction: "credit",level: 1, parentCode: null,   isLeaf: true  },
   // ─── 费用 ───────────────────────────────────────────────
-  { code: "6001c",   name: "主营业务成本",               category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
-  { code: "6101",    name: "税金及附加",                 category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
+  { code: "6401",   name: "主营业务成本",               category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
+  { code: "6403",    name: "税金及附加",                 category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "6201",    name: "销售费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
-  { code: "6301e",   name: "管理费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: false },
-  { code: "6301e01", name: "管理费用-工资",              category: "expense",   direction: "debit", level: 2, parentCode: "6301e",isLeaf: true  },
-  { code: "6301e02", name: "管理费用-折旧",              category: "expense",   direction: "debit", level: 2, parentCode: "6301e",isLeaf: true  },
-  { code: "6301e03", name: "管理费用-办公费",            category: "expense",   direction: "debit", level: 2, parentCode: "6301e",isLeaf: true  },
-  { code: "6301e04", name: "管理费用-差旅费",            category: "expense",   direction: "debit", level: 2, parentCode: "6301e",isLeaf: true  },
-  { code: "6301e05", name: "管理费用-业务招待费",         category: "expense",   direction: "debit", level: 2, parentCode: "6301e",isLeaf: true  },
-  { code: "6301e06", name: "管理费用-研发费用",           category: "expense",   direction: "debit", level: 2, parentCode: "6301e",isLeaf: true  },
+  { code: "6602",   name: "管理费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: false },
+  { code: "660201", name: "管理费用-工资",              category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
+  { code: "660202", name: "管理费用-折旧",              category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
+  { code: "660203", name: "管理费用-办公费",            category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
+  { code: "660204", name: "管理费用-差旅费",            category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
+  { code: "660205", name: "管理费用-业务招待费",         category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
+  { code: "660206", name: "管理费用-研发费用",           category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
   // 6301e 本身是非叶子，凭证不能挂上去。通用「管理费用」场景（费用报销模板、进项
   // 发票入账、无法归类的采购报销）此前落在表外科目 6602，现统一落到本明细科目。
-  { code: "6301e07", name: "管理费用-其他",              category: "expense",   direction: "debit", level: 2, parentCode: "6301e",isLeaf: true  },
-  { code: "6401",    name: "财务费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: false },
-  { code: "6401001", name: "财务费用-利息支出",          category: "expense",   direction: "debit", level: 2, parentCode: "6401", isLeaf: true  },
-  { code: "6401002", name: "财务费用-手续费",            category: "expense",   direction: "debit", level: 2, parentCode: "6401", isLeaf: true  },
+  { code: "660207", name: "管理费用-其他",              category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
+  { code: "6603",    name: "财务费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: false },
+  { code: "660301", name: "财务费用-利息支出",          category: "expense",   direction: "debit", level: 2, parentCode: "6603", isLeaf: true  },
+  { code: "660302", name: "财务费用-手续费",            category: "expense",   direction: "debit", level: 2, parentCode: "6603", isLeaf: true  },
   { code: "6601",    name: "职工薪酬（成本）",           category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "6711",    name: "营业外支出",                 category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "6801",    name: "所得税费用",                 category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  }

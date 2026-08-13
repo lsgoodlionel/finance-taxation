@@ -22,7 +22,15 @@ export interface EInvoiceParseResult {
   errors: string[];
 }
 
-function toCents(value: unknown): number | null {
+/**
+ * 金额转分，**非法输入返回 null**。
+ *
+ * 刻意不共用 `utils/money.ts` 的 `toCents`：那一份对非法输入返回 0，用在
+ * 报表汇总里是对的（缺失即 0）；而这里解析的是**外部电子发票文件**，
+ * 分不清「金额确实是 0」和「这个字段根本没解析出来」会让一张坏票被当成
+ * 零元票静默入库。两处需求相反，合并只会逼其中一处将就。
+ */
+function toCentsOrNull(value: unknown): number | null {
   const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
   if (!Number.isFinite(n)) {
     return null;
@@ -40,7 +48,7 @@ function requireString(source: Record<string, unknown>, key: string, errors: str
 }
 
 function requireCents(source: Record<string, unknown>, key: string, errors: string[]): number {
-  const cents = toCents(source[key]);
+  const cents = toCentsOrNull(source[key]);
   if (cents === null) {
     errors.push(`${key} 金额非法`);
     return 0;

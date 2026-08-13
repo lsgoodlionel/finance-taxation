@@ -59,7 +59,7 @@ function hasPrefix(code: string, prefixes: string[]): boolean {
 }
 
 /** 本年利润科目：结转损益的对手方，也是资产负债表所有者权益里的利润归集行。 */
-const PROFIT_ACCOUNT_CODE = "3131";
+const PROFIT_ACCOUNT_CODE = "4103";
 
 /** 金额比较容差。金额是 numeric(18,2)，半分钱的差已不可能来自正常数据。 */
 const AMOUNT_EPSILON = 0.0001;
@@ -390,7 +390,7 @@ function classifyCashFlow(entries: LedgerEntry[]): CashFlowReport["sections"] & 
       hasPrefix(code, ["1601", "1701", "1801002"])
     );
     const isFinancing = counterCodes.some((code) =>
-      hasPrefix(code, ["2001", "2401", "3001", "3002", "3141"])
+      hasPrefix(code, ["2001", "2401", "3001", "3002", "4104"])
     );
 
     if (netCash > 0) {

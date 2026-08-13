@@ -85,7 +85,7 @@ test("the guard refuses unknown, non-leaf, and inactive accounts", async () => {
     assert.equal(unknown.ok === false && unknown.code, "ACCOUNT_NOT_FOUND");
 
     // 非叶子（汇总科目）—— 042 事故的根因：往 2211 直接记账导致合计时被算两次
-    for (const code of ["2211", "2221", "6301e", "6401"]) {
+    for (const code of ["2211", "2221", "6602", "6603"]) {
       const nonLeaf = await checkAccountsUsable(COMPANY_ID, [{ accountCode: code }]);
       assert.equal(nonLeaf.ok, false, `${code} 是汇总科目，不该允许直接记账`);
       assert.equal(nonLeaf.ok === false && nonLeaf.code, "ACCOUNT_NOT_LEAF");

@@ -77,7 +77,7 @@ async function seedAsset(
        id, company_id, asset_no, name, category, acquired_on, original_cost, salvage_value,
        useful_life_months, depreciation_start_period, expense_account_code,
        elects_one_time_deduction, tax_category
-     ) values ($1, $2, $3, $3, $4, $5::date, $6::numeric, 0, $7, $8, '6301e02', $9, $10)`,
+     ) values ($1, $2, $3, $3, $4, $5::date, $6::numeric, 0, $7, $8, '660202', $9, $10)`,
     [
       params.id,
       COMPANY_ID,
