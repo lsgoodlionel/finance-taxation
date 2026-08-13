@@ -337,3 +337,79 @@ test("往来账龄与核销的完整路径", async (t) => {
     assert.equal(aging.body?.total, "177000.00", "撤销 3 万的核销后欠款回到账龄表");
   });
 });
+
+/**
+ * 预收账款的核销路径（V12 残留 8 · 迁移 071）。
+ *
+ * 独立一个顶层 test 是为了拿到干净的库：上面那个块里已经有应付账款的余额，
+ * 而预收与应付共用 `direction=payable` 一张账龄表，混在一起断言就说不清
+ * 「这 5 万到底是预收还是应付」。
+ *
+ * 走的是 HTTP handler 而不是纯函数：C2 那次「核销方已用额度恒为 0」的 bug 就是
+ * SQL 只 join 了 open_entry_id、纯函数完全测不出来，集成测试才抓到。这次改的是
+ * account_type 的归类，同样只有走到 SQL 才知道 `= any($n::text[])` 真的把新类型
+ * 带进去了。
+ */
+test("预收账款能核销——迁移 071 之前它被泛化的 liability_current 挡在门外", async (t) => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+
+  t.after(async () => {
+    await pool.end();
+    const { closePool } = await import("../../db/client.js");
+    await closePool();
+  });
+
+  await pool.query(
+    `insert into counterparties (id, company_id, name, category, credit_days)
+     values ($1, $2, '丁客户', 'customer', 0)`,
+    [CP_A, COMPANY_ID]
+  );
+
+  // 3-01 收到客户预付货款 5 万：借 银行存款 / 贷 预收账款 —— 贷方形成义务
+  await seedEntry(pool, { id: "le-adv-1", accountCode: "2203", accountName: "预收账款", debit: "0.00", credit: "50000.00", entryDate: "2026-03-01", counterpartyId: CP_A });
+  // 6-15 发货确认收入 3 万：借 预收账款 / 贷 主营业务收入 —— 借方了结
+  await seedEntry(pool, { id: "le-adv-settle", accountCode: "2203", accountName: "预收账款", debit: "30000.00", credit: "0.00", entryDate: "2026-06-15", counterpartyId: CP_A });
+
+  await t.test("预收余额进得了账龄表", async () => {
+    const aging = await getAging("direction=payable&asOf=2026-06-30");
+    assert.equal(aging.statusCode, 200);
+    assert.equal(aging.body?.total, "50000.00", "核销前是全额——发货那笔尚未与它配对");
+
+    const buckets = Object.fromEntries(
+      (aging.body?.buckets as { key: string; amount: string }[]).map((b) => [b.key, b.amount])
+    );
+    assert.equal(buckets["91-180"], "50000.00", "3-01 到 6-30 是 121 天");
+  });
+
+  await t.test("发货那笔作为核销方出现在待核销明细里", async () => {
+    const items = await getOpenItems("direction=payable&asOf=2026-06-30");
+    const settleIds = (items.body?.settleItems as { entryId: string }[]).map((i) => i.entryId);
+    assert.ok(
+      settleIds.includes("le-adv-settle"),
+      "借方的预收账款分录是核销方——方向判反的话它会被当成新的预收义务"
+    );
+  });
+
+  await t.test("核销后预收余额只剩未发货部分", async () => {
+    const done = await settle({
+      openEntryId: "le-adv-1",
+      settleEntryId: "le-adv-settle",
+      amount: "30000.00"
+    });
+    assert.equal(done.statusCode, 201, JSON.stringify(done.body));
+
+    const aging = await getAging("direction=payable&asOf=2026-06-30");
+    assert.equal(aging.body?.total, "20000.00", "5 万预收发了 3 万的货，还欠 2 万");
+  });
+
+  await t.test("核销额超出预收余额被拒", async () => {
+    await seedEntry(pool, { id: "le-adv-settle-2", accountCode: "2203", accountName: "预收账款", debit: "99000.00", credit: "0.00", entryDate: "2026-06-20", counterpartyId: CP_A });
+    const rejected = await settle({
+      openEntryId: "le-adv-1",
+      settleEntryId: "le-adv-settle-2",
+      amount: "99000.00"
+    });
+    assert.notEqual(rejected.statusCode, 201, "预收只剩 2 万，发 9.9 万的货说明有笔预收没记账");
+  });
+});

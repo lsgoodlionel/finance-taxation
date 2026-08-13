@@ -33,15 +33,44 @@ export interface SettleableAccountType {
 /**
  * 可核销的科目语义。
  *
- * 预付账款（asset_prepayment）**在列**：预付给供应商的货款同样需要逐笔跟踪
- * 「付了多久还没收到货」，账龄口径与应收一致。预收账款目前的 account_type 是
- * 泛化的 `liability_current`（049 没有为它单列），因此暂不纳入 —— 与其在这里
- * 按科目码 2203 开一个特例，不如等 account_type 补齐，否则又回到硬编码科目码。
+ * ## 资产侧与负债侧必须对称（迁移 071 修的就是这个）
+ *
+ * 049 定 `account_type` 时，负债侧的往来科目被单边漏掉了：资产侧把 1131 应收利息、
+ * 1221 其他应收款一并归进了 `asset_receivable`，负债侧对称的 2231 应付利息、
+ * 2241 其他应付款却留在泛化的 `liability_current` 里。`liability_payable` 当时只有
+ * 2201 应付票据、2202 应付账款——恰好是资产侧 1121/1122 的对称项，多出来的两个没跟上。
+ *
+ * 后果不是理论上的：**2241 有四条真实写入路径**（差旅、采购、事项路由、凭证模板都
+ * 往它上面挂员工垫付款），2203 也有（预收性质的合同收入）。这些分录一直在产生，
+ * 却查不出「谁垫了多少、还欠多少」「哪笔预收还没发货」。
+ *
+ * ## 预收为什么单列而不并入 liability_payable
+ *
+ * `account_type` 是科目的会计性质标签，预收不是应付款——收了钱没发货与欠了货款没付
+ * 是两种不同的义务。把它塞进 `liability_payable` 只是让核销「能用」，代价是这个标签
+ * 从此说了谎，而 049 引入它的全部意义就是让业务规则有据可依。资产侧 `asset_prepayment`
+ * 独立于 `asset_receivable` 也是同一个道理。
+ *
+ * ## 已知局限：账龄表按 direction 二分，四类合并成两张
+ *
+ * `direction` 只有 receivable / payable 两个值，所以预付与应收合并成一张表、预收与
+ * 应付合并成另一张——这是**本次改动之前就有的现状**（预付账款早就和应收账款混在
+ * 一起），不是新引入的。
+ *
+ * 上面那个 `label` 字段（「应收款项」「预付款项」…）目前**没有任何消费方**，
+ * 它是为分组呈现预备的。要真正分开成四张表，得改账龄接口的响应形状与前端面板，
+ * 属于独立的一次改动，不该夹带在「让预收能核销」里。
  */
 export const SETTLEABLE_ACCOUNT_TYPES: readonly SettleableAccountType[] = [
   { accountType: "asset_receivable", openSide: "debit", label: "应收款项", direction: "receivable" },
   { accountType: "asset_prepayment", openSide: "debit", label: "预付款项", direction: "receivable" },
-  { accountType: "liability_payable", openSide: "credit", label: "应付款项", direction: "payable" }
+  { accountType: "liability_payable", openSide: "credit", label: "应付款项", direction: "payable" },
+  {
+    accountType: "liability_advance_receipt",
+    openSide: "credit",
+    label: "预收款项",
+    direction: "payable"
+  }
 ];
 
 const BY_TYPE = new Map(SETTLEABLE_ACCOUNT_TYPES.map((item) => [item.accountType, item]));

@@ -446,7 +446,23 @@ Odoo `l10n_cn` 在这块反而是四个系统里做得最细的（2221 下 27 �
    `chart-parity.integration.test.ts` 现在比对两张表的科目集合、`category`、`direction`（名称不比对：迁移里的名称常带「应交税费-」这类限定前缀，逐字比对只是噪音），任一侧漏改立刻红。已用「临时删掉 6115」实测护栏确实会拦，不是永远绿的假护栏。
 
    真正的收敛仍待独立立项：`classifyProfitAccount` / `classifyBalanceSheetAccount` 是同步纯函数，改成读库要么变异步、要么把科目表作为参数贯穿十余个调用点（`closing.ts`、`risk/engine.ts`、`reports/summary.ts`、`trial-balance.ts`、`balance-check.ts`、`dashboard/*`、`assistant`、`boss-qa`），触及报表核心口径，不该顺手夹带在功能批次里。
-8. **预收账款（2203）未纳入核销**。它的 `account_type` 目前是泛化的 `liability_current`，049 没有为它单列。与其在 `settleable-accounts.ts` 里按科目码 2203 开特例（那就回到硬编码科目码了），不如等 `account_type` 补齐。
+8. ~~**预收账款（2203）未纳入核销**~~ —— **已处理**（迁移 071）。
+
+   查下来不止预收一个：049 定 `account_type` 时**负债侧被单边漏掉了**。资产侧把四个往来科目一并归进 `asset_receivable`（1121/1122/1131/1221），负债侧的 `liability_payable` 却只有 2201/2202——恰好是 1121/1122 的对称项，多出来的 1131 应收利息、1221 其他应收款所对应的 2231 应付利息、2241 其他应付款留在了 `liability_current` 这个兜底桶里。
+
+   | 资产侧 | account_type | 负债侧对称科目 | 049 归类 | 071 后 |
+   |---|---|---|---|---|
+   | 1123 预付账款 | `asset_prepayment` | 2203 预收账款 | `liability_current` | `liability_advance_receipt`（新增） |
+   | 1221 其他应收款 | `asset_receivable` | 2241 其他应付款 | `liability_current` | `liability_payable` |
+   | 1131 应收利息 | `asset_receivable` | 2231 应付利息 | `liability_current` | `liability_payable` |
+
+   **后果不是理论上的**：2241 有四条真实写入路径（差旅、采购、事项路由、凭证模板都往它上面挂员工垫付款），2203 也有（预收性质的合同收入）。分录一直在产生，却查不出「谁垫了多少、还欠多少」——而员工垫付款正是最需要逐笔核销的场景之一。
+
+   预收单列 `liability_advance_receipt` 而非并入 `liability_payable`：`account_type` 是会计性质标签，收了钱没发货与欠了货款没付是两种义务，塞进去只是让核销「能用」而让标签说了谎。
+
+   护栏：`aging.test.ts` 新增一条钉住资产/负债对称关系，将来再加可核销类型而漏掉一侧立刻红。集成测试走 HTTP handler 验证（纯函数测不出 SQL 层——C2 那次「核销方已用额度恒为 0」就是这么漏的），并用「临时撤掉新类型」实测确认会拦，不是永远绿的假护栏。
+
+   **顺带发现的已知局限**：账龄表按 `direction` 二分，预付与应收合并成一张、预收与应付合并成另一张。这是本次之前就有的现状。`SettleableAccountType.label`（「应收款项」「预付款项」…）**目前没有任何消费方**，它是为分组呈现预备的；要真正分成四张表得改账龄接口响应形状与前端面板，属独立改动。
 9. ~~**定期凭证前端只支持一借一贷等额模板**~~ —— **已处理**，改为动态多行（`Form.List`），少于两行不给删。
 
 10. **E2E 曾两次失败，未能复现**（原记为「flaky」，现修正）。
