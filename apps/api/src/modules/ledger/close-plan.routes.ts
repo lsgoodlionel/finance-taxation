@@ -18,7 +18,6 @@ import { query, queryOne } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import { buildClosePlan, type ClosePlanInput } from "./close-plan.js";
 import { checkTaxConsistency } from "../tax-integration/consistency.js";
-import { REVENUE_EXCLUDED_PREFIXES } from "../tax-integration/consistency.routes.js";
 import { PENDING_DRAFT_STATUSES } from "../ai-agents/close/draft-status.js";
 import { REVENUE_ACCOUNT_PREFIXES } from "../reports/profit-accounts.js";
 import { EXCLUDE_PERIOD_CLOSING_SQL } from "./closing-entries.js";
@@ -205,31 +204,21 @@ async function loadTaxConsistencyOverall(
   const output = invoiceRows.find((r) => r.direction === "output");
   const input = invoiceRows.find((r) => r.direction === "input");
   const likeClauses = REVENUE_PREFIXES.map((_, i) => `account_code like $${i + 3}`).join(" or ");
-  const excludeOffset = REVENUE_PREFIXES.length + 3;
-  const excludeClauses = REVENUE_EXCLUDED_PREFIXES.map(
-    (_, i) => `account_code not like $${i + excludeOffset}`
-  ).join(" and ");
   // 排除结转损益分录（口径见 ledger/closing-entries.ts）：按属期聚合账面收入。
   // 这一处尤其致命，因为它和 incomeClosed 在同一个响应里：结转一做完，
   // 「已结转损益」勾上的同一瞬间，票税一致性就因为账面收入变 0 而翻红，
   // 结账向导会把刚做对的事报成错。
   //
-  // 顺带补上 REVENUE_EXCLUDED_PREFIXES（6001c 主营业务成本 / 6301e 管理费用）。
-  // 它们落在 `6001%` / `6301%` 里，此前未排除，会被当成负收入冲减账面收入 ——
-  // 这是与结转无关的既有缺陷，但与 tax-integration/consistency.routes.ts 的同款
-  // 查询口径不一致，同一份数据两个入口给出两个票税差异，一并对齐。
+  // 这里曾另有一组 `not like` 排除项，用来剔掉落在 `6001%` / `6301%` 里的主营
+  // 业务成本 `6001c` 与管理费用 `6301e`。V12-D3 把它们改成 `6401` / `6602` 之后
+  // 与收入前缀不再有交集，排除项已删除。
   const revenueRows = await query<{ revenue: string }>(
     `select coalesce(sum(credit - debit), 0) as revenue
      from ledger_entries
      where company_id = $1 and to_char(entry_date, 'YYYY-MM') = $2
        and ${EXCLUDE_PERIOD_CLOSING_SQL}
-       and (${likeClauses}) and (${excludeClauses})`,
-    [
-      companyId,
-      period,
-      ...REVENUE_PREFIXES.map((p) => `${p}%`),
-      ...REVENUE_EXCLUDED_PREFIXES.map((p) => `${p}%`)
-    ]
+       and (${likeClauses})`,
+    [companyId, period, ...REVENUE_PREFIXES.map((p) => `${p}%`)]
   );
 
   const report = checkTaxConsistency({

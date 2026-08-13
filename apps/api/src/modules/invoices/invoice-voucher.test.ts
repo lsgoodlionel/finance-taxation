@@ -51,7 +51,7 @@ test("含小数金额仍保持平衡", () => {
 
 const INPUT_TAX_ACCOUNT = "222102";
 const OUTPUT_TAX_ACCOUNT = "222101";
-const COST_ACCOUNT = "6301e07";
+const COST_ACCOUNT = "660207";
 
 function findLine(draft: ReturnType<typeof buildInvoiceVoucherDraft>, code: string) {
   return draft.lines.find((l) => l.accountCode === code);

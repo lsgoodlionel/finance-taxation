@@ -37,7 +37,7 @@ export interface SocialSecurityVoucherDraft {
  * 单位承担的社保与公积金分挂 22110102 / 22110103 两个明细，便于社保稽核对账。
  */
 const ACCOUNTS = {
-  expense:         { code: "6301e01",  name: "管理费用-工资" },
+  expense:         { code: "660201",  name: "管理费用-工资" },
   socialPayable:   { code: "22110102", name: "应付职工薪酬-社保（单位）" },
   housingPayable:  { code: "22110103", name: "应付职工薪酬-公积金（单位）" },
   bank:            { code: "1002",     name: "银行存款" },

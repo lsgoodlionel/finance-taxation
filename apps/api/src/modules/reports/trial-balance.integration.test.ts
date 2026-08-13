@@ -341,7 +341,7 @@ test("period closing entries are included, zeroing P&L and moving profit into 31
     assert.equal(expense.closingCredit, "0.00", "结转后费用类期末必须归零");
 
     // 3131 本年利润承载两次结转：期初 500（4 月）、本期 250（5 月）、期末 750
-    const profit = rowOf(report, "3131");
+    const profit = rowOf(report, "4103");
     assert.equal(profit.openingCredit, "500.00");
     assert.equal(profit.periodCredit, "250.00");
     assert.equal(profit.closingCredit, "750.00");

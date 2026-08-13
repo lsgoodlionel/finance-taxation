@@ -17,7 +17,7 @@ function render(report: ProfitStatementReport | null): string {
 const taxedReport: ProfitStatementReport = {
   periodLabel: "2026-05",
   revenues: [{ code: "6001", label: "主营业务收入", amount: "1000.00" }],
-  costsAndExpenses: [{ code: "6001c", label: "主营业务成本", amount: "200.00" }],
+  costsAndExpenses: [{ code: "6401", label: "主营业务成本", amount: "200.00" }],
   totals: {
     revenue: "1000.00",
     cost: "200.00",

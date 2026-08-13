@@ -31,7 +31,7 @@ function ledgerEntry(overrides: Partial<LedgerEntry> & { id: string; accountCode
 function monthOfBusiness(period: string, revenue: string, cost: string): LedgerEntry[] {
   return [
     ledgerEntry({ id: `${period}-rev`, accountCode: "6001", entryDate: `${period}-10`, credit: revenue }),
-    ledgerEntry({ id: `${period}-cost`, accountCode: "6001c", entryDate: `${period}-10`, debit: cost })
+    ledgerEntry({ id: `${period}-cost`, accountCode: "6401", entryDate: `${period}-10`, debit: cost })
   ];
 }
 
@@ -124,7 +124,7 @@ test("排除结转损益分录：月结之后那个月不会塌成 0", () => {
       }),
       ledgerEntry({
         id: "close-cost",
-        accountCode: "6001c",
+        accountCode: "6401",
         entryDate: "2026-04-30",
         credit: "400.00",
         source: "period_closing"
@@ -161,7 +161,7 @@ test("趋势最后一个点与驾驶舱利润概览卡片逐字段相等", () =>
   // 同一个月就会在卡上写 100、在图上画 101。
   const entries = [
     ledgerEntry({ id: "rev", accountCode: "6001", entryDate: "2026-05-10", credit: "100.40" }),
-    ledgerEntry({ id: "cost", accountCode: "6001c", entryDate: "2026-05-10", debit: "0.50" }),
+    ledgerEntry({ id: "cost", accountCode: "6401", entryDate: "2026-05-10", debit: "0.50" }),
     ledgerEntry({ id: "admin", accountCode: "6602", entryDate: "2026-05-20", debit: "10.30" }),
     ledgerEntry({ id: "tax", accountCode: "6801", entryDate: "2026-05-25", debit: "3.70" })
   ];

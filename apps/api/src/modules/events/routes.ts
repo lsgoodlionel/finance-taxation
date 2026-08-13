@@ -581,7 +581,7 @@ export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBu
           {
             id: makeId("vou-line", event.id, "debit-expense"),
             summary: "确认费用",
-            accountCode: "6301e07",
+            accountCode: "660207",
             accountName: "管理费用-其他",
             debit: amount,
             credit: "0.00"

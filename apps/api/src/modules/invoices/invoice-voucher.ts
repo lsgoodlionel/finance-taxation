@@ -101,7 +101,7 @@ export function buildInvoiceVoucherDraft(inv: InvoiceForVoucher): InvoiceVoucher
     voucherType: "payment",
     summary: `进项发票 No.${inv.invoiceNo} ${inv.sellerName}`,
     lines: [
-      line(costSummary, "6301e07", "管理费用-其他", costAmount, 0),
+      line(costSummary, "660207", "管理费用-其他", costAmount, 0),
       ...(hasDeductibleTaxLine ? [line("应交税费—应交增值税（进项税额）", "222102", "应交税费-应交增值税（进项）", tax, 0)] : []),
       line(`应付账款—${inv.sellerName}`, "2202", "应付账款", 0, total),
     ],

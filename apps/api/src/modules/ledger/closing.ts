@@ -17,7 +17,7 @@
 import { classifyProfitAccount } from "../reports/profit-accounts.js";
 
 /** Current-year profit account that P&L is closed into. */
-export const PROFIT_ACCOUNT = "3131";
+export const PROFIT_ACCOUNT = "4103";
 
 const EPSILON = 0.0001;
 

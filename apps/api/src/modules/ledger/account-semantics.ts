@@ -2,7 +2,7 @@
  * `accounts.account_type` 的业务语义判定（V12-B4 / B5）。
  *
  * 迁移 049 给科目加了 `account_type` 这层语义标签，正是为了让「哪些科目不结转
- * 期初」「哪个是本年利润」这类规则有据可依，而不是继续在各处硬编码 `"3131"`。
+ * 期初」「哪个是本年利润」这类规则有据可依，而不是继续在各处硬编码 `"4103"`。
  * 本模块是这些规则的单一事实来源，纯函数、可单测。
  *
  * ## 为什么用前缀匹配而不是枚举
@@ -21,10 +21,10 @@ export const CURRENT_YEAR_PROFIT_TYPE = "equity_unaffected";
 export const RETAINED_EARNINGS_TYPE = "equity_retained";
 
 /** 本年利润科目编码（本系统沿用《企业会计制度》编码）。 */
-export const CURRENT_YEAR_PROFIT_CODE = "3131";
+export const CURRENT_YEAR_PROFIT_CODE = "4103";
 
 /** 利润分配科目编码。 */
-export const RETAINED_EARNINGS_CODE = "3141";
+export const RETAINED_EARNINGS_CODE = "4104";
 
 /**
  * 是不是损益类科目（收入 / 成本 / 费用）。

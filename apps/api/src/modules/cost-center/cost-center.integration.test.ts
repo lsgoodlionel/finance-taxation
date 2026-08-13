@@ -178,10 +178,10 @@ test("成本中心的完整路径", async (t) => {
   await t.test("按成本中心汇总费用，未指定的单列", async () => {
     const sales = `cc-${COMPANY_ID}-CC-SALES`;
     const rd = `cc-${COMPANY_ID}-CC-RD`;
-    await seedExpense(pool, { id: "le-cc-1", accountCode: "6301e03", amount: "30000.00", costCenterId: sales, entryDate: "2026-08-05" });
-    await seedExpense(pool, { id: "le-cc-2", accountCode: "6301e01", amount: "20000.00", costCenterId: sales, entryDate: "2026-08-06" });
-    await seedExpense(pool, { id: "le-cc-3", accountCode: "6301e03", amount: "40000.00", costCenterId: rd, entryDate: "2026-08-07" });
-    await seedExpense(pool, { id: "le-cc-4", accountCode: "6301e03", amount: "10000.00", costCenterId: null, entryDate: "2026-08-08" });
+    await seedExpense(pool, { id: "le-cc-1", accountCode: "660203", amount: "30000.00", costCenterId: sales, entryDate: "2026-08-05" });
+    await seedExpense(pool, { id: "le-cc-2", accountCode: "660201", amount: "20000.00", costCenterId: sales, entryDate: "2026-08-06" });
+    await seedExpense(pool, { id: "le-cc-3", accountCode: "660203", amount: "40000.00", costCenterId: rd, entryDate: "2026-08-07" });
+    await seedExpense(pool, { id: "le-cc-4", accountCode: "660203", amount: "10000.00", costCenterId: null, entryDate: "2026-08-08" });
 
     const report = await getReport("2026-08");
     assert.equal(report.statusCode, 200, JSON.stringify(report.body));
@@ -218,7 +218,7 @@ test("成本中心的完整路径", async (t) => {
   await t.test("结转分录不算本期费用", async () => {
     await seedExpense(pool, {
       id: "le-cc-closing",
-      accountCode: "6301e03",
+      accountCode: "660203",
       amount: "77777.00",
       costCenterId: null,
       entryDate: "2026-08-31",

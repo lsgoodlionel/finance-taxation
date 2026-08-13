@@ -163,7 +163,7 @@ test("evaluateRiskFindings does not treat a cost-only voucher as posted revenue"
         businessEventId: "evt-sales-cost-only",
         entryDate: "2026-05-15",
         summary: "结转成本",
-        accountCode: "6001c",
+        accountCode: "6401",
         accountName: "主营业务成本",
         debit: "800.00",
         credit: "0.00",

@@ -91,7 +91,7 @@ const RENT_TEMPLATE = {
   endPeriod: "2026-12",
   summaryTemplate: "计提办公室房租 {period}",
   lines: [
-    { accountCode: "6301e03", debit: "20000.00", credit: "0.00" },
+    { accountCode: "660203", debit: "20000.00", credit: "0.00" },
     { accountCode: "2202", debit: "0.00", credit: "20000.00" }
   ]
 };
@@ -146,7 +146,7 @@ test("定期凭证的完整路径", async (t) => {
     const rejected = await createTemplate({
       ...RENT_TEMPLATE,
       lines: [
-        { accountCode: "6301e03", debit: "20000.00", credit: "0.00" },
+        { accountCode: "660203", debit: "20000.00", credit: "0.00" },
         { accountCode: "2202", debit: "0.00", credit: "18000.00" }
       ]
     });

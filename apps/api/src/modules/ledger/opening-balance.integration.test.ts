@@ -38,7 +38,7 @@ const OPENING_LINES = [
   { accountCode: "1002", debit: "800000.00", credit: "0.00" },
   { accountCode: "1122", debit: "200000.00", credit: "0.00" },
   { accountCode: "3001", debit: "0.00", credit: "700000.00" },
-  { accountCode: "3141", debit: "0.00", credit: "300000.00" }
+  { accountCode: "4104", debit: "0.00", credit: "300000.00" }
 ];
 
 function createAuthContext(): AuthContext {
@@ -223,11 +223,11 @@ test("损益类科目与 3131 本年利润不得有期初余额", async () => {
     // 3131 本年利润：历史累积的未分配利润应录在 3141，不是 3131
     const currentYear = await postOpening([
       { accountCode: "1002", debit: "1000.00" },
-      { accountCode: "3131", credit: "1000.00" }
+      { accountCode: "4103", credit: "1000.00" }
     ]);
     assert.equal(currentYear.statusCode, 400);
     assert.equal(currentYear.body!.reason, "CURRENT_YEAR_PROFIT");
-    assert.ok(String(currentYear.body!.error).includes("3141"));
+    assert.ok(String(currentYear.body!.error).includes("4104"));
 
     // 一行都不许落库
     assert.deepEqual(await ledgerCounts(pool), { vouchers: 0, entries: 0 });
@@ -258,7 +258,7 @@ test("借贷不平被拒绝，差额显式列出，且一行都不落库", async
     // 系统绝不自动把差额塞进 3141 —— 那会把「漏录 80 万应收」和「历史未分配利润」
     // 混为一谈，账面平了但科目余额是错的。
     assert.ok(String(result.body!.error).includes("不会自动补平"));
-    assert.ok(String(result.body!.error).includes("3141"));
+    assert.ok(String(result.body!.error).includes("4104"));
 
     assert.deepEqual(
       await ledgerCounts(pool),

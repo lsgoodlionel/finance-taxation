@@ -33,8 +33,23 @@ export interface AccountCodeMapping {
 /**
  * 需要国标化的编码。
  *
- * **只列三类冲突项**，不动 `1002`、`2202`、`6001` 等本就合规的编码 ——
- * 动得越多回归面越大，而它们没有任何问题。
+ * ## 存在编码占用链，必须两阶段改写
+ *
+ * `6001c` 的国标编码是 `6401`，而 FT 已经把 `6401` 用作「财务费用」——
+ * 直接改会撞唯一约束。所以 `6401 → 6603`（财务费用的国标编码）必须一起做，
+ * 且迁移要先把全部受影响编码挪到临时值再落位（PostgreSQL 的唯一约束默认
+ * `NOT DEFERRABLE`，逐行即时检查，同一条 UPDATE 里换不过来）。
+ *
+ * ## 两项刻意不改
+ *
+ * - `6201` 销售费用：国标是 `6601`，但那个编码被 FT 的「职工薪酬（成本）」占着。
+ * - `6601` 职工薪酬（成本）：**国标里没有这样一个损益类科目**（应付职工薪酬是
+ *   负债类 2211，生产相关的应进生产成本/制造费用）。这是**科目设置本身存疑**，
+ *   改编码解决不了；在不清楚它承载什么业务的前提下动它，风险远大于收益。
+ *
+ * 代价是销售费用仍是非国标的 `6201`。但它不与任何编码冲突、不产生前缀陷阱，
+ * 留着的唯一代价是名义上不合规——远小于贸然动一个语义不明的科目。
+ * 详见 docs/v12-d3-account-code-standardization-plan.md 第一节之二。
  */
 export const ACCOUNT_CODE_MAPPINGS: readonly AccountCodeMapping[] = [
   {
@@ -58,6 +73,21 @@ export const ACCOUNT_CODE_MAPPINGS: readonly AccountCodeMapping[] = [
   { legacy: "6301e05", standard: "660205", name: "管理费用-租金", reason: "随父级 6301e→6602" },
   { legacy: "6301e06", standard: "660206", name: "管理费用-研发费用", reason: "随父级 6301e→6602" },
   { legacy: "6301e07", standard: "660207", name: "管理费用-其他", reason: "随父级 6301e→6602" },
+  // ── 占用链：6001c 要用的 6401 被财务费用占着，两者必须一起改 ──
+  {
+    legacy: "6401",
+    standard: "6603",
+    name: "财务费用",
+    reason: "国标财务费用是 6603；腾出 6401 给主营业务成本"
+  },
+  { legacy: "6401001", standard: "660301", name: "财务费用-利息支出", reason: "随父级 6401→6603" },
+  { legacy: "6401002", standard: "660302", name: "财务费用-手续费", reason: "随父级 6401→6603" },
+  {
+    legacy: "6101",
+    standard: "6403",
+    name: "税金及附加",
+    reason: "国标税金及附加是 6403；目标编码空闲，顺带做"
+  },
   {
     legacy: "3131",
     standard: "4103",
@@ -104,6 +134,21 @@ export const LEGACY_CODES: readonly string[] = ACCOUNT_CODE_MAPPINGS.map((item) 
 
 /** 全部国标编码。 */
 export const STANDARD_CODES: readonly string[] = ACCOUNT_CODE_MAPPINGS.map((item) => item.standard);
+
+/**
+ * **真正退役**的编码——改完之后不该再出现在任何地方。
+ *
+ * 这不等于 `LEGACY_CODES`。占用链上的编码两头都在：`6401` 既是财务费用的旧码，
+ * 又是主营业务成本的新码。按 `LEGACY_CODES` 判残留，会把正确落位的 `6401` 报成
+ * 「没改干净」。
+ *
+ * 这个坑踩过两次：迁移 070 的零残留自检误报了 2 处，随后本模块的源码护栏又用
+ * 同一个错判据把 12 个文件报成待改。所以把判据提炼到这里，让 SQL 侧与 TS 侧
+ * 共用同一个概念，而不是各写一遍各错一遍。
+ */
+export const RETIRED_CODES: readonly string[] = ACCOUNT_CODE_MAPPINGS.filter(
+  (item) => !STANDARD_CODES.includes(item.legacy)
+).map((item) => item.legacy);
 
 /**
  * 迁移要改写的全部「表.列」。

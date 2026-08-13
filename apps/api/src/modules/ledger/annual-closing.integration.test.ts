@@ -184,27 +184,27 @@ test("跨两个自然年：第二年的年结金额只等于第二年的利润�
     await runClosePeriod("2026-12", "2026-12-31");
 
     // 月结之后 3131 承载 2026 全年利润，3141 还是空的 —— 这就是缺陷的起点。
-    assert.equal(await accountBalance(pool, "3131", "2026-12-31"), 600);
-    assert.equal(await accountBalance(pool, "3141", "2026-12-31"), 0);
+    assert.equal(await accountBalance(pool, "4103", "2026-12-31"), 600);
+    assert.equal(await accountBalance(pool, "4104", "2026-12-31"), 0);
 
     const closed2026 = await closeYearViaRoute(2026);
     assert.equal(closed2026.statusCode, 201, JSON.stringify(closed2026.body));
     assert.equal(closed2026.body!.netProfit, 600);
     // 年结之后 3131 归零，利润落到 3141 —— 这正是原来缺失的那一步。
-    assert.equal(await accountBalance(pool, "3131", "2026-12-31"), 0);
-    assert.equal(await accountBalance(pool, "3141", "2026-12-31"), 600);
+    assert.equal(await accountBalance(pool, "4103", "2026-12-31"), 0);
+    assert.equal(await accountBalance(pool, "4104", "2026-12-31"), 600);
 
     await seedEntries(pool, "2027", YEAR_2027);
     await runClosePeriod("2027-12", "2027-12-31");
     // 2027 月结后 3131 只承载 2027 的利润（2026 的已被年结冲平）
-    assert.equal(await accountBalance(pool, "3131", "2027-12-31"), 900);
+    assert.equal(await accountBalance(pool, "4103", "2027-12-31"), 900);
 
     const closed2027 = await closeYearViaRoute(2027);
     assert.equal(closed2027.statusCode, 201, JSON.stringify(closed2027.body));
     // ★ 核心回归：若年结取数排除了历史年结分录，这里会变成 1500（2026 被重复结转一遍）
     assert.equal(closed2027.body!.netProfit, 900, "第二年的年结金额不得包含第一年的利润");
-    assert.equal(await accountBalance(pool, "3131", "2027-12-31"), 0);
-    assert.equal(await accountBalance(pool, "3141", "2027-12-31"), 1500);
+    assert.equal(await accountBalance(pool, "4103", "2027-12-31"), 0);
+    assert.equal(await accountBalance(pool, "4104", "2027-12-31"), 1500);
   } finally {
     await closePool();
     await pool.end();
@@ -249,8 +249,8 @@ test("年结凭证是账上真实存在的一张凭证，有会计日期、期�
     assert.deepEqual(
       entries.rows.map((e) => [e.account_code, Number(e.debit), Number(e.credit)]),
       [
-        ["3131", 600, 0],
-        ["3141", 0, 600]
+        ["4103", 600, 0],
+        ["4104", 0, 600]
       ],
       "盈利年度：借 3131 / 贷 3141"
     );
@@ -299,13 +299,13 @@ test("亏损年度的分录反向：贷 3131 / 借 3141", async () => {
     assert.deepEqual(
       entries.rows.map((e) => [e.account_code, Number(e.debit), Number(e.credit)]),
       [
-        ["3131", 0, 500],
-        ["3141", 500, 0]
+        ["4103", 0, 500],
+        ["4104", 500, 0]
       ]
     );
     // 未分配利润为负（累计亏损）
-    assert.equal(await accountBalance(pool, "3141", "2026-12-31"), -500);
-    assert.equal(await accountBalance(pool, "3131", "2026-12-31"), 0);
+    assert.equal(await accountBalance(pool, "4104", "2026-12-31"), -500);
+    assert.equal(await accountBalance(pool, "4103", "2026-12-31"), 0);
   } finally {
     await closePool();
     await pool.end();

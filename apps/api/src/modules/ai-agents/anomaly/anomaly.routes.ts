@@ -14,11 +14,7 @@ import type { ApiRequest } from "../../../types.js";
 import { query } from "../../../db/client.js";
 import { json } from "../../../utils/http.js";
 import { EXCLUDE_PERIOD_CLOSING_SQL } from "../../ledger/closing-entries.js";
-import {
-  COST_ACCOUNT_PREFIX,
-  NON_OPERATING_EXPENSE_PREFIX,
-  REVENUE_ACCOUNT_PREFIXES
-} from "../../reports/profit-accounts.js";
+import { REVENUE_ACCOUNT_PREFIXES } from "../../reports/profit-accounts.js";
 import {
   runAnomalyScan,
   type AnomalyFinding,
@@ -36,15 +32,12 @@ const TAX_BURDEN_LOOKBACK_MONTHS = 6;
 /** 收入科目前缀，与 reports/profit-accounts.ts 同源，避免两侧口径漂移。 */
 export const REVENUE_PREFIXES: string[] = [...REVENUE_ACCOUNT_PREFIXES];
 
-/**
- * 与收入前缀重叠、但实为成本/费用的科目：主营业务成本 6001c 落在 `6001%` 里，
- * 管理费用 6301e 落在 `6301%` 里。SQL 用 like 匹配前缀，必须显式排除，否则
- * 税负率分母（营业收入）被成本与管理费用冲减而偏小，税负率虚高、误报异常。
- */
-export const REVENUE_EXCLUDED_PREFIXES: string[] = [
-  COST_ACCOUNT_PREFIX,
-  NON_OPERATING_EXPENSE_PREFIX
-];
+// V12-D3：这里曾有一个 REVENUE_EXCLUDED_PREFIXES，把主营业务成本 `6001c` 与
+// 管理费用 `6301e` 从 `6001%` / `6301%` 的 like 匹配里剔出去 —— 不剔的话税负率
+// 的分母（营业收入）被成本费用冲减而偏小，税负率虚高、误报异常。
+//
+// 国标化之后主营业务成本是 `6401`、管理费用是 `6602`，与收入前缀再无交集，
+// 排除子句整个删掉了。
 
 const TAX_PAYABLE_PREFIX = "2221";
 const BANK_ACCOUNT_PREFIX = "1002";
@@ -165,11 +158,7 @@ async function fetchWeekendAmountEntries(companyId: string, range: DateRange): P
 async function fetchTaxBurdenPeriods(companyId: string, endPeriod: string): Promise<TaxBurdenPeriodInput[]> {
   const startPeriod = shiftPeriodLabel(endPeriod, -(TAX_BURDEN_LOOKBACK_MONTHS - 1));
   const revenueIncludeClauses = REVENUE_PREFIXES.map((_, i) => `account_code like $${i + 3}`).join(" or ");
-  const excludeOffset = REVENUE_PREFIXES.length + 3;
-  const revenueExcludeClauses = REVENUE_EXCLUDED_PREFIXES.map(
-    (_, i) => `account_code not like $${i + excludeOffset}`
-  ).join(" and ");
-  const startParamIndex = excludeOffset + REVENUE_EXCLUDED_PREFIXES.length;
+  const startParamIndex = REVENUE_PREFIXES.length + 3;
   // 排除结转损益分录（口径见 ledger/closing-entries.ts）：revenue 一列是按属期聚合
   // 营业收入，属于损益聚合。不排除的话已结转月份 revenue = 0，税负率 = 税额 / 0，
   // 于是每个正常结账的月份都会被判成「税负率异常」——把月结变成告警制造机。
@@ -177,7 +166,7 @@ async function fetchTaxBurdenPeriods(companyId: string, endPeriod: string): Prom
   const rows = await query<{ period: string; tax: string; revenue: string }>(
     `select to_char(entry_date, 'YYYY-MM') as period,
             sum(case when account_code like $2 then credit - debit else 0 end) as tax,
-            sum(case when (${revenueIncludeClauses}) and (${revenueExcludeClauses})
+            sum(case when (${revenueIncludeClauses})
                      then credit - debit else 0 end) as revenue
      from ledger_entries
      where company_id = $1
@@ -189,7 +178,6 @@ async function fetchTaxBurdenPeriods(companyId: string, endPeriod: string): Prom
       companyId,
       `${TAX_PAYABLE_PREFIX}%`,
       ...REVENUE_PREFIXES.map((p) => `${p}%`),
-      ...REVENUE_EXCLUDED_PREFIXES.map((p) => `${p}%`),
       startPeriod,
       endPeriod
     ]

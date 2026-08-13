@@ -23,8 +23,8 @@ test("classifyProfitAccount separates cost and non-operating expense from the re
   assert.equal(classifyProfitAccount("6111"), "revenue");
   assert.equal(classifyProfitAccount("6301"), "revenue");
   // 与收入前缀重叠但属于成本/支出，必须先被排除
-  assert.equal(classifyProfitAccount("6001c"), "cost");
-  assert.equal(classifyProfitAccount("6301e"), "expense");
+  assert.equal(classifyProfitAccount("6401"), "cost");
+  assert.equal(classifyProfitAccount("6602"), "expense");
   assert.equal(classifyProfitAccount("6801"), "expense");
   assert.equal(classifyProfitAccount("1002"), "other");
   assert.equal(classifyProfitAccount("2221"), "other");
@@ -41,10 +41,10 @@ test("classifyProfitAccount routes 6-prefixed accounts missing from the chart in
 
 test("classifyProfitAccount follows the chart of accounts for registered sub-accounts", () => {
   // 二级科目在科目主数据里有权威 category，不再依赖前缀表是否列举过
-  assert.equal(classifyProfitAccount("6401001"), "expense");
-  assert.equal(classifyProfitAccount("6401002"), "expense");
-  assert.equal(classifyProfitAccount("6301e01"), "expense");
-  assert.equal(classifyProfitAccount("6301e06"), "expense");
+  assert.equal(classifyProfitAccount("660301"), "expense");
+  assert.equal(classifyProfitAccount("660302"), "expense");
+  assert.equal(classifyProfitAccount("660201"), "expense");
+  assert.equal(classifyProfitAccount("660206"), "expense");
   // 未登记的收入子科目走兜底收入前缀，不能掉进费用兜底
   assert.equal(classifyProfitAccount("6001001"), "revenue");
   assert.equal(classifyProfitAccount("6051001"), "revenue");
@@ -62,7 +62,7 @@ test("classifyProfitAccount keeps balance-sheet and production-cost accounts out
 test("summarizeProfitTotals no longer drops the 6602 expense recorded in 2026-04", () => {
   // Arrange：复刻 ledger_entries 里 2026-04 的真实费用分录
   const entries = [
-    entry("6401", "183000.00", "0.00"),
+    entry("6603", "183000.00", "0.00"),
     entry("6601", "15000.00", "0.00"),
     entry("6602", "8000.00", "0.00")
   ];
@@ -81,7 +81,7 @@ test("summarizeProfitTotals counts every revenue account, not just 6001", () => 
   const entries = [
     entry("6001", "0.00", "1000.00"),
     entry("6051", "0.00", "200.00"),
-    entry("6001c", "300.00", "0.00"),
+    entry("6401", "300.00", "0.00"),
     entry("6201", "50.00", "0.00"),
     entry("1002", "1200.00", "0.00")
   ];
@@ -101,8 +101,8 @@ test("summarizeProfitTotals counts every revenue account, not just 6001", () => 
 test("summarizeProfitTotals splits income tax out of the expense bucket", () => {
   const entries = [
     entry("6001", "0.00", "1000.00"),
-    entry("6001c", "300.00", "0.00"),
-    entry("6301e", "50.00", "0.00"),
+    entry("6401", "300.00", "0.00"),
+    entry("6602", "50.00", "0.00"),
     entry("6801", "100.00", "0.00")
   ];
 
@@ -121,7 +121,7 @@ test("summarizeProfitTotals subtracts income tax exactly once", () => {
   // Arrange：同一份数据，仅在是否存在 6801 分录上有差异
   const base = [
     entry("6001", "0.00", "1000.00"),
-    entry("6001c", "300.00", "0.00"),
+    entry("6401", "300.00", "0.00"),
     entry("6601", "50.00", "0.00")
   ];
   const withTax = [...base, entry("6801", "100.00", "0.00")];
@@ -141,8 +141,8 @@ test("summarizeProfitTotals keeps pre-fix results when there is no income tax en
   const entries = [
     entry("6001", "0.00", "1000.00"),
     entry("6051", "0.00", "200.00"),
-    entry("6001c", "300.00", "0.00"),
-    entry("6301e", "20.00", "0.00"),
+    entry("6401", "300.00", "0.00"),
+    entry("6602", "20.00", "0.00"),
     entry("6601", "80.00", "0.00")
   ];
 
@@ -161,7 +161,7 @@ test("classifyProfitAccount counts 税金及附加 and every other tax-ish 6xxx 
   // tax-surcharge 模板（vouchers/templates.ts）落到 6101「税金及附加」。它必须进
   // 利润表的 costsAndExpenses 与 totals.expenses，否则这笔费用会在 /reports 与
   // /home 上凭空消失，而资产负债表的本年利润照扣，两表口径当场分叉。
-  assert.equal(classifyProfitAccount("6101"), "expense");
+  assert.equal(classifyProfitAccount("6403"), "expense");
   assert.equal(classifyProfitAccount("610101"), "expense");
   // 6403 这类科目表未登记的编码同样不能掉进 other（历史上曾被 tax-surcharge 模板使用）
   assert.equal(classifyProfitAccount("6403"), "expense");
@@ -170,7 +170,7 @@ test("classifyProfitAccount counts 税金及附加 and every other tax-ish 6xxx 
 
 test("summarizeProfitTotals keeps 税金及附加 inside the expense bucket", () => {
   // Arrange：一笔收入 + 一笔 tax-surcharge 模板生成的税金及附加
-  const entries = [entry("6001", "0.00", "1000.00"), entry("6101", "120.00", "0.00")];
+  const entries = [entry("6001", "0.00", "1000.00"), entry("6403", "120.00", "0.00")];
 
   // Act
   const totals = summarizeProfitTotals(entries);
@@ -188,10 +188,10 @@ test("profit statement net profit equals the closing entry net profit", () => {
     entry("6001", "0.00", "1000.00"),
     entry("6001001", "0.00", "200.00"),
     entry("6051", "0.00", "150.00"),
-    entry("6001c", "300.00", "0.00"),
-    entry("6101", "120.00", "0.00"),
-    entry("6301e01", "80.00", "0.00"),
-    entry("6401001", "40.00", "0.00"),
+    entry("6401", "300.00", "0.00"),
+    entry("6403", "120.00", "0.00"),
+    entry("660201", "80.00", "0.00"),
+    entry("660301", "40.00", "0.00"),
     entry("6602", "60.00", "0.00"),
     entry("6403", "25.00", "0.00"),
     entry("6801", "100.00", "0.00"),

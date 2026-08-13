@@ -78,7 +78,7 @@ const templates: VoucherTemplateDefinition[] = [
     buildLines(amount) {
       const value = money(amount);
       return [
-        line("tpl-expense-1", "确认管理费用", "6301e07", "管理费用-其他", value, "0.00"),
+        line("tpl-expense-1", "确认管理费用", "660207", "管理费用-其他", value, "0.00"),
         line("tpl-expense-2", "确认员工垫付款", "2241", "其他应付款", "0.00", value)
       ];
     }
@@ -143,7 +143,7 @@ const templates: VoucherTemplateDefinition[] = [
     buildLines(amount) {
       const value = money(amount);
       return [
-        line("tpl-rnd-1", "确认研发费用", "6301e06", "管理费用-研发费用", value, "0.00"),
+        line("tpl-rnd-1", "确认研发费用", "660206", "管理费用-研发费用", value, "0.00"),
         line("tpl-rnd-2", "确认研发支出付款", "1002", "银行存款", "0.00", value)
       ];
     }
@@ -170,7 +170,7 @@ const templates: VoucherTemplateDefinition[] = [
     buildLines(amount) {
       const value = money(amount);
       return [
-        line("tpl-tax-surcharge-1", "计提税金及附加", "6101", "税金及附加", value, "0.00"),
+        line("tpl-tax-surcharge-1", "计提税金及附加", "6403", "税金及附加", value, "0.00"),
         line("tpl-tax-surcharge-2", "确认应交税费-印花税", "222105", "应交税费-应交印花税", "0.00", value)
       ];
     }

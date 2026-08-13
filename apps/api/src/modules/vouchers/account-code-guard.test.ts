@@ -23,42 +23,28 @@ import { buildPurchaseExpenseBundle } from "../events/purchase-expense-rules.js"
 import { buildTravelExpenseBundle } from "../events/travel-expense-rules.js";
 import { buildContractRevenueBundle } from "../events/contract-revenue-rules.js";
 import { buildEventMappings, PENDING_ACCOUNT_CODE } from "../events/routes.js";
-import {
-  EXPENSE_PREFIXES,
-  REVENUE_PREFIXES,
-  REVENUE_EXCLUDED_PREFIXES
-} from "../analytics/routes.js";
-import {
-  REVENUE_PREFIXES as CONSISTENCY_REVENUE_PREFIXES,
-  REVENUE_EXCLUDED_PREFIXES as CONSISTENCY_REVENUE_EXCLUDED_PREFIXES
-} from "../tax-integration/consistency.routes.js";
-import {
-  REVENUE_PREFIXES as ANOMALY_REVENUE_PREFIXES,
-  REVENUE_EXCLUDED_PREFIXES as ANOMALY_REVENUE_EXCLUDED_PREFIXES
-} from "../ai-agents/anomaly/anomaly.routes.js";
+import { EXPENSE_PREFIXES, REVENUE_PREFIXES } from "../analytics/routes.js";
+import { REVENUE_PREFIXES as CONSISTENCY_REVENUE_PREFIXES } from "../tax-integration/consistency.routes.js";
+import { REVENUE_PREFIXES as ANOMALY_REVENUE_PREFIXES } from "../ai-agents/anomaly/anomaly.routes.js";
 import { classifyProfitAccount } from "../reports/profit-accounts.js";
 
 /**
  * 全部按前缀取数的收入读路径。每新增一个按 `account_code like '6001%'` 之类
- * 过滤收入的模块，都要接进这张表——否则重叠前缀（6001c / 6301e）会把成本与
- * 管理费用当作负收入冲减，金额静默偏小且不会有任何报错。
+ * 过滤收入的模块，都要接进这张表。
+ *
+ * **V12-D3 之前每条路径还带一张 `exclude` 排除表**，因为主营业务成本 `6001c`
+ * 落在 `6001%` 里、管理费用 `6301e` 落在 `6301%` 里，不排除就会被当成负收入
+ * 冲减营业收入，金额静默偏小、没有任何报错。国标化把它们改成 `6401` / `6602`
+ * 之后已无可排除之物，`exclude` 字段与相关断言一并删除。
+ *
+ * 取而代之的是下面那条守**根因**的断言：任何非收入科目的编码都不得落进收入
+ * 前缀。这比原来强——原来是 N 条读路径各自记得补救，现在是从源头禁止产生
+ * 需要补救的编码。
  */
 const REVENUE_READ_PATHS = [
-  {
-    source: "analytics/routes.ts",
-    include: REVENUE_PREFIXES,
-    exclude: REVENUE_EXCLUDED_PREFIXES
-  },
-  {
-    source: "tax-integration/consistency.routes.ts",
-    include: CONSISTENCY_REVENUE_PREFIXES,
-    exclude: CONSISTENCY_REVENUE_EXCLUDED_PREFIXES
-  },
-  {
-    source: "ai-agents/anomaly/anomaly.routes.ts",
-    include: ANOMALY_REVENUE_PREFIXES,
-    exclude: ANOMALY_REVENUE_EXCLUDED_PREFIXES
-  }
+  { source: "analytics/routes.ts", include: REVENUE_PREFIXES },
+  { source: "tax-integration/consistency.routes.ts", include: CONSISTENCY_REVENUE_PREFIXES },
+  { source: "ai-agents/anomaly/anomaly.routes.ts", include: ANOMALY_REVENUE_PREFIXES }
 ] as const;
 
 const SAMPLE_AMOUNT = "1000.00";
@@ -311,10 +297,7 @@ test("the unknown-event fallback keeps a non-postable placeholder code", () => {
 test("analytics read-path prefixes all resolve to real chart accounts", () => {
   // Arrange：取数侧按前缀过滤，前缀写错不会报错，只会让金额静默漏算
   //（旧的 5601/6602/6603 在科目表里根本不存在，费用长期少计）。
-  const prefixes = [
-    ...REVENUE_READ_PATHS.flatMap((path) => [...path.include, ...path.exclude]),
-    ...EXPENSE_PREFIXES
-  ];
+  const prefixes = [...REVENUE_READ_PATHS.flatMap((path) => [...path.include]), ...EXPENSE_PREFIXES];
 
   // Act
   const unmatched = prefixes.filter(
@@ -328,15 +311,15 @@ test("analytics read-path prefixes all resolve to real chart accounts", () => {
 test("every revenue read path's prefixes agree with the profit statement classifier", () => {
   // Arrange：取数侧与 reports/profit-accounts.ts 必须同口径，否则
   // /analytics、/tax-integration/consistency、/anomaly 会对同一期间
-  // 给出彼此不同的「收入」，而成本 6001c 与管理费用 6301e 会被当成负收入。
+  // 给出彼此不同的「收入」。
   const codes = CHART_OF_ACCOUNTS.map((account) => account.code);
   const matches = (code: string, prefixes: readonly string[]) =>
     prefixes.some((prefix) => code.startsWith(prefix));
 
-  // Act：模拟 SQL 的 like 语义——命中收入前缀且未被排除前缀命中
+  // Act：模拟 SQL 的 like 语义——命中收入前缀即被取走
   const misclassified = REVENUE_READ_PATHS.flatMap((path) =>
     codes
-      .filter((code) => matches(code, path.include) && !matches(code, path.exclude))
+      .filter((code) => matches(code, path.include))
       .filter((code) => classifyProfitAccount(code) !== "revenue")
       .map((code) => `${path.source}: ${code}`)
   );
@@ -371,18 +354,30 @@ test("analytics expense prefixes agree with the profit statement classifier", ()
   assert.equal(matches("6801", EXPENSE_PREFIXES), false);
 });
 
-test("revenue read paths all exclude the overlapping cost and expense prefixes", () => {
-  // Arrange：排除表漏项时上一条断言仍会挂，但错误信息指向具体科目而非缺失的前缀；
-  // 这里直接钉住「排除表必须含 6001c 与 6301e」，让漏配的修复方向一目了然。
-  const required = ["6001c", "6301e"];
+test("没有任何非收入科目的编码落进收入前缀——D3 消除的就是这件事", () => {
+  // Arrange：这条取代了 V12-D3 之前的「每条读路径都必须排除 6001c / 6301e」。
+  //
+  // 那条断言守的是**补救**：N 个按 like 取收入的读路径，每个都要记得带上排除表。
+  // 这条守的是**根因**：科目表里就不该存在「以收入前缀开头但不是收入」的编码。
+  // 只要没有这种编码，所有读路径都不需要排除表，将来新增的读路径也天然安全。
+  //
+  // 谁会让它变红：有人再引入一个 `6001x` 之类的自造编码。那时该改的是编码，
+  // 不是给每个读路径再补一次排除表。
+  const codes = CHART_OF_ACCOUNTS.map((account) => account.code);
 
   // Act
-  const missing = REVENUE_READ_PATHS.flatMap((path) =>
-    required.filter((prefix) => !path.exclude.includes(prefix)).map((p) => `${path.source}: ${p}`)
-  );
+  const offenders = codes
+    .filter((code) => REVENUE_PREFIXES.some((prefix) => code.startsWith(prefix)))
+    .filter((code) => classifyProfitAccount(code) !== "revenue")
+    .map((code) => `${code} ${findChartAccount(code)?.name ?? ""}`);
 
   // Assert
-  assert.deepEqual(missing, [], `收入取数路径缺少重叠前缀排除项：${missing.join("; ")}`);
+  assert.deepEqual(
+    offenders,
+    [],
+    `这些科目的编码落在收入前缀里但不是收入，会被所有按 like 取收入的读路径` +
+      `当成负收入冲减营业收入：${offenders.join("、")}`
+  );
 });
 
 test("CHART_OF_ACCOUNTS is internally consistent", () => {

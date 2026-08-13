@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   ACCOUNT_CODE_MAPPINGS,
   CODE_BEARING_COLUMNS,
   isLegacyCode,
   LEGACY_CODES,
+  RETIRED_CODES,
   STANDARD_CODES,
   toLegacyCode,
   toStandardCode
@@ -80,20 +82,33 @@ test("要改写的列清单覆盖全部已知的科目码承载处", () => {
 });
 
 /**
+ * 仓库根。**不能用 `process.cwd()`** —— 单测由 `npm run -w @finance-taxation/api`
+ * 驱动，cwd 是 `apps/api` 而不是仓库根，拼出来的路径会变成 `apps/api/apps/api/src`
+ * 而 ENOENT（初版就是这么挂的）。从本文件位置往上找才与运行目录无关。
+ */
+function findRepoRoot(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  while (!existsSync(join(dir, "apps/web/src"))) {
+    const parent = dirname(dir);
+    if (parent === dir) throw new Error("找不到仓库根：向上遍历到了文件系统顶层");
+    dir = parent;
+  }
+  return dir;
+}
+
+/**
  * ## 护栏：源码里不得再出现旧编码
  *
- * **本用例目前应当是红的** —— D3 尚未实施，40 个文件还在用旧编码。
- * 它先落地是刻意的：让「还剩多少处没改」变成一个随时可查的数字，
- * 而不是靠 grep 手工数。实施过程中它会逐步变绿。
+ * 这条先于实施落地，刻意让它一开始就是红的——让「还剩多少处没改」变成一个
+ * 随时可查的数字，而不是靠 grep 手工数。实施时它从 40 个文件逐步收敛到 0，
+ * 现在转正，防的是将来有人从旧文档或旧分支里把旧编码抄回来。
  *
  * 与 `chart-parity.integration.test.ts` 同一个思路：把「靠人记得」换成
  * 「机器记得」。
  */
-test("源码里不再出现旧编码字面量", { skip: "D3 尚未实施，见 docs/v12-d3-account-code-standardization-plan.md" }, () => {
-  const roots = [
-    join(process.cwd(), "apps/api/src"),
-    join(process.cwd(), "apps/web/src")
-  ];
+test("源码里不再出现旧编码字面量", () => {
+  const repoRoot = findRepoRoot();
+  const roots = [join(repoRoot, "apps/api/src"), join(repoRoot, "apps/web/src")];
   /** 映射表自身必须提旧编码，否则没法做映射。 */
   const allowlist = ["code-standardization.ts", "code-standardization.test.ts"];
 
@@ -109,9 +124,11 @@ test("源码里不再出现旧编码字面量", { skip: "D3 尚未实施，见 d
       if (allowlist.includes(entry)) continue;
 
       const content = readFileSync(full, "utf8");
-      const hits = LEGACY_CODES.filter((code) => content.includes(`"${code}"`));
+      // 用 RETIRED_CODES 而不是 LEGACY_CODES：`6401` 两头都在（财务费用的旧码
+      // ＋主营业务成本的新码），按 LEGACY_CODES 判会把正确的新编码报成残留。
+      const hits = RETIRED_CODES.filter((code) => content.includes(`"${code}"`));
       if (hits.length > 0) {
-        offenders.push(`${full.replace(process.cwd() + "/", "")} → ${hits.join("、")}`);
+        offenders.push(`${full.replace(repoRoot + "/", "")} → ${hits.join("、")}`);
       }
     }
   };

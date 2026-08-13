@@ -251,7 +251,7 @@ export function RecurringVouchersPanel() {
                       rules={[{ required: true, message: "科目必填" }]}
                       style={{ marginBottom: 0, width: 130 }}
                     >
-                      <Input placeholder={index === 0 ? "6301e03" : "2202"} aria-label={`第 ${index + 1} 行科目`} />
+                      <Input placeholder={index === 0 ? "660203" : "2202"} aria-label={`第 ${index + 1} 行科目`} />
                     </Form.Item>
                     <Form.Item
                       {...field}

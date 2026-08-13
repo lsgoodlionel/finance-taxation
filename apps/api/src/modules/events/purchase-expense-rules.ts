@@ -165,7 +165,7 @@ function expenseDebitAccount(classification: PurchaseExpenseClassification) {
     case "fixed_asset":
       return { code: "1601", name: "固定资产" };
     default:
-      return { code: "6301e07", name: "管理费用-其他" };
+      return { code: "660207", name: "管理费用-其他" };
   }
 }
 

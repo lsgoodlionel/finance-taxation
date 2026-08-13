@@ -152,7 +152,7 @@ test("buildDashboardSnapshot aggregates profit, queues, and ai summary", () => {
       businessEventId: "evt-1",
       entryDate: "2026-05-15",
       summary: "成本",
-      accountCode: "6001c",
+      accountCode: "6401",
       accountName: "主营业务成本",
       debit: "400.00",
       credit: "0.00",
@@ -244,9 +244,9 @@ test("buildDashboardSnapshot net profit matches the formal profit statement for 
   const entries: LedgerEntry[] = [
     ledgerEntry({ id: "le-1", accountCode: "6001", credit: "1000.00" }),
     ledgerEntry({ id: "le-2", accountCode: "6051", credit: "300.00" }),
-    ledgerEntry({ id: "le-3", accountCode: "6001c", debit: "400.00" }),
+    ledgerEntry({ id: "le-3", accountCode: "6401", debit: "400.00" }),
     ledgerEntry({ id: "le-4", accountCode: "6201", debit: "100.00" }),
-    ledgerEntry({ id: "le-5", accountCode: "6301e", debit: "50.00" }),
+    ledgerEntry({ id: "le-5", accountCode: "6602", debit: "50.00" }),
     ledgerEntry({ id: "le-6", accountCode: "6801", debit: "60.00" }),
     ledgerEntry({ id: "le-7", accountCode: "1002", debit: "1300.00" })
   ];
@@ -267,7 +267,7 @@ test("buildDashboardSnapshot exposes 所得税费用 separately from 期间费�
   // 拿 revenue - cost - expense 当利润会虚高一个税额，饼图分块之和也少一块。
   const entries: LedgerEntry[] = [
     ledgerEntry({ id: "le-1", accountCode: "6001", credit: "1000.00" }),
-    ledgerEntry({ id: "le-2", accountCode: "6001c", debit: "400.00" }),
+    ledgerEntry({ id: "le-2", accountCode: "6401", debit: "400.00" }),
     ledgerEntry({ id: "le-3", accountCode: "6201", debit: "100.00" }),
     ledgerEntry({ id: "le-4", accountCode: "6801", debit: "60.00" })
   ];
@@ -289,7 +289,7 @@ test("buildDashboardSnapshot reports zero 所得税费用 when the period has no
   // Arrange
   const entries: LedgerEntry[] = [
     ledgerEntry({ id: "le-1", accountCode: "6001", credit: "1000.00" }),
-    ledgerEntry({ id: "le-2", accountCode: "6001c", debit: "400.00" })
+    ledgerEntry({ id: "le-2", accountCode: "6401", debit: "400.00" })
   ];
 
   // Act
@@ -313,14 +313,14 @@ test("dashboard profit overview ignores period-closing entries for the closed pe
   // Arrange：本期业务分录 + 期末结转分录（金额恰好相反，entry_date 落在本期之内）
   const business: LedgerEntry[] = [
     ledgerEntry({ id: "le-1", accountCode: "6001", credit: "1000.00" }),
-    ledgerEntry({ id: "le-2", accountCode: "6001c", debit: "400.00" }),
+    ledgerEntry({ id: "le-2", accountCode: "6401", debit: "400.00" }),
     ledgerEntry({ id: "le-3", accountCode: "6201", debit: "100.00" })
   ];
   const closing: LedgerEntry[] = [
     closingLedgerEntry({ id: "cl-1", accountCode: "6001", debit: "1000.00", entryDate: "2026-05-31" }),
-    closingLedgerEntry({ id: "cl-2", accountCode: "6001c", credit: "400.00", entryDate: "2026-05-31" }),
+    closingLedgerEntry({ id: "cl-2", accountCode: "6401", credit: "400.00", entryDate: "2026-05-31" }),
     closingLedgerEntry({ id: "cl-3", accountCode: "6201", credit: "100.00", entryDate: "2026-05-31" }),
-    closingLedgerEntry({ id: "cl-4", accountCode: "3131", credit: "500.00", entryDate: "2026-05-31" })
+    closingLedgerEntry({ id: "cl-4", accountCode: "4103", credit: "500.00", entryDate: "2026-05-31" })
   ];
   const period = { startDate: "2026-05-01", endDate: "2026-05-31" };
 
@@ -341,7 +341,7 @@ test("dashboard profit overview stays internally consistent when totals need rou
   // 于是「收入 − 成本 = 毛利」在展示层变成 100 − 1 = 99 ≠ 100。
   const entries: LedgerEntry[] = [
     ledgerEntry({ id: "le-1", accountCode: "6001", credit: "100.40" }),
-    ledgerEntry({ id: "le-2", accountCode: "6001c", debit: "0.50" }),
+    ledgerEntry({ id: "le-2", accountCode: "6401", debit: "0.50" }),
     ledgerEntry({ id: "le-3", accountCode: "6201", debit: "0.40" }),
     ledgerEntry({ id: "le-4", accountCode: "6801", debit: "0.40" })
   ];
@@ -385,7 +385,7 @@ test("dashboard profit overview keeps the pie-chart invariant for many rounding 
       for (const tax of cents) {
         const entries: LedgerEntry[] = [
           ledgerEntry({ id: "le-1", accountCode: "6001", credit: "100.45" }),
-          ledgerEntry({ id: "le-2", accountCode: "6001c", debit: cost }),
+          ledgerEntry({ id: "le-2", accountCode: "6401", debit: cost }),
           ledgerEntry({ id: "le-3", accountCode: "6201", debit: expense }),
           ledgerEntry({ id: "le-4", accountCode: "6801", debit: tax })
         ];
