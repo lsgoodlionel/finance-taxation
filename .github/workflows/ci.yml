@@ -7,6 +7,23 @@ on:
       - "codex/**"
   pull_request:
 
+# 一个 `codex/**` 分支上的 PR 会同时被 push 和 pull_request 触发，产生两个并发 run。
+# 两个 run 的 V4 Baseline Acceptance 都要起同一份 docker-compose 测试栈，端口写死在
+# 33100 / 55173 / 55433 —— 后起的那个直接挂在
+#   `failed to bind host port for 0.0.0.0:33100: address already in use`
+# 上。这不是代码问题，但它会随机把绿的 PR 标红，逼人去分辨「这次红是真的吗」。
+#
+# 同 ref 只保留最新一个 run，旧的取消。cancel-in-progress 对 main 也安全：main 上
+# 连续 push 时，被取消的是已经过时的那次验证。
+#
+# group 必须用**分支名**，不能用 `github.ref`：push 事件下它是 `refs/heads/xxx`，
+# pull_request 事件下是 `refs/pull/N/merge`，两者永远不相等，正好把该合并的两个
+# run 分到两组，配置写了等于没写。`head_ref`（PR 事件）与 `ref_name`（push 事件）
+# 都是裸分支名，才能归一。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
