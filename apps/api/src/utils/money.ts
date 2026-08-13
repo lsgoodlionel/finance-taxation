@@ -8,13 +8,16 @@
  * 而在会计里「差一分」和「差一万」是同一类问题：账不平就是账不平，没人能判断
  * 这一分是舍入误差还是真错账。全程按整数分算，误差在源头就不存在。
  *
- * ## 已有的副本
+ * ## 副本已收敛（V12 收尾）
  *
- * 同名函数目前另有四份（reports/trial-balance.ts、ai-agents/close/close-drafts.routes.ts、
- * invoices/einvoice-parse.ts、ai-evals/journal-entry-bench.ts）。它们语义并不完全一致
- * —— einvoice-parse 那份对非法输入返回 null。本模块只承接新代码，不动那四处：
- * trial-balance 与 close-drafts 属刚合入的批次 B，此刻改它们只会制造跨批次冲突面。
- * 收敛它们是一件独立的事，需要逐个确认语义差异，不该顺手夹带在固定资产里。
+ * 曾另有四份同名函数。三份（reports/trial-balance.ts、ai-agents/close/close-drafts.routes.ts、
+ * ai-evals/journal-entry-bench.ts）行为与本模块完全一致，已全部改为引用这里。
+ *
+ * 第四份**刻意保留**：`invoices/einvoice-parse.ts` 的 `toCentsOrNull` 对非法输入
+ * 返回 null 而不是 0。它解析的是外部电子发票文件，分不清「金额确实是 0」和
+ * 「这个字段根本没解析出来」会让一张坏票被当成零元票静默入库；而报表汇总里
+ * 缺失即 0 才是对的。两处需求相反，合并只会逼其中一处将就——所以它改了名字
+ * 以示区别，而不是合并。
  */
 
 /**

@@ -43,6 +43,7 @@
  */
 
 import { classifyBalanceSheetAccount } from "./balance-sheet-accounts.js";
+import { fromCents, toCents } from "../../utils/money.js";
 
 /** 一个科目在本期的原始聚合结果（由 SQL 一次算出，见 trial-balance.routes.ts）。 */
 export interface TrialBalanceAggregate {
@@ -126,14 +127,6 @@ export interface BuildTrialBalanceInput {
  * 小额错账吞掉——而小额错账正是最难靠肉眼发现的那一类。
  */
 const BALANCED_TOLERANCE_CENTS = 0;
-
-function toCents(value: string | null | undefined): number {
-  return Math.round(Number(value ?? 0) * 100);
-}
-
-function fromCents(cents: number): string {
-  return (cents / 100).toFixed(2);
-}
 
 /**
  * 该科目的期初是否按财年起算。

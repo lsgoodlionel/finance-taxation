@@ -2791,3 +2791,31 @@ export async function getLedgerVatPaper(period: string) {
     `/api/tax/vat-working-paper/ledger?period=${encodeURIComponent(period)}`
   );
 }
+
+// ── V12-D4 折旧纳税调整明细表（A105080）──────────────────────────────────
+
+export interface TaxDepreciationRow {
+  assetId: string;
+  assetNo: string;
+  assetName: string;
+  category: string;
+  originalCost: string;
+  accountingLifeMonths: number;
+  taxLifeMonths: number;
+  accountingDepreciation: string;
+  taxDeduction: string;
+  adjustment: string;
+  reason: string;
+  explanation: string;
+}
+
+export async function getTaxDepreciationReport(taxYear: number) {
+  return request<{
+    taxYear: number;
+    accountingTotal: string;
+    taxTotal: string;
+    adjustmentTotal: string;
+    summary: string;
+    rows: TaxDepreciationRow[];
+  }>(`/api/assets/tax-depreciation?taxYear=${taxYear}`);
+}

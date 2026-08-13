@@ -17,6 +17,7 @@ import {
   type EventForAccounting,
 } from "../modules/ai-agents/accounting-agent.js";
 import type { VoucherDraftLine } from "@finance-taxation/domain-model";
+import { toCents } from "../utils/money.js";
 
 export interface GoldenCase {
   name: string;
@@ -300,10 +301,6 @@ export const GOLDEN_CASES: GoldenCase[] = [
 ];
 
 /** 以“分”为单位比较借贷合计，避免浮点误差 */
-function toCents(value: string): number {
-  return Math.round(Number(value) * CENTS_SCALE);
-}
-
 function isBalanced(lines: VoucherDraftLine[]): boolean {
   const debitCents = lines.reduce((sum, l) => sum + toCents(l.debit), 0);
   const creditCents = lines.reduce((sum, l) => sum + toCents(l.credit), 0);

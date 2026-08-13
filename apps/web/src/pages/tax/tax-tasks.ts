@@ -71,7 +71,7 @@ export function buildTaxTasks({ batches, items, overdueCount }: TaxTaskInput): T
     {
       key: TAX_TASK_KEYS.rates,
       label: "核对税率与账簿",
-      description: "看这个属期该用哪档税率，以及按账簿算出来的增值税与税目记录差多少。"
+      description: "看这个属期该用哪档税率、按账簿算出来的增值税与税目记录差多少，以及折旧的税会差异。"
     },
     {
       key: TAX_TASK_KEYS.calendar,

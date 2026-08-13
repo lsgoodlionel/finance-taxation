@@ -1,8 +1,11 @@
 /**
- * 税率主数据与账簿口径增值税底稿（V12-D2 前端）。
+ * 税率主数据、账簿口径增值税底稿与折旧纳税调整（V12-D2 / D4 前端）。
  *
- * 两件事放同一屏，是因为它们回答的是同一个问题的两半：
- * 「这个属期该用什么税率」与「按账簿算出来的税是多少」。
+ * 三件事放同一屏，因为它们都是「报税前要核对什么」：这个属期该用什么税率、
+ * 按账簿算出来的增值税是多少、折旧的税会差异要调多少。
+ *
+ * 折旧调整是**年度**口径（汇算按年做），所以它只取属期里的年份 ——
+ * 与上面两件的月度口径不同，这一点在卡片标题上写明。
  */
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Card, Descriptions, Radio, Space, Table, Tag, Typography } from "antd";
@@ -12,8 +15,10 @@ import { Term } from "../../components/ui/Term";
 import { usePeriod } from "../../lib/period-context";
 import {
   getLedgerVatPaper,
+  getTaxDepreciationReport,
   listTaxRates,
   type LedgerVatPaperView,
+  type TaxDepreciationRow,
   type TaxRateView
 } from "../../lib/api";
 
@@ -38,6 +43,13 @@ export function TaxRatePanel() {
   const [error, setError] = useState<string | null>(null);
   /** 税率视图：当期有效 vs 全部（含历史档）。 */
   const [scope, setScope] = useState<"current" | "all">("current");
+  const [taxDep, setTaxDep] = useState<{
+    summary: string;
+    adjustmentTotal: string;
+    accountingTotal: string;
+    taxTotal: string;
+    rows: TaxDepreciationRow[];
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,16 +57,20 @@ export function TaxRatePanel() {
     try {
       // 税率按属期首日取——增值税历次改版都在月初生效，按月的属期不跨改版点
       const on = scope === "current" ? `${period}-01` : undefined;
-      const [rateList, ledgerPaper] = await Promise.all([
+      // 折旧纳税调整是**年度**口径，属期只取年份 —— 汇算按年做，不按月
+      const taxYear = Number(period.slice(0, 4));
+      const [rateList, ledgerPaper, depreciation] = await Promise.all([
         listTaxRates("vat", on),
         getLedgerVatPaper(period).catch((err) => {
           // 底稿取不到不该连税率一起看不了——增值税科目没配齐时它会 400
           toast.error(errorMessage(err, "账簿口径底稿加载失败"));
           return null;
-        })
+        }),
+        getTaxDepreciationReport(taxYear).catch(() => null)
       ]);
       setRates(rateList.items);
       setPaper(ledgerPaper);
+      setTaxDep(depreciation);
     } catch (err) {
       const message = errorMessage(err, "加载税率主数据失败");
       setError(message);
@@ -143,6 +159,76 @@ export function TaxRatePanel() {
           ]}
         />
       </Card>
+
+      {taxDep && taxDep.rows.length > 0 ? (
+        <Card
+          title={`${period.slice(0, 4)} 年度折旧纳税调整（A105080）`}
+          style={{ borderRadius: 12 }}
+        >
+          <Alert
+            type={Number(taxDep.adjustmentTotal) === 0 ? "success" : "info"}
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={taxDep.summary}
+            description={
+              <span style={{ fontSize: 12, color: "#64748b" }}>
+                会计折旧 {taxDep.accountingTotal}，税法可扣除 {taxDep.taxTotal}，
+                调整额 {taxDep.adjustmentTotal}（正数调增、负数调减）
+              </span>
+            }
+          />
+          <Table
+            rowKey="assetId"
+            size="small"
+            dataSource={taxDep.rows}
+            pagination={{ pageSize: 10, hideOnSinglePage: true }}
+            columns={[
+              { title: "编号", dataIndex: "assetNo", width: 110 },
+              { title: "名称", dataIndex: "assetName" },
+              {
+                title: "会计年限",
+                dataIndex: "accountingLifeMonths",
+                align: "right" as const,
+                width: 100,
+                render: (months: number) => `${months} 个月`
+              },
+              {
+                title: "税法年限",
+                dataIndex: "taxLifeMonths",
+                align: "right" as const,
+                width: 100,
+                render: (months: number, row: TaxDepreciationRow) =>
+                  months > row.accountingLifeMonths ? (
+                    <Tag color="orange">{months} 个月</Tag>
+                  ) : (
+                    `${months} 个月`
+                  )
+              },
+              { title: "会计折旧", dataIndex: "accountingDepreciation", align: "right" as const, width: 120 },
+              { title: "税法扣除", dataIndex: "taxDeduction", align: "right" as const, width: 120 },
+              {
+                title: "纳税调整",
+                dataIndex: "adjustment",
+                align: "right" as const,
+                width: 120,
+                render: (value: string) =>
+                  Number(value) === 0 ? (
+                    value
+                  ) : (
+                    <Typography.Text type={Number(value) > 0 ? "danger" : "success"}>{value}</Typography.Text>
+                  )
+              },
+              { title: "说明", dataIndex: "explanation", ellipsis: true }
+            ]}
+          />
+          <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+            会计<Term k="depreciation">折旧</Term>按企业估计的年限<Term k="accrual">计提</Term>，
+            税前扣除要按税法最低年限（<Term k="cit">企业所得税</Term>法实施条例第六十条）。差额是**时间性**的：整个生命周期
+            扣除总额不变，差的只是在哪一年扣。500 万以下的设备器具可选一次性扣除，
+            购置当年大额调减、以后年度逐年调增。
+          </Typography.Paragraph>
+        </Card>
+      ) : null}
 
       {paper ? (
         <>

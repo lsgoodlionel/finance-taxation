@@ -17,6 +17,13 @@ import {
   type RecurringVoucherView
 } from "../../lib/api";
 
+/** 建模板表单里的一行分录。借贷各自可空，由后端做平衡校验。 */
+interface RecurringLineForm {
+  accountCode: string;
+  debit?: number | null;
+  credit?: number | null;
+}
+
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
@@ -96,18 +103,11 @@ export function RecurringVouchersPanel() {
         startPeriod: values.startPeriod,
         endPeriod: values.endPeriod || null,
         summaryTemplate: values.summaryTemplate,
-        lines: [
-          {
-            accountCode: values.debitAccountCode,
-            debit: String(values.amount),
-            credit: "0"
-          },
-          {
-            accountCode: values.creditAccountCode,
-            debit: "0",
-            credit: String(values.amount)
-          }
-        ]
+        lines: (values.lines as RecurringLineForm[]).map((line) => ({
+          accountCode: line.accountCode,
+          debit: String(line.debit ?? 0),
+          credit: String(line.credit ?? 0)
+        }))
       });
       toast.success("定期凭证模板已建立");
       setCreateOpen(false);
@@ -240,26 +240,51 @@ export function RecurringVouchersPanel() {
           >
             <Input placeholder="2026-12" />
           </Form.Item>
-          <Form.Item name="amount" label="金额" rules={[{ required: true, message: "请填写金额" }]}>
-            <InputNumber style={{ width: "100%" }} min={0.01} precision={2} />
-          </Form.Item>
-          <Form.Item
-            name="debitAccountCode"
-            label="借方科目"
-            rules={[{ required: true, message: "请填写借方科目" }]}
-          >
-            <Input placeholder="6301e03" />
-          </Form.Item>
-          <Form.Item
-            name="creditAccountCode"
-            label="贷方科目"
-            rules={[{ required: true, message: "请填写贷方科目" }]}
-          >
-            <Input placeholder="2202" />
-          </Form.Item>
+          <Form.List name="lines" initialValue={[{}, {}]}>
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map((field, index) => (
+                  <Space key={field.key} align="baseline" style={{ display: "flex", marginBottom: 8 }}>
+                    <Form.Item
+                      {...field}
+                      name={[field.name, "accountCode"]}
+                      rules={[{ required: true, message: "科目必填" }]}
+                      style={{ marginBottom: 0, width: 130 }}
+                    >
+                      <Input placeholder={index === 0 ? "6301e03" : "2202"} aria-label={`第 ${index + 1} 行科目`} />
+                    </Form.Item>
+                    <Form.Item
+                      {...field}
+                      name={[field.name, "debit"]}
+                      style={{ marginBottom: 0, width: 130 }}
+                    >
+                      <InputNumber placeholder="借方" min={0} precision={2} style={{ width: "100%" }} />
+                    </Form.Item>
+                    <Form.Item
+                      {...field}
+                      name={[field.name, "credit"]}
+                      style={{ marginBottom: 0, width: 130 }}
+                    >
+                      <InputNumber placeholder="贷方" min={0} precision={2} style={{ width: "100%" }} />
+                    </Form.Item>
+                    {/* 少于两行时不给删：一张凭证至少要有借贷两方 */}
+                    {fields.length > 2 ? (
+                      <Button size="small" onClick={() => remove(field.name)}>
+                        删除
+                      </Button>
+                    ) : null}
+                  </Space>
+                ))}
+                <Button type="dashed" onClick={() => add()} block style={{ marginBottom: 12 }}>
+                  + 添加分录行
+                </Button>
+              </>
+            )}
+          </Form.List>
           <Typography.Text type="secondary">
-            当前只支持一借一贷的等额模板。模板本身必须<Term k="debit-credit-balance">借贷平衡</Term>
-            ——不平的模板会每个月生成一张过不了账的草稿，因此在这一刻就会被拒绝。
+            模板必须<Term k="debit-credit-balance">借贷平衡</Term>——不平的模板会每个月生成
+            一张过不了账的草稿，因此后端在建模板这一刻就会拒绝，不必等到月结才发现。
+            一行只填<Term k="debit">借方</Term>或<Term k="credit">贷方</Term>之一。
           </Typography.Text>
         </Form>
       </Modal>
