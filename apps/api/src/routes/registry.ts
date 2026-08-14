@@ -79,6 +79,12 @@ import {
   previewDepreciationRoute,
   runDepreciationRoute
 } from "../modules/assets/routes.js";
+import {
+  createRevaluationVoucherRoute,
+  listExchangeRatesRoute,
+  previewRevaluationRoute,
+  upsertExchangeRateRoute
+} from "../modules/currency/routes.js";
 import { buildClosingPackageExport, buildClosingPackageHtml } from "../modules/packages/closing-bundle.js";
 import {
   createRndCostLine,
@@ -628,6 +634,18 @@ const routes: RouteDef[] = [
     permission: "ledger.post",
     handler: (req, res, p) => deleteSettlementRoute(req, res, p.id!)
   },
+
+  // 多币种（V12-D5）。
+  //
+  // 汇率维护归 ledger.post 而不是单开权限：汇率直接决定折算金额与调汇损益，
+  // 改一个数字等于改一笔账，与记账是同一级别的动作。查询归 ledger.view。
+  //
+  // 调汇生成的是 draft 凭证（与折旧、红冲、增值税结转一致），所以它要的是
+  // ledger.post 而非 ledger.approve —— 复核过账仍走凭证自己的审批路径。
+  { method: "GET", path: "/api/currency/rates", auth: true, permission: "ledger.view", handler: listExchangeRatesRoute },
+  { method: "PUT", path: "/api/currency/rates", auth: true, permission: "ledger.post", handler: upsertExchangeRateRoute },
+  { method: "GET", path: "/api/currency/revaluation", auth: true, permission: "ledger.view", handler: previewRevaluationRoute },
+  { method: "POST", path: "/api/currency/revaluation", auth: true, permission: "ledger.post", handler: createRevaluationVoucherRoute },
 
   // 固定资产（V12-C1）
   //

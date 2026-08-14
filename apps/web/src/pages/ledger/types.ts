@@ -1,4 +1,4 @@
-export type LedgerSceneKey = "summary" | "balances" | "journal" | "entries" | "periods";
+export type LedgerSceneKey = "summary" | "balances" | "journal" | "entries" | "periods" | "revaluation";
 
 export interface JournalItem {
   id: string;
@@ -35,7 +35,9 @@ export const LEDGER_SCENE_OPTIONS: LedgerSceneOption[] = [
   { key: "balances", title: "科目余额", description: "按科目查看借贷累计与余额，适合月结前复核。", emoji: "🧮" },
   { key: "journal", title: "现金/银行日记账", description: "按资金账类型与日期区间加载资金流水。", emoji: "💸" },
   { key: "entries", title: "总账分录", description: "按凭证或事项过滤分录与过账批次。", emoji: "🧾" },
-  { key: "periods", title: "期间锁账", description: "管理会计期间锁定状态，保护已关闭账期。", emoji: "🔒" }
+  { key: "periods", title: "期间锁账", description: "管理会计期间锁定状态，保护已关闭账期。", emoji: "🔒" },
+  // V12-D5。与「期间锁账」同属月结控制而非查账：它会生成凭证、改变损益。
+  { key: "revaluation", title: "外币调汇", description: "维护汇率并按期末汇率重估外币货币性项目。", emoji: "💱" }
 ];
 
 export function isLedgerSceneKey(value: string): value is LedgerSceneKey {

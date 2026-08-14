@@ -21,10 +21,7 @@ import {
   type TaxDepreciationRow,
   type TaxRateView
 } from "../../lib/api";
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback;
-}
+import { errorMessage } from "../../lib/errors";
 
 /** 账簿口径底稿里每行的角色名。 */
 const ROLE_LABELS: Record<string, string> = {

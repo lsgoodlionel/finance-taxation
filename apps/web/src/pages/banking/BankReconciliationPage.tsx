@@ -32,10 +32,7 @@ import {
   type BalanceReconciliationView,
   type ReconciliationItemView
 } from "../../lib/api";
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback;
-}
+import { errorMessage } from "../../lib/errors";
 
 /** 四类未达账项的中文名，严格按会计口径（前者是记账方，后者是未入账方）。 */
 const ITEM_TYPE_LABELS: Record<ReconciliationItemView["itemType"], string> = {

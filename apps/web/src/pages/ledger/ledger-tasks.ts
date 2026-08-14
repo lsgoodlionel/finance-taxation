@@ -22,7 +22,8 @@ export const LEDGER_TASK_KEYS = {
   balances: "balances",
   journal: "journal",
   entries: "entries",
-  periods: "periods"
+  periods: "periods",
+  revaluation: "revaluation"
 } as const satisfies Record<LedgerSceneKey, LedgerSceneKey>;
 
 /** V10 起在 URL 上承载「当前在做哪件事」的参数名（与 /tax、/risk 对齐）。 */
@@ -90,6 +91,10 @@ const LEDGER_TASK_TEXT: Record<LedgerSceneKey, { label: string; description: str
   periods: {
     label: "锁定已结账期间",
     description: "月结控制，不是查账：把已经结完的月份锁住（或在纠错时解锁），锁上之后该期间不能再过账。"
+  },
+  revaluation: {
+    label: "做期末外币调汇",
+    description: "维护汇率，按资产负债表日汇率重估外币货币性项目，差额生成汇兑损益草稿凭证。非货币性项目按准则不调。"
   }
 };
 
