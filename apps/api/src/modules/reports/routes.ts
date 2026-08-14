@@ -1,6 +1,5 @@
 import type { ServerResponse } from "node:http";
 import type { ReportSnapshot } from "@finance-taxation/domain-model";
-import { CHART_OF_ACCOUNTS } from "../accounts/routes.js";
 import type { ApiRequest } from "../../types.js";
 import { query, queryOne, withTransaction } from "../../db/client.js";
 import { json } from "../../utils/http.js";
@@ -106,11 +105,10 @@ export async function getBalanceSheet(req: ApiRequest, res: ServerResponse) {
     checkBalanceSheet(client, companyId, period.endDate)
   );
 
-  return json(res, 200, {
-    ...report,
-    selfCheck,
-    accountCatalogSize: CHART_OF_ACCOUNTS.length
-  });
+  // 这里曾返回 `accountCatalogSize: CHART_OF_ACCOUNTS.length`。它没有任何消费方
+  // （前端不读、测试不断言），而 V12 残留 7 把报表分类的事实来源改成 accounts 表
+  // 之后，它报的还是硬编码常量那份的大小——一个没人看、看了还会被误导的数字。
+  return json(res, 200, { ...report, selfCheck });
 }
 
 export async function getProfitStatement(req: ApiRequest, res: ServerResponse) {

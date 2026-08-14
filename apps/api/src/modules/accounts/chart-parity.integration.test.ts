@@ -4,10 +4,14 @@
  * ## 为什么需要它
  *
  * 049 把科目表落了库（`account_templates` + `accounts`），但
- * `chart-of-accounts.ts` 这份 TS 常量并没有退休——报表侧的
- * `profit-accounts.ts` / `balance-sheet-accounts.ts` 至今仍从它取
- * `category` 来判断一个科目进利润表还是资产负债表。于是同一件事有两个
- * 事实来源，而它们**必须手工保持同步**。
+ * `chart-of-accounts.ts` 这份 TS 常量并没有退休。
+ *
+ * **报表侧已经收敛到库**（残留 7 已处理）：分录经 `listCompanyLedgerEntries`
+ * 取出时随行带上 `accountCategory`，`classifyProfitAccount` /
+ * `classifyBalanceSheetAccount` 优先采信它。常量表降级为兜底——服务那些只拿得到
+ * 科目码的调用点（结转损益、风控引擎）与纯函数单测。
+ *
+ * 但兜底路径仍在生产里跑，两份数据漂移仍会出错，所以这个护栏继续有效。
  *
  * 这不是假设的风险，已经咬过一次：V12-C1 新增「6115 资产处置损益」时，
  * 如果只加进迁移而忘了加进这张常量表，6115 会走
@@ -20,10 +24,13 @@
  * 名称不比对——迁移里的名称常带「应交税费-」这类前缀限定，与常量表的
  * 展示名有合理差异，逐字比对只会制造噪音。
  *
- * 它不能替代真正的收敛（让报表侧直接读 `accounts` 表）。那是一次触及
- * 报表核心口径的重构，`classifyProfitAccount` / `classifyBalanceSheetAccount`
- * 是同步纯函数，改成读库要么变异步、要么把科目表作为参数贯穿十余个调用点，
- * 应当独立立项。在那之前，这个测试把「靠人记得同步」换成「机器记得」。
+ * ## 与 account-category-source.integration.test.ts 的分工
+ *
+ * 这条只能证明两份数据**一致**，证明不了报表实际读的是哪一份——两份一致时，
+ * 读哪份都得到同样的报表。那件事由 `account-category-source.integration.test.ts`
+ * 负责：它故意改库里某个科目的 `category`，看报表跟不跟着变。
+ *
+ * 两条都要有。这条防漂移，那条防「悄悄退回读常量」。
  */
 
 import assert from "node:assert/strict";

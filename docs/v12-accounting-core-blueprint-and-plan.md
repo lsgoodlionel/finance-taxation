@@ -445,7 +445,13 @@ Odoo `l10n_cn` 在这块反而是四个系统里做得最细的（2221 下 27 �
 
    `chart-parity.integration.test.ts` 现在比对两张表的科目集合、`category`、`direction`（名称不比对：迁移里的名称常带「应交税费-」这类限定前缀，逐字比对只是噪音），任一侧漏改立刻红。已用「临时删掉 6115」实测护栏确实会拦，不是永远绿的假护栏。
 
-   真正的收敛仍待独立立项：`classifyProfitAccount` / `classifyBalanceSheetAccount` 是同步纯函数，改成读库要么变异步、要么把科目表作为参数贯穿十余个调用点（`closing.ts`、`risk/engine.ts`、`reports/summary.ts`、`trial-balance.ts`、`balance-check.ts`、`dashboard/*`、`assistant`、`boss-qa`），触及报表核心口径，不该顺手夹带在功能批次里。
+   **已收敛**（残留 7 处理完毕）。实际改动面比这里估计的小一个数量级：所有报表 / 驾驶舱 / 税务 / 风控入口都走同一个取数函数 `listCompanyLedgerEntries`，让它 `left join accounts` 把 `category` 随分录带出来，八个调用点就收敛成一处。分类函数加一个可选的 `category` 入参，优先采信它；硬编码表降级为兜底，服务那些只拿得到科目码的调用点（结转损益、风控引擎）与纯函数单测。
+
+   路子不是新发明的：`balance-check.ts`、`settlement-store.ts`、`cost-center-store.ts`、`vat-ledger-paper.routes.ts` 早就在用 `left join accounts ... a.category / a.account_type` 这个模式（C2/D1/D2 全走它），报表是最后一个没跟上的。
+
+   **决定性测试**：`account-category-source.integration.test.ts` 故意把库里 6001 的 `category` 改成 `expense`，断言报表跟着把它算进费用。`chart-parity` 只能证明两份数据一致，证明不了报表实际读的是哪一份——两份一致时读哪份结果都一样。这条测试实施前实测为红（「报表仍把 6001 算成收入 —— 说明读的是硬编码常量」），改完转绿。
+
+   顺带删掉了 `accountCatalogSize` 这个无消费方的响应字段（它报的是硬编码表大小，收敛后还会误导），以及更正了 D3 文档里一处判断失误——`balance-sheet-accounts.ts` 的 `CODE_PREFIX_SECTIONS` 是数据驱动的前缀表，D3 当时 grep `startsWith("4")` 没命中它，而 4xxx 段在 D3 之后同时住着成本类（4001/4101）与权益类（4103/4104）。已把 4103/4104 排到 `4` 之前。
 8. ~~**预收账款（2203）未纳入核销**~~ —— **已处理**（迁移 071）。
 
    查下来不止预收一个：049 定 `account_type` 时**负债侧被单边漏掉了**。资产侧把四个往来科目一并归进 `asset_receivable`（1121/1122/1131/1221），负债侧的 `liability_payable` 却只有 2201/2202——恰好是 1121/1122 的对称项，多出来的 1131 应收利息、1221 其他应收款所对应的 2231 应付利息、2241 其他应付款留在了 `liability_current` 这个兜底桶里。

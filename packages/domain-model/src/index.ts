@@ -469,6 +469,18 @@ export interface LedgerEntry {
   counterpartyId?: string | null;
   /** 成本中心维度（V12-D1）。非费用科目为空，详见 VoucherDraftLine.costCenterId。 */
   costCenterId?: string | null;
+  /**
+   * 科目的报表口径分类，从 `accounts` 表随分录一起取出（V12 残留 7）。
+   *
+   * **这是报表分类的事实来源。** 此前 `classifyProfitAccount` /
+   * `classifyBalanceSheetAccount` 读的是硬编码的 `chart-of-accounts.ts`，
+   * 而 049 早就把科目表落了库——两份数据靠 `chart-parity` 护栏防漂移，
+   * 但报表实际读的始终是常量那份。
+   *
+   * 可选是因为分录不是只有报表在用：凭证详情、账簿列示等场景不需要它，
+   * 也不该为此多 join 一次。取不到时分类会退回按前缀兜底，与历史行为一致。
+   */
+  accountCategory?: AccountCategory | null;
 }
 
 export interface LedgerPostingBatch {

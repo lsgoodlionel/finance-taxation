@@ -82,14 +82,27 @@ function fromAccountCategory(category: AccountCategory): BalanceSheetSection {
 /**
  * 科目表未登记时的编码段兜底。
  *
- * 本系统沿用旧《企业会计制度》编码（3 = 所有者权益、4 = 成本），**不是**国标的
- * 3 = 共同类 / 4 = 所有者权益 / 5 = 成本。蓝图 D3 已把国标化迁移单独立项，在那
- * 之前这里必须按现行约定判。
+ * ## 4xxx 段混住了两类科目，顺序不能调换
+ *
+ * 本系统的成本类沿用旧《企业会计制度》编码（4001 生产成本、4101 制造费用），
+ * 而 V12-D3 把本年利润改成了国标的 `4103`、利润分配改成 `4104`——两者都是
+ * **所有者权益类**。于是 4xxx 段里同时住着成本类与权益类，纯 `["4", "asset"]`
+ * 会把本年利润判成资产。
+ *
+ * 所以 `4103` / `4104` 必须排在 `4` 之前。这是一条顺序敏感的规则，正是 D3 想
+ * 消灭的那类东西——但它只在**兜底路径**上生效（科目表登记了的科目走不到这里，
+ * 而 4103/4104 都是模板科目），真正的修法是把成本类改成国标的 5001 / 5101，
+ * 已记入 D3 方案文档第九节。
+ *
+ * 顺带更正：D3 当时 grep `startsWith("4")` 与 `like '4%'` 确认「全仓没有按 4
+ * 前缀判定科目性质的代码」，漏了这张表——它是数据驱动的，两个 grep 都命不中。
  */
 const CODE_PREFIX_SECTIONS: ReadonlyArray<readonly [string, BalanceSheetSection]> = [
   ["1", "asset"],
   ["2", "liability"],
   ["3", "equity"],
+  ["4103", "equity"],
+  ["4104", "equity"],
   ["4", "asset"],
   ["6", "profitAndLoss"]
 ];
@@ -97,11 +110,22 @@ const CODE_PREFIX_SECTIONS: ReadonlyArray<readonly [string, BalanceSheetSection]
 /**
  * 把任意科目代码归入资产负债表的某一去向。**永不返回 undefined。**
  *
- * 优先级：科目主数据精确命中 > 编码段兜底 > `unclassified`。
- * 主数据优先是因为本系统编码存在 `6001c`（成本）、`6301e`（费用）这类与前缀语义
- * 冲突的约定，纯前缀判定会归错类。
+ * 优先级：调用方传入的 `category`（来自 `accounts` 表）> 硬编码科目表 > 编码段
+ * 兜底 > `unclassified`。
+ *
+ * 第一档是 V12 残留 7 加的事实来源：分录经 `listCompanyLedgerEntries` 取出时已随
+ * 行带上 `accountCategory`。第二档降级为兜底——`chart-parity` 护栏保证它与库不
+ * 漂移，不一致时以库为准，因为库才是用户能改的那份。
+ *
+ * 前两档都优先于前缀判定，是因为编码段与会计性质并非一一对应（4xxx 段同时住着
+ * 成本类与权益类，见 CODE_PREFIX_SECTIONS 的说明）。
  */
-export function classifyBalanceSheetAccount(code: string): BalanceSheetSection {
+export function classifyBalanceSheetAccount(
+  code: string,
+  category?: AccountCategory | null
+): BalanceSheetSection {
+  if (category) return fromAccountCategory(category);
+
   const account = findChartAccount(code);
   if (account) return fromAccountCategory(account.category);
 
