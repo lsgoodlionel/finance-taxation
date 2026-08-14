@@ -50,9 +50,26 @@ assert(
   periodsTask.description?.includes("不是查账") === true,
   "expected the period-lock task to state that it is a month-end control, not a query"
 );
+// 控制类任务（会改账、会生成凭证）必须整体排在查账类之后。
+//
+// 这条原来写的是「锁账必须排在最后一位」。V12-D5 加「外币调汇」时它红了——
+// 而调汇同样是控制类（生成汇兑损益凭证、改变损益），排在锁账之后并不违背
+// 原意。所以断言从「某一件固定在末位」改成守它真正的意图：**查账与控制之间
+// 有一条分界线，控制类不许插进查账类中间**。
+const CONTROL_TASK_KEYS: string[] = [LEDGER_TASK_KEYS.periods, LEDGER_TASK_KEYS.revaluation];
+const firstControlIndex = tasks.findIndex((task) => CONTROL_TASK_KEYS.includes(task.key));
+assert(firstControlIndex >= 0, "expected at least one month-end control task");
 assert(
-  tasks[tasks.length - 1]?.key === LEDGER_TASK_KEYS.periods,
-  "expected the period-lock task to sit last, after the four read-only tasks"
+  tasks.slice(firstControlIndex).every((task) => CONTROL_TASK_KEYS.includes(task.key)),
+  "expected every month-end control task to sit after all read-only query tasks"
+);
+
+// 调汇同样要讲明白它不是查账 —— 它会生成凭证。
+const revaluationTask = tasks.find((task) => task.key === LEDGER_TASK_KEYS.revaluation);
+assert(revaluationTask, "expected a currency revaluation task");
+assert(
+  revaluationTask.description?.includes("凭证") === true,
+  "expected the revaluation task to say it generates a voucher"
 );
 
 // ── 角标：只有真实待办才挂 ────────────────────────────────────────────────────

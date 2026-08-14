@@ -17,16 +17,9 @@ import {
   type AgingItem,
   type SettlementCandidate
 } from "../../lib/api";
+import { errorMessage, todayIso } from "../../lib/errors";
 
 type Direction = "receivable" | "payable";
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback;
-}
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export function AgingPanel() {
   const [direction, setDirection] = useState<Direction>("receivable");

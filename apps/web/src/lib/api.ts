@@ -58,7 +58,10 @@ import type {
 } from "@finance-taxation/domain-model";
 import { describePageLoadError, isAuthRequiredError } from "./request-errors";
 
-const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+// 可选链不是多余的：`import.meta.env` 在 Vite 下总是存在，但在 node --test
+// 里整体是 undefined，读属性直接抛 TypeError。那会让**任何 import 本模块的
+// 组件都无法做渲染测试**——不是某一个测试的问题，是一整类测试被挡住。
+const rawApiBaseUrl = import.meta.env?.VITE_API_BASE_URL;
 export const API_BASE_URL = rawApiBaseUrl === undefined ? "http://127.0.0.1:3100" : rawApiBaseUrl;
 const TOKEN_KEY = "finance-taxation-v2-token";
 const REFRESH_TOKEN_KEY = "finance-taxation-v2-refresh-token";
@@ -1353,7 +1356,7 @@ export async function compensateTransferBatch(batchId: string) {
 
 export async function downloadTransferFile(batchId: string, format: "generic" | "cmb") {
   const token = window.localStorage.getItem("finance-taxation-v2-token") ?? "";
-  const base = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3100";
+  const base = import.meta.env?.VITE_API_BASE_URL || "http://127.0.0.1:3100";
   const resp = await fetch(`${base}/api/payroll/transfer/batches/${batchId}/file?format=${format}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
@@ -2818,4 +2821,70 @@ export async function getTaxDepreciationReport(taxYear: number) {
     summary: string;
     rows: TaxDepreciationRow[];
   }>(`/api/assets/tax-depreciation?taxYear=${taxYear}`);
+}
+
+// ─── 多币种（V12-D5）────────────────────────────────────────────────
+
+export interface ExchangeRate {
+  id: string;
+  currency: string;
+  rateDate: string;
+  /** 整数标度值（乘 1e6），与库一致。 */
+  rate: number;
+  /** 人读的小数形式，直接显示，避免每个调用方各除一遍。 */
+  rateDisplay: string;
+  source: string;
+  note: string | null;
+}
+
+export interface RevaluationLine {
+  accountCode: string;
+  accountName: string;
+  currency: string;
+  foreignBalance: string;
+  baseBookBalance: string;
+  closingRate: string | null;
+  difference: string | null;
+  needsAdjustment: boolean;
+  isGain: boolean | null;
+  reason: string;
+}
+
+export interface RevaluationPreview {
+  asOfDate: string;
+  baseCurrency: string;
+  /** 缺汇率的币种。非空时后端不生成凭证——半张调汇凭证比不调更难查。 */
+  missingRates: string[];
+  netGainLoss: string;
+  lines: RevaluationLine[];
+}
+
+export async function listExchangeRates(currency?: string) {
+  const suffix = currency ? `?currency=${encodeURIComponent(currency)}` : "";
+  return request<{ rates: ExchangeRate[]; baseCurrency: string }>(`/api/currency/rates${suffix}`);
+}
+
+export async function upsertExchangeRate(body: {
+  currency: string;
+  rateDate: string;
+  rate: number;
+  note?: string;
+}) {
+  return request<ExchangeRate>("/api/currency/rates", {
+    method: "PUT",
+    body: JSON.stringify(body)
+  });
+}
+
+export async function previewRevaluation(asOfDate: string) {
+  return request<RevaluationPreview>(
+    `/api/currency/revaluation?asOfDate=${encodeURIComponent(asOfDate)}`
+  );
+}
+
+export async function createRevaluationVoucher(asOfDate: string) {
+  return request<{ voucherId: string; lineCount: number; status: string; notice: string }>(
+    "/api/currency/revaluation",
+    { method: "POST", body: JSON.stringify({ asOfDate }) }
+  );
 }

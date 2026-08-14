@@ -16,16 +16,13 @@ import {
   setRecurringVoucherStatus,
   type RecurringVoucherView
 } from "../../lib/api";
+import { errorMessage } from "../../lib/errors";
 
 /** 建模板表单里的一行分录。借贷各自可空，由后端做平衡校验。 */
 interface RecurringLineForm {
   accountCode: string;
   debit?: number | null;
   credit?: number | null;
-}
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback;
 }
 
 const SKIP_REASONS: Record<string, string> = {

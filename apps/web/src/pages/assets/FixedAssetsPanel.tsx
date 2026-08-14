@@ -35,6 +35,7 @@ import {
   type DepreciationReason,
   type FixedAsset
 } from "../../lib/api";
+import { errorMessage } from "../../lib/errors";
 
 /**
  * 资产类别，与后端 `tax-depreciation.ts` 的 TAX_MINIMUM_LIFE_YEARS 一一对应
@@ -50,10 +51,6 @@ const ASSET_CATEGORY_OPTIONS = [
   { value: "electronic", label: "电子设备（3 年）" }
 ];
 
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback;
-}
 
 /** 把"为什么没提"翻成人话——只显示代号等于没解释。 */
 const REASON_LABELS: Record<DepreciationReason, string> = {

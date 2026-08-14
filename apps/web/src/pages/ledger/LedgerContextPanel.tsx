@@ -92,6 +92,11 @@ function resolveMetrics(scene: LedgerSceneKey, props: LedgerContextPanelProps): 
         { label: "已锁期间", value: String(props.lockedPeriodCount) },
         { label: "未锁期间", value: String(props.unlockedPeriodCount) }
       ];
+    case "revaluation":
+      // 调汇的数字全部依赖「截至哪一天」，而那个日期在面板内部由用户选。
+      // 外壳这里报一个与日期无关的数只会误导，不如不报——面板自己会列出
+      // 每个外币科目的余额、汇率与差额。
+      return [];
   }
 }
 

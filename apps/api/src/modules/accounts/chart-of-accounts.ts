@@ -138,6 +138,10 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   { code: "6603",    name: "财务费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: false },
   { code: "660301", name: "财务费用-利息支出",          category: "expense",   direction: "debit", level: 2, parentCode: "6603", isLeaf: true  },
   { code: "660302", name: "财务费用-手续费",            category: "expense",   direction: "debit", level: 2, parentCode: "6603", isLeaf: true  },
+  // V12-D5：期末调汇的对手方。借贷两个方向都会走——外币升值时资产类调汇产生
+  // 收益（贷方），贬值时产生损失（借方）。direction 标 debit 是「余额通常在哪一方」
+  // 的惯例，不表示它只走借方。
+  { code: "660303", name: "财务费用-汇兑损益",          category: "expense",   direction: "debit", level: 2, parentCode: "6603", isLeaf: true  },
   { code: "6601",    name: "职工薪酬（成本）",           category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "6711",    name: "营业外支出",                 category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "6801",    name: "所得税费用",                 category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  }
