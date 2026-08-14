@@ -413,3 +413,105 @@ test("预收账款能核销——迁移 071 之前它被泛化的 liability_curr
     assert.notEqual(rejected.statusCode, 201, "预收只剩 2 万，发 9.9 万的货说明有笔预收没记账");
   });
 });
+
+/**
+ * 往来单位的**录入侧**（V12-C2 补齐）。
+ *
+ * C2 做了往来核销与账龄，凭证的 `attachCounterparty` 从业务事项继承这个维度——
+ * 但**事项创建时硬编码写 null**，压根没有录入口。种子库实测：28 个事项 0 个有往来
+ * 单位，20 条分录 0 条，于是账龄表与核销整条链路都是空的。
+ *
+ * 上面那些用例是直接往库里塞 counterparty_id 造的数据，测得到核销规则、测不到
+ * 「用户怎么让一笔账带上往来单位」。这里补的正是那一段。
+ */
+test("往来单位从事项录入并传到凭证行", async (t) => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+
+  t.after(async () => {
+    await pool.end();
+    const { closePool } = await import("../../db/client.js");
+    await closePool();
+  });
+
+  await pool.query(
+    `insert into counterparties (id, company_id, name, category, credit_days)
+     values ($1, $2, '甲供应商', 'supplier', 30), ($3, $2, '乙供应商', 'supplier', 60)`,
+    [CP_A, COMPANY_ID, CP_B]
+  );
+
+  async function createEvent(body: Record<string, unknown>) {
+    const { createEvent: route } = await import("../events/routes.js");
+    const capture = createResponseCapture();
+    await route(
+      { method: "POST", url: "/api/events", auth: createAuthContext(), body } as ApiRequest,
+      capture.response
+    );
+    return capture.readJson();
+  }
+
+  async function createVoucher(body: Record<string, unknown>) {
+    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const capture = createResponseCapture();
+    await createVoucherFromTemplate(
+      { method: "POST", url: "/api/vouchers", auth: createAuthContext(), body } as ApiRequest,
+      capture.response
+    );
+    return capture.readJson();
+  }
+
+  let eventId = "";
+
+  await t.test("事项能带上往来单位——此前这一列硬编码成 null", async () => {
+    const created = await createEvent({
+      type: "expense",
+      title: "采购办公用品",
+      occurredOn: "2026-06-20",
+      amount: "600.00",
+      counterpartyId: CP_A
+    });
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    eventId = String(created.body?.id);
+
+    const row = await pool.query<{ counterparty_id: string | null }>(
+      `select counterparty_id from business_events where id = $1`,
+      [eventId]
+    );
+    assert.equal(row.rows[0]?.counterparty_id, CP_A);
+  });
+
+  await t.test("凭证从事项继承往来单位，只贴往来科目", async () => {
+    const created = await createVoucher({
+      templateKey: "expense",
+      amount: "600.00",
+      businessEventId: eventId
+    });
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+
+    const rows = await pool.query<{ account_code: string; counterparty_id: string | null }>(
+      `select account_code, counterparty_id from voucher_lines where voucher_id = $1 order by sort_order`,
+      [String(created.body?.id)]
+    );
+    const payable = rows.rows.find((r) => r.account_code === "2241");
+    const expense = rows.rows.find((r) => r.account_code === "660207");
+    assert.equal(payable?.counterparty_id, CP_A, "其他应付款是往来科目，要带上");
+    assert.equal(expense?.counterparty_id, null, "管理费用不是往来科目，不带");
+  });
+
+  await t.test("请求体上的往来单位覆盖事项继承——记账时才知道对方是谁的情形", async () => {
+    const created = await createVoucher({
+      templateKey: "expense",
+      amount: "600.00",
+      businessEventId: eventId,
+      counterpartyId: CP_B
+    });
+    assert.equal(created.statusCode, 201);
+
+    const rows = await pool.query<{ counterparty_id: string | null }>(
+      `select counterparty_id from voucher_lines
+        where voucher_id = $1 and account_code = '2241'`,
+      [String(created.body?.id)]
+    );
+    assert.equal(rows.rows[0]?.counterparty_id, CP_B, "覆盖成乙供应商，而不是事项上的甲");
+  });
+});

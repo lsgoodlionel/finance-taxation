@@ -516,6 +516,11 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
      * 部门费用报表的「未指定」分组。
      */
     costCenterId?: string;
+    /**
+     * 往来单位（V12-C2）。**覆盖**从业务事项继承的那个值——事项建的时候可能还
+     * 不知道对方是谁（比如先记一笔待认领的收款），记账时才补得上。
+     */
+    counterpartyId?: string;
   };
   if (!body.templateKey || !body.amount || !body.businessEventId) {
     return json(res, 400, { error: "templateKey, amount and businessEventId are required" });
@@ -636,7 +641,14 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
 
   // 往来维度只贴到往来科目的行上（V12-C2）。给每一行都贴会让"银行存款-甲客户"
   // 这种无意义的组合进总账；判据用 account_type 而非科目码，D3 换编码时不用改这里。
-  await attachCounterparty(req.auth!.companyId, voucher.lines, event.counterparty_id);
+  // 请求体上的往来单位优先于事项继承：事项建的时候可能还不知道对方是谁，
+  // 记账时才补得上，而这时候再回头改事项既绕又容易忘。
+  await attachCounterparty(
+    req.auth!.companyId,
+    voucher.lines,
+    (typeof body.counterpartyId === "string" && body.counterpartyId ? body.counterpartyId : null) ??
+      event.counterparty_id
+  );
   // 成本中心由用户在创建时指定（V12-D1）。与往来单位不同，它不能从业务事项推断：
   // D1 刻意没有复用 departments 表——组织架构会变而核算口径要稳定，两者是两个概念。
   await attachCostCenter(

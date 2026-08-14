@@ -522,6 +522,12 @@ export interface CreateBusinessEventInput {
   currency: string;
   source: BusinessEventSource;
   contractId?: string | null;
+  /**
+   * 往来单位（V12-C2 补齐）。C2 做了往来核销与账龄，凭证从事项继承这个维度，
+   * 但事项本身一直没有录入口——种子库实测 28 个事项 0 个有往来单位，于是账龄表
+   * 与核销功能整条链路都是空的。
+   */
+  counterpartyId?: string | null;
 }
 
 export interface CreateTaskInput {

@@ -1315,7 +1315,9 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
     status: "draft",
     source: body.source ?? "manual",
     contractId: body.contractId ?? null,
-    counterpartyId: null,
+    // 往来单位（V12-C2 补齐）。此前这里硬编码成 null —— 凭证的 attachCounterparty
+    // 从事项继承这个维度，事项没有它就等于整条往来链路（账龄、核销）都是空的。
+    counterpartyId: body.counterpartyId ?? null,
     projectId: null,
     createdAt: now,
     updatedAt: now

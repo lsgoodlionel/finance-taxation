@@ -3,6 +3,8 @@ import type { BusinessEvent, BusinessEventStatus } from "@finance-taxation/domai
 import {
   analyzeEvent,
   createEvent,
+  listCounterparties,
+  type Counterparty,
   getEventDetail,
   listEvents,
   listTasks,
@@ -48,8 +50,12 @@ export function EventsPage() {
     occurredOn: new Date().toISOString().slice(0, 10),
     amount: "",
     currency: "CNY",
-    source: "manual"
+    source: "manual",
+    // 往来单位（V12-C2）。此前事项完全没有这个字段，导致凭证继承不到、
+    // 账龄表与核销整条链路都是空的。
+    counterpartyId: ""
   });
+  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
   const [statusDraft, setStatusDraft] = useState<BusinessEventStatus>("draft");
   const { t } = useI18n();
   const selectedEventId = selectedEventIdState || null;
@@ -80,6 +86,14 @@ export function EventsPage() {
 
   useEffect(() => { void loadEvents(); }, []);
 
+  // 往来单位档案：只在挂载时拉一次，它不随事项列表变化。
+  // 拉不到就让选择器空着——它是选填维度，不该因此挡住建事项。
+  useEffect(() => {
+    void listCounterparties()
+      .then((payload) => setCounterparties(payload.items))
+      .catch(() => setCounterparties([]));
+  }, []);
+
   useEffect(() => {
     if (detail) {
       setStatusDraft(detail.status);
@@ -95,13 +109,18 @@ export function EventsPage() {
     if (!form.title.trim()) return;
     setLoading("saving");
     try {
-      const created = await createEvent({ ...form, amount: form.amount || null });
+      const created = await createEvent({
+        ...form,
+        amount: form.amount || null,
+        // 空串是「没选」，不是一个 id —— 直传会让后端拿它去查一个不存在的往来单位
+        counterpartyId: form.counterpartyId || null
+      });
       const payload = await listEvents();
       setEvents(payload.items);
       setSelectedEventIdState(created.id);
       await refreshDetail(created.id);
       setMessage(`已创建：${created.title}`);
-      setForm((f) => ({ ...f, title: "", description: "", amount: "" }));
+      setForm((f) => ({ ...f, title: "", description: "", amount: "", counterpartyId: "" }));
       // 创建成功即关闭对话框：用户接下来要看的是这一笔办到哪了，不是继续填表。
       setShowCreate(false);
     } catch (err) {
@@ -201,6 +220,7 @@ export function EventsPage() {
       isBusy={isBusy}
       isSaving={loading === "saving"}
       options={eventTypeOptions}
+      counterparties={counterparties}
       onChange={(next) => setForm((prev) => ({ ...prev, ...next }))}
       onSubmit={() => void handleCreate()}
       onClose={() => setShowCreate(false)}
