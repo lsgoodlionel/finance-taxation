@@ -316,7 +316,7 @@ const aprilBusinessEntries: LedgerEntry[] = [
   makeEntry("v11-4", "1405", "库存商品", "0.00", "400.00")
 ];
 
-/** 4 月的结转分录：借 6001 1000 / 贷 6001c 400 / 贷 3131 600。 */
+/** 4 月的结转分录：借 6001 1000 / 贷 6401 400 / 贷 4103 600。（V12-D3 前是 6001c / 3131） */
 const aprilClosingEntries: LedgerEntry[] = [
   makeClosingEntry("v11-c1", "6001", "主营业务收入", "1000.00", "0.00"),
   makeClosingEntry("v11-c2", "6401", "主营业务成本", "0.00", "400.00"),

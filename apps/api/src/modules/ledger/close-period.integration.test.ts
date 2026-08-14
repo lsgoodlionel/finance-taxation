@@ -396,7 +396,7 @@ test("period closing must not zero out any profit-and-loss read path for the clo
     const closing = await runClosePeriod(MAY, MAY_END);
     assert.equal(closing.alreadyClosed, false);
     assert.equal(closing.netProfit, 740, "结转进 3131 的金额必须等于利润表净利润");
-    // 6001 / 6051 / 6001c / 6201 / 6801 五个损益科目 + 3131 平衡腿
+    // 6001 / 6051 / 6401 / 6201 / 6801 五个损益科目 + 4103 平衡腿
     assert.equal(closing.lineCount, 6);
 
     // 守卫：确认结转分录真的落在被结转期间之内（缺陷成立的前提）。

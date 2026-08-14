@@ -5,7 +5,22 @@
  * 用户在按下之前有权先看清这个月要提多少、哪些资产没提、为什么没提。
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Space, Table, Tag, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Divider,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Typography
+} from "antd";
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Term } from "../../components/ui/Term";
 import { toast } from "sonner";
@@ -20,6 +35,21 @@ import {
   type DepreciationReason,
   type FixedAsset
 } from "../../lib/api";
+
+/**
+ * 资产类别，与后端 `tax-depreciation.ts` 的 TAX_MINIMUM_LIFE_YEARS 一一对应
+ *（实施条例第六十条）。标签带上法定年限，用户选的时候就能看出税会差异从哪来。
+ */
+const ASSET_CATEGORY_OPTIONS = [
+  { value: "building", label: "房屋、建筑物（税法最低 20 年）" },
+  { value: "machinery", label: "机器、机械及其他生产设备（10 年）" },
+  { value: "equipment", label: "通用设备（10 年）" },
+  { value: "tools", label: "器具、工具（5 年）" },
+  { value: "furniture", label: "家具（5 年）" },
+  { value: "vehicle", label: "运输工具（飞机火车轮船除外，4 年）" },
+  { value: "electronic", label: "电子设备（3 年）" }
+];
+
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
@@ -298,9 +328,70 @@ export function FixedAssetsPanel() {
             name="expenseAccountCode"
             label="折旧费用科目"
             rules={[{ required: true, message: "请填写费用科目" }]}
-            extra="管理用设备填 6301e02（管理费用-折旧），车间设备应填制造费用科目。"
+            extra="管理用设备填 660202（管理费用-折旧），车间设备应填制造费用科目。"
           >
             <Input placeholder="660202" />
+          </Form.Item>
+
+          <Form.Item
+            name="category"
+            label="资产类别"
+            initialValue="equipment"
+            extra="决定税法最低折旧年限（实施条例第六十条），填错会让纳税调整算错。"
+          >
+            <Select options={ASSET_CATEGORY_OPTIONS} />
+          </Form.Item>
+
+          <Divider plain style={{ marginTop: 8 }}>
+            税务处理（可留空）
+          </Divider>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="这一段只影响纳税调整，不改变账簿折旧"
+            description="账上每月提多少仍按上面的会计年限走；这里填的是税法口径，差额进《资产折旧、摊销及纳税调整明细表》。留空即「按会计口径、不加速、不选一次性扣除」。"
+          />
+
+          <Form.Item
+            name="taxCategory"
+            label="税法分类"
+            extra="与会计分类不同时才填。留空则用上面的资产类别。"
+          >
+            <Select allowClear placeholder="默认同资产类别" options={ASSET_CATEGORY_OPTIONS} />
+          </Form.Item>
+
+          <Form.Item
+            name="taxDepreciationMethod"
+            label="税法折旧方法"
+            initialValue="straight_line"
+            extra="加速折旧需满足技术进步、产品更新换代较快或常年强震动高腐蚀等条件（实施条例第九十八条），由企业自行判断并留存备查资料。"
+          >
+            <Select
+              options={[
+                { value: "straight_line", label: "直线法（不加速）" },
+                { value: "double_declining", label: "双倍余额递减法" },
+                { value: "sum_of_years", label: "年数总和法" }
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="taxLifeMonthsOverride"
+            label="缩短后的税法年限（月）"
+            extra="不得低于法定最低年限的 60%。留空表示不缩短。"
+          >
+            <InputNumber style={{ width: "100%" }} min={1} precision={0} placeholder="留空即不缩短" />
+          </Form.Item>
+
+          <Form.Item
+            name="electsOneTimeDeduction"
+            label="选择一次性扣除"
+            valuePropName="checked"
+            initialValue={false}
+            extra="限单价不超过 500 万元的设备器具，房屋建筑物不适用（财税〔2018〕54 号及后续延期公告）。这是企业的选择，可以放弃。"
+          >
+            <Switch />
           </Form.Item>
         </Form>
       </Modal>

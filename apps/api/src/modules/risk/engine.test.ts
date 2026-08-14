@@ -125,7 +125,8 @@ test("evaluateRiskFindings emits sales and execution findings for the current ev
 });
 
 test("evaluateRiskFindings does not treat a cost-only voucher as posted revenue", () => {
-  // Arrange：主营业务成本 6001c 与主营业务收入 6001 前缀重叠，纯前缀判定会把
+  // Arrange：主营业务成本当时是 6001c，与主营业务收入 6001 前缀重叠，纯前缀判定会把
+  //（V12-D3 已改成 6401，重叠消失；这条用例保留，它验的是分类本身而非编码）
   // 只有成本分录的凭证误读成「收入已入账」，凭空报出缺失增值税事项等销售类风险。
   const salesEvent: BusinessEvent = {
     id: "evt-sales-cost-only",
@@ -184,7 +185,7 @@ test("evaluateRiskFindings does not treat a cost-only voucher as posted revenue"
   assert.deepEqual(
     triggered.map((item) => item.ruleCode),
     [],
-    "主营业务成本 6001c 被误判为已入账收入"
+    "主营业务成本被误判为已入账收入（编码在 V12-D3 前是 6001c，现为 6401）"
   );
 });
 

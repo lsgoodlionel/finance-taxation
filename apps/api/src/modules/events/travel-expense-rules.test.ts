@@ -50,7 +50,10 @@ test("buildTravelExpenseBundle generates standard travel chain with required tra
   );
   assert.deepEqual(bundle.taxMappings.map((item) => item.taxType), ["增值税", "企业所得税"]);
   assert.equal(bundle.voucherDrafts[0]?.status, "review_required");
-  // 差旅费落 6301e04（管理费用-差旅费）。此前断言的 6601 是「职工薪酬（成本）」，
+  // ⚠️ 660204 在 `accounts` 表里是**业务招待费**而非差旅费，见 travel-expense-rules.ts
+  // 的说明（V12-D3 之后暴露出的名称错位，已独立立项）。本用例先钉住现状，
+  // 免得在修复前又被人「顺手」改成别的编码。
+  // 更早的一次修复记录：此前断言的 6601 是「职工薪酬（成本）」，
   // 与分录上写的科目名「销售费用-差旅费」既不同码也不同义。
   assert.equal(bundle.voucherDrafts[0]?.lines[0]?.accountCode, "660204");
   assert.equal(bundle.voucherDrafts[0]?.lines[0]?.accountName, "管理费用-差旅费");
