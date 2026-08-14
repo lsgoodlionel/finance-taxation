@@ -285,3 +285,154 @@ test("汇率维护与期末调汇的完整路径", async (t) => {
     );
   });
 });
+
+/**
+ * 外币业务的录入链路（V12-D5 录入侧）。
+ *
+ * D5 一期做完汇率与调汇之后留了一个和 D4 同款的缺口：**外币业务根本录不进来**，
+ * 唯一途径是直接改数据库。这里验证补齐后的整条链路：
+ * 凭证创建按业务发生日汇率折算 → 原币逐行分摊 → 过账带进总账 → 调汇取得到余额。
+ */
+test("外币业务从录入到调汇的完整链路", async (t) => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+
+  t.after(async () => {
+    await pool.end();
+    const { closePool } = await import("../../db/client.js");
+    await closePool();
+  });
+
+  // 业务发生在 3 月，凭证 6 月才补录 —— 该用的是 3 月的汇率
+  await putRate({ currency: "USD", rateDate: "2026-03-01", rate: 7.0 });
+  await putRate({ currency: "USD", rateDate: "2026-06-30", rate: 7.5 });
+
+  await pool.query(
+    `insert into business_events
+       (id, company_id, type, title, description, department, occurred_on, amount, currency, status, source)
+     values ('evt-fx-1', $1, 'expense', '境外服务费', '', '财务部', '2026-03-15'::date, 1000, 'USD', 'analyzed', 'manual')`,
+    [COMPANY_ID]
+  );
+
+  let voucherId = "";
+
+  await t.test("按业务发生日的汇率折算，而不是今天的", async () => {
+    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const capture = createResponseCapture();
+    await createVoucherFromTemplate(
+      {
+        method: "POST",
+        url: "/api/vouchers",
+        auth: createAuthContext(),
+        body: {
+          templateKey: "expense",
+          amount: "1000.00",
+          businessEventId: "evt-fx-1",
+          currency: "USD"
+        }
+      } as ApiRequest,
+      capture.response
+    );
+    const created = capture.readJson();
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    voucherId = String(created.body?.id);
+
+    const lines = await pool.query<{
+      account_code: string;
+      debit: string;
+      credit: string;
+      currency: string;
+      original_amount: string | null;
+      exchange_rate: string | null;
+    }>(
+      `select account_code, debit::text, credit::text, currency, original_amount::text, exchange_rate::text
+         from voucher_lines where voucher_id = $1 order by sort_order`,
+      [voucherId]
+    );
+
+    // 1000 USD × 7.00（3 月 1 日那条）= 7000 CNY，不是 × 7.50
+    const totalDebit = lines.rows.reduce((sum, r) => sum + Number(r.debit), 0);
+    assert.equal(totalDebit.toFixed(2), "7000.00", "补录时该用业务发生日的汇率");
+
+    for (const row of lines.rows) {
+      assert.equal(row.currency, "USD");
+      assert.equal(row.exchange_rate, "7000000");
+      assert.ok(row.original_amount !== null, "外币行必须带原币金额");
+    }
+
+    // 借贷两侧的原币之和都等于用户输入的 1000.00
+    const debitForeign = lines.rows
+      .filter((r) => Number(r.debit) > 0)
+      .reduce((sum, r) => sum + Number(r.original_amount), 0);
+    const creditForeign = lines.rows
+      .filter((r) => Number(r.credit) > 0)
+      .reduce((sum, r) => sum + Number(r.original_amount), 0);
+    assert.equal(debitForeign.toFixed(2), "1000.00");
+    assert.equal(creditForeign.toFixed(2), "1000.00");
+  });
+
+  await t.test("缺汇率时拒绝创建，并指明去哪儿维护", async () => {
+    await pool.query(
+      `insert into business_events
+         (id, company_id, type, title, description, department, occurred_on, amount, currency, status, source)
+       values ('evt-fx-eur', $1, 'expense', '欧元服务费', '', '财务部', '2026-03-15'::date, 500, 'EUR', 'analyzed', 'manual')`,
+      [COMPANY_ID]
+    );
+    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const capture = createResponseCapture();
+    await createVoucherFromTemplate(
+      {
+        method: "POST",
+        url: "/api/vouchers",
+        auth: createAuthContext(),
+        body: {
+          templateKey: "expense",
+          amount: "500.00",
+          businessEventId: "evt-fx-eur",
+          currency: "EUR"
+        }
+      } as ApiRequest,
+      capture.response
+    );
+    const rejected = capture.readJson();
+    assert.equal(rejected.statusCode, 400);
+    assert.equal(rejected.body?.code, "EXCHANGE_RATE_MISSING");
+    assert.match(String(rejected.body?.error), /调汇/, "要告诉用户去哪儿补汇率");
+  });
+
+  await t.test("不填币种时一切照旧走本位币", async () => {
+    await pool.query(
+      `insert into business_events
+         (id, company_id, type, title, description, department, occurred_on, amount, currency, status, source)
+       values ('evt-cny', $1, 'expense', '本币服务费', '', '财务部', '2026-03-15'::date, 500, 'CNY', 'analyzed', 'manual')`,
+      [COMPANY_ID]
+    );
+    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const capture = createResponseCapture();
+    await createVoucherFromTemplate(
+      {
+        method: "POST",
+        url: "/api/vouchers",
+        auth: createAuthContext(),
+        body: { templateKey: "expense", amount: "500.00", businessEventId: "evt-cny" }
+      } as ApiRequest,
+      capture.response
+    );
+    const created = capture.readJson();
+    assert.equal(created.statusCode, 201);
+
+    const lines = await pool.query<{ currency: string; original_amount: string | null; debit: string }>(
+      `select currency, original_amount::text, debit::text from voucher_lines where voucher_id = $1`,
+      [String(created.body?.id)]
+    );
+    for (const row of lines.rows) {
+      assert.equal(row.currency, "CNY");
+      assert.equal(row.original_amount, null, "本位币行不该带原币信息，否则调汇会把它当外币");
+    }
+    assert.equal(
+      lines.rows.reduce((s, r) => s + Number(r.debit), 0).toFixed(2),
+      "500.00",
+      "本位币金额不该被折算逻辑碰"
+    );
+  });
+});

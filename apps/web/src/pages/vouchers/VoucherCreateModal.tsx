@@ -81,14 +81,22 @@ export function VoucherCreateModal({
           <Input placeholder="粘贴或输入事项 ID" />
         </Form.Item>
         <Form.Item
+          name="currency"
+          label={<span>币种 <Text type="secondary" style={{ fontSize: 11 }}>(外币业务才填)</Text></span>}
+          extra="填了就按业务发生日的汇率折算成人民币入账；汇率在总账「做期末外币调汇」里维护。留空即人民币业务。"
+        >
+          <Input placeholder="留空 = 人民币；外币填 USD、EUR 等三字母码" maxLength={3} />
+        </Form.Item>
+        <Form.Item
           name="amount"
           label="金额"
+          extra="填了币种时这里是原币金额，不是折算后的人民币金额。"
           rules={[
             { required: true, message: "请输入金额" },
             { pattern: /^\d+(\.\d{1,2})?$/, message: "请输入有效金额" },
           ]}
         >
-          <Input prefix="¥" placeholder="0.00" />
+          <Input placeholder="0.00" />
         </Form.Item>
         <Form.Item name="summary" label={<span>摘要 <Text type="secondary" style={{ fontSize: 11 }}>(可选)</Text></span>}>
           <Input placeholder="凭证摘要，留空则使用模板默认摘要" />
