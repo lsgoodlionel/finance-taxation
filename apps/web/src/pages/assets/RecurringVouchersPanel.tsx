@@ -248,7 +248,9 @@ export function RecurringVouchersPanel() {
                       rules={[{ required: true, message: "科目必填" }]}
                       style={{ marginBottom: 0, width: 130 }}
                     >
-                      <Input placeholder={index === 0 ? "660203" : "2202"} aria-label={`第 ${index + 1} 行科目`} />
+                      {/* 660205 是管理费用-租金，与上方「计提办公室房租」的摘要模板配套。
+                          此前写 660203——那是差旅费（迁移 077 修复的名称错位）。 */}
+                      <Input placeholder={index === 0 ? "660205" : "2202"} aria-label={`第 ${index + 1} 行科目`} />
                     </Form.Item>
                     <Form.Item
                       {...field}

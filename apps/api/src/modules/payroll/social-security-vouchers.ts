@@ -35,9 +35,13 @@ export interface SocialSecurityVoucherDraft {
  * 科目取自 accounts/chart-of-accounts.ts，全部为叶子科目。
  * 此前 expense 用表外科目 6602、payable 用非叶子的 2211，落账即污染报表口径。
  * 单位承担的社保与公积金分挂 22110102 / 22110103 两个明细，便于社保稽核对账。
+ *
+ * expense 曾挂 660201 并写名称「管理费用-工资」——挂错了科目（库里 660201 是
+ * 办公费），而「管理费用-工资」当时在库里根本不存在。迁移 077 补了 660208
+ * 这个明细，人工费用因此能独立归集，研发费用加计扣除不必再靠摘要文本去拆。
  */
 const ACCOUNTS = {
-  expense:         { code: "660201",  name: "管理费用-工资" },
+  expense:         { code: "660208",  name: "管理费用-工资" },
   socialPayable:   { code: "22110102", name: "应付职工薪酬-社保（单位）" },
   housingPayable:  { code: "22110103", name: "应付职工薪酬-公积金（单位）" },
   bank:            { code: "1002",     name: "银行存款" },

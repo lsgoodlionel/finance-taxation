@@ -357,9 +357,12 @@ export function evaluateRiskFindings(input: RiskEvaluationInput): RiskFinding[] 
     );
   }
 
+  // 660208 是管理费用-工资（迁移 077 新增）。这里曾写 660201——那是**办公费**，
+  // 拿办公费分录去判定「这是工资事项」，既会漏掉真的工资分录、又会把买办公用品
+  // 的事件误判成缺个税申报。6601 是职工薪酬（成本），生产人员薪酬走它。
   const hasPayrollSpending = eventLedgerEntries.some((entry) =>
     entry.accountCode.startsWith("22110101") ||
-    entry.accountCode.startsWith("660201") ||
+    entry.accountCode.startsWith("660208") ||
     entry.accountCode.startsWith("6601")
   );
   if (event.type === "payroll" && hasPayrollSpending) {
