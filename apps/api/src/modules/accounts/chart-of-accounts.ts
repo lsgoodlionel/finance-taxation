@@ -32,9 +32,10 @@
  * 库里 `ledger_entries` / `voucher_lines` 等 8 个列的行数**全为 0**，唯一一条
  * 历史分录早在迁移 041 就被改到了 `6201`。
  *
- * 处置方案见 docs/v12-d6-payroll-cost-account-retirement-plan.md，**但它被蓝图
- * 残留 11（管理费用明细名称错位）阻塞**——方案要把工资改挂 `660201`，而那个编码
- * 在 `accounts` 表里叫「办公费」。
+ * 处置方案见 docs/v12-d6-payroll-cost-account-retirement-plan.md。它曾被残留 11
+ *（管理费用明细名称错位）阻塞——方案要把工资改挂 `660201`，而那个编码在
+ * `accounts` 表里叫「办公费」。**迁移 077 已解除阻塞**：名称按库改齐，并新增了
+ * `660208` 管理费用-工资，D6 的借方落点现在是明确的。
  */
 
 export type AccountCategory =
@@ -140,15 +141,29 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   { code: "6403",    name: "税金及附加",                 category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "6201",    name: "销售费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "6602",   name: "管理费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: false },
-  { code: "660201", name: "管理费用-工资",              category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
+  // 这七个明细的名称此前与 `account_templates` **整体错开一位**：常量表把 660201
+  // 写成「工资」，办公费/差旅费/业务招待费顺次后移一格，库里的「租金」在常量表里
+  // 根本不存在。041 的映射注释与这份常量一致，049 落库时写的却是另一套，两份在
+  // 同一个月分头写成、谁也没对过谁；070 只换编码前缀不动名称，错位就原样保留。
+  //
+  // 后果是税务上的：差旅费按常量挂 660204，而库里 660204 是业务招待费——后者只能
+  // 按 60% 扣除且不超营业收入 5‰，前者可全额扣除，记错让企业多缴税。
+  //
+  // 现已按库改齐（迁移 077）。**库是科目名称的事实来源**，这份常量跟随它，
+  // 由 chart-parity.integration.test.ts 的名称比对守住。
+  { code: "660201", name: "管理费用-办公费",            category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
   { code: "660202", name: "管理费用-折旧",              category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
-  { code: "660203", name: "管理费用-办公费",            category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
-  { code: "660204", name: "管理费用-差旅费",            category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
-  { code: "660205", name: "管理费用-业务招待费",         category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
+  { code: "660203", name: "管理费用-差旅费",            category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
+  { code: "660204", name: "管理费用-业务招待费",         category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
+  { code: "660205", name: "管理费用-租金",              category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
   { code: "660206", name: "管理费用-研发费用",           category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
   // 6301e 本身是非叶子，凭证不能挂上去。通用「管理费用」场景（费用报销模板、进项
   // 发票入账、无法归类的采购报销）此前落在表外科目 6602，现统一落到本明细科目。
   { code: "660207", name: "管理费用-其他",              category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
+  // 迁移 077 新增。单位承担的社保与公积金此前挂 660201 并写名称「管理费用-工资」——
+  // 挂错了科目（660201 是办公费），且那个名称在库里根本不存在。不并入 660207
+  // 「其他」是因为研发费用加计扣除要按人工费用归集，混进杂项后只能靠摘要去拆。
+  { code: "660208", name: "管理费用-工资",              category: "expense",   direction: "debit", level: 2, parentCode: "6602",isLeaf: true  },
   { code: "6603",    name: "财务费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: false },
   { code: "660301", name: "财务费用-利息支出",          category: "expense",   direction: "debit", level: 2, parentCode: "6603", isLeaf: true  },
   { code: "660302", name: "财务费用-手续费",            category: "expense",   direction: "debit", level: 2, parentCode: "6603", isLeaf: true  },

@@ -155,19 +155,10 @@ function buildVoucherLines(event: BusinessEvent, scenario: TravelExpenseScenario
   const hotelAmount = (amount * 0.4).toFixed(2);
   const mealAmount = Math.max(0, amount - Number(transportAmount) - Number(hotelAmount)).toFixed(2);
 
-  // ⚠️ 这里挂的 660204 与 `accounts` 表对不上，**修好之前不要照抄这个编码**。
-  //
-  // 库里 660204 是**业务招待费**，差旅费是 660203。硬编码的 chart-of-accounts.ts
-  // 与库的明细名称从 049 起就整体错位（库：办公费/折旧/差旅费/业务招待费/租金；
-  // 常量：工资/折旧/办公费/差旅费/业务招待费），而 `chart-parity` 护栏明确豁免了
-  // 名称比对——「迁移里的名称常带限定前缀，逐字比对只是噪音」——恰好放过这一类。
-  //
-  // V12-D3 只把编码前缀从 6301e0x 换成 6602xx，名称一个没动，所以错位原样保留，
-  // 是国标化之后核对科目树时才暴露的。
-  //
-  // 后果是税务上的：业务招待费只能按 60% 扣除且不超营业收入 5‰，差旅费可全额
-  // 扣除——记错这一笔企业要多缴税。已独立立项（要判断以哪边为准、历史分录怎么办、
-  // 库里没有的「管理费用-工资」明细去哪，都不是能顺手决定的事）。
+  // 差旅费是 660203。这里曾挂 660204——那是**业务招待费**，两者的税前扣除口径
+  // 完全不同：业务招待费只能按 60% 扣除且不超营业收入 5‰，差旅费可全额扣除，
+  // 记错让企业多缴税。根因是 chart-of-accounts.ts 与 `accounts` 表的管理费用
+  // 明细名称整体错开一位，已按库改齐（迁移 077）。
   //
   // 更早的一次修复记录：此前挂的 6601 是「职工薪酬（成本）」，科目名却写
   // 「销售费用-差旅费」，码、名、语义三者都不一致。
@@ -175,7 +166,7 @@ function buildVoucherLines(event: BusinessEvent, scenario: TravelExpenseScenario
     {
       id: `vou-line-${event.id}-transport`,
       summary: "交通差旅费用",
-      accountCode: "660204",
+      accountCode: "660203",
       accountName: "管理费用-差旅费",
       debit: transportAmount,
       credit: "0.00"
@@ -183,7 +174,7 @@ function buildVoucherLines(event: BusinessEvent, scenario: TravelExpenseScenario
     {
       id: `vou-line-${event.id}-hotel`,
       summary: "住宿差旅费用",
-      accountCode: "660204",
+      accountCode: "660203",
       accountName: "管理费用-差旅费",
       debit: hotelAmount,
       credit: "0.00"
@@ -191,7 +182,7 @@ function buildVoucherLines(event: BusinessEvent, scenario: TravelExpenseScenario
     {
       id: `vou-line-${event.id}-meal`,
       summary: scenario.accountingPeriodConflict ? "餐饮及跨期调整待复核" : "餐饮及补贴复核",
-      accountCode: "660204",
+      accountCode: "660203",
       accountName: "管理费用-差旅费",
       debit: mealAmount,
       credit: "0.00"

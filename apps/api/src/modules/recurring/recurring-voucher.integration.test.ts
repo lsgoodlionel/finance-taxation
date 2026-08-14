@@ -90,8 +90,10 @@ const RENT_TEMPLATE = {
   startPeriod: "2026-01",
   endPeriod: "2026-12",
   summaryTemplate: "计提办公室房租 {period}",
+  // 660205 是管理费用-租金。此前写 660203——那是差旅费，与「办公室房租」这个
+  // 模板名对不上（迁移 077 修复的名称错位）。
   lines: [
-    { accountCode: "660203", debit: "20000.00", credit: "0.00" },
+    { accountCode: "660205", debit: "20000.00", credit: "0.00" },
     { accountCode: "2202", debit: "0.00", credit: "20000.00" }
   ]
 };
@@ -146,7 +148,7 @@ test("定期凭证的完整路径", async (t) => {
     const rejected = await createTemplate({
       ...RENT_TEMPLATE,
       lines: [
-        { accountCode: "660203", debit: "20000.00", credit: "0.00" },
+        { accountCode: "660205", debit: "20000.00", credit: "0.00" },
         { accountCode: "2202", debit: "0.00", credit: "18000.00" }
       ]
     });
