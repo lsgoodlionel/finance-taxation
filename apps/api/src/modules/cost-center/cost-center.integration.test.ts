@@ -252,3 +252,104 @@ test("成本中心的完整路径", async (t) => {
     assert.equal(report.body?.code, "PERIOD_INVALID");
   });
 });
+
+/**
+ * 成本中心的**写入侧**（V12-D1 补齐）。
+ *
+ * D1 建了成本中心主数据、加了 `ledger_entries.cost_center_id`、做了部门费用报表，
+ * 但**没有任何地方给这一列赋值**——种子库实测 20 条分录里 0 条有成本中心，于是
+ * 报表里所有金额都落在「未指定」一行，整张报表实际不可用。
+ *
+ * 上面那些用例是直接往库里塞 cost_center_id 造的数据，测得到读口径、测不到
+ * 「用户怎么让一笔账带上成本中心」。这里补的正是那一段。
+ */
+test("凭证创建时指定成本中心，费用行才带得上它", async (t) => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+
+  t.after(async () => {
+    await pool.end();
+    const { closePool } = await import("../../db/client.js");
+    await closePool();
+  });
+
+  const created = await createCostCenter({ code: "CC-SALES", name: "销售一部" });
+  assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+  const costCenterId = String(created.body?.id);
+
+  await pool.query(
+    `insert into business_events
+       (id, company_id, type, title, description, department, occurred_on, amount, currency, status, source)
+     values ('evt-cc-1', $1, 'expense', '部门办公费', '', '销售部', '2026-06-15'::date, 500, 'CNY', 'analyzed', 'manual')`,
+    [COMPANY_ID]
+  );
+
+  let voucherId = "";
+
+  await t.test("费用行贴上成本中心，非费用行不贴", async () => {
+    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const capture = createResponseCapture();
+    await createVoucherFromTemplate(
+      {
+        method: "POST",
+        url: "/api/vouchers",
+        auth: createAuthContext(),
+        body: {
+          templateKey: "expense",
+          amount: "500.00",
+          businessEventId: "evt-cc-1",
+          costCenterId
+        }
+      } as ApiRequest,
+      capture.response
+    );
+    const result = capture.readJson();
+    assert.equal(result.statusCode, 201, JSON.stringify(result.body));
+    voucherId = String(result.body?.id);
+
+    const rows = await pool.query<{ account_code: string; cost_center_id: string | null }>(
+      `select account_code, cost_center_id from voucher_lines where voucher_id = $1 order by sort_order`,
+      [voucherId]
+    );
+
+    const expense = rows.rows.find((r) => r.account_code === "660207");
+    const payable = rows.rows.find((r) => r.account_code === "2241");
+    assert.equal(expense?.cost_center_id, costCenterId, "管理费用行必须带上成本中心");
+    assert.equal(
+      payable?.cost_center_id,
+      null,
+      "其他应付款不属于任何部门——贴上去会让部门费用凭空多出一笔"
+    );
+  });
+
+  await t.test("不指定成本中心时照旧，费用落进「未指定」", async () => {
+    await pool.query(
+      `insert into business_events
+         (id, company_id, type, title, description, department, occurred_on, amount, currency, status, source)
+       values ('evt-cc-2', $1, 'expense', '未指定部门的费用', '', '财务部', '2026-06-16'::date, 300, 'CNY', 'analyzed', 'manual')`,
+      [COMPANY_ID]
+    );
+    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const capture = createResponseCapture();
+    await createVoucherFromTemplate(
+      {
+        method: "POST",
+        url: "/api/vouchers",
+        auth: createAuthContext(),
+        body: { templateKey: "expense", amount: "300.00", businessEventId: "evt-cc-2" }
+      } as ApiRequest,
+      capture.response
+    );
+    const result = capture.readJson();
+    assert.equal(result.statusCode, 201);
+
+    const rows = await pool.query<{ cost_center_id: string | null }>(
+      `select cost_center_id from voucher_lines where voucher_id = $1`,
+      [String(result.body?.id)]
+    );
+    assert.ok(
+      rows.rows.every((r) => r.cost_center_id === null),
+      "不填就是不填——不在写入端拦人，缺维度由报表的「未指定」分组显式列示"
+    );
+  });
+});
