@@ -237,8 +237,15 @@ export async function listCompanyVouchers(
         approved_at, posted_at, created_at, updated_at
       from vouchers
       ${where}
+      -- 按工作流顺序排：待处理的排前面，已过账的沉底。
+      --
+      -- 这里曾有 'validated' / 'approved' 两个分支，是早期状态机的遗留 —— 它们
+      -- 不在 VoucherStatus（draft|review_required|posted）里，迁移 072 给这一列
+      -- 加了 CHECK 之后更不可能出现。留着只会让下一个读代码的人以为状态机有五档。
+      --
+      -- ELSE 保留：CHECK 挡的是新写入，而 order by 对任何取值都得有个确定去向。
       order by
-        CASE status WHEN 'draft' THEN 1 WHEN 'validated' THEN 2 WHEN 'approved' THEN 3 WHEN 'posted' THEN 4 ELSE 5 END,
+        CASE status WHEN 'draft' THEN 1 WHEN 'review_required' THEN 2 WHEN 'posted' THEN 3 ELSE 4 END,
         created_at desc
     `,
     params
