@@ -47,6 +47,8 @@ interface AmountEntry {
   accountCode: string;
   debit: string;
   credit: string;
+  /** 科目的报表口径，随分录从 accounts 表取出（V12 残留 7）。缺省时走兜底判定。 */
+  accountCategory?: AccountCategory | null;
 }
 
 export interface ProfitTotals {
@@ -91,15 +93,23 @@ function fromAccountCategory(category: AccountCategory): ProfitAccountKind {
  *    编码无任何前缀关系，这一档放哪都不影响正确性——它现在只是「毛利要单列
  *    成本」这条业务规则的落点。同理，此前还有一条 `6301e*` → 费用的前置分支，
  *    专为避开 `6301` 营业外收入而存在，现在管理费用是 `6602`，那一档已删除。
- * 2. 科目主数据 `category` 精确命中 → 权威分类。收入/费用直接采信，资产/负债/
- *    权益/成本类归 other。这一档取代了此前那张硬编码费用前缀表——前缀表漏了
- *    未列举的科目，导致费用被静默丢弃、利润虚高。
- * 3. 科目表未登记时的兜底：命中收入前缀 → 收入；否则只要是 6 开头 → 费用。
+ * 2. **调用方传入的 `category`（来自 `accounts` 表）→ 事实来源**（V12 残留 7）。
+ *    分录经 `listCompanyLedgerEntries` 取出时已随行带上，见 LedgerEntry.accountCategory。
+ * 3. 硬编码 `chart-of-accounts.ts` → **兜底，不再是事实来源**。留着是为了那些
+ *    还没有把 category 传下来的调用点（结转损益、风控引擎等纯 code 入参的场景），
+ *    以及纯函数单测。`chart-parity` 护栏保证它与库不漂移，所以这一档与第 2 档
+ *    结果一致——不一致时以库为准，因为库才是用户能改的那份。
+ * 4. 两处都查不到时的兜底：命中收入前缀 → 收入；否则只要是 6 开头 → 费用。
  *    兜底与资产负债表历史行为一致（非收入的 6 开头一律当费用），保证未登记科目
  *    与将来新增的子科目都不会从报表里消失。
  */
-export function classifyProfitAccount(code: string): ProfitAccountKind {
+export function classifyProfitAccount(
+  code: string,
+  category?: AccountCategory | null
+): ProfitAccountKind {
   if (code.startsWith(MAIN_BUSINESS_COST_PREFIX)) return "cost";
+
+  if (category) return fromAccountCategory(category);
 
   const account = findChartAccount(code);
   if (account) return fromAccountCategory(account.category);
@@ -136,7 +146,7 @@ export function summarizeProfitTotals(entries: readonly AmountEntry[]): ProfitTo
 
   for (const entry of entries) {
     const signed = parseAmount(entry.debit) - parseAmount(entry.credit);
-    const kind = classifyProfitAccount(entry.accountCode);
+    const kind = classifyProfitAccount(entry.accountCode, entry.accountCategory);
     if (kind === "revenue") {
       revenue += -signed;
       continue;

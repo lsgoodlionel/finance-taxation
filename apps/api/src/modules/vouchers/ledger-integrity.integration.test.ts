@@ -116,3 +116,50 @@ test("voucher_lines inherits company_id from its voucher without the caller supp
     await pool.end();
   }
 });
+
+/**
+ * 凭证状态的取值约束（迁移 072，蓝图第六节第 1 条的落地）。
+ *
+ * 与 `ledger_entries.source` 的 CHECK（迁移 067）是同一件事的另一半，当时只做了
+ * 分录侧。蓝图记的待核实项是「排序表达式里有 'validated' / 'approved'，但
+ * VoucherStatus 只有三个值，跑 select distinct 确认」——查下来种子库里确实没有
+ * 脏数据，但这一列**当时没有任何约束**，所以「没有」纯属运气而不是保证。
+ */
+test("数据库拒绝 VoucherStatus 之外的凭证状态", async () => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  try {
+    // 三个合法状态都能写
+    for (const [index, status] of ["draft", "review_required", "posted"].entries()) {
+      await pool.query(
+        `insert into vouchers (id, company_id, voucher_type, summary, status, source, accounting_date, period)
+         values ($1, $2, 'general', '状态约束验证', $3, 'test', '2026-06-30'::date, '2026-06')`,
+        [`vch-status-ok-${index}`, COMPANY_ID, status]
+      );
+    }
+
+    // 排序表达式里遗留的两个早期状态现在写不进去了 —— 它们的存在正说明
+    // 这一列历史上被写过别的取值
+    for (const status of ["validated", "approved"]) {
+      await assertRejected(
+        pool,
+        `insert into vouchers (id, company_id, voucher_type, summary, status, source, accounting_date, period)
+         values ($1, $2, 'general', '早期状态机遗留', $3, 'test', '2026-06-30'::date, '2026-06')`,
+        [`vch-status-bad-${status}`, COMPANY_ID, status],
+        "vouchers_status_check"
+      );
+    }
+
+    // 空串与拼写错误同样挡住：状态判定全是字符串比较，写错一个字母会让这张凭证
+    // 从「未过账清单」和「已过账账簿」里同时消失
+    await assertRejected(
+      pool,
+      `insert into vouchers (id, company_id, voucher_type, summary, status, source, accounting_date, period)
+       values ('vch-status-typo', $1, 'general', '拼写错误', 'postd', 'test', '2026-06-30'::date, '2026-06')`,
+      [COMPANY_ID],
+      "vouchers_status_check"
+    );
+  } finally {
+    await pool.end();
+  }
+});

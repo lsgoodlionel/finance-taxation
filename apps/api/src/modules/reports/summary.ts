@@ -140,10 +140,15 @@ export function resolveProfitSplit(input: ProfitSplitInput): ProfitSplit {
  */
 export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetReport {
   const asOfEntries = input.entries.filter((entry) => entry.entryDate <= input.asOfDate);
-  const balanceMap = new Map<string, number>();
+  // 聚合时把科目的报表口径一起留住（V12 残留 7）：分类的事实来源是 accounts 表，
+  // 聚合成 code → amount 就把它丢了，下面只能退回按编码猜。
+  const balanceMap = new Map<string, { amount: number; category: LedgerEntry["accountCategory"] }>();
   for (const entry of asOfEntries) {
-    const current = balanceMap.get(entry.accountCode) || 0;
-    balanceMap.set(entry.accountCode, current + parseAmount(entry.debit) - parseAmount(entry.credit));
+    const current = balanceMap.get(entry.accountCode);
+    balanceMap.set(entry.accountCode, {
+      amount: (current?.amount ?? 0) + parseAmount(entry.debit) - parseAmount(entry.credit),
+      category: current?.category ?? entry.accountCategory
+    });
   }
 
   const assetLines: FinancialReportLine[] = [];
@@ -177,8 +182,8 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
   // 制造费用 4101 既不进资产也不进负债权益，被静默丢弃，制造业客户的资产负债表
   // 直接不平。现在改用全函数 classifyBalanceSheetAccount，兜底走 unclassified
   // 并显式告警，不再有「掉到 else 外面」的可能。
-  for (const [accountCode, amount] of balanceMap.entries()) {
-    const section = classifyBalanceSheetAccount(accountCode);
+  for (const [accountCode, { amount, category }] of balanceMap.entries()) {
+    const section = classifyBalanceSheetAccount(accountCode, category);
 
     if (section === "asset") {
       assetLines.push({
@@ -306,21 +311,25 @@ export function buildBalanceSheetReport(input: BalanceSheetInput): BalanceSheetR
 export function buildProfitStatementReport(input: PeriodInput): ProfitStatementReport {
   const revenueLines: FinancialReportLine[] = [];
   const costExpenseLines: FinancialReportLine[] = [];
-  const sums = new Map<string, { name: string; amount: number }>();
+  const sums = new Map<
+    string,
+    { name: string; amount: number; category: LedgerEntry["accountCategory"] }
+  >();
 
   const operatingEntries = input.entries.filter((entry) => !isPeriodClosingEntry(entry));
 
   for (const entry of operatingEntries) {
     const current = sums.get(entry.accountCode) || {
       name: entry.accountName,
-      amount: 0
+      amount: 0,
+      category: entry.accountCategory
     };
     current.amount += parseAmount(entry.debit) - parseAmount(entry.credit);
     sums.set(entry.accountCode, current);
   }
 
-  for (const [code, { name, amount }] of sums.entries()) {
-    const kind = classifyProfitAccount(code);
+  for (const [code, { name, amount, category }] of sums.entries()) {
+    const kind = classifyProfitAccount(code, category);
     if (kind === "revenue") {
       revenueLines.push({ code, label: name, amount: formatAmount(-amount) });
       continue;

@@ -94,6 +94,8 @@ interface LedgerEntryRow {
   credit: string | number;
   source: LedgerEntry["source"];
   posted_at: string | Date;
+  /** 来自 accounts 表的 left join；分录指向一个已不存在的科目时为 null。 */
+  account_category?: LedgerEntry["accountCategory"];
 }
 
 interface LedgerPostingBatchRow {
@@ -208,7 +210,8 @@ function mapLedgerEntryRow(row: LedgerEntryRow): LedgerEntry {
     debit: toAmountString(row.debit),
     credit: toAmountString(row.credit),
     source: row.source,
-    postedAt: toIsoString(row.posted_at) || new Date().toISOString()
+    postedAt: toIsoString(row.posted_at) || new Date().toISOString(),
+    accountCategory: row.account_category ?? null
   };
 }
 
@@ -234,8 +237,15 @@ export async function listCompanyVouchers(
         approved_at, posted_at, created_at, updated_at
       from vouchers
       ${where}
+      -- 按工作流顺序排：待处理的排前面，已过账的沉底。
+      --
+      -- 这里曾有 'validated' / 'approved' 两个分支，是早期状态机的遗留 —— 它们
+      -- 不在 VoucherStatus（draft|review_required|posted）里，迁移 072 给这一列
+      -- 加了 CHECK 之后更不可能出现。留着只会让下一个读代码的人以为状态机有五档。
+      --
+      -- ELSE 保留：CHECK 挡的是新写入，而 order by 对任何取值都得有个确定去向。
       order by
-        CASE status WHEN 'draft' THEN 1 WHEN 'validated' THEN 2 WHEN 'approved' THEN 3 WHEN 'posted' THEN 4 ELSE 5 END,
+        CASE status WHEN 'draft' THEN 1 WHEN 'review_required' THEN 2 WHEN 'posted' THEN 3 ELSE 4 END,
         created_at desc
     `,
     params
@@ -307,31 +317,41 @@ export async function listCompanyLedgerEntries(
   options: ListLedgerEntriesOptions = {}
 ): Promise<LedgerEntry[]> {
   const params: unknown[] = [companyId];
-  let where = "where company_id = $1";
+  // 列名一律带 `e.` 前缀：查询 left join 了 accounts，裸列名会歧义。
+  let where = "where e.company_id = $1";
   if (options.voucherId) {
     params.push(options.voucherId);
-    where += ` and voucher_id = $${params.length}`;
+    where += ` and e.voucher_id = $${params.length}`;
   }
   if (options.businessEventId) {
     params.push(options.businessEventId);
-    where += ` and business_event_id = $${params.length}`;
+    where += ` and e.business_event_id = $${params.length}`;
   }
   if (options.dateFrom) {
     params.push(options.dateFrom);
-    where += ` and entry_date >= $${params.length}::date`;
+    where += ` and e.entry_date >= $${params.length}::date`;
   }
   if (options.dateTo) {
     params.push(options.dateTo);
-    where += ` and entry_date <= $${params.length}::date`;
+    where += ` and e.entry_date <= $${params.length}::date`;
   }
   const rows = await query<LedgerEntryRow>(
     `
       select
-        id, company_id, voucher_id, business_event_id, entry_date, summary,
-        account_code, account_name, debit, credit, source, posted_at
-      from ledger_entries
+        e.id, e.company_id, e.voucher_id, e.business_event_id, e.entry_date, e.summary,
+        e.account_code, e.account_name, e.debit, e.credit, e.source, e.posted_at,
+        a.category as account_category
+      from ledger_entries e
+      -- 科目的报表口径随分录一起取出（V12 残留 7）。此前报表侧读的是硬编码的
+      -- chart-of-accounts.ts，而 049 早把科目表落了库 —— 两份数据靠 chart-parity
+      -- 护栏防漂移，但报表实际读的始终是常量那份。
+      --
+      -- left join 而不是 join：分录指向一个已不存在的科目（脏数据）时不能让它
+      -- 从账簿上消失，那会比分类错更难查。取不到 category 的走前缀兜底。
+      -- (company_id, code) 上有唯一索引，join 不构成额外开销。
+      left join accounts a on a.company_id = e.company_id and a.code = e.account_code
       ${where}
-      order by posted_at desc, id asc
+      order by e.posted_at desc, e.id asc
     `,
     params
   );
