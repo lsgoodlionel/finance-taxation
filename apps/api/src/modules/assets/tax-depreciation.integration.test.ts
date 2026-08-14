@@ -70,14 +70,16 @@ async function seedAsset(
     acquiredOn: string;
     oneTime?: boolean;
     taxCategory?: string | null;
+    taxMethod?: string;
+    taxLifeOverride?: number | null;
   }
 ): Promise<void> {
   await pool.query(
     `insert into fixed_assets (
        id, company_id, asset_no, name, category, acquired_on, original_cost, salvage_value,
        useful_life_months, depreciation_start_period, expense_account_code,
-       elects_one_time_deduction, tax_category
-     ) values ($1, $2, $3, $3, $4, $5::date, $6::numeric, 0, $7, $8, '660202', $9, $10)`,
+       elects_one_time_deduction, tax_category, tax_depreciation_method, tax_life_months_override
+     ) values ($1, $2, $3, $3, $4, $5::date, $6::numeric, 0, $7, $8, '660202', $9, $10, $11, $12)`,
     [
       params.id,
       COMPANY_ID,
@@ -88,7 +90,9 @@ async function seedAsset(
       params.lifeMonths,
       `${params.acquiredOn.slice(0, 7)}`,
       params.oneTime ?? false,
-      params.taxCategory ?? null
+      params.taxCategory ?? null,
+      params.taxMethod ?? "straight_line",
+      params.taxLifeOverride ?? null
     ]
   );
 }
@@ -251,5 +255,121 @@ test("折旧纳税调整明细表的完整路径", async (t) => {
     const bad = await getReport(99);
     assert.equal(bad.statusCode, 400);
     assert.equal(bad.body?.code, "TAX_YEAR_INVALID");
+  });
+});
+
+/**
+ * 税法加速折旧走通整条路径（V12-D4 二期）。
+ *
+ * 算法本身由 accelerated-depreciation.test.ts 逐年钉住，这里测的是接线：
+ * 新列有没有真的从库里取出来、有没有真的改变纳税调整额。
+ */
+test("加速折旧的完整路径", async (t) => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+
+  t.after(async () => {
+    await pool.end();
+    const { closePool } = await import("../../db/client.js");
+    await closePool();
+  });
+
+  await t.test("年数总和法：购置首年税前多扣，大额调减", async () => {
+    // 设备 100 万、残值 0、会计 10 年直线（每年 10 万），税法用年数总和法 10 年
+    // 首年税法扣 100万 × 10/55 = 18.18 万，会计只提 10 万 → 调减
+    await seedAsset(pool, {
+      id: "fa-acc-1",
+      assetNo: "ACC-001",
+      category: "equipment",
+      originalCost: "1000000.00",
+      lifeMonths: 120,
+      acquiredOn: "2026-01-15",
+      taxMethod: "sum_of_years"
+    });
+    for (let month = 2; month <= 12; month += 1) {
+      await seedDepreciation(pool, "fa-acc-1", `2026-${String(month).padStart(2, "0")}`, "8333.33");
+    }
+
+    const report = await getReport(2026);
+    assert.equal(report.statusCode, 200, JSON.stringify(report.body));
+    const row = (report.body?.rows as any[]).find((item) => item.assetNo === "ACC-001");
+    assert.equal(row.taxDeduction, "181818.18", "100万 × 10/55");
+    assert.equal(row.accountingDepreciation, "91666.63", "11 个月的会计折旧");
+    assert.equal(row.reason, "accelerated");
+    assert.match(String(row.explanation), /纳税调减/);
+    assert.equal(Number(row.adjustment) < 0, true);
+  });
+
+  await t.test("双倍余额递减法：首年按原值 × 2/n", async () => {
+    // 设备 100 万、残值 0、10 年 → 首年 100万 × 2/10 = 20 万
+    await seedAsset(pool, {
+      id: "fa-acc-2",
+      assetNo: "ACC-002",
+      category: "equipment",
+      originalCost: "1000000.00",
+      lifeMonths: 120,
+      acquiredOn: "2026-03-10",
+      taxMethod: "double_declining"
+    });
+
+    const report = await getReport(2026);
+    const row = (report.body?.rows as any[]).find((item) => item.assetNo === "ACC-002");
+    assert.equal(row.taxDeduction, "200000.00");
+  });
+
+  await t.test("缩短折旧年限：合法下限能存，低于下限被数据库挡住", async () => {
+    // 设备类税法最低 10 年 → 缩短下限 72 个月
+    await seedAsset(pool, {
+      id: "fa-acc-3",
+      assetNo: "ACC-003",
+      category: "equipment",
+      originalCost: "720000.00",
+      lifeMonths: 120,
+      acquiredOn: "2026-01-15",
+      taxMethod: "sum_of_years",
+      taxLifeOverride: 72
+    });
+    const report = await getReport(2026);
+    const row = (report.body?.rows as any[]).find((item) => item.assetNo === "ACC-003");
+    // 6 年年数总和 = 21，首年 72万 × 6/21 = 20.57 万
+    assert.equal(row.taxDeduction, "205714.28");
+
+    await assert.rejects(
+      seedAsset(pool, {
+        id: "fa-acc-bad",
+        assetNo: "ACC-BAD",
+        category: "equipment",
+        originalCost: "100000.00",
+        lifeMonths: 120,
+        acquiredOn: "2026-01-15",
+        taxMethod: "sum_of_years",
+        taxLifeOverride: 71
+      }),
+      /fixed_assets_shortened_life_check|violates check constraint/,
+      "低于法定下限 60% 是违规，不是可接受的输入"
+    );
+  });
+
+  await t.test("超出折旧年限的年度扣除额为 0，不会负数或报错", async () => {
+    const report = await getReport(2040);
+    const row = (report.body?.rows as any[]).find((item) => item.assetNo === "ACC-001");
+    assert.equal(row.taxDeduction, "0.00");
+  });
+
+  await t.test("一次性扣除优先于加速折旧——原值一次扣光后谈按年加速无意义", async () => {
+    await seedAsset(pool, {
+      id: "fa-acc-4",
+      assetNo: "ACC-004",
+      category: "equipment",
+      originalCost: "300000.00",
+      lifeMonths: 120,
+      acquiredOn: "2026-05-10",
+      oneTime: true,
+      taxMethod: "double_declining"
+    });
+    const report = await getReport(2026);
+    const row = (report.body?.rows as any[]).find((item) => item.assetNo === "ACC-004");
+    assert.equal(row.taxDeduction, "300000.00", "全额原值，不是 2/10 那一档");
+    assert.equal(row.reason, "one_time_deduction");
   });
 });

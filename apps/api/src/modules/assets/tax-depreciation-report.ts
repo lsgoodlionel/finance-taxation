@@ -13,6 +13,7 @@ import {
   taxDepreciationForYear,
   type TaxDepreciationAsset
 } from "./tax-depreciation.js";
+import type { TaxDepreciationMethod } from "./accelerated-depreciation.js";
 
 export interface TaxDepreciationRow {
   assetId: string;
@@ -53,6 +54,8 @@ interface AssetRow {
   useful_life_months: number;
   acquired_on: string | Date;
   elects_one_time_deduction: boolean;
+  tax_depreciation_method: string;
+  tax_life_months_override: number | null;
   /** 本纳税年度的会计折旧额。 */
   year_depreciation: string | null;
   /** 截至上年末的会计折旧累计——用作税法扣除的起点近似值，见下方注释。 */
@@ -89,6 +92,7 @@ export async function loadTaxDepreciationRows(
     `select a.id, a.asset_no, a.name, a.category, a.tax_category,
             a.original_cost::text, a.salvage_value::text, a.useful_life_months,
             a.acquired_on, a.elects_one_time_deduction,
+            a.tax_depreciation_method, a.tax_life_months_override,
             (select sum(d.amount)::text from fixed_asset_depreciations d
               where d.asset_id = a.id and d.period >= $2 and d.period <= $3) as year_depreciation,
             (select sum(d.amount)::text from fixed_asset_depreciations d
@@ -113,7 +117,10 @@ export async function loadTaxDepreciationRows(
       salvageValueCents: toCents(row.salvage_value),
       accountingLifeMonths: row.useful_life_months,
       acquiredOn: toDateOnly(row.acquired_on),
-      electsOneTimeDeduction: row.elects_one_time_deduction
+      electsOneTimeDeduction: row.elects_one_time_deduction,
+      // 取值受 fixed_assets_tax_depreciation_method_check 约束，与联合类型一一对应
+      taxDepreciationMethod: row.tax_depreciation_method as TaxDepreciationMethod,
+      taxLifeMonthsOverride: row.tax_life_months_override
     };
 
     const outcome = taxDepreciationForYear({
