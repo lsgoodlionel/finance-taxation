@@ -170,6 +170,18 @@ export interface VoucherDraftLine {
    * 但也就无法归到任何一个部门头上。
    */
   costCenterId?: string | null;
+  /**
+   * 外币原币信息（V12-D5）。三样要么都有、要么都没有，库上有 CHECK 约束强制。
+   *
+   * `debit` / `credit` 始终是**本位币**金额——外币业务在创建凭证时就按业务发生日
+   * 的汇率折算好了，所以模板体系、借贷平衡校验、报表口径全都不必感知币种。
+   *
+   * 原币逐行金额由 `currency/foreign-allocation.ts` 按各行本位币比例分摊、末行扫尾，
+   * 保证借贷两侧的原币之和都严格等于用户输入的那个数。
+   */
+  currency?: string | null;
+  originalAmount?: string | null;
+  exchangeRate?: number | null;
 }
 
 export type VoucherDraftStatus = "draft" | "review_required" | "ready";

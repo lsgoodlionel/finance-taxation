@@ -57,6 +57,18 @@ export interface LedgerEntryInput {
    * （银行存款、应交税费、实收资本）不属于任何部门。
    */
   costCenterId?: string | null;
+  /**
+   * 外币原币信息（V12-D5）。三样要么都有、要么都没有——库上有 CHECK 约束
+   * （`ledger_entries_currency_consistency`）强制这一点。
+   *
+   * `debit` / `credit` 始终是**本位币**金额，所以报表、试算平衡、结转损益一行
+   * 都不受影响；这三样只在期末调汇与凭证追溯时用到。
+   *
+   * 缺省本位币：既有调用方（结转、期初、红冲）不必感知币种。
+   */
+  currency?: string | null;
+  originalAmount?: string | null;
+  exchangeRate?: number | null;
 }
 
 export interface PostabilityInput {
@@ -129,8 +141,10 @@ export async function insertLedgerEntries(
       `
         insert into ledger_entries (
           id, company_id, voucher_id, business_event_id, entry_date, summary,
-          account_code, account_name, debit, credit, source, posted_at, counterparty_id, cost_center_id
-        ) values ($1, $2, $3, $4, $5::date, $6, $7, $8, $9::numeric, $10::numeric, $11, $12::timestamptz, $13, $14)
+          account_code, account_name, debit, credit, source, posted_at, counterparty_id, cost_center_id,
+          currency, original_amount, exchange_rate
+        ) values ($1, $2, $3, $4, $5::date, $6, $7, $8, $9::numeric, $10::numeric, $11, $12::timestamptz, $13, $14,
+                  $15, $16::numeric, $17)
       `,
       [
         entry.id,
@@ -146,7 +160,10 @@ export async function insertLedgerEntries(
         entry.source,
         entry.postedAt,
         entry.counterpartyId ?? null,
-        entry.costCenterId ?? null
+        entry.costCenterId ?? null,
+        entry.currency ?? "CNY",
+        entry.originalAmount ?? null,
+        entry.exchangeRate ?? null
       ]
     );
   }

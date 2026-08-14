@@ -38,6 +38,10 @@ import { formatVoucherNumber, resolveVoucherWord, type VoucherWord } from "./vou
 import { insertLedgerEntries } from "./ledger-writer.js";
 import { SETTLEABLE_TYPE_CODES } from "../settlement/settleable-accounts.js";
 import { checkAccountsUsable } from "../accounts/account-guard.js";
+import { BASE_CURRENCY, RATE_SCALE } from "../currency/revaluation.js";
+import { resolveClosingRate } from "../currency/revaluation-store.js";
+import { allocateForeignAmounts, foreignToBaseCents } from "../currency/foreign-allocation.js";
+import { toCents } from "../../utils/money.js";
 
 interface VoucherRow {
   id: string;
@@ -69,6 +73,9 @@ interface VoucherLineRow {
   sort_order: number;
   counterparty_id: string | null;
   cost_center_id: string | null;
+  currency: string | null;
+  original_amount: string | number | null;
+  exchange_rate: string | number | null;
 }
 
 interface VoucherPostingRecordRow {
@@ -152,7 +159,14 @@ function mapVoucherLineRow(row: VoucherLineRow): VoucherDraftLine {
     debit: toAmountString(row.debit),
     credit: toAmountString(row.credit),
     counterpartyId: row.counterparty_id,
-    costCenterId: row.cost_center_id
+    costCenterId: row.cost_center_id,
+    // `?? null` 不是多余的：这三列若没进 select 就是 `undefined`，而 `=== null`
+    // 判不出 undefined，`Number(undefined)` 得到 NaN，进库时报
+    // `invalid input syntax for type bigint: "NaN"`（初版就是这么挂的，
+    // 一次挂掉 6 条凭证集成用例）。
+    currency: row.currency ?? null,
+    originalAmount: row.original_amount == null ? null : toAmountString(row.original_amount),
+    exchangeRate: row.exchange_rate == null ? null : Number(row.exchange_rate)
   };
 }
 
@@ -258,7 +272,7 @@ export async function listCompanyVouchers(
     `
       select
         id, voucher_id, summary, account_code, account_name, debit, credit, sort_order,
-        counterparty_id, cost_center_id
+        counterparty_id, cost_center_id, currency, original_amount, exchange_rate
       from voucher_lines
       where voucher_id = any($1::text[])
       order by sort_order asc
@@ -444,6 +458,13 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
     amount?: string;
     summary?: string;
     businessEventId?: string;
+    /**
+     * 外币业务（V12-D5）。填了 currency 就按业务发生日的汇率折算：
+     * `amount` 被当作**原币**金额，模板拿到的是折算后的本位币金额。
+     *
+     * 不填则一切照旧走本位币，既有调用方零感知。
+     */
+    currency?: string;
   };
   if (!body.templateKey || !body.amount || !body.businessEventId) {
     return json(res, 400, { error: "templateKey, amount and businessEventId are required" });
@@ -464,11 +485,44 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
     return json(res, 404, { error: "Business event not found" });
   }
 
+  // ── 外币折算（V12-D5）────────────────────────────────────────────
+  //
+  // 汇率取**业务发生日**或之前最近一天，而不是「今天」：一张 3 月的凭证在 6 月补录，
+  // 该用的是 3 月的汇率。这与调汇取「资产负债表日或之前最近一天」是同一个原则。
+  const currency = typeof body.currency === "string" ? body.currency.trim().toUpperCase() : "";
+  const isForeign = currency !== "" && currency !== BASE_CURRENCY;
+  let exchangeRate = RATE_SCALE;
+  let foreignTotalCents = 0;
+
+  if (isForeign) {
+    const eventDate = toDateOnly(event.occurred_on) ?? new Date().toISOString().slice(0, 10);
+    const resolved = await withTransaction((client) =>
+      resolveClosingRate(client, req.auth!.companyId, currency, eventDate)
+    );
+    if (resolved === null) {
+      return json(res, 400, {
+        error: `缺少 ${currency} 在 ${eventDate} 或之前的汇率，请先在总账「做期末外币调汇」里维护汇率。`,
+        code: "EXCHANGE_RATE_MISSING"
+      });
+    }
+    exchangeRate = resolved;
+    foreignTotalCents = toCents(body.amount);
+    if (!Number.isFinite(foreignTotalCents) || foreignTotalCents <= 0) {
+      return json(res, 400, { error: "外币金额必须大于 0", code: "AMOUNT_INVALID" });
+    }
+  }
+
+  // 模板拿到的始终是**本位币**金额：模板体系与科目口径都按本位币设计，
+  // 让它感知币种会把外币逻辑扩散到每一个模板里。
+  const templateAmount = isForeign
+    ? (foreignToBaseCents(foreignTotalCents, exchangeRate) / 100).toFixed(2)
+    : body.amount;
+
   let draft;
   try {
     draft = buildVoucherTemplateDraft({
       templateKey: body.templateKey,
-      amount: body.amount,
+      amount: templateAmount,
       summary: body.summary,
       businessEventId: body.businessEventId,
       companyId: req.auth!.companyId
@@ -476,6 +530,20 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
   } catch (error) {
     return json(res, 400, { error: (error as Error).message });
   }
+
+  // 外币时把原币总额按各行本位币比例分摊（末行扫尾），保证借贷两侧的原币之和都
+  // 严格等于用户输入的那个数——外币余额是逐行累加出来的，差出去的分会一直留在
+  // 账上，期末调汇时被当成汇率变动算进汇兑损益。
+  const foreignPerLine = isForeign
+    ? allocateForeignAmounts(
+        draft.lines.map((line) => ({
+          debitCents: toCents(line.debit),
+          creditCents: toCents(line.credit)
+        })),
+        foreignTotalCents,
+        exchangeRate
+      )
+    : [];
 
   const now = new Date().toISOString();
   const mappingId = `tpl-draft-${Date.now()}`;
@@ -493,7 +561,12 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
     voucherNumber: null,
     lines: draft.lines.map((line, index) => ({
       ...line,
-      id: `${voucherId}-line-${index + 1}`
+      id: `${voucherId}-line-${index + 1}`,
+      // 原币在这里就贴上，而不是等到写库时再算一遍：响应对象与落库内容必须同源，
+      // 否则前端拿到的凭证和库里的对不上，而这种不一致要等到下次读取才暴露。
+      currency: isForeign ? currency : BASE_CURRENCY,
+      originalAmount: isForeign ? (foreignPerLine[index]! / 100).toFixed(2) : null,
+      exchangeRate: isForeign ? exchangeRate : null
     })),
     approvedAt: null,
     postedAt: null,
@@ -549,8 +622,11 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
             account_name,
             debit,
             credit,
-            sort_order
-          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8)
+            sort_order,
+            currency,
+            original_amount,
+            exchange_rate
+          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8, $9, $10::numeric, $11)
         `,
         [
           `${mappingId}-line-${index + 1}`,
@@ -560,7 +636,10 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
           line.accountName,
           line.debit,
           line.credit,
-          index
+          index,
+          line.currency ?? BASE_CURRENCY,
+          line.originalAmount ?? null,
+          line.exchangeRate ?? null
         ]
       );
     }
@@ -611,8 +690,11 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
             credit,
             sort_order,
             counterparty_id,
-            cost_center_id
-          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8, $9, $10)
+            cost_center_id,
+            currency,
+            original_amount,
+            exchange_rate
+          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8, $9, $10, $11, $12::numeric, $13)
         `,
         [
           line.id,
@@ -624,7 +706,10 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
           line.credit,
           index,
           line.counterpartyId ?? null,
-          line.costCenterId ?? null
+          line.costCenterId ?? null,
+          line.currency ?? BASE_CURRENCY,
+          line.originalAmount ?? null,
+          line.exchangeRate ?? null
         ]
       );
     }
@@ -1061,7 +1146,12 @@ export async function postVoucher(req: ApiRequest, res: ServerResponse, voucherI
     // 不该有，往来科目漏填的后果是这笔进不了账龄表，由 settlement 侧提示补录。
     counterpartyId: line.counterpartyId ?? null,
     // 成本中心维度同理（V12-D1）：漏填的后果是落进部门费用报表的「未指定」一行。
-    costCenterId: line.costCenterId ?? null
+    costCenterId: line.costCenterId ?? null,
+    // 外币原币随凭证行进总账（V12-D5）。丢在这一步的话，账上就只剩折算后的本位币
+    // 金额，期末调汇拿不到外币余额、也回答不了「当初按什么汇率入的账」。
+    currency: line.currency ?? BASE_CURRENCY,
+    originalAmount: line.originalAmount ?? null,
+    exchangeRate: line.exchangeRate ?? null
   }));
   const createdBatch: LedgerPostingBatch = {
     id: `ledger-batch-${voucherId}`,

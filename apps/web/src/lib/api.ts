@@ -536,6 +536,11 @@ export async function createVoucherFromTemplate(input: {
   amount: string;
   businessEventId: string;
   summary?: string;
+  /**
+   * 外币业务（V12-D5）。填了它，`amount` 就是**原币**金额，后端按业务发生日的
+   * 汇率折算成本位币入账。不填则一切照旧。
+   */
+  currency?: string;
 }) {
   return request<Voucher>("/api/vouchers", {
     method: "POST",
