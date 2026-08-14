@@ -29,6 +29,12 @@
  * 的 5 年处理 —— 这是实施条例里覆盖面最广的一档，比不做限制安全：
  * 不做限制等于默认企业的会计年限总是合规，那正是要检查的事。
  */
+import {
+  acceleratedScheduleCents,
+  MIN_SHORTENED_LIFE_RATIO,
+  type TaxDepreciationMethod
+} from "./accelerated-depreciation.js";
+
 export const TAX_MINIMUM_LIFE_YEARS: Readonly<Record<string, number>> = {
   /** 房屋、建筑物 */
   building: 20,
@@ -49,6 +55,16 @@ export const DEFAULT_MINIMUM_LIFE_YEARS = 5;
 
 export function taxMinimumLifeMonths(category: string): number {
   return (TAX_MINIMUM_LIFE_YEARS[category] ?? DEFAULT_MINIMUM_LIFE_YEARS) * 12;
+}
+
+/**
+ * 缩短折旧年限后允许的最短月数（实施条例第九十八条：不低于法定年限的 60%）。
+ *
+ * **向上取整**：电子设备最低 3 年 × 60% = 1.8 年 = 21.6 个月，向下取整成 21 会让
+ * 企业合法地比法定下限多扣一点点。宁可严一个月。
+ */
+export function minimumShortenedLifeMonths(category: string): number {
+  return Math.ceil(taxMinimumLifeMonths(category) * MIN_SHORTENED_LIFE_RATIO);
 }
 
 /**
@@ -88,6 +104,20 @@ export interface TaxDepreciationAsset {
   acquiredOn: string;
   /** 是否选择一次性扣除。**企业可以放弃**，所以这是一个选择而非自动判定。 */
   electsOneTimeDeduction: boolean;
+  /**
+   * 税法折旧方法（V12-D4 二期）。缺省直线法。
+   *
+   * 加速折旧同样是企业的**选择**而非自动判定：实施条例第九十八条给的是「可以」，
+   * 且要满足技术进步/强震动高腐蚀等条件，系统判不了。
+   */
+  taxDepreciationMethod?: TaxDepreciationMethod;
+  /**
+   * 缩短后的税法折旧月数（V12-D4 二期）。为空表示不缩短。
+   *
+   * 下限是法定最低年限的 60%（实施条例第九十八条），由数据库 CHECK 与
+   * `minimumShortenedLifeMonths` 共同把关。
+   */
+  taxLifeMonthsOverride?: number | null;
 }
 
 export interface TaxLifeResolution {
@@ -144,6 +174,8 @@ export type TaxDepreciationReason =
   | "one_time_deducted_prior_year"
   /** 会计年限短于税法最低年限，按税法年限摊。 */
   | "tax_minimum_life"
+  /** 采用加速折旧法（双倍余额递减 / 年数总和）。 */
+  | "accelerated"
   /** 两者一致，无差异。 */
   | "aligned";
 
@@ -192,6 +224,37 @@ export function taxDepreciationForYear(input: TaxDepreciationInput): TaxDeprecia
     }
   }
 
+  // ── 加速折旧（V12-D4 二期）─────────────────────────────────────────
+  //
+  // 排在一次性扣除之后：两者都选时一次性扣除优先——它把原值一次扣光，
+  // 再谈按年加速已无意义。排在最低年限判定之前：加速折旧法自带年限口径
+  // （可能还叠加了缩短年限），不该再被「会计年限 vs 最低年限」那套覆盖。
+  const method = asset.taxDepreciationMethod ?? "straight_line";
+  if (method !== "straight_line") {
+    const lifeMonths = asset.taxLifeMonthsOverride ?? Math.max(
+      asset.accountingLifeMonths,
+      taxMinimumLifeMonths(asset.category)
+    );
+    // 税法加速折旧按年计算。不足一年的按一年算——年限向上取整，
+    // 向下取整会凭空少一个年度、把那一年的扣除额挤进前面的年份。
+    const lifeYears = Math.max(1, Math.ceil(lifeMonths / 12));
+    const schedule = acceleratedScheduleCents({
+      originalCostCents: asset.originalCostCents,
+      salvageValueCents: asset.salvageValueCents,
+      lifeYears,
+      method
+    });
+    // 购置当年记为第 1 年。超出年限的年度扣除额为 0（已提完）。
+    const yearIndex = taxYear - acquiredYear;
+    const taxDeductionCents = schedule[yearIndex] ?? 0;
+    return {
+      taxDeductionCents,
+      accountingDepreciationCents,
+      adjustmentCents: accountingDepreciationCents - taxDeductionCents,
+      reason: "accelerated"
+    };
+  }
+
   const life = resolveTaxLife(asset);
   if (!life.shorterThanMinimum) {
     // 会计年限不短于税法最低年限：税法认可会计折旧额，无差异
@@ -226,6 +289,10 @@ export function describeAdjustment(result: TaxDepreciationResult): string {
       return `适用一次性扣除，本年税前扣除全额原值，纳税调减 ${amount}。`;
     case "one_time_deducted_prior_year":
       return `购置年度已一次性扣除完毕，本年会计折旧 ${amount} 全额纳税调增。`;
+    case "accelerated":
+      return result.adjustmentCents >= 0
+        ? `采用税法加速折旧法，本年会计折旧高于税前扣除，纳税调增 ${amount}。`
+        : `采用税法加速折旧法，本年税前扣除高于会计折旧，纳税调减 ${amount}。`;
     case "tax_minimum_life":
       return `会计折旧年限短于税法最低年限，超提部分纳税调增 ${amount}。`;
     case "aligned":
