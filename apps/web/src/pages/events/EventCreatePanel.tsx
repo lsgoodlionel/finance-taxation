@@ -7,6 +7,8 @@
  * 不会同时做这两件事。
  */
 import React from "react";
+import type { Counterparty } from "../../lib/api";
+import { Term } from "../../components/ui/Term";
 
 type EventFormState = {
   type: string;
@@ -16,6 +18,7 @@ type EventFormState = {
   occurredOn: string;
   amount: string;
   currency?: string;
+  counterpartyId?: string;
   source?: string;
 };
 
@@ -29,11 +32,20 @@ type EventCreatePanelProps = {
   isBusy: boolean;
   isSaving: boolean;
   options: EventTypeOption[];
+  counterparties: Counterparty[];
   onChange(next: EventFormState): void;
   onSubmit(): void;
 };
 
-export function EventCreatePanel({ form, isBusy, isSaving, options, onChange, onSubmit }: EventCreatePanelProps) {
+export function EventCreatePanel({
+  form,
+  isBusy,
+  isSaving,
+  options,
+  counterparties,
+  onChange,
+  onSubmit
+}: EventCreatePanelProps) {
   return (
     <div>
         <div className="grid-2" style={{ gap: 12 }}>
@@ -92,6 +104,27 @@ export function EventCreatePanel({ form, isBusy, isSaving, options, onChange, on
               placeholder="选填"
             />
           </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">往来单位</label>
+          <select
+            className="form-input"
+            value={form.counterpartyId ?? ""}
+            onChange={(event) => onChange({ ...form, counterpartyId: event.target.value })}
+          >
+            <option value="">
+              {counterparties.length === 0 ? "还没有往来单位档案" : "选填 —— 不选则这笔进不了账龄表"}
+            </option>
+            {counterparties.map((item) => (
+              <option key={item.id} value={item.id ?? ""}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <p className="form-hint">
+            应收应付类<Term k="account">科目</Term>靠它分户。不填的话这笔只是余额里的
+            一个数字，看不出是谁欠的、欠了多久，也没法把收款和欠款对上。
+          </p>
         </div>
         <div className="mt-16">
           <button

@@ -373,6 +373,11 @@ export async function createEvent(input: {
   currency: string;
   source: string;
   contractId?: string | null;
+  /**
+   * 往来单位（V12-C2）。凭证从事项继承这个维度——不填的话应收应付分录就没有
+   * 分户依据，进不了账龄表也没法做核销。
+   */
+  counterpartyId?: string | null;
 }) {
   return request<BusinessEvent>("/api/events", {
     method: "POST",

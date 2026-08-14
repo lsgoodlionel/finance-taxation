@@ -9,6 +9,8 @@ import React from "react";
 import { Modal } from "antd";
 import { EventCreatePanel } from "./EventCreatePanel";
 
+import type { Counterparty } from "../../lib/api";
+
 type EventFormState = {
   type: string;
   title: string;
@@ -18,6 +20,7 @@ type EventFormState = {
   amount: string;
   currency?: string;
   source?: string;
+  counterpartyId?: string;
 };
 
 export interface EventCreateModalProps {
@@ -26,6 +29,7 @@ export interface EventCreateModalProps {
   isBusy: boolean;
   isSaving: boolean;
   options: Array<{ value: string; label: string }>;
+  counterparties: Counterparty[];
   onChange(next: EventFormState): void;
   onSubmit(): void;
   onClose(): void;
@@ -37,6 +41,7 @@ export function EventCreateModal({
   isBusy,
   isSaving,
   options,
+  counterparties,
   onChange,
   onSubmit,
   onClose
@@ -56,6 +61,7 @@ export function EventCreateModal({
         isBusy={isBusy}
         isSaving={isSaving}
         options={options}
+        counterparties={counterparties}
         onChange={onChange}
         onSubmit={onSubmit}
       />
