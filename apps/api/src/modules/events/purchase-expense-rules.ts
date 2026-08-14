@@ -156,7 +156,7 @@ function documentStatus(documentType: string, scenario: PurchaseExpenseScenario)
 /**
  * 借方科目必须取 accounts/chart-of-accounts.ts 的叶子科目。
  * 本系统销售费用是 6201（6601 是「职工薪酬（成本）」，此前误当销售费用用），
- * 管理费用是 6301e 系列，6301e 本身非叶子，通用场景落 6301e07。
+ * 管理费用是 6602 系列（V12-D3 国标化前是 6301e），6602 本身非叶子，通用场景落 660207。
  */
 function expenseDebitAccount(classification: PurchaseExpenseClassification) {
   switch (classification) {

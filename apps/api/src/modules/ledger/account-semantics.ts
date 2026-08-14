@@ -33,7 +33,7 @@ export const RETAINED_EARNINGS_CODE = "4104";
  * 「4xxx 属成本类」的直觉相反，但会计上是对的：这两个科目的期末余额就是**在产品**，
  * 属存货，是资产。reports/balance-sheet-accounts.ts 已按此归类（category `cost`
  * → 资产），closing.ts 的 `classifyProfitAccount` 也已把它们排除在结转损益之外
- * （返回 `other`）。本系统不做成本结转（4001/4101 → 6001c 需要产量与在产品数据，
+ * （返回 `other`）。本系统不做成本结转（4001/4101 → 6401 需要产量与在产品数据，
  * 蓝图「明确不引入清单」已排除），所以 4001 余额会一直以资产形态挂在表上。
  *
  * 若在这里把 `cost_production` 判成损益类，后果是双向的错：制造业客户录不进在产品

@@ -107,6 +107,8 @@ async function loadBossContext(companyId: string): Promise<FinancialContext> {
   // 此前这里按 6001/6002 取收入、6601/6602/6603 取费用：6002/6602/6603 在本系统科目表
   // 里根本不存在，6601 是职工薪酬而非销售费用，销售费用 6201、管理费用 6301e、
   // 财务费用 6401、税金及附加 6101 全部漏计，老板看到的「本月花了多少」长期偏低。
+  //（这几个是 V12-D3 国标化之前的编码，现在分别是 6602 / 6603 / 6403，
+  // 而 6401 已改指主营业务成本 —— 照着这段旧编码去查会查错科目。）
   const monthTotals = summarizeProfitTotals(
     monthLedger.map((e) => ({
       accountCode: e.account_code,

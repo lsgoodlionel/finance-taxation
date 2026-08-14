@@ -129,6 +129,26 @@ test("源码里不再出现旧编码字面量", () => {
       const hits = RETIRED_CODES.filter((code) => content.includes(`"${code}"`));
       if (hits.length > 0) {
         offenders.push(`${full.replace(repoRoot + "/", "")} → ${hits.join("、")}`);
+        continue;
+      }
+
+      // 带引号的字面量之外，**注释与 UI 文案里的旧编码同样有害**：
+      // 前端曾有一句「管理用设备填 6301e02」，照着填会填到一个已不存在的科目；
+      // 几处注释写着「财务费用 6401」，而 D3 之后 6401 是主营业务成本。
+      // 这些都躲过了上面那条带引号的匹配。
+      //
+      // 只对**含字母的自造编码**（6001c / 6301e*）做裸匹配：3131、6101 这类纯
+      // 数字会撞上金额、行号、ID，误报比漏报更消耗人。
+      //
+      // 讲历史是允许的——D3 干了什么本来就该记下来——但必须在同一文件里标明
+      // 「D3」，否则读的人分不清那是史料还是现状。
+      const lettered = RETIRED_CODES.filter((code) => /[a-z]/.test(code));
+      const bare = lettered.filter((code) => content.includes(code));
+      if (bare.length > 0 && !content.includes("D3")) {
+        offenders.push(
+          `${full.replace(repoRoot + "/", "")} → ${bare.join("、")}（未标明 D3，` +
+            `无法分辨这是历史叙述还是漏改的现状描述）`
+        );
       }
     }
   };

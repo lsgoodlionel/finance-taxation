@@ -322,3 +322,110 @@ test("固定资产台账、折旧计提与处置的完整路径", async (t) => {
     assert.equal(april.body?.code, "NO_DEPRECIABLE_ASSET", "唯一的资产已处置，本期无可提资产");
   });
 });
+
+/**
+ * 建卡时录入税务属性（V12-D4 一期 + 二期的前端接线缺口）。
+ *
+ * D4 的四个税务字段（一次性扣除、税法分类、加速折旧方法、缩短年限）此前**只能
+ * 直接改数据库设置** —— 后端算得出纳税调整，但没有任何入口把这些选择录进去。
+ * 后端有能力而没有入口，等于功能不可用。
+ *
+ * 校验放在应用层而不是只靠数据库 CHECK：CHECK 抛的是
+ * `violates check constraint "fixed_assets_shortened_life_check"`，
+ * 对着这句话的用户不知道自己该填多少。库里的约束继续留着兜底（数据修复脚本、
+ * 批量导入绕得过应用层），两者不冲突。
+ */
+test("建卡时录入税务属性", async (t) => {
+  await prepareDatabase();
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+
+  t.after(async () => {
+    await pool.end();
+    const { closePool } = await import("../../db/client.js");
+    await closePool();
+  });
+
+  await t.test("四个税务字段都能落库并读回", async () => {
+    const created = await createAsset({
+      ...EQUIPMENT,
+      assetNo: "FA-TAX-1",
+      category: "equipment",
+      taxCategory: "electronic",
+      electsOneTimeDeduction: false,
+      taxDepreciationMethod: "sum_of_years",
+      taxLifeMonthsOverride: 72
+    });
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    assert.equal(created.body?.taxCategory, "electronic");
+    assert.equal(created.body?.taxDepreciationMethod, "sum_of_years");
+    assert.equal(created.body?.taxLifeMonthsOverride, 72);
+    assert.equal(created.body?.electsOneTimeDeduction, false);
+  });
+
+  await t.test("不传税务字段时落在安全的缺省值上", async () => {
+    const created = await createAsset({ ...EQUIPMENT, assetNo: "FA-TAX-2" });
+    assert.equal(created.statusCode, 201);
+    assert.equal(created.body?.taxDepreciationMethod, "straight_line", "缺省不加速");
+    assert.equal(created.body?.electsOneTimeDeduction, false, "一次性扣除是选择，不能默认开");
+    assert.equal(created.body?.taxLifeMonthsOverride, null);
+  });
+
+  await t.test("缩短年限低于法定下限时给出能照着改的错误", async () => {
+    const rejected = await createAsset({
+      ...EQUIPMENT,
+      assetNo: "FA-TAX-3",
+      category: "equipment",
+      taxDepreciationMethod: "double_declining",
+      taxLifeMonthsOverride: 71
+    });
+    assert.equal(rejected.statusCode, 400);
+    assert.equal(rejected.body?.code, "ASSET_TAX_LIFE_TOO_SHORT");
+    // 错误信息里必须有具体的下限数字，否则用户只知道错了不知道该填多少
+    assert.match(String(rejected.body?.error), /72/);
+  });
+
+  await t.test("加速折旧方法取值非法被拒", async () => {
+    const rejected = await createAsset({
+      ...EQUIPMENT,
+      assetNo: "FA-TAX-4",
+      taxDepreciationMethod: "straight_lines"
+    });
+    assert.equal(rejected.statusCode, 400);
+    assert.equal(rejected.body?.code, "ASSET_TAX_METHOD_INVALID");
+  });
+
+  await t.test("房屋建筑物勾一次性扣除被拒——政策原文限于设备器具", async () => {
+    const rejected = await createAsset({
+      ...EQUIPMENT,
+      assetNo: "FA-TAX-5",
+      category: "building",
+      originalCost: "1000000.00",
+      electsOneTimeDeduction: true
+    });
+    assert.equal(rejected.statusCode, 400);
+    assert.equal(rejected.body?.code, "ASSET_ONE_TIME_DEDUCTION_INELIGIBLE");
+  });
+
+  await t.test("超过 500 万勾一次性扣除，在应用层就被挡住", async () => {
+    const rejected = await createAsset({
+      ...EQUIPMENT,
+      assetNo: "FA-TAX-6",
+      category: "equipment",
+      originalCost: "6000000.00",
+      electsOneTimeDeduction: true
+    });
+    assert.equal(rejected.statusCode, 400);
+    assert.equal(rejected.body?.code, "ASSET_ONE_TIME_DEDUCTION_INELIGIBLE");
+    assert.match(String(rejected.body?.error), /500/, "错误信息要点出 500 万这条线");
+  });
+
+  await t.test("税法分类必须是已知类别，否则最低年限会静默走兜底", async () => {
+    const rejected = await createAsset({
+      ...EQUIPMENT,
+      assetNo: "FA-TAX-7",
+      taxCategory: "spaceship"
+    });
+    assert.equal(rejected.statusCode, 400);
+    assert.equal(rejected.body?.code, "ASSET_TAX_CATEGORY_INVALID");
+  });
+});

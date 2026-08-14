@@ -70,6 +70,16 @@ export async function createAssetRoute(req: ApiRequest, res: ServerResponse): Pr
       salvageValue: body.salvageValue == null ? 0 : String(body.salvageValue),
       usefulLifeMonths,
       expenseAccountCode,
+      // 税务属性（V12-D4）。四个都可选，取值校验在 asset-store 里统一做——
+      // 那里能拿到 category 与原值，才给得出「至少 72 个月」这种能照着改的错误。
+      taxCategory: typeof body.taxCategory === "string" && body.taxCategory ? body.taxCategory : null,
+      electsOneTimeDeduction: body.electsOneTimeDeduction === true,
+      taxDepreciationMethod:
+        typeof body.taxDepreciationMethod === "string" ? body.taxDepreciationMethod : undefined,
+      taxLifeMonthsOverride:
+        body.taxLifeMonthsOverride == null || body.taxLifeMonthsOverride === ""
+          ? null
+          : Number(body.taxLifeMonthsOverride),
       assetAccountCode:
         typeof body.assetAccountCode === "string" ? body.assetAccountCode : undefined,
       accumulatedAccountCode:

@@ -224,6 +224,8 @@ async function loadBossContext(companyId: string) {
   // 与 boss-qa 一样改走 reports/profit-accounts.ts 的共用口径：旧的 6001/6002 收入、
   // 6601/6602/6603 费用前缀里，6002/6602/6603 在本系统科目表中不存在，6601 是职工薪酬
   // 而非销售费用，销售费用 6201 / 管理费用 6301e / 财务费用 6401 全部被漏计。
+  //（这几个是 V12-D3 国标化之前的编码，现在管理费用是 6602、财务费用是 6603，
+  // 而 6401 已改指主营业务成本 —— 照着这段旧编码去查会查错科目。）
   const monthTotals = summarizeProfitTotals(
     monthLedger.map((e) => ({
       accountCode: e.account_code,
