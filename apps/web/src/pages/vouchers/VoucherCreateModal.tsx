@@ -1,6 +1,8 @@
 import { Modal, Form, Select, Input, Typography, Alert, Space } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
-import type { VoucherTemplate } from "../../lib/api";
+import { useEffect, useState } from "react";
+import type { CostCenter, VoucherTemplate } from "../../lib/api";
+import { listCostCenters } from "../../lib/api";
 import { VALIDATION_GUIDE_ITEMS } from "./validation-hints";
 import { Term } from "../../components/ui/Term";
 
@@ -11,6 +13,10 @@ interface VoucherCreateForm {
   businessEventId: string;
   amount: string;
   summary: string;
+  /** 外币业务（V12-D5）。留空即人民币。 */
+  currency?: string;
+  /** 成本中心（V12-D1）。留空则费用落进部门报表的「未指定」分组。 */
+  costCenterId?: string;
 }
 
 interface VoucherCreateModalProps {
@@ -26,6 +32,16 @@ export function VoucherCreateModal({
   open, templates, initialEventId, creating, onSubmit, onClose,
 }: VoucherCreateModalProps) {
   const [form] = Form.useForm<VoucherCreateForm>();
+  const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+
+  // 只在弹窗打开时拉：成本中心清单不常变，没必要跟着页面一起加载。
+  useEffect(() => {
+    if (!open) return;
+    void listCostCenters()
+      .then((payload) => setCostCenters(payload.items))
+      // 拉不到就让选择器空着——它是可选维度，不该因此挡住建凭证。
+      .catch(() => setCostCenters([]));
+  }, [open]);
 
   function handleOk() {
     void form.validateFields().then((values) => {
@@ -97,6 +113,20 @@ export function VoucherCreateModal({
           ]}
         >
           <Input placeholder="0.00" />
+        </Form.Item>
+        <Form.Item
+          name="costCenterId"
+          label={<span>成本中心 <Text type="secondary" style={{ fontSize: 11 }}>(可选)</Text></span>}
+          extra="只贴给费用类科目；银行存款、应交税费这些不属于任何部门的行不会带上它。留空则该笔费用落进部门报表的「未指定」分组。"
+        >
+          <Select
+            allowClear
+            placeholder={costCenters.length === 0 ? "还没有成本中心，先去经营报告里新建" : "留空 = 不指定"}
+            options={costCenters.map((item) => ({
+              value: item.id,
+              label: `${item.code} ${item.name}`
+            }))}
+          />
         </Form.Item>
         <Form.Item name="summary" label={<span>摘要 <Text type="secondary" style={{ fontSize: 11 }}>(可选)</Text></span>}>
           <Input placeholder="凭证摘要，留空则使用模板默认摘要" />

@@ -37,6 +37,7 @@ import { buildReversalLines, canReverseVoucher } from "./reversal.js";
 import { formatVoucherNumber, resolveVoucherWord, type VoucherWord } from "./voucher-number.js";
 import { insertLedgerEntries } from "./ledger-writer.js";
 import { SETTLEABLE_TYPE_CODES } from "../settlement/settleable-accounts.js";
+import { isCostCenterApplicable } from "../cost-center/cost-center.js";
 import { checkAccountsUsable } from "../accounts/account-guard.js";
 import { BASE_CURRENCY, RATE_SCALE } from "../currency/revaluation.js";
 import { resolveClosingRate } from "../currency/revaluation-store.js";
@@ -146,6 +147,51 @@ async function attachCounterparty(
   for (const line of lines) {
     if (settleable.has(line.accountCode)) {
       line.counterpartyId = counterpartyId;
+    }
+  }
+}
+
+/**
+ * 把成本中心贴到凭证行（V12-D1 的最后一环）。
+ *
+ * D1 建了成本中心主数据、加了 `ledger_entries.cost_center_id`、做了部门费用报表，
+ * **但没有任何地方给这一列赋值**——于是报表里所有金额都落在「未指定」一行，
+ * 整张报表实际不可用。这里补上写入侧。
+ *
+ * 与 {@link attachCounterparty} 同构：一个值 + 按科目性质判定该贴给哪些行。
+ * 判据是 `isCostCenterApplicable`（费用类，且排除所得税这类公司级科目），
+ * 而不是科目码前缀。
+ *
+ * **只贴适用的行，不强制**：一张凭证里银行存款、应交税费那几行不属于任何部门，
+ * 贴上去只会让部门费用凭空多出一笔。而适用行漏贴的后果是落进「未指定」分组，
+ * 由报表显式列示——不在写入端拦人，因为记不上账比少一个维度严重得多。
+ */
+async function attachCostCenter(
+  companyId: string,
+  lines: { accountCode: string; costCenterId?: string | null }[],
+  costCenterId: string | null
+): Promise<void> {
+  if (!costCenterId || lines.length === 0) return;
+  const codes = [...new Set(lines.map((line) => line.accountCode))];
+  const rows = await query<{ code: string; category: string; account_type: string }>(
+    `select code, category, account_type from accounts
+     where company_id = $1 and code = any($2::text[])`,
+    [companyId, codes]
+  );
+  const applicable = new Set(
+    rows
+      .filter((row) =>
+        isCostCenterApplicable({
+          code: row.code,
+          category: row.category,
+          accountType: row.account_type
+        })
+      )
+      .map((row) => row.code)
+  );
+  for (const line of lines) {
+    if (applicable.has(line.accountCode)) {
+      line.costCenterId = costCenterId;
     }
   }
 }
@@ -465,6 +511,11 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
      * 不填则一切照旧走本位币，既有调用方零感知。
      */
     currency?: string;
+    /**
+     * 成本中心（V12-D1）。填了就贴给凭证里适用的费用行，不填则那些行落进
+     * 部门费用报表的「未指定」分组。
+     */
+    costCenterId?: string;
   };
   if (!body.templateKey || !body.amount || !body.businessEventId) {
     return json(res, 400, { error: "templateKey, amount and businessEventId are required" });
@@ -586,6 +637,13 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
   // 往来维度只贴到往来科目的行上（V12-C2）。给每一行都贴会让"银行存款-甲客户"
   // 这种无意义的组合进总账；判据用 account_type 而非科目码，D3 换编码时不用改这里。
   await attachCounterparty(req.auth!.companyId, voucher.lines, event.counterparty_id);
+  // 成本中心由用户在创建时指定（V12-D1）。与往来单位不同，它不能从业务事项推断：
+  // D1 刻意没有复用 departments 表——组织架构会变而核算口径要稳定，两者是两个概念。
+  await attachCostCenter(
+    req.auth!.companyId,
+    voucher.lines,
+    typeof body.costCenterId === "string" && body.costCenterId ? body.costCenterId : null
+  );
 
   await withTransaction(async (client) => {
     await client.query(
