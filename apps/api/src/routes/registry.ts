@@ -2,6 +2,17 @@ import { env } from "../config/env.js";
 import { query } from "../db/client.js";
 import { getMenu } from "../modules/access/routes.js";
 import {
+  cancelScheduleRoute,
+  confirmPaymentRoute,
+  createPaymentRoute,
+  createScheduleRoute,
+  exportPaymentsRoute,
+  listDuePaymentsRoute,
+  listPaymentsRoute,
+  listSchedulesRoute
+} from "../modules/payments/routes.js";
+
+import {
   createReimbursementRoute,
   getReimbursementRoute,
   invoiceReimbursementUsageRoute,
@@ -724,6 +735,45 @@ const routes: RouteDef[] = [
     permission: "expense.view",
     handler: (req, res, p) => invoiceReimbursementUsageRoute(req, res, p.id!)
   },
+
+
+  // ── V13-C 合同付款计划与付款单 ─────────────────────────────────────
+  //
+  // 付款计划的读写归 contracts.*（它是合同条款的一部分）；
+  // 实际付款归 banking.manage（出纳本职，与导流水、做对账同一档）。
+  // 这条分界让「谁能改合同条款」与「谁能把钱付出去」是两个人。
+  {
+    method: "GET",
+    path: "/api/contracts/:id/schedules",
+    auth: true,
+    permission: "contracts.view",
+    handler: (req, res, p) => listSchedulesRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/contracts/:id/schedules",
+    auth: true,
+    permission: "contracts.manage",
+    handler: (req, res, p) => createScheduleRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/schedules/:id/cancel",
+    auth: true,
+    permission: "contracts.manage",
+    handler: (req, res, p) => cancelScheduleRoute(req, res, p.id!)
+  },
+  { method: "GET", path: "/api/payments/due", auth: true, permission: "contracts.view", handler: listDuePaymentsRoute },
+  { method: "GET", path: "/api/payments", auth: true, permission: "contracts.view", handler: listPaymentsRoute },
+  { method: "POST", path: "/api/payments", auth: true, permission: "banking.manage", handler: createPaymentRoute },
+  {
+    method: "POST",
+    path: "/api/payments/:id/confirm",
+    auth: true,
+    permission: "banking.manage",
+    handler: (req, res, p) => confirmPaymentRoute(req, res, p.id!)
+  },
+  { method: "POST", path: "/api/payments/export", auth: true, permission: "banking.manage", handler: exportPaymentsRoute },
 
   // ── V13-A 审批流（终于用上了 workflow.* 权限键）─────────────────────
   //
