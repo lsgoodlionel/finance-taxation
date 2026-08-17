@@ -20,15 +20,18 @@ import { errorMessage } from "../../lib/errors";
 import { listCostCenters } from "../../lib/api";
 import {
   createBudget,
+  getExpenseAnalysis,
   listBudgets,
   type BudgetWithUsage,
-  type CreateBudgetBody
+  type CreateBudgetBody,
+  type ExpenseAnalysis
 } from "../../lib/api-expense-control";
+import { ExpenseAnalysisPanel } from "./ExpenseAnalysisPanel";
 import { BudgetCreateForm, type CostCenterOption } from "./BudgetCreateForm";
 import { BudgetTable } from "./BudgetTable";
 import { countOverruns } from "./budget-view";
 
-const TASK_KEYS = ["review", "create"] as const;
+const TASK_KEYS = ["review", "create", "analysis"] as const;
 type BudgetTaskKey = (typeof TASK_KEYS)[number];
 
 function isTaskKey(value: string | null): value is BudgetTaskKey {
@@ -42,6 +45,8 @@ export function BudgetCenterPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<ExpenseAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
 
   const task: BudgetTaskKey = isTaskKey(searchParams.get("task"))
     ? (searchParams.get("task") as BudgetTaskKey)
@@ -90,6 +95,18 @@ export function BudgetCenterPage() {
   );
 
   const overrunCount = useMemo(() => countOverruns(items), [items]);
+
+  // 费用构成按需加载：它查的是报销单，与预算列表是两套数据，
+  // 没切到那件事就不该多跑一次查询。
+  useEffect(() => {
+    if (task !== "analysis") return;
+    const analysisPeriod = period ?? dayjs().format("YYYY-MM");
+    setAnalysisLoading(true);
+    getExpenseAnalysis(analysisPeriod)
+      .then(setAnalysis)
+      .catch((error) => toast.error(errorMessage(error, "费用分析加载失败")))
+      .finally(() => setAnalysisLoading(false));
+  }, [task, period]);
 
   const handleCreate = async (body: CreateBudgetBody) => {
     setSubmitting(true);
@@ -161,13 +178,26 @@ export function BudgetCenterPage() {
             key: "create",
             label: "立预算",
             description: "按期间、部门、科目定额度"
+          },
+          {
+            key: "analysis",
+            label: "看构成",
+            description: "报销的钱花在哪个部门、哪类费用、谁报的"
           }
         ]}
         activeKey={task}
         onSelectTask={(key) => setTask(key as BudgetTaskKey)}
         switcherLabel="预算中心任务"
       >
-        {task === "review" ? (
+        {task === "analysis" ? (
+          analysisLoading ? (
+            <Skeleton active paragraph={{ rows: 5 }} />
+          ) : analysis ? (
+            <ExpenseAnalysisPanel analysis={analysis} />
+          ) : (
+            <Empty description="暂无费用数据" />
+          )
+        ) : task === "review" ? (
           <div>
             <Space style={{ marginBottom: 12 }}>
               <Typography.Text type="secondary">期间</Typography.Text>

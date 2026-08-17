@@ -588,3 +588,48 @@ export async function confirmPayment(id: string) {
     { method: "POST" }
   );
 }
+
+// ── 业财合规审核与费用分析（V13-D）─────────────────────────────
+
+export interface AuditFinding {
+  /** 哪一行出的问题；null 表示单据级。 */
+  lineId: string | null;
+  level: ControlLevel;
+  code: string;
+  message: string;
+}
+
+export interface AuditOutcome {
+  level: ControlLevel;
+  findings: AuditFinding[];
+}
+
+/** 审核一张报销单。纯计算不落库，填完表就能看，不用等提交被拒。 */
+export async function auditReimbursement(id: string) {
+  return request<AuditOutcome>(`/api/reimbursements/${encodeURIComponent(id)}/audit`, {
+    method: "POST"
+  });
+}
+
+export interface ExpenseAnalysisRow {
+  key: string;
+  label: string;
+  amountCents: number;
+  count: number;
+}
+
+export interface ExpenseAnalysis {
+  period: string;
+  byCostCenter: ExpenseAnalysisRow[];
+  byExpenseType: ExpenseAnalysisRow[];
+  byApplicant: ExpenseAnalysisRow[];
+  totalCents: number;
+  /** 口径说明。数据源是报销单不是总账——不说明白两张表对不上时没人知道为什么。 */
+  scopeNote: string;
+}
+
+export async function getExpenseAnalysis(period: string) {
+  return request<ExpenseAnalysis>(
+    `/api/reports/expense-analysis?period=${encodeURIComponent(period)}`
+  );
+}

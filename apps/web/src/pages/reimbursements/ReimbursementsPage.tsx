@@ -35,14 +35,17 @@ import { TaskFocusShell } from "../../components/ui/TaskFocusShell";
 import { errorMessage } from "../../lib/errors";
 import { listCostCenters } from "../../lib/api";
 import {
+  auditReimbursement,
   createReimbursement,
   listAdvances,
   listReimbursements,
   transitionReimbursement,
   type AdvanceRow,
+  type AuditOutcome,
   type ReimbursementLineInput,
   type ReimbursementRow
 } from "../../lib/api-expense-control";
+import { AuditPanel } from "./AuditPanel";
 import { formatCents } from "../requests/request-view";
 import { REIMBURSEMENT_STATUS_META, sumLineCents } from "./reimbursement-view";
 
@@ -79,6 +82,10 @@ export function ReimbursementsPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // 审核结果按单据 id 缓存：切换任务、刷新列表都不该丢掉刚看到的结论。
+  const [audits, setAudits] = useState<Record<string, AuditOutcome>>({});
+  const [auditing, setAuditing] = useState<string | null>(null);
 
   const [expenseDate, setExpenseDate] = useState<Dayjs | null>(null);
   const [advanceId, setAdvanceId] = useState<string | undefined>(undefined);
@@ -180,7 +187,31 @@ export function ReimbursementsPage() {
     }
   };
 
+  const runAudit = async (row: ReimbursementRow) => {
+    setAuditing(row.id);
+    try {
+      const outcome = await auditReimbursement(row.id);
+      setAudits((prev) => ({ ...prev, [row.id]: outcome }));
+      return outcome;
+    } catch (error) {
+      toast.error(errorMessage(error, "审核失败"));
+      return null;
+    } finally {
+      setAuditing(null);
+    }
+  };
+
   const handleTransition = async (row: ReimbursementRow, action: string) => {
+    // 提交前先审核。**把结果展开给用户看，而不是让他撞一个 409**——
+    // 服务端仍会拦（那是最终防线），但用户应当在点之前就知道哪里不行。
+    if (action === "submit") {
+      const outcome = await runAudit(row);
+      if (outcome?.level === "block") {
+        toast.error("有必须处理的合规问题，展开单据查看详情");
+        return;
+      }
+    }
+
     try {
       const result = await transitionReimbursement(row.id, action);
       toast.success(result.note ?? "操作成功");
@@ -508,7 +539,24 @@ export function ReimbursementsPage() {
             columns={columns}
             pagination={false}
             expandable={{
+              // 展开时自动审核一次：用户展开单据就是想知道「这单有没有问题」。
+              onExpand: (expanded, row) => {
+                if (expanded && !audits[row.id]) void runAudit(row);
+              },
               expandedRowRender: (row) => (
+                <div>
+                  {audits[row.id] ? (
+                    <div style={{ marginBottom: 12 }}>
+                      <AuditPanel
+                        outcome={audits[row.id]!}
+                        lineLabels={Object.fromEntries(
+                          row.lines.map((line) => [line.id, line.summary || line.expenseType])
+                        )}
+                      />
+                    </div>
+                  ) : auditing === row.id ? (
+                    <Skeleton active paragraph={{ rows: 1 }} style={{ marginBottom: 12 }} />
+                  ) : null}
                 <Table
                   rowKey="id"
                   size="small"
@@ -542,6 +590,7 @@ export function ReimbursementsPage() {
                     { title: "说明", dataIndex: "summary" }
                   ]}
                 />
+                </div>
               )
             }}
           />
