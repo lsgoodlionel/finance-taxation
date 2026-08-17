@@ -158,3 +158,89 @@ export async function checkExpenseStandard(body: {
     standardId: string | null;
   }>("/api/expense-standards/check", { method: "POST", body: JSON.stringify(body) });
 }
+
+// ── 审批流（V13-A4/A5/A6）──────────────────────────────────────────
+
+export type ApprovalDocumentType =
+  | "request"
+  | "advance"
+  | "reimbursement"
+  | "payment"
+  | "contract";
+
+export type ApprovalStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type ApproverType = "role" | "user" | "manager";
+
+export interface ApprovalStep {
+  stepOrder: number;
+  approverType: ApproverType;
+  approverValue: string;
+  /** 触发本步骤的最小金额（分）。达到即触发。 */
+  minAmountCents: number;
+}
+
+export interface ApprovalFlow {
+  id: string;
+  name: string;
+  documentType: ApprovalDocumentType;
+  isActive: boolean;
+  note: string | null;
+  steps: ApprovalStep[];
+}
+
+export interface ApprovalInstance {
+  id: string;
+  flowId: string;
+  documentType: ApprovalDocumentType;
+  documentId: string;
+  submitterUserId: string;
+  status: ApprovalStatus;
+  currentStepOrder: number | null;
+  requiredStepOrders: number[];
+  amountCents: number;
+}
+
+export interface ApprovalActionRecord {
+  step_order: number;
+  actor_user_id: string;
+  action: string;
+  comment: string | null;
+  acted_at: string;
+}
+
+export async function listApprovalFlows() {
+  return request<{ items: ApprovalFlow[]; total: number }>("/api/approval/flows");
+}
+
+export async function createApprovalFlow(body: {
+  name: string;
+  documentType: ApprovalDocumentType;
+  steps: Array<Omit<ApprovalStep, "stepOrder">>;
+  note?: string | null;
+}) {
+  return request<{ flow: ApprovalFlow }>("/api/approval/flows", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+/** 我的待办审批。 */
+export async function listPendingApprovals() {
+  return request<{ items: ApprovalInstance[]; total: number }>("/api/approval/pending");
+}
+
+export async function actOnApproval(
+  id: string,
+  body: { action: "approve" | "reject" | "cancel"; comment?: string | null }
+) {
+  return request<{ instance: ApprovalInstance }>(
+    `/api/approval/instances/${encodeURIComponent(id)}/act`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
+export async function getApprovalHistory(id: string) {
+  return request<{ actions: ApprovalActionRecord[]; total: number }>(
+    `/api/approval/instances/${encodeURIComponent(id)}`
+  );
+}

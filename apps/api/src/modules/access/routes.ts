@@ -48,6 +48,10 @@ const ALL_MENU_ITEMS: readonly MenuItem[] = [
   // V13-A：预算中心。费用标准不在这里——它是**配置**而非日常操作，
   // 归入系统中心（与科目表、往来单位一致），否则低频配置项会稀释高频入口。
   { key: "budget", label: "预算中心", route: "/budget", permissionKey: "budget.view", ...GROUP_EXPENSE },
+  // 我的审批用 workflow.view——那个权限键在目录里躺了很久没人用，
+  // 它本就是给审批流预留的。放在费控组而非入口组：审批对象绝大多数是费控单据。
+  // 「我的一天」仍聚合全部待办（含审批），两者是聚合视图与专项工作台的分工。
+  { key: "approvals", label: "我的审批", route: "/approvals", permissionKey: "workflow.view", ...GROUP_EXPENSE },
   { key: "bills", label: "票据中心", route: "/bills", permissionKey: "documents.view", ...GROUP_FINANCE },
   { key: "vouchers", label: "凭证中心", route: "/vouchers", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "ledger", label: "总账中心", route: "/ledger", permissionKey: "ledger.view", ...GROUP_FINANCE },

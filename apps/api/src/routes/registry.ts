@@ -2,6 +2,15 @@ import { env } from "../config/env.js";
 import { query } from "../db/client.js";
 import { getMenu } from "../modules/access/routes.js";
 import {
+  actOnApprovalRoute,
+  createFlowRoute,
+  getApprovalDetailRoute,
+  listFlowsRoute,
+  listPendingRoute,
+  submitApprovalRoute
+} from "../modules/approval/routes.js";
+
+import {
   checkBudgetRoute,
   createBudgetRoute,
   deleteBudgetRoute,
@@ -590,6 +599,31 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "ledger.post",
     handler: (req, res, p) => updateCostCenterRoute(req, res, p.id!)
+  },
+
+
+  // ── V13-A 审批流（终于用上了 workflow.* 权限键）─────────────────────
+  //
+  // 这两个键在 permissionCatalog 里躺了很久却没有任何路由使用——它们是历史上
+  // 给审批流预留的位置。`workflow.view` 覆盖「看流程 + 处理我的待办」，
+  // `workflow.manage` 只管改流程定义：改审批链等于改谁能放行多大的钱。
+  { method: "GET", path: "/api/approval/flows", auth: true, permission: "workflow.view", handler: listFlowsRoute },
+  { method: "POST", path: "/api/approval/flows", auth: true, permission: "workflow.manage", handler: createFlowRoute },
+  { method: "GET", path: "/api/approval/pending", auth: true, permission: "workflow.view", handler: listPendingRoute },
+  { method: "POST", path: "/api/approval/instances", auth: true, permission: "workflow.view", handler: submitApprovalRoute },
+  {
+    method: "POST",
+    path: "/api/approval/instances/:id/act",
+    auth: true,
+    permission: "workflow.view",
+    handler: (req, res, p) => actOnApprovalRoute(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/approval/instances/:id",
+    auth: true,
+    permission: "workflow.view",
+    handler: (req, res, p) => getApprovalDetailRoute(req, res, p.id!)
   },
 
   // ── V13-A 费控地基：预算与费用标准 ──────────────────────────────────

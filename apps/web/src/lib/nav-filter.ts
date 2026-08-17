@@ -1,6 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import {
   AlertOutlined, AuditOutlined, BarChartOutlined, BookOutlined, CalculatorOutlined,
+  CheckSquareOutlined,
   DashboardOutlined, ExperimentOutlined, ExportOutlined, FileSearchOutlined, FileTextOutlined,
   FormOutlined, FundOutlined, GoldOutlined,
   InboxOutlined, LineChartOutlined, ProfileOutlined, RobotOutlined, SettingOutlined,
@@ -51,6 +52,7 @@ export const proNavItems: readonly NavEntry[] = [
     type: "group",
     children: [
       { key: "/budget", icon: createElement(FundOutlined), label: "预算中心" },
+      { key: "/approvals", icon: createElement(CheckSquareOutlined), label: "我的审批" },
     ],
   },
   {

@@ -38,6 +38,7 @@ const PayrollDomainPage = lazy(() => import("./pages/payroll/PayrollDomainPage")
 const MonthEndClosePage = lazy(() => import("./pages/MonthEndClosePage").then((m) => ({ default: m.MonthEndClosePage })));
 const AssetsCenterPage = lazy(() => import("./pages/assets/AssetsCenterPage").then((m) => ({ default: m.AssetsCenterPage })));
 const BudgetCenterPage = lazy(() => import("./pages/budget/BudgetCenterPage").then((m) => ({ default: m.BudgetCenterPage })));
+const MyApprovalsPage = lazy(() => import("./pages/approval/MyApprovalsPage").then((m) => ({ default: m.MyApprovalsPage })));
 const BankReconciliationPage = lazy(() => import("./pages/banking/BankReconciliationPage").then((m) => ({ default: m.BankReconciliationPage })));
 const MyDayPage = lazy(() => import("./pages/MyDayPage").then((m) => ({ default: m.MyDayPage })));
 const HomePage = lazy(() => import("./pages/home").then((m) => ({ default: m.HomePage })));
@@ -85,6 +86,8 @@ const router = createBrowserRouter([
       { path: "asset-center", element: <AssetsCenterPage /> },
       // V13-A：预算中心。费控组的第一项，批次 B/C 会在同组加申请、报销、付款。
       { path: "budget", element: <BudgetCenterPage /> },
+      // V13-A6：pro 与 guided 两轨共用同一页——审批对财务和业务人员是同一件事。
+      { path: "approvals", element: <MyApprovalsPage /> },
       // 余额调节表是月结流程里的一个步骤，由月结向导直接跳来，也要能单独深链给审计看
       { path: "banking/reconciliation", element: <BankReconciliationPage /> },
       { path: "ledger", element: <LedgerPage /> },

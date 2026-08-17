@@ -64,7 +64,22 @@ const WRITE_ROUTES_WITH_VIEW_PERMISSION: ReadonlyMap<string, string> = new Map([
   // V13-A：两个费控预检接口。用 POST 是因为入参是对象（日期 + 科目 + 部门 + 金额），
   // 塞进查询串既难读又有长度上限；语义上它们与 GET 无异——纯计算，不落库、不建单据。
   ["POST /api/budgets/check", "POST 当查询用：预算预检，只读三个数后算差额，不落库"],
-  ["POST /api/expense-standards/check", "POST 当查询用：超标预检，匹配标准后比金额，不落库"]
+  ["POST /api/expense-standards/check", "POST 当查询用：超标预检，匹配标准后比金额，不落库"],
+  // V13-A 审批：两层守护。workflow.view 只负责放基层角色进门——挂 manage
+  // 会让员工连自己的待办都处理不了、连自己的单子都提不了。能不能动某一单
+  // 由 handler 按数据归属收敛：
+  [
+    "POST /api/approval/instances",
+    "两层守护：workflow.view 放行提交，submitter 固定取 req.auth.userId，" +
+      "提交人永远是自己；同单据并发提交由 uq_approval_instance_pending 排他约束挡住"
+  ],
+  [
+    "POST /api/approval/instances/:id/act",
+    "两层守护：收敛点是 approval/store.ts 的 act —— 批准/驳回按 canActOnStep 判权" +
+      "（role/user/manager 三种，见 engine.test.ts 的 canActOnStep 四条用例），" +
+      "撤回只允许发起人本人。manager 类型的上级在 store 内部解析，" +
+      "不接受调用方传入——传当前用户 id 会让判据恒真"
+  ]
 ]);
 
 /**
