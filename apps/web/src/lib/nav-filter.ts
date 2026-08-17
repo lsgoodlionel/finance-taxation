@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import {
-  AlertOutlined, AuditOutlined, BarChartOutlined, BookOutlined, CalculatorOutlined,
+  AlertOutlined, AuditOutlined, BankOutlined, BarChartOutlined, BookOutlined, CalculatorOutlined,
   CheckSquareOutlined, FileDoneOutlined,
   DashboardOutlined, ExperimentOutlined, ExportOutlined, FileSearchOutlined, FileTextOutlined,
   FormOutlined, FundOutlined, GoldOutlined,
@@ -21,7 +21,7 @@ export interface NavEntry extends NavLeaf {
   children?: NavLeaf[];
 }
 
-/** pro 模式：完整 8 组 23 项导航（与后端 /api/access/menu 的 group 元数据一致）。 */
+/** pro 模式：完整 8 组 24 项导航（与后端 /api/access/menu 的 group 元数据一致）。 */
 export const proNavItems: readonly NavEntry[] = [
   {
     key: "g-entry",
@@ -49,7 +49,7 @@ export const proNavItems: readonly NavEntry[] = [
   {
     // V13-A：费控组。位置即语义——排在「经营管理」之后、「财务运营」之前，
     // 与真实业务时序一致：先有业务与合同，再有费用控制，最后才是账务核算。
-    // B8 已补齐申请与借款、报销中心；付款中心排在批次 C。
+    // 至此费控组 5 项齐了：预算 / 审批 / 申请与借款 / 报销 / 付款，与蓝图一致。
     key: "g-expense",
     label: "费用与支付",
     type: "group",
@@ -58,6 +58,7 @@ export const proNavItems: readonly NavEntry[] = [
       { key: "/approvals", icon: createElement(CheckSquareOutlined), label: "我的审批" },
       { key: "/requests", icon: createElement(FileDoneOutlined), label: "申请与借款" },
       { key: "/reimbursements", icon: createElement(WalletOutlined), label: "报销中心" },
+      { key: "/payments", icon: createElement(BankOutlined), label: "付款中心" },
     ],
   },
   {

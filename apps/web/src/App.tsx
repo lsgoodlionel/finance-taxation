@@ -41,6 +41,7 @@ const BudgetCenterPage = lazy(() => import("./pages/budget/BudgetCenterPage").th
 const MyApprovalsPage = lazy(() => import("./pages/approval/MyApprovalsPage").then((m) => ({ default: m.MyApprovalsPage })));
 const RequestsPage = lazy(() => import("./pages/requests/RequestsPage").then((m) => ({ default: m.RequestsPage })));
 const ReimbursementsPage = lazy(() => import("./pages/reimbursements/ReimbursementsPage").then((m) => ({ default: m.ReimbursementsPage })));
+const PaymentsPage = lazy(() => import("./pages/payments/PaymentsPage").then((m) => ({ default: m.PaymentsPage })));
 const BankReconciliationPage = lazy(() => import("./pages/banking/BankReconciliationPage").then((m) => ({ default: m.BankReconciliationPage })));
 const MyDayPage = lazy(() => import("./pages/MyDayPage").then((m) => ({ default: m.MyDayPage })));
 const HomePage = lazy(() => import("./pages/home").then((m) => ({ default: m.HomePage })));
@@ -92,6 +93,7 @@ const router = createBrowserRouter([
       { path: "approvals", element: <MyApprovalsPage /> },
       { path: "requests", element: <RequestsPage /> },
       { path: "reimbursements", element: <ReimbursementsPage /> },
+      { path: "payments", element: <PaymentsPage /> },
       // 余额调节表是月结流程里的一个步骤，由月结向导直接跳来，也要能单独深链给审计看
       { path: "banking/reconciliation", element: <BankReconciliationPage /> },
       { path: "ledger", element: <LedgerPage /> },

@@ -50,21 +50,21 @@ assert(fallback !== items, "expected fallback to return a copy");
 // 空集合 → 空导航
 assert(filterNavByAllowedRoutes(items, new Set()).length === 0, "expected empty set to filter everything");
 
-// pro 导航常量：8 组 23 项。
+// pro 导航常量：8 组 24 项。
 // 这两个数字是**防膨胀护栏**，不是随代码变动的快照：每加一项都该先问
 // "能不能并进已有的中心"。V12 批次 C 新增四个能力（固定资产 / 往来账龄 /
 // 定期凭证 / 余额调节表），只加了一项 /assets——前三个并成同一页的三件事，
 // 余额调节表由月结向导跳转、不进侧栏。
 //
-// V13-A 新增第 8 组「费用与支付」，B8 补齐到 4 项：
-// 预算中心 / 我的审批 / 申请与借款 / 报销中心。
+// V13 第 8 组「费用与支付」到批次 C 收在 5 项：
+// 预算中心 / 我的审批 / 申请与借款 / 报销中心 / 付款中心——与蓝图一致，
+// 不多不少。
 // 费用标准没有独立入口：它是**配置**而非日常操作，归入系统中心，与科目表、
 // 往来单位一致——低频配置项进一级导航会稀释高频入口。
-// 批次 C 会再加一项付款中心，届时这两个数字要跟着改——
-// 而改动本身就是一次"这项非加不可吗"的复核。
+// 这一组到此为止。再想往里加，先问「能不能并进已有的五项之一」。
 assert(proNavItems.length === 8, "expected 8 pro nav groups");
 const proLeafCount = proNavItems.reduce((count, group) => count + (group.children?.length ?? 0), 0);
-assert(proLeafCount === 23, "expected 23 pro nav leaves");
+assert(proLeafCount === 24, "expected 24 pro nav leaves");
 
 // guided 导航常量：扁平且 ≤6 项，路由必须是 pro 导航或 guided 专属路由清单的成员
 assert(guidedNavItems.length <= 6, "expected guided nav to stay minimal");

@@ -57,6 +57,9 @@ const ALL_MENU_ITEMS: readonly MenuItem[] = [
   // 这正是「审计要看得到别人的单据」与「只读角色不该提单」的分界。
   { key: "requests", label: "申请与借款", route: "/requests", permissionKey: "expense.view", ...GROUP_EXPENSE },
   { key: "reimbursements", label: "报销中心", route: "/reimbursements", permissionKey: "expense.view", ...GROUP_EXPENSE },
+  // 付款中心归 contracts.view：应付列表的来源是合同付款计划。
+  // 真正把钱付出去要 banking.manage（出纳本职），那道门在接口上。
+  { key: "payments", label: "付款中心", route: "/payments", permissionKey: "contracts.view", ...GROUP_EXPENSE },
   { key: "bills", label: "票据中心", route: "/bills", permissionKey: "documents.view", ...GROUP_FINANCE },
   { key: "vouchers", label: "凭证中心", route: "/vouchers", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "ledger", label: "总账中心", route: "/ledger", permissionKey: "ledger.view", ...GROUP_FINANCE },

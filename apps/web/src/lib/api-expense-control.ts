@@ -454,3 +454,137 @@ export async function checkInvoiceReimbursementUsage(invoiceId: string) {
     usages: { reimbursementId: string; reimbursementNo: string; status: string }[];
   }>(`/api/invoices/${encodeURIComponent(invoiceId)}/reimbursement-usage`);
 }
+
+// ── 合同付款计划与付款单（V13-C）─────────────────────────────────
+
+export type PaymentScheduleType = "normal" | "retention";
+export type PaymentScheduleStatus = "pending" | "partial" | "paid" | "overdue" | "cancelled";
+
+export interface PaymentSchedule {
+  id: string;
+  contractId: string;
+  periodNo: number;
+  title: string;
+  dueDate: string;
+  amountCents: number;
+  ratioBp: number | null;
+  scheduleType: PaymentScheduleType;
+  retentionReleaseDate: string | null;
+  isCancelled: boolean;
+  note: string | null;
+  /** 已付，**由付款单汇总**，不是表上的字段。 */
+  paidCents: number;
+  status: PaymentScheduleStatus;
+}
+
+export interface ContractPaymentProgress {
+  totalCents: number;
+  paidCents: number;
+  /** 待付**不含质保金**——它是约定延后的。 */
+  unpaidCents: number;
+  retentionCents: number;
+  isFullyPaid: boolean;
+  /** 主体款项付清，质保金可能还挂着。工程合同最常见的中间态。 */
+  isMainPaid: boolean;
+}
+
+export async function listContractSchedules(contractId: string) {
+  return request<{ items: PaymentSchedule[]; progress: ContractPaymentProgress }>(
+    `/api/contracts/${encodeURIComponent(contractId)}/schedules`
+  );
+}
+
+export async function createContractSchedule(
+  contractId: string,
+  body: {
+    periodNo: number;
+    title: string;
+    dueDate: string;
+    amountCents: number;
+    ratioBp?: number | null;
+    scheduleType?: PaymentScheduleType;
+    retentionReleaseDate?: string | null;
+    note?: string | null;
+  }
+) {
+  return request<{ schedule: PaymentSchedule }>(
+    `/api/contracts/${encodeURIComponent(contractId)}/schedules`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
+export async function cancelContractSchedule(scheduleId: string) {
+  return request<{ ok: true }>(`/api/schedules/${encodeURIComponent(scheduleId)}/cancel`, {
+    method: "POST"
+  });
+}
+
+export interface DuePaymentRow {
+  scheduleId: string;
+  contractId: string;
+  contractNo: string;
+  counterpartyName: string;
+  periodNo: number;
+  title: string;
+  dueDate: string;
+  amountCents: number;
+  paidCents: number;
+  scheduleType: PaymentScheduleType;
+}
+
+/** 应付列表。默认查本月——出纳每天要看的第一个东西。 */
+export async function listDuePayments(params: { from?: string; to?: string } = {}) {
+  const qs = new URLSearchParams();
+  if (params.from) qs.set("from", params.from);
+  if (params.to) qs.set("to", params.to);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return request<{ items: DuePaymentRow[]; total: number; totalCents: number }>(
+    `/api/payments/due${suffix}`
+  );
+}
+
+export type PaymentStatus = "draft" | "submitted" | "paid" | "cancelled";
+
+export interface PaymentRow {
+  id: string;
+  paymentNo: string;
+  reimbursementId: string | null;
+  scheduleId: string | null;
+  amountCents: number;
+  paidOn: string;
+  bankAccountCode: string;
+  status: PaymentStatus;
+  voucherId: string | null;
+  exportBatchNo: string | null;
+  note: string | null;
+}
+
+export async function listPayments(params: { status?: PaymentStatus; from?: string; to?: string } = {}) {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.from) qs.set("from", params.from);
+  if (params.to) qs.set("to", params.to);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return request<{ items: PaymentRow[]; total: number }>(`/api/payments${suffix}`);
+}
+
+export async function createPayment(body: {
+  reimbursementId?: string | null;
+  scheduleId?: string | null;
+  amountCents: number;
+  paidOn?: string;
+  bankAccountCode?: string;
+  note?: string | null;
+}) {
+  return request<{ payment: PaymentRow }>("/api/payments", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export async function confirmPayment(id: string) {
+  return request<{ payment: PaymentRow; voucherId: string; note: string }>(
+    `/api/payments/${encodeURIComponent(id)}/confirm`,
+    { method: "POST" }
+  );
+}
