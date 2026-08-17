@@ -88,6 +88,49 @@ begin
   end loop;
 end $$;
 
+-- ── 与迁移 041 的二元组冲突：必须消歧，否则 041 不再幂等 ──────────
+--
+-- 041 用 `(account_code, account_name)` 二元组定位历史错挂，其中一条是
+-- `('6601', '销售费用-工资') → '6201'`——当年 6601 是「职工薪酬（成本）」，
+-- 而那笔钱其实是销售人员工资，所以改到了销售费用 6201。
+--
+-- **本迁移把 6201 改回 6601 之后，那个二元组又成立了**：`le-007-2` 现在是
+-- `(6601, '销售费用-工资')`，041 重跑会把它改回 6201，于是 041↔080 来回改，
+-- 041 的幂等性被破坏（`seed-account-codes-db.integration.test.ts` 的「041 可重复
+-- 执行」用例正是这么抓到的）。
+--
+-- 041 是已在各环境执行过的历史迁移，不能改。所以在这里消歧：把 `account_name`
+-- 改得更具体一点，让二元组不再命中。
+--
+-- **改名而不是改回编码**：6601 现在就是销售费用，编码是对的。而「销售费用-销售
+-- 人员工资」比「销售费用-工资」信息量只多不少——041 自己也说过，分录名对科目的
+-- 细化「比科目表的标准名更有信息量，故一律保留不动」，这里保留的正是那份信息。
+update ledger_entries
+   set account_name = '销售费用-销售人员工资'
+ where account_code = '6601' and account_name = '销售费用-工资';
+
+update voucher_lines
+   set account_name = '销售费用-销售人员工资'
+ where account_code = '6601' and account_name = '销售费用-工资';
+
+do $$
+declare
+  clash bigint;
+begin
+  -- 自检：041 的那个二元组不得再出现，否则下一次跑幂等测试还会红，
+  -- 而那时已经离开这个迁移的上下文、要重新查一遍才知道为什么。
+  select count(*) into clash from (
+    select 1 from ledger_entries where account_code = '6601' and account_name = '销售费用-工资'
+    union all
+    select 1 from voucher_lines where account_code = '6601' and account_name = '销售费用-工资'
+  ) t;
+  if clash > 0 then
+    raise exception
+      '仍有 % 行是 (6601, ''销售费用-工资'')——这个二元组会被迁移 041 再次命中，'
+      '把销售费用改回 6201。', clash;
+  end if;
+end $$;
+
 comment on column accounts.code is
   '科目编码，已全部按《企业会计准则——应用指南》国标化（V12-D3 迁移 070 + D6 迁移 080）。'
   '070 之后只剩销售费用 6201 未改——它的国标编码 6601 被「职工薪酬（成本）」占着，'
