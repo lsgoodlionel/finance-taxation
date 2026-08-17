@@ -1179,6 +1179,10 @@ export const permissionCatalog = [
   "budget.view",
   "budget.manage",
   "expense.view",
+  // 提交费用类单据（申请/借款/报销）。**与 expense.view 分开**：只读角色
+  // 与审计要看得到费用标准和别人的单据，但不该能提单——V13-B 的权限护栏
+  // 正是抓到「role-viewer 能建申请单」才拆出这个键。
+  "expense.submit",
   "expense.manage",
   "knowledge.view",
   "knowledge.manage",

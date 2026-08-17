@@ -118,16 +118,16 @@ export async function createBudgetRoute(req: ApiRequest, res: ServerResponse): P
     userId: req.auth!.userId,
     action: "budget.create",
     resourceType: "budget",
-    resourceId: result.budget.id,
-    resourceLabel: `${result.budget.periodKey} ${result.budget.accountCode ?? "全科目"}`,
+    resourceId: result.value.id,
+    resourceLabel: `${result.value.periodKey} ${result.value.accountCode ?? "全科目"}`,
     changes: {
-      amountCents: result.budget.amountCents,
-      costCenterId: result.budget.costCenterId,
-      controlPolicy: result.budget.controlPolicy
+      amountCents: result.value.amountCents,
+      costCenterId: result.value.costCenterId,
+      controlPolicy: result.value.controlPolicy
     }
   });
 
-  json(res, 201, { budget: await withUsage(result.budget) });
+  json(res, 201, { budget: await withUsage(result.value) });
 }
 
 export async function updateBudgetRoute(
@@ -162,14 +162,14 @@ export async function updateBudgetRoute(
     userId: req.auth!.userId,
     action: "budget.update",
     resourceType: "budget",
-    resourceId: result.budget.id,
-    resourceLabel: `${result.budget.periodKey} ${result.budget.accountCode ?? "全科目"}`,
+    resourceId: result.value.id,
+    resourceLabel: `${result.value.periodKey} ${result.value.accountCode ?? "全科目"}`,
     // 金额改动要留下前后值：预算被调减是敏感操作，稽查时要答得出「谁在什么时候
     // 把这个部门的预算从 X 改成了 Y」。
-    changes: { amountCentsBefore: before.amountCents, amountCentsAfter: result.budget.amountCents }
+    changes: { amountCentsBefore: before.amountCents, amountCentsAfter: result.value.amountCents }
   });
 
-  json(res, 200, { budget: await withUsage(result.budget) });
+  json(res, 200, { budget: await withUsage(result.value) });
 }
 
 export async function deleteBudgetRoute(

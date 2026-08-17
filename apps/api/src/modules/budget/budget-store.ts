@@ -23,8 +23,13 @@ export interface BudgetFailure {
   message: string;
 }
 
+/**
+ * 统一用 `value` 而不是 `budget` 做载荷名——approval / requests 两个模块的
+ * Result 都是 `{ ok, value }`，三处两种形状会让人在调用点习惯性写错
+ *（写这批代码时真的踩了一次：`result.value` 取到 undefined）。
+ */
 export type BudgetResult =
-  | { ok: true; budget: BudgetRow }
+  | { ok: true; value: BudgetRow }
   | { ok: false; failure: BudgetFailure };
 
 export interface CreateBudgetInput {
@@ -90,7 +95,7 @@ export async function createBudget(input: CreateBudgetInput): Promise<BudgetResu
         input.note
       ]
     );
-    return { ok: true, budget: mapBudgetRow(row!) };
+    return { ok: true, value: mapBudgetRow(row!) };
   } catch (error) {
     // 唯一索引用 coalesce 把 null 补成 '*'，所以两条「全公司 + 不限科目」的
     // 预算也会撞——这正是要拦的：重复建会让可用额度凭空翻倍。
@@ -136,7 +141,7 @@ export async function updateBudgetAmount(
   if (!row) {
     return { ok: false, failure: { code: "BUDGET_NOT_FOUND", message: "预算不存在" } };
   }
-  return { ok: true, budget: mapBudgetRow(row) };
+  return { ok: true, value: mapBudgetRow(row) };
 }
 
 /**

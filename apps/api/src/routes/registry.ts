@@ -2,6 +2,15 @@ import { env } from "../config/env.js";
 import { query } from "../db/client.js";
 import { getMenu } from "../modules/access/routes.js";
 import {
+  createRequestRoute,
+  getRequestRoute,
+  listRequestsRoute,
+  precheckRequestRoute,
+  transitionRequestRoute,
+  updateRequestRoute
+} from "../modules/requests/routes.js";
+
+import {
   actOnApprovalRoute,
   createFlowRoute,
   getApprovalDetailRoute,
@@ -601,6 +610,46 @@ const routes: RouteDef[] = [
     handler: (req, res, p) => updateCostCenterRoute(req, res, p.id!)
   },
 
+
+
+  // ── V13-B 申请单 ───────────────────────────────────────────────────
+  //
+  // 读用 expense.view，写用 expense.submit——两者必须分开：只读角色与审计
+  // 要看得到费用标准和别人的单据，但不该能提单。这不是洁癖，是权限护栏
+  // 真的抓到了「role-viewer 能建申请单」。
+  //
+  // 归属收敛在 handler：requesterUserId 固定取 req.auth.userId，提交人永远
+  // 是自己；submit/cancel 另在 store 里判「只有发起人能做」。
+  { method: "GET", path: "/api/requests", auth: true, permission: "expense.view", handler: listRequestsRoute },
+  { method: "POST", path: "/api/requests", auth: true, permission: "expense.submit", handler: createRequestRoute },
+  {
+    method: "GET",
+    path: "/api/requests/:id",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => getRequestRoute(req, res, p.id!)
+  },
+  {
+    method: "PATCH",
+    path: "/api/requests/:id",
+    auth: true,
+    permission: "expense.submit",
+    handler: (req, res, p) => updateRequestRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/requests/:id/precheck",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => precheckRequestRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/requests/:id/transition",
+    auth: true,
+    permission: "expense.submit",
+    handler: (req, res, p) => transitionRequestRoute(req, res, p.id!)
+  },
 
   // ── V13-A 审批流（终于用上了 workflow.* 权限键）─────────────────────
   //

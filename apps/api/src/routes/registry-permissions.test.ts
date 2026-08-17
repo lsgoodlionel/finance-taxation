@@ -65,6 +65,11 @@ const WRITE_ROUTES_WITH_VIEW_PERMISSION: ReadonlyMap<string, string> = new Map([
   // 塞进查询串既难读又有长度上限；语义上它们与 GET 无异——纯计算，不落库、不建单据。
   ["POST /api/budgets/check", "POST 当查询用：预算预检，只读三个数后算差额，不落库"],
   ["POST /api/expense-standards/check", "POST 当查询用：超标预检，匹配标准后比金额，不落库"],
+  [
+    "POST /api/requests/:id/precheck",
+    "POST 当查询用：申请单的预算预检，读三个数后算差额，不落库、不改单据状态。" +
+      "用 POST 而非 GET 只为与另外两个 check 接口保持一致的调用形态"
+  ],
   // V13-A 审批：两层守护。workflow.view 只负责放基层角色进门——挂 manage
   // 会让员工连自己的待办都处理不了、连自己的单子都提不了。能不能动某一单
   // 由 handler 按数据归属收敛：
@@ -101,7 +106,10 @@ const WRITE_ROUTES_ALLOWED_FOR_READ_ONLY_ROLE: ReadonlySet<string> = new Set([
   "POST /api/tasks/:id/remind",
   // viewer 持有 expense.view（要看得到费用标准才知道自己能报多少），
   // 而超标预检是纯计算——能看标准的人本就能自己算出同样的结论。
-  "POST /api/expense-standards/check"
+  "POST /api/expense-standards/check",
+  // 同理：预检只读不写。viewer 提不了单（提交要 expense.submit，它没有），
+  // 但能看一眼某张单会不会超预算，这与它能查预算列表是同一层能力。
+  "POST /api/requests/:id/precheck"
 ]);
 
 /**
