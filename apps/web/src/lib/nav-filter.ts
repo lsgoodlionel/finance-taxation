@@ -1,11 +1,11 @@
 import { createElement, type ReactNode } from "react";
 import {
   AlertOutlined, AuditOutlined, BarChartOutlined, BookOutlined, CalculatorOutlined,
-  CheckSquareOutlined,
+  CheckSquareOutlined, FileDoneOutlined,
   DashboardOutlined, ExperimentOutlined, ExportOutlined, FileSearchOutlined, FileTextOutlined,
   FormOutlined, FundOutlined, GoldOutlined,
   InboxOutlined, LineChartOutlined, ProfileOutlined, RobotOutlined, SettingOutlined,
-  TeamOutlined, UnorderedListOutlined,
+  TeamOutlined, UnorderedListOutlined, WalletOutlined,
 } from "@ant-design/icons";
 
 /** 导航叶子项：key 即路由路径。 */
@@ -21,7 +21,7 @@ export interface NavEntry extends NavLeaf {
   children?: NavLeaf[];
 }
 
-/** pro 模式：完整 7 组 17 项导航（与后端 /api/access/menu 的 group 元数据一致）。 */
+/** pro 模式：完整 8 组 23 项导航（与后端 /api/access/menu 的 group 元数据一致）。 */
 export const proNavItems: readonly NavEntry[] = [
   {
     key: "g-entry",
@@ -29,6 +29,9 @@ export const proNavItems: readonly NavEntry[] = [
     type: "group",
     children: [
       { key: "/inbox", icon: createElement(InboxOutlined), label: "我的一天" },
+      // V13-B8：从 guided 轨移过来。移出那一轨的理由是「记账口径对业务人员
+      // 是错的抽象」，但会计确实要这个快速入口——两轨都不放等于悄悄下线一个功能。
+      { key: "/quick-entry", icon: createElement(FormOutlined), label: "记一笔" },
       { key: "/assistant", icon: createElement(RobotOutlined), label: "AI 财税助手" },
       { key: "/events", icon: createElement(UnorderedListOutlined), label: "经营事项总线" },
       { key: "/dashboard/chairman", icon: createElement(DashboardOutlined), label: "董事长驾驶舱" },
@@ -46,13 +49,15 @@ export const proNavItems: readonly NavEntry[] = [
   {
     // V13-A：费控组。位置即语义——排在「经营管理」之后、「财务运营」之前，
     // 与真实业务时序一致：先有业务与合同，再有费用控制，最后才是账务核算。
-    // 批次 B/C 会往这里加「申请与借款」「报销中心」「付款中心」「我的审批」。
+    // B8 已补齐申请与借款、报销中心；付款中心排在批次 C。
     key: "g-expense",
     label: "费用与支付",
     type: "group",
     children: [
       { key: "/budget", icon: createElement(FundOutlined), label: "预算中心" },
       { key: "/approvals", icon: createElement(CheckSquareOutlined), label: "我的审批" },
+      { key: "/requests", icon: createElement(FileDoneOutlined), label: "申请与借款" },
+      { key: "/reimbursements", icon: createElement(WalletOutlined), label: "报销中心" },
     ],
   },
   {
@@ -104,18 +109,33 @@ export const proNavItems: readonly NavEntry[] = [
   },
 ];
 
-/** guided 模式：面向老板的白话极简导航（扁平、≤6 项），同样经权限过滤。 */
+/**
+ * guided 模式：面向业务人员的白话极简导航（扁平、≤6 项），同样经权限过滤。
+ *
+ * ## V13-B8：「记一笔」移出这一轨
+ *
+ * 「记一笔」是**记账口径**（选科目、填借贷），对业务人员是错的抽象——
+ * 他们要的是「我出差花了 800 住宿费」，不是「借：管理费用-差旅费」。
+ *
+ * V7 当初把它放进来，是因为那时 guided 轨没有别的业务入口可放。现在有了
+ * 申请与报销，就该把位置还给正确的抽象。「记一笔」保留在 pro 轨。
+ */
 export const guidedNavItems: readonly NavEntry[] = [
   { key: "/home", icon: createElement(DashboardOutlined), label: "今天" },
+  { key: "/requests", icon: createElement(FileDoneOutlined), label: "我要申请" },
+  { key: "/reimbursements", icon: createElement(WalletOutlined), label: "我要报销" },
+  { key: "/approvals", icon: createElement(CheckSquareOutlined), label: "我的审批" },
   { key: "/assistant", icon: createElement(RobotOutlined), label: "问 AI" },
-  { key: "/quick-entry", icon: createElement(FormOutlined), label: "记一笔" },
-  { key: "/events", icon: createElement(UnorderedListOutlined), label: "我的事项" },
-  { key: "/inbox", icon: createElement(InboxOutlined), label: "审批与待办" },
   { key: "/reports", icon: createElement(LineChartOutlined), label: "经营报告" },
 ];
 
-/** guided 专属路由（不出现在 pro 导航，但同样受后端 menu 权限过滤）。 */
-export const GUIDED_ONLY_ROUTES: readonly string[] = ["/home", "/quick-entry"];
+/**
+ * guided 专属路由（不出现在 pro 导航，但同样受后端 menu 权限过滤）。
+ *
+ * V13-B8 之后只剩 `/home`：`/quick-entry` 从 guided 轨移到了 pro 轨，
+ * 不再是「guided 专属」。
+ */
+export const GUIDED_ONLY_ROUTES: readonly string[] = ["/home"];
 
 /**
  * 按后端返回的可见路由集合过滤导航（保持原顺序，不修改入参）：

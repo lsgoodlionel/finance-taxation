@@ -244,3 +244,213 @@ export async function getApprovalHistory(id: string) {
     `/api/approval/instances/${encodeURIComponent(id)}`
   );
 }
+
+// ── 申请单（V13-B1/B2）────────────────────────────────────────────
+
+export type RequestType = "travel" | "procurement" | "payment" | "other";
+export type RequestStatus =
+  | "draft"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "completed"
+  | "cancelled";
+
+export interface RequestRow {
+  id: string;
+  requestNo: string;
+  requestType: RequestType;
+  title: string;
+  purpose: string;
+  amountCents: number;
+  currency: string;
+  costCenterId: string | null;
+  accountCode: string | null;
+  expectedDate: string;
+  status: RequestStatus;
+  requesterUserId: string;
+  businessEventId: string | null;
+  note: string | null;
+}
+
+export async function listRequests(params: { mine?: boolean; status?: RequestStatus } = {}) {
+  const qs = new URLSearchParams();
+  if (params.mine) qs.set("mine", "true");
+  if (params.status) qs.set("status", params.status);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return request<{ items: RequestRow[]; total: number }>(`/api/requests${suffix}`);
+}
+
+export async function createRequest(body: {
+  requestType: RequestType;
+  title: string;
+  purpose: string;
+  amountCents: number;
+  costCenterId?: string | null;
+  accountCode?: string | null;
+  expectedDate: string;
+  note?: string | null;
+}) {
+  return request<{ request: RequestRow }>("/api/requests", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export type RequestAction = "submit" | "approve" | "reject" | "cancel" | "complete";
+
+export async function transitionRequest(id: string, action: RequestAction) {
+  return request<{ request: RequestRow }>(
+    `/api/requests/${encodeURIComponent(id)}/transition`,
+    { method: "POST", body: JSON.stringify({ action }) }
+  );
+}
+
+/** 提交前看这单会不会超预算。返回全部适用预算各自的判定。 */
+export async function precheckRequest(id: string) {
+  return request<{
+    level: ControlLevel;
+    checks: BudgetCheckItem[];
+    total?: number;
+    note?: string;
+  }>(`/api/requests/${encodeURIComponent(id)}/precheck`, { method: "POST" });
+}
+
+// ── 借款 / 备用金（V13-B3/B6）─────────────────────────────────────
+
+export type AdvanceStatus = "draft" | "pending" | "approved" | "paid" | "settled" | "cancelled";
+
+export interface AdvanceRow {
+  id: string;
+  advanceNo: string;
+  requestId: string | null;
+  borrowerUserId: string;
+  counterpartyId: string;
+  amountCents: number;
+  purpose: string;
+  expectedReturnDate: string | null;
+  status: AdvanceStatus;
+  paymentVoucherId: string | null;
+  note: string | null;
+  /** 未还余额，**来自账上**（1221 该往来单位的净额），不是表上的字段。 */
+  outstandingCents: number;
+}
+
+export async function listAdvances(params: { mine?: boolean; status?: AdvanceStatus } = {}) {
+  const qs = new URLSearchParams();
+  if (params.mine) qs.set("mine", "true");
+  if (params.status) qs.set("status", params.status);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return request<{ items: AdvanceRow[]; total: number }>(`/api/advances${suffix}`);
+}
+
+export async function createAdvance(body: {
+  requestId?: string | null;
+  amountCents: number;
+  purpose: string;
+  expectedReturnDate?: string | null;
+  note?: string | null;
+}) {
+  return request<{ advance: AdvanceRow }>("/api/advances", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export async function transitionAdvance(id: string, action: string) {
+  return request<{ advance: AdvanceRow }>(
+    `/api/advances/${encodeURIComponent(id)}/transition`,
+    { method: "POST", body: JSON.stringify({ action }) }
+  );
+}
+
+// ── 报销单（V13-B4/B5/B7）────────────────────────────────────────
+
+export type ReimbursementStatus =
+  | "draft"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "paid"
+  | "cancelled";
+
+export interface ReimbursementAllocation {
+  costCenterId: string;
+  ratioBp: number;
+  amountCents: number;
+}
+
+export interface ReimbursementLine {
+  id: string;
+  expenseType: string;
+  accountCode: string;
+  amountCents: number;
+  quantity: number;
+  invoiceId: string | null;
+  summary: string;
+  allocations: ReimbursementAllocation[];
+}
+
+export interface ReimbursementRow {
+  id: string;
+  reimbursementNo: string;
+  requestId: string | null;
+  advanceId: string | null;
+  applicantUserId: string;
+  expenseDate: string;
+  status: ReimbursementStatus;
+  voucherId: string | null;
+  note: string | null;
+  lines: ReimbursementLine[];
+  /** 明细合计，**算出来的**，服务端不存这个字段。 */
+  totalCents: number;
+}
+
+export async function listReimbursements(
+  params: { mine?: boolean; status?: ReimbursementStatus } = {}
+) {
+  const qs = new URLSearchParams();
+  if (params.mine) qs.set("mine", "true");
+  if (params.status) qs.set("status", params.status);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return request<{ items: ReimbursementRow[]; total: number }>(`/api/reimbursements${suffix}`);
+}
+
+export interface ReimbursementLineInput {
+  expenseType: string;
+  accountCode: string;
+  amountCents: number;
+  quantity?: number;
+  invoiceId?: string | null;
+  summary?: string;
+  allocationsByRatio?: { costCenterId: string; ratioBp: number }[];
+  allocationsByAmount?: { costCenterId: string; amountCents: number }[];
+}
+
+export async function createReimbursement(body: {
+  requestId?: string | null;
+  advanceId?: string | null;
+  expenseDate: string;
+  lines: ReimbursementLineInput[];
+  note?: string | null;
+}) {
+  return request<{ reimbursement: ReimbursementRow }>("/api/reimbursements", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export async function transitionReimbursement(id: string, action: string) {
+  return request<{ reimbursement: ReimbursementRow; note?: string }>(
+    `/api/reimbursements/${encodeURIComponent(id)}/transition`,
+    { method: "POST", body: JSON.stringify({ action }) }
+  );
+}
+
+/** 这张发票报过没有（票据中心「转报销单」前先问一句）。 */
+export async function checkInvoiceReimbursementUsage(invoiceId: string) {
+  return request<{
+    used: boolean;
+    usages: { reimbursementId: string; reimbursementNo: string; status: string }[];
+  }>(`/api/invoices/${encodeURIComponent(invoiceId)}/reimbursement-usage`);
+}

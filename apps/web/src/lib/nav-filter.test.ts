@@ -50,20 +50,21 @@ assert(fallback !== items, "expected fallback to return a copy");
 // 空集合 → 空导航
 assert(filterNavByAllowedRoutes(items, new Set()).length === 0, "expected empty set to filter everything");
 
-// pro 导航常量：8 组 20 项。
+// pro 导航常量：8 组 23 项。
 // 这两个数字是**防膨胀护栏**，不是随代码变动的快照：每加一项都该先问
 // "能不能并进已有的中心"。V12 批次 C 新增四个能力（固定资产 / 往来账龄 /
 // 定期凭证 / 余额调节表），只加了一项 /assets——前三个并成同一页的三件事，
 // 余额调节表由月结向导跳转、不进侧栏。
 //
-// V13-A 新增第 8 组「费用与支付」，本批次落 2 项（预算中心 + 我的审批）。
+// V13-A 新增第 8 组「费用与支付」，B8 补齐到 4 项：
+// 预算中心 / 我的审批 / 申请与借款 / 报销中心。
 // 费用标准没有独立入口：它是**配置**而非日常操作，归入系统中心，与科目表、
 // 往来单位一致——低频配置项进一级导航会稀释高频入口。
-// 批次 B/C 会把这组加到 5 项（再加申请与借款 / 报销中心 / 付款中心），
-// 届时这两个数字要跟着改，而改动本身就是一次"这项非加不可吗"的复核。
+// 批次 C 会再加一项付款中心，届时这两个数字要跟着改——
+// 而改动本身就是一次"这项非加不可吗"的复核。
 assert(proNavItems.length === 8, "expected 8 pro nav groups");
 const proLeafCount = proNavItems.reduce((count, group) => count + (group.children?.length ?? 0), 0);
-assert(proLeafCount === 20, "expected 20 pro nav leaves");
+assert(proLeafCount === 23, "expected 23 pro nav leaves");
 
 // guided 导航常量：扁平且 ≤6 项，路由必须是 pro 导航或 guided 专属路由清单的成员
 assert(guidedNavItems.length <= 6, "expected guided nav to stay minimal");
@@ -75,7 +76,12 @@ for (const item of guidedNavItems) {
     `expected guided route ${item.key} to exist in pro nav or GUIDED_ONLY_ROUTES`
   );
 }
-assert(GUIDED_ONLY_ROUTES.includes("/home") && GUIDED_ONLY_ROUTES.includes("/quick-entry"), "expected guided-only routes to cover /home and /quick-entry");
+// V13-B8：/quick-entry 从 guided 轨移到 pro 轨，不再是 guided 专属。
+// 「记一笔」是记账口径，对业务人员是错的抽象；但会计要这个快速入口，
+// 所以是移动而不是删除——两轨都不放等于悄悄下线一个功能。
+assert(GUIDED_ONLY_ROUTES.includes("/home"), "expected /home to stay guided-only");
+assert(!GUIDED_ONLY_ROUTES.includes("/quick-entry"), "expected /quick-entry to have moved to pro nav");
+assert(proRoutes.has("/quick-entry"), "expected /quick-entry to be reachable from pro nav");
 
 // 面包屑：最长前缀匹配
 const bc = buildBreadcrumb(proNavItems, "/dashboard/chairman");

@@ -52,6 +52,11 @@ const ALL_MENU_ITEMS: readonly MenuItem[] = [
   // 它本就是给审批流预留的。放在费控组而非入口组：审批对象绝大多数是费控单据。
   // 「我的一天」仍聚合全部待办（含审批），两者是聚合视图与专项工作台的分工。
   { key: "approvals", label: "我的审批", route: "/approvals", permissionKey: "workflow.view", ...GROUP_EXPENSE },
+  // 申请与报销用 expense.view：能看就能进页面，能不能提单由页面内的
+  // 写接口（expense.submit）再判一次。只读角色进得来但提不了单——
+  // 这正是「审计要看得到别人的单据」与「只读角色不该提单」的分界。
+  { key: "requests", label: "申请与借款", route: "/requests", permissionKey: "expense.view", ...GROUP_EXPENSE },
+  { key: "reimbursements", label: "报销中心", route: "/reimbursements", permissionKey: "expense.view", ...GROUP_EXPENSE },
   { key: "bills", label: "票据中心", route: "/bills", permissionKey: "documents.view", ...GROUP_FINANCE },
   { key: "vouchers", label: "凭证中心", route: "/vouchers", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "ledger", label: "总账中心", route: "/ledger", permissionKey: "ledger.view", ...GROUP_FINANCE },
