@@ -652,9 +652,12 @@ export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBu
         lines: [
           {
             id: makeId("vou-line", event.id, "debit-payroll"),
-            summary: "计提工资成本",
-            accountCode: "6601",
-            accountName: "职工薪酬（成本）",
+            summary: "计提工资费用",
+            // D6：此前挂 6601「职工薪酬（成本）」，已由迁移 079 废弃——
+            // 同一件业务事实，此前的科目取决于用户从哪个入口进来（工资模块挂
+            // 管理费用、模板与本处挂 6601），现在统一到 660208。
+            accountCode: "660208",
+            accountName: "管理费用-工资",
             debit: amount,
             credit: "0.00"
           },

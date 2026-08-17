@@ -17,25 +17,19 @@
  * 前缀关系，那些「先排除」的分支已全部删除（见 reports/profit-accounts.ts、
  * tax-integration/consistency.routes.ts、ai-agents/anomaly/anomaly.routes.ts）。
  *
- * 仍未国标化的一处：`6201` 销售费用。它的国标编码 `6601` 被本系统的「职工薪酬
- * （成本）」占着。`6201` 不与任何编码冲突、不产生前缀陷阱，留着的代价仅是名义上
- * 不合规。
+ * ## 编码国标化已收尾（V12-D6，迁移 079 + 080）
  *
- * ## `6601 职工薪酬（成本）` 已查清：待废弃，不要保留（D6）
+ * D3 之后只剩销售费用还是非国标的 `6201`——它的国标编码 `6601` 被「职工薪酬
+ *（成本）」占着，而那个科目的设置本身存疑，不能贸然动。
  *
- * D3 当时把它标为「科目设置存疑、需独立立项」。**已经查过了，不必再查**：
- * 它不对应任何会计科目，是「工资计提的借方该挂哪里」这个判断的占位符。
- * 职工薪酬的贷方（`22110101`）本来就是对的，错的只有借方。
+ * D6 查清了它：`6601` **不对应任何会计科目**，是「工资计提的借方该挂哪里」这个
+ * 判断的占位符。职工薪酬的贷方（`22110101`）本来就是对的，错的只有借方；库里
+ * 8 个存科目码的列行数全为 0，唯一一条历史分录早在迁移 041 就被改到了销售费用。
+ * 迁移 079 把它废弃（借方统一到 `660208` 管理费用-工资），080 随即把 `6201`
+ * 改成 `6601`。
  *
- * 三条判据：真正的工资链路（`payroll/social-security-vouchers.ts`）从不用它；
- * 它 `name` 写「（成本）」而 `category` 是 `expense`，码名语义三者不一致；
- * 库里 `ledger_entries` / `voucher_lines` 等 8 个列的行数**全为 0**，唯一一条
- * 历史分录早在迁移 041 就被改到了 `6201`。
- *
- * 处置方案见 docs/v12-d6-payroll-cost-account-retirement-plan.md。它曾被残留 11
- *（管理费用明细名称错位）阻塞——方案要把工资改挂 `660201`，而那个编码在
- * `accounts` 表里叫「办公费」。**迁移 077 已解除阻塞**：名称按库改齐，并新增了
- * `660208` 管理费用-工资，D6 的借方落点现在是明确的。
+ * **至此无遗留非国标编码。** 完整证据见
+ * docs/v12-d6-payroll-cost-account-retirement-plan.md。
  */
 
 export type AccountCategory =
@@ -139,7 +133,7 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   // ─── 费用 ───────────────────────────────────────────────
   { code: "6401",   name: "主营业务成本",               category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "6403",    name: "税金及附加",                 category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
-  { code: "6201",    name: "销售费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
+  { code: "6601",    name: "销售费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "6602",   name: "管理费用",                  category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: false },
   // 这七个明细的名称此前与 `account_templates` **整体错开一位**：常量表把 660201
   // 写成「工资」，办公费/差旅费/业务招待费顺次后移一格，库里的「租金」在常量表里
@@ -171,7 +165,6 @@ export const CHART_OF_ACCOUNTS: ChartAccount[] = [
   // 收益（贷方），贬值时产生损失（借方）。direction 标 debit 是「余额通常在哪一方」
   // 的惯例，不表示它只走借方。
   { code: "660303", name: "财务费用-汇兑损益",          category: "expense",   direction: "debit", level: 2, parentCode: "6603", isLeaf: true  },
-  { code: "6601",    name: "职工薪酬（成本）",           category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "6711",    name: "营业外支出",                 category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  },
   { code: "6801",    name: "所得税费用",                 category: "expense",   direction: "debit", level: 1, parentCode: null,   isLeaf: true  }
 ];

@@ -161,7 +161,9 @@ function documentStatus(documentType: string, scenario: PurchaseExpenseScenario)
 function expenseDebitAccount(classification: PurchaseExpenseClassification) {
   switch (classification) {
     case "sales_expense":
-      return { code: "6201", name: "销售费用" };
+      // 销售费用的国标编码是 6601（D6 迁移 080）。D3 当时改不了它，
+      // 因为 6601 被「职工薪酬（成本）」占着。
+      return { code: "6601", name: "销售费用" };
     case "fixed_asset":
       return { code: "1601", name: "固定资产" };
     default:
