@@ -2,6 +2,14 @@ import { env } from "../config/env.js";
 import { query } from "../db/client.js";
 import { getMenu } from "../modules/access/routes.js";
 import {
+  createReimbursementRoute,
+  getReimbursementRoute,
+  invoiceReimbursementUsageRoute,
+  listReimbursementsRoute,
+  transitionReimbursementRoute
+} from "../modules/reimbursements/routes.js";
+
+import {
   createAdvanceRoute,
   getAdvanceRoute,
   listAdvancesRoute,
@@ -687,6 +695,34 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "banking.manage",
     handler: (req, res, p) => payAdvanceRoute(req, res, p.id!)
+  },
+
+
+  // ── V13-B 报销单 ───────────────────────────────────────────────────
+  { method: "GET", path: "/api/reimbursements", auth: true, permission: "expense.view", handler: listReimbursementsRoute },
+  { method: "POST", path: "/api/reimbursements", auth: true, permission: "expense.submit", handler: createReimbursementRoute },
+  {
+    method: "GET",
+    path: "/api/reimbursements/:id",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => getReimbursementRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/reimbursements/:id/transition",
+    auth: true,
+    permission: "expense.submit",
+    handler: (req, res, p) => transitionReimbursementRoute(req, res, p.id!)
+  },
+  // B5：票据中心的「转报销单」按钮要在点之前就知道这张票报没报过——
+  // 挂上去再被拒是最差的顺序。
+  {
+    method: "GET",
+    path: "/api/invoices/:id/reimbursement-usage",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => invoiceReimbursementUsageRoute(req, res, p.id!)
   },
 
   // ── V13-A 审批流（终于用上了 workflow.* 权限键）─────────────────────

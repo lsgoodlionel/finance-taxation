@@ -32,6 +32,9 @@ interface SeedCounts {
    *  seed 的输出里一眼看得见——「后端有能力、没数据」在 V12 里出现过五次。 */
   budgets: number;
   expenseStandards: number;
+  /** V13-B：成本中心。V12-D1 做了这个能力，但种子库里一条都没有——
+   *  于是费用分摊、部门费用报表在种子账上全是空的。写报销集成测试时发现。 */
+  costCenters: number;
 }
 
 async function readJson<T>(fileName: string): Promise<T> {
@@ -218,6 +221,17 @@ const SEED_BUDGETS = [
   }
 ] as const;
 
+/**
+ * 成本中心（V12-D1 的能力，V13-B 补种子）。
+ *
+ * 没有它，费用分摊在页面上是死的——分摊对象的下拉框空着，而用户看不出
+ * 是「功能没做」还是「数据没配」。两个部门够了：分摊至少要两个对象才成立。
+ */
+const SEED_COST_CENTERS = [
+  { suffix: "rnd", code: "CC-RND", name: "研发部" },
+  { suffix: "sales", code: "CC-SALES", name: "市场部" }
+] as const;
+
 const SEED_STANDARDS = [
   {
     suffix: "hotel-generic",
@@ -256,7 +270,8 @@ const counts: SeedCounts = {
     ),
     taxMappings: scenarios.length,
     budgets: companies.length * SEED_BUDGETS.length,
-    expenseStandards: companies.length * SEED_STANDARDS.length
+    expenseStandards: companies.length * SEED_STANDARDS.length,
+    costCenters: companies.length * SEED_COST_CENTERS.length
   };
 
   const pool = new pg.Pool({ connectionString: databaseUrl });
@@ -508,6 +523,20 @@ const counts: SeedCounts = {
     // 场景，而种子库那一列一行都没有。这里播下去，budget.integration.test 之外
     // 的任何人打开页面都能看到真实数据。
     for (const company of companies) {
+      for (const costCenter of SEED_COST_CENTERS) {
+        await client.query(
+          `INSERT INTO cost_centers (id, company_id, code, name)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = now()`,
+          [
+            `cc-seed-${company.id}-${costCenter.suffix}`,
+            company.id,
+            costCenter.code,
+            costCenter.name
+          ]
+        );
+      }
+
       for (const budget of SEED_BUDGETS) {
         await client.query(
           `INSERT INTO budgets (id, company_id, period_type, period_key,
