@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 import { query } from "../db/client.js";
 import { getMenu } from "../modules/access/routes.js";
+import { expenseAnalysisRoute } from "../modules/reports/expense-analysis-routes.js";
 import {
   cancelScheduleRoute,
   confirmPaymentRoute,
@@ -13,6 +14,7 @@ import {
 } from "../modules/payments/routes.js";
 
 import {
+  auditReimbursementRoute,
   createReimbursementRoute,
   getReimbursementRoute,
   invoiceReimbursementUsageRoute,
@@ -726,6 +728,16 @@ const routes: RouteDef[] = [
     permission: "expense.submit",
     handler: (req, res, p) => transitionReimbursementRoute(req, res, p.id!)
   },
+  // V13-D：业财合规审核。挂 expense.view 而非 submit——审批人要能看到
+  // 审核结果，而他未必有提单权限。POST 当查询用（纯计算不落库），
+  // 已按规矩登记进 registry-permissions 的白名单。
+  {
+    method: "POST",
+    path: "/api/reimbursements/:id/audit",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => auditReimbursementRoute(req, res, p.id!)
+  },
   // B5：票据中心的「转报销单」按钮要在点之前就知道这张票报没报过——
   // 挂上去再被拒是最差的顺序。
   {
@@ -736,6 +748,10 @@ const routes: RouteDef[] = [
     handler: (req, res, p) => invoiceReimbursementUsageRoute(req, res, p.id!)
   },
 
+
+  // V13-D6：费用分析。归 expense.view——它读的是报销数据，
+  // 与「谁能看别人的报销单」同一层能力。
+  { method: "GET", path: "/api/reports/expense-analysis", auth: true, permission: "expense.view", handler: expenseAnalysisRoute },
 
   // ── V13-C 合同付款计划与付款单 ─────────────────────────────────────
   //

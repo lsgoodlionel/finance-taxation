@@ -6,6 +6,7 @@
  * - `GET  /api/reimbursements/:id`            详情
  * - `POST /api/reimbursements/:id/transition` 提交 / 批准 / 驳回 / 付款
  * - `GET  /api/invoices/:id/reimbursement-usage` 这张票报过没有（B5 用）
+ * - `POST /api/reimbursements/:id/audit`      业财合规审核（V13-D）
  */
 
 import type { ServerResponse } from "node:http";
@@ -13,6 +14,7 @@ import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { ensureEmployeeCounterparty } from "../advances/store.js";
+import { runReimbursementAudit } from "./audit-service.js";
 import { createReimbursementVoucher } from "./voucher.js";
 import {
   createReimbursement,
@@ -171,6 +173,24 @@ export async function transitionReimbursementRoute(
   const body = (req.body ?? {}) as Record<string, unknown>;
   const action = typeof body.action === "string" ? body.action : "";
 
+  // 提交审批前先过一遍合规审核。**只拦 block**——warn 与 escalate 放行，
+  // 前者让审批人看到，后者由审批流加一级。审核放在状态流转之前：
+  // 拦住的单据不该留下「提交过」的痕迹。
+  if (action === "submit") {
+    const current = await getReimbursement(req.auth!.companyId, id);
+    if (current) {
+      const audit = await runReimbursementAudit(req.auth!.companyId, current);
+      if (audit.level === "block") {
+        json(res, 409, {
+          error: "存在必须处理的合规问题，不能提交",
+          code: "REIMBURSEMENT_AUDIT_BLOCKED",
+          audit
+        });
+        return;
+      }
+    }
+  }
+
   const result = await transitionReimbursement(req.auth!.companyId, id, action);
   if (!result.ok) {
     json(res, STATUS_BY_FAILURE[result.failure.code], {
@@ -218,4 +238,26 @@ export async function invoiceReimbursementUsageRoute(
 ): Promise<void> {
   const usages = await findInvoiceUsage(req.auth!.companyId, id);
   json(res, 200, { used: usages.length > 0, usages });
+}
+
+/**
+ * 业财合规审核（V13-D）。
+ *
+ * 独立成接口而不是只在提交时跑：用户填完表就该看到「这张票报过了」，
+ * 而不是点了提交才被拒。同一套 `runReimbursementAudit` 两处共用，
+ * 判断不会走岔。
+ */
+export async function auditReimbursementRoute(
+  req: ApiRequest,
+  res: ServerResponse,
+  id: string
+): Promise<void> {
+  const found = await getReimbursement(req.auth!.companyId, id);
+  if (!found) {
+    json(res, 404, { error: "报销单不存在", code: "REIMBURSEMENT_NOT_FOUND" });
+    return;
+  }
+
+  const audit = await runReimbursementAudit(req.auth!.companyId, found);
+  json(res, 200, audit);
 }

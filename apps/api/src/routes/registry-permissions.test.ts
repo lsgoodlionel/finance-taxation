@@ -66,6 +66,11 @@ const WRITE_ROUTES_WITH_VIEW_PERMISSION: ReadonlyMap<string, string> = new Map([
   ["POST /api/budgets/check", "POST 当查询用：预算预检，只读三个数后算差额，不落库"],
   ["POST /api/expense-standards/check", "POST 当查询用：超标预检，匹配标准后比金额，不落库"],
   [
+    "POST /api/reimbursements/:id/audit",
+    "POST 当查询用：业财合规审核，读发票与标准后纯计算，不落库、不改单据状态。" +
+      "挂 view 是因为审批人要看得到审核结果，而他未必有提单权限"
+  ],
+  [
     "POST /api/requests/:id/precheck",
     "POST 当查询用：申请单的预算预检，读三个数后算差额，不落库、不改单据状态。" +
       "用 POST 而非 GET 只为与另外两个 check 接口保持一致的调用形态"
@@ -109,7 +114,9 @@ const WRITE_ROUTES_ALLOWED_FOR_READ_ONLY_ROLE: ReadonlySet<string> = new Set([
   "POST /api/expense-standards/check",
   // 同理：预检只读不写。viewer 提不了单（提交要 expense.submit，它没有），
   // 但能看一眼某张单会不会超预算，这与它能查预算列表是同一层能力。
-  "POST /api/requests/:id/precheck"
+  "POST /api/requests/:id/precheck",
+  // 同理：审核只读不写。
+  "POST /api/reimbursements/:id/audit"
 ]);
 
 /**
