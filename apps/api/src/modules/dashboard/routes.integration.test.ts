@@ -91,7 +91,7 @@ const ENTRY_FIXTURES: EntryFixture[] = [
   { id: "dash-le-1", entryDate: "2026-05-12", accountCode: "6001", accountName: "主营业务收入", debit: "0.00", credit: "1000.00" },
   { id: "dash-le-2", entryDate: "2026-05-12", accountCode: "6051", accountName: "其他业务收入", debit: "0.00", credit: "300.00" },
   { id: "dash-le-3", entryDate: "2026-05-12", accountCode: "6401", accountName: "主营业务成本", debit: "400.00", credit: "0.00" },
-  { id: "dash-le-4", entryDate: "2026-05-12", accountCode: "6201", accountName: "销售费用", debit: "100.00", credit: "0.00" },
+  { id: "dash-le-4", entryDate: "2026-05-12", accountCode: "6601", accountName: "销售费用", debit: "100.00", credit: "0.00" },
   { id: "dash-le-5", entryDate: "2026-05-12", accountCode: "1002", accountName: "银行存款", debit: "1300.00", credit: "0.00" },
   { id: "dash-le-6", entryDate: "2026-05-12", accountCode: "2221", accountName: "应交税费", debit: "500.00", credit: "0.00" },
   { id: "dash-le-7", entryDate: "2026-04-15", accountCode: "6001", accountName: "主营业务收入", debit: "0.00", credit: "9999.00" },

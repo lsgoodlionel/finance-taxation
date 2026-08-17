@@ -71,7 +71,7 @@ test("resolveFiscalYearStart falls back to the natural year until B5 lands fisca
 
 test("profit-and-loss accounts take the fiscal-year opening basis, others accrue from inception", () => {
   assert.equal(resolveOpeningBasis("6001", "revenue"), "fiscal_year");
-  assert.equal(resolveOpeningBasis("6201", "expense"), "fiscal_year");
+  assert.equal(resolveOpeningBasis("6601", "expense"), "fiscal_year");
 
   assert.equal(resolveOpeningBasis("1002", "asset"), "inception");
   assert.equal(resolveOpeningBasis("2202", "liability"), "inception");

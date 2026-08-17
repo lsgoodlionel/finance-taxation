@@ -111,7 +111,7 @@ const MAY_ENTRIES: EntryFixture[] = [
   { id: "cp-le-3", entryDate: "2026-05-12", accountCode: "6051", accountName: "其他业务收入", debit: "0.00", credit: "300.00" },
   { id: "cp-le-4", entryDate: "2026-05-13", accountCode: "6401", accountName: "主营业务成本", debit: "400.00", credit: "0.00" },
   { id: "cp-le-5", entryDate: "2026-05-13", accountCode: "1405", accountName: "库存商品", debit: "0.00", credit: "400.00" },
-  { id: "cp-le-6", entryDate: "2026-05-14", accountCode: "6201", accountName: "销售费用", debit: "100.00", credit: "0.00" },
+  { id: "cp-le-6", entryDate: "2026-05-14", accountCode: "6601", accountName: "销售费用", debit: "100.00", credit: "0.00" },
   { id: "cp-le-7", entryDate: "2026-05-14", accountCode: "1002", accountName: "银行存款", debit: "0.00", credit: "100.00" },
   { id: "cp-le-8", entryDate: "2026-05-20", accountCode: "6801", accountName: "所得税费用", debit: "60.00", credit: "0.00" },
   { id: "cp-le-9", entryDate: "2026-05-20", accountCode: "2221", accountName: "应交税费", debit: "0.00", credit: "60.00" }
@@ -466,7 +466,7 @@ test("period closing entries stay visible in the account-balance ledger view", a
     assert.equal(balanceOf("6001"), 0, "结转后主营业务收入必须归零");
     assert.equal(balanceOf("6051"), 0, "结转后其他业务收入必须归零");
     assert.equal(balanceOf("6401"), 0, "结转后主营业务成本必须归零");
-    assert.equal(balanceOf("6201"), 0, "结转后销售费用必须归零");
+    assert.equal(balanceOf("6601"), 0, "结转后销售费用必须归零");
     assert.equal(balanceOf("6801"), 0, "结转后所得税费用必须归零");
     assert.equal(balanceOf("4103"), -740, "本年利润承载净利润，且必须出现在账簿里");
 

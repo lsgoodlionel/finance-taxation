@@ -86,12 +86,14 @@ const templates: VoucherTemplateDefinition[] = [
   {
     key: "payroll",
     label: "工资计提",
-    description: "借职工薪酬，贷应付职工薪酬。",
+    description: "借管理费用-工资，贷应付职工薪酬。",
     voucherType: "accrual",
     buildLines(amount) {
       const value = money(amount);
       return [
-        line("tpl-payroll-1", "计提工资成本", "6601", "职工薪酬（成本）", value, "0.00"),
+        // D6：此前挂 6601「职工薪酬（成本）」——那个科目不对应任何会计科目，
+        // 是「工资借方该挂哪里」这个判断的占位符，已由迁移 079 废弃。
+        line("tpl-payroll-1", "计提工资费用", "660208", "管理费用-工资", value, "0.00"),
         line("tpl-payroll-2", "确认应付职工薪酬", "22110101", "应付职工薪酬-工资", "0.00", value)
       ];
     }

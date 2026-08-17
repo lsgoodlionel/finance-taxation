@@ -115,14 +115,14 @@ const APRIL_ENTRIES: EntryFixture[] = [
   { id: "tb-le-2", entryDate: "2026-04-05", accountCode: "3001", accountName: "实收资本", debit: "0.00", credit: "1000.00" },
   { id: "tb-le-3", entryDate: "2026-04-18", accountCode: "1002", accountName: "银行存款", debit: "600.00", credit: "0.00" },
   { id: "tb-le-4", entryDate: "2026-04-18", accountCode: "6001", accountName: "主营业务收入", debit: "0.00", credit: "600.00" },
-  { id: "tb-le-5", entryDate: "2026-04-22", accountCode: "6201", accountName: "销售费用", debit: "100.00", credit: "0.00" },
+  { id: "tb-le-5", entryDate: "2026-04-22", accountCode: "6601", accountName: "销售费用", debit: "100.00", credit: "0.00" },
   { id: "tb-le-6", entryDate: "2026-04-22", accountCode: "1002", accountName: "银行存款", debit: "0.00", credit: "100.00" }
 ];
 
 const MAY_ENTRIES: EntryFixture[] = [
   { id: "tb-le-7", entryDate: "2026-05-09", accountCode: "1002", accountName: "银行存款", debit: "300.00", credit: "0.00" },
   { id: "tb-le-8", entryDate: "2026-05-09", accountCode: "6001", accountName: "主营业务收入", debit: "0.00", credit: "300.00" },
-  { id: "tb-le-9", entryDate: "2026-05-15", accountCode: "6201", accountName: "销售费用", debit: "50.00", credit: "0.00" },
+  { id: "tb-le-9", entryDate: "2026-05-15", accountCode: "6601", accountName: "销售费用", debit: "50.00", credit: "0.00" },
   { id: "tb-le-10", entryDate: "2026-05-15", accountCode: "1002", accountName: "银行存款", debit: "0.00", credit: "50.00" },
   { id: "tb-le-11", entryDate: "2026-05-20", accountCode: "1405", accountName: "库存商品", debit: "200.00", credit: "0.00" },
   { id: "tb-le-12", entryDate: "2026-05-20", accountCode: "2202", accountName: "应付账款", debit: "0.00", credit: "200.00" }
@@ -334,7 +334,7 @@ test("period closing entries are included, zeroing P&L and moving profit into 31
     assert.equal(revenue.closingCredit, "0.00", "结转后收入类期末必须归零");
     assert.equal(revenue.openingCredit, "0.00", "4 月已结转，5 月期初为 0");
 
-    const expense = rowOf(report, "6201");
+    const expense = rowOf(report, "6601");
     assert.equal(expense.periodDebit, "50.00");
     assert.equal(expense.periodCredit, "50.00", "本期贷方 50 只可能来自结转分录");
     assert.equal(expense.closingDebit, "0.00");

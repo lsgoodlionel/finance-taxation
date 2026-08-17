@@ -82,7 +82,7 @@ test("summarizeProfitTotals counts every revenue account, not just 6001", () => 
     entry("6001", "0.00", "1000.00"),
     entry("6051", "0.00", "200.00"),
     entry("6401", "300.00", "0.00"),
-    entry("6201", "50.00", "0.00"),
+    entry("6601", "50.00", "0.00"),
     entry("1002", "1200.00", "0.00")
   ];
 

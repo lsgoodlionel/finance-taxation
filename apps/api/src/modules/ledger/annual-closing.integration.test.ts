@@ -34,7 +34,7 @@ const COMPANY_ID = "cmp-v4-tech";
 const YEAR_2026 = [
   { code: "1002", name: "银行存款", debit: "1000.00", credit: "0.00", date: "2026-03-15" },
   { code: "6001", name: "主营业务收入", debit: "0.00", credit: "1000.00", date: "2026-03-15" },
-  { code: "6201", name: "销售费用", debit: "400.00", credit: "0.00", date: "2026-04-20" },
+  { code: "6601", name: "销售费用", debit: "400.00", credit: "0.00", date: "2026-04-20" },
   { code: "1002", name: "银行存款", debit: "0.00", credit: "400.00", date: "2026-04-20" }
 ];
 
@@ -46,7 +46,7 @@ const YEAR_2027 = [
 
 /** 2026 年亏损版：费用 500、无收入 → 净利润 −500。 */
 const YEAR_2026_LOSS = [
-  { code: "6201", name: "销售费用", debit: "500.00", credit: "0.00", date: "2026-06-01" },
+  { code: "6601", name: "销售费用", debit: "500.00", credit: "0.00", date: "2026-06-01" },
   { code: "1002", name: "银行存款", debit: "0.00", credit: "500.00", date: "2026-06-01" }
 ];
 
@@ -323,7 +323,7 @@ test("损益未结转时拒绝年结；上年未结账时拒绝结本年", async
     const notClosed = await closeYearViaRoute(2026);
     assert.equal(notClosed.statusCode, 400);
     assert.equal(notClosed.body!.code, "PROFIT_AND_LOSS_NOT_CLOSED");
-    assert.deepEqual(notClosed.body!.offendingCodes, ["6001", "6201"]);
+    assert.deepEqual(notClosed.body!.offendingCodes, ["6001", "6601"]);
 
     await runClosePeriod("2026-12", "2026-12-31");
     await seedEntries(pool, "2027", YEAR_2027);
