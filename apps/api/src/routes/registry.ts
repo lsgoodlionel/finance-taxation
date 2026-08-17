@@ -2,6 +2,14 @@ import { env } from "../config/env.js";
 import { query } from "../db/client.js";
 import { getMenu } from "../modules/access/routes.js";
 import {
+  createAdvanceRoute,
+  getAdvanceRoute,
+  listAdvancesRoute,
+  payAdvanceRoute,
+  transitionAdvanceRoute
+} from "../modules/advances/routes.js";
+
+import {
   createRequestRoute,
   getRequestRoute,
   listRequestsRoute,
@@ -649,6 +657,36 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "expense.submit",
     handler: (req, res, p) => transitionRequestRoute(req, res, p.id!)
+  },
+
+
+  // ── V13-B 借款单 / 备用金 ────────────────────────────────────────
+  //
+  // 付款挂 banking.manage 而不是 expense.submit：付款是出纳的本职，
+  // 与导流水、做对账同一档。借款人自己不能给自己付款——这是最基本的
+  // 不相容职务分离。
+  { method: "GET", path: "/api/advances", auth: true, permission: "expense.view", handler: listAdvancesRoute },
+  { method: "POST", path: "/api/advances", auth: true, permission: "expense.submit", handler: createAdvanceRoute },
+  {
+    method: "GET",
+    path: "/api/advances/:id",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => getAdvanceRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/advances/:id/transition",
+    auth: true,
+    permission: "expense.submit",
+    handler: (req, res, p) => transitionAdvanceRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/advances/:id/pay",
+    auth: true,
+    permission: "banking.manage",
+    handler: (req, res, p) => payAdvanceRoute(req, res, p.id!)
   },
 
   // ── V13-A 审批流（终于用上了 workflow.* 权限键）─────────────────────
