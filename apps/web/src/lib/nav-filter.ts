@@ -1,7 +1,8 @@
 import { createElement, type ReactNode } from "react";
 import {
   AlertOutlined, AuditOutlined, BarChartOutlined, BookOutlined, CalculatorOutlined,
-  DashboardOutlined, ExperimentOutlined, ExportOutlined, FileSearchOutlined, FileTextOutlined, FormOutlined, GoldOutlined,
+  DashboardOutlined, ExperimentOutlined, ExportOutlined, FileSearchOutlined, FileTextOutlined,
+  FormOutlined, FundOutlined, GoldOutlined,
   InboxOutlined, LineChartOutlined, ProfileOutlined, RobotOutlined, SettingOutlined,
   TeamOutlined, UnorderedListOutlined,
 } from "@ant-design/icons";
@@ -39,6 +40,17 @@ export const proNavItems: readonly NavEntry[] = [
     children: [
       { key: "/contracts", icon: createElement(FileTextOutlined), label: "合同与往来" },
       { key: "/payroll", icon: createElement(TeamOutlined), label: "工资管理" },
+    ],
+  },
+  {
+    // V13-A：费控组。位置即语义——排在「经营管理」之后、「财务运营」之前，
+    // 与真实业务时序一致：先有业务与合同，再有费用控制，最后才是账务核算。
+    // 批次 B/C 会往这里加「申请与借款」「报销中心」「付款中心」「我的审批」。
+    key: "g-expense",
+    label: "费用与支付",
+    type: "group",
+    children: [
+      { key: "/budget", icon: createElement(FundOutlined), label: "预算中心" },
     ],
   },
   {

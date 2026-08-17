@@ -60,7 +60,11 @@ const WRITE_ROUTES_WITH_VIEW_PERMISSION: ReadonlyMap<string, string> = new Map([
       "再由 tasks/mutation-scope.ts 的 canMutateTask 按负责人收敛（见 mutation-scope.test.ts）。" +
       "只挂 tasks.manage 会让会计/员工/出纳连自己名下的任务都改不了"
   ],
-  ["POST /api/tasks/:id/remind", "同上，催办与状态变更同一口径"]
+  ["POST /api/tasks/:id/remind", "同上，催办与状态变更同一口径"],
+  // V13-A：两个费控预检接口。用 POST 是因为入参是对象（日期 + 科目 + 部门 + 金额），
+  // 塞进查询串既难读又有长度上限；语义上它们与 GET 无异——纯计算，不落库、不建单据。
+  ["POST /api/budgets/check", "POST 当查询用：预算预检，只读三个数后算差额，不落库"],
+  ["POST /api/expense-standards/check", "POST 当查询用：超标预检，匹配标准后比金额，不落库"]
 ]);
 
 /**
@@ -79,7 +83,10 @@ const WRITE_ROUTES_ALLOWED_FOR_READ_ONLY_ROLE: ReadonlySet<string> = new Set([
   "POST /api/ai/automation/decide",
   "POST /api/feedback",
   "PUT /api/tasks/:id",
-  "POST /api/tasks/:id/remind"
+  "POST /api/tasks/:id/remind",
+  // viewer 持有 expense.view（要看得到费用标准才知道自己能报多少），
+  // 而超标预检是纯计算——能看标准的人本就能自己算出同样的结论。
+  "POST /api/expense-standards/check"
 ]);
 
 /**

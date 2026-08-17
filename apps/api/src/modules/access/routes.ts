@@ -16,6 +16,11 @@ interface MenuItem {
 
 const GROUP_ENTRY = { groupKey: "g-entry", groupLabel: "业务入口" } as const;
 const GROUP_MGMT = { groupKey: "g-mgmt", groupLabel: "经营管理" } as const;
+/**
+ * V13：费控组。**位置即语义**——排在「经营管理」之后、「财务运营」之前，
+ * 与真实业务时序一致：先有业务与合同，再有费用控制，最后才是账务核算。
+ */
+const GROUP_EXPENSE = { groupKey: "g-expense", groupLabel: "费用与支付" } as const;
 const GROUP_FINANCE = { groupKey: "g-finance", groupLabel: "财务运营" } as const;
 const GROUP_TAX = { groupKey: "g-tax", groupLabel: "税务人力" } as const;
 const GROUP_RISK = { groupKey: "g-risk", groupLabel: "研发风控" } as const;
@@ -40,6 +45,9 @@ const ALL_MENU_ITEMS: readonly MenuItem[] = [
   { key: "dashboard", label: "董事长驾驶舱", route: "/dashboard/chairman", permissionKey: "dashboard.view", ...GROUP_ENTRY },
   { key: "contracts", label: "合同与往来", route: "/contracts", permissionKey: "contracts.view", ...GROUP_MGMT },
   { key: "payroll", label: "工资管理", route: "/payroll", permissionKey: "payroll.view", ...GROUP_MGMT },
+  // V13-A：预算中心。费用标准不在这里——它是**配置**而非日常操作，
+  // 归入系统中心（与科目表、往来单位一致），否则低频配置项会稀释高频入口。
+  { key: "budget", label: "预算中心", route: "/budget", permissionKey: "budget.view", ...GROUP_EXPENSE },
   { key: "bills", label: "票据中心", route: "/bills", permissionKey: "documents.view", ...GROUP_FINANCE },
   { key: "vouchers", label: "凭证中心", route: "/vouchers", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "ledger", label: "总账中心", route: "/ledger", permissionKey: "ledger.view", ...GROUP_FINANCE },

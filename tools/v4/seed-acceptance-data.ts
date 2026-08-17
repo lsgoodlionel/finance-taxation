@@ -28,6 +28,10 @@ interface SeedCounts {
   contracts: number;
   documentMappings: number;
   taxMappings: number;
+  /** V13-A：费控地基的种子。计数进 SeedCounts 是为了让「播了没播」在
+   *  seed 的输出里一眼看得见——「后端有能力、没数据」在 V12 里出现过五次。 */
+  budgets: number;
+  expenseStandards: number;
 }
 
 async function readJson<T>(fileName: string): Promise<T> {
@@ -174,7 +178,70 @@ export async function seedAcceptanceData(databaseUrl: string): Promise<SeedCount
     }
   }
 
-  const counts: SeedCounts = {
+  /**
+ * 种子预算的期间：2026-04。
+ *
+ * **刻意与种子账的业务期间对齐**（种子分录集中在 2026-01/02/04）——预算落在
+ * 没有任何分录的月份，打开预算中心看到的就是一排「已发生 0.00」，
+ * 那等于没验证取数口径通不通，与不播种没有区别。
+ */
+const SEED_BUDGET_PERIOD = "2026-04";
+
+/** 费用标准的生效起日：设在账套期间之前，让整个种子期间都被标准覆盖。 */
+const SEED_STANDARD_EFFECTIVE_FROM = "2026-01-01";
+
+/**
+ * V13-A 费控地基的种子。
+ *
+ * 每个公司播两条预算（一条带科目与部门、一条全公司总额）与两条费用标准
+ * （一条通用、一条按职级），覆盖「维度为 null」与「维度有值」两种形态——
+ * 只播全 null 的那种，`coalesce` 唯一索引与最具体匹配都测不出来。
+ */
+const SEED_BUDGETS = [
+  {
+    suffix: "travel",
+    periodType: "month",
+    periodKey: SEED_BUDGET_PERIOD,
+    accountCode: "660203",
+    amountCents: 500000,
+    controlPolicy: "warn",
+    note: "差旅费月度预算（V13 种子）"
+  },
+  {
+    suffix: "company",
+    periodType: "year",
+    periodKey: SEED_BUDGET_PERIOD.slice(0, 4),
+    accountCode: null,
+    amountCents: 20000000,
+    controlPolicy: "warn",
+    note: "全公司年度总额预算（V13 种子）"
+  }
+] as const;
+
+const SEED_STANDARDS = [
+  {
+    suffix: "hotel-generic",
+    expenseType: "travel_hotel",
+    gradeCode: null,
+    cityTier: null,
+    limitCents: 30000,
+    limitBasis: "per_day",
+    overPolicy: "warn",
+    note: "住宿通用标准 300/晚（V13 种子）"
+  },
+  {
+    suffix: "hotel-m2-tier1",
+    expenseType: "travel_hotel",
+    gradeCode: "M2",
+    cityTier: "tier1",
+    limitCents: 60000,
+    limitBasis: "per_day",
+    overPolicy: "escalate",
+    note: "M2 一线城市住宿 600/晚，超标加签（V13 种子）"
+  }
+] as const;
+
+const counts: SeedCounts = {
     companies: companies.length,
     departments: organization.departments.length,
     roles: uniqueRoles.size,
@@ -187,7 +254,9 @@ export async function seedAcceptanceData(databaseUrl: string): Promise<SeedCount
       (total, fixture) => total + fixture.expected.documentTypes.length,
       0
     ),
-    taxMappings: scenarios.length
+    taxMappings: scenarios.length,
+    budgets: companies.length * SEED_BUDGETS.length,
+    expenseStandards: companies.length * SEED_STANDARDS.length
   };
 
   const pool = new pg.Pool({ connectionString: databaseUrl });
@@ -430,6 +499,63 @@ export async function seedAcceptanceData(databaseUrl: string): Promise<SeedCount
           occurredOn.slice(0, 7)
         ]
       );
+    }
+
+    // ── V13-A：费控地基 ────────────────────────────────────────────
+    //
+    // 播种是**护栏的一部分**而不是便利：V12 收口时确认「后端有能力、前端没
+    // 入口」出现过五次，四次的读口径测试全绿——因为用例直接往库里塞数据造
+    // 场景，而种子库那一列一行都没有。这里播下去，budget.integration.test 之外
+    // 的任何人打开页面都能看到真实数据。
+    for (const company of companies) {
+      for (const budget of SEED_BUDGETS) {
+        await client.query(
+          `INSERT INTO budgets (id, company_id, period_type, period_key,
+                                cost_center_id, account_code, amount_cents, control_policy, note)
+           VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)
+           ON CONFLICT (id) DO UPDATE
+           SET amount_cents = EXCLUDED.amount_cents,
+               control_policy = EXCLUDED.control_policy,
+               note = EXCLUDED.note,
+               updated_at = now()`,
+          [
+            `bdg-seed-${company.id}-${budget.suffix}`,
+            company.id,
+            budget.periodType,
+            budget.periodKey,
+            budget.accountCode,
+            budget.amountCents,
+            budget.controlPolicy,
+            budget.note
+          ]
+        );
+      }
+
+      for (const standard of SEED_STANDARDS) {
+        await client.query(
+          `INSERT INTO expense_standards (id, company_id, expense_type, grade_code, city_tier,
+                                          limit_cents, limit_basis, over_policy,
+                                          effective_from, effective_to, note)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10)
+           ON CONFLICT (id) DO UPDATE
+           SET limit_cents = EXCLUDED.limit_cents,
+               over_policy = EXCLUDED.over_policy,
+               note = EXCLUDED.note,
+               updated_at = now()`,
+          [
+            `es-seed-${company.id}-${standard.suffix}`,
+            company.id,
+            standard.expenseType,
+            standard.gradeCode,
+            standard.cityTier,
+            standard.limitCents,
+            standard.limitBasis,
+            standard.overPolicy,
+            SEED_STANDARD_EFFECTIVE_FROM,
+            standard.note
+          ]
+        );
+      }
     }
 
     await client.query("COMMIT");

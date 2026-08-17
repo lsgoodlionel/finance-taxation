@@ -1,6 +1,20 @@
 import { env } from "../config/env.js";
 import { query } from "../db/client.js";
 import { getMenu } from "../modules/access/routes.js";
+import {
+  checkBudgetRoute,
+  createBudgetRoute,
+  deleteBudgetRoute,
+  listBudgetsRoute,
+  updateBudgetRoute
+} from "../modules/budget/routes.js";
+import {
+  checkExpenseStandardRoute,
+  createExpenseStandardRoute,
+  expireExpenseStandardRoute,
+  listExpenseStandardsRoute
+} from "../modules/expense-standards/routes.js";
+
 import { listAccounts, getAccountByCode, createAccount, updateAccount } from "../modules/accounts/routes.js";
 import { handleAuthMeta } from "../modules/auth/routes.js";
 import { handleChairmanDashboard, handleChairmanTrend } from "../modules/dashboard/routes.js";
@@ -577,6 +591,42 @@ const routes: RouteDef[] = [
     permission: "ledger.post",
     handler: (req, res, p) => updateCostCenterRoute(req, res, p.id!)
   },
+
+  // ── V13-A 费控地基：预算与费用标准 ──────────────────────────────────
+  //
+  // 预算读写分权：`budget.view` 给到部门经理与审计（要看得到执行情况），
+  // `budget.manage` 只给财务与管理层。
+  { method: "GET", path: "/api/budgets", auth: true, permission: "budget.view", handler: listBudgetsRoute },
+  { method: "POST", path: "/api/budgets", auth: true, permission: "budget.manage", handler: createBudgetRoute },
+  {
+    method: "PATCH",
+    path: "/api/budgets/:id",
+    auth: true,
+    permission: "budget.manage",
+    handler: (req, res, p) => updateBudgetRoute(req, res, p.id!)
+  },
+  {
+    method: "DELETE",
+    path: "/api/budgets/:id",
+    auth: true,
+    permission: "budget.manage",
+    handler: (req, res, p) => deleteBudgetRoute(req, res, p.id!)
+  },
+  // 预检挂 budget.view 而不是 manage：提单的人要能看到自己这笔会不会超预算，
+  // 但不该因此获得改预算的权限。
+  { method: "POST", path: "/api/budgets/check", auth: true, permission: "budget.view", handler: checkBudgetRoute },
+
+  { method: "GET", path: "/api/expense-standards", auth: true, permission: "expense.view", handler: listExpenseStandardsRoute },
+  { method: "POST", path: "/api/expense-standards", auth: true, permission: "expense.manage", handler: createExpenseStandardRoute },
+  {
+    method: "PATCH",
+    path: "/api/expense-standards/:id",
+    auth: true,
+    permission: "expense.manage",
+    handler: (req, res, p) => expireExpenseStandardRoute(req, res, p.id!)
+  },
+  { method: "POST", path: "/api/expense-standards/check", auth: true, permission: "expense.view", handler: checkExpenseStandardRoute },
+
   { method: "GET", path: "/api/reports/cost-centers", auth: true, permission: "ledger.view", handler: getCostCenterReportRoute },
 
   // 税率主数据（V12-D2）

@@ -1173,6 +1173,13 @@ export const permissionCatalog = [
   "audit.view",
   "workflow.view",
   "workflow.manage",
+  // V13 费控。预算与费用标准分开授权：预算额度是管理层的决策数据（部门经理
+  // 该看得到自己部门的预算执行），而费用标准是行政/HR 维护的制度配置，
+  // 两者的持有人在多数公司里不是同一批人。
+  "budget.view",
+  "budget.manage",
+  "expense.view",
+  "expense.manage",
   "knowledge.view",
   "knowledge.manage",
   "settings.manage"

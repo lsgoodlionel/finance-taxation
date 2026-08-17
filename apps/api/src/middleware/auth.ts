@@ -22,7 +22,8 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "contracts.view", "contracts.manage",
     "payroll.view", "payroll.manage",
     "audit.view", "workflow.view", "workflow.manage",
-    "knowledge.view", "knowledge.manage"
+    "knowledge.view", "knowledge.manage",
+    "budget.view", "budget.manage", "expense.view", "expense.manage"
   ],
   "role-finance-director": [
     "dashboard.view", "events.view", "events.create", "events.assign",
@@ -32,7 +33,8 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "contracts.view", "contracts.manage",
     "payroll.view", "payroll.manage",
     "audit.view", "workflow.view", "workflow.manage",
-    "knowledge.view"
+    "knowledge.view",
+    "budget.view", "budget.manage", "expense.view", "expense.manage"
   ],
   "role-accountant": [
     "dashboard.view", "events.view",
@@ -40,39 +42,45 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "ledger.view", "ledger.post", "banking.manage", "tax.view", "tax.manage",
     "payroll.view",
     "audit.view", "workflow.view", "workflow.manage",
-    "knowledge.view"
+    "knowledge.view",
+    "budget.view", "budget.manage", "expense.view", "expense.manage"
   ],
   "role-employee": [
     "dashboard.view", "events.view", "events.create",
     "tasks.view", "documents.view", "documents.manage",
     "ledger.view", "tax.view", "contracts.view",
-    "payroll.view", "knowledge.view"
+    "payroll.view", "knowledge.view",
+    "expense.view"
   ],
   "role-cashier": [
     "dashboard.view", "events.view",
     "tasks.view", "documents.view", "documents.manage",
     // 出纳管银行账户、导流水、做对账 —— 这是本职，但不含记账权 ledger.post。
     "ledger.view", "banking.manage", "tax.view",
-    "payroll.view", "knowledge.view"
+    "payroll.view", "knowledge.view",
+    "expense.view"
   ],
   "role-tax-specialist": [
     "dashboard.view", "events.view", "events.create",
     "tasks.view", "documents.view", "documents.manage",
     "ledger.view", "tax.view", "tax.manage",
     "contracts.view", "payroll.view",
-    "audit.view", "workflow.view", "workflow.manage", "knowledge.view"
+    "audit.view", "workflow.view", "workflow.manage", "knowledge.view",
+    "expense.view"
   ],
   "role-auditor": [
     "dashboard.view", "events.view",
     "tasks.view", "documents.view",
     "ledger.view", "tax.view",
     "contracts.view", "payroll.view",
-    "audit.view", "workflow.view", "knowledge.view"
+    "audit.view", "workflow.view", "knowledge.view",
+    "budget.view", "expense.view"
   ],
   "role-viewer": [
     "dashboard.view", "events.view", "tasks.view",
     "documents.view", "ledger.view", "tax.view",
-    "contracts.view", "payroll.view", "knowledge.view"
+    "contracts.view", "payroll.view", "knowledge.view",
+    "expense.view"
   ]
 };
 
