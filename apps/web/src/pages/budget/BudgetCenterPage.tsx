@@ -10,7 +10,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Alert, Button, DatePicker, Empty, Skeleton, Space, Typography } from "antd";
+import { Alert, Button, DatePicker, Empty, InputNumber, Modal, Radio, Skeleton, Space, Typography } from "antd";
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { toast } from "sonner";
@@ -20,8 +20,10 @@ import { errorMessage } from "../../lib/errors";
 import { listCostCenters } from "../../lib/api";
 import {
   createBudget,
+  deleteBudget,
   getExpenseAnalysis,
   listBudgets,
+  updateBudget,
   type BudgetWithUsage,
   type CreateBudgetBody,
   type ExpenseAnalysis
@@ -46,6 +48,9 @@ export function BudgetCenterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<ExpenseAnalysis | null>(null);
+  const [adjusting, setAdjusting] = useState<BudgetWithUsage | null>(null);
+  const [adjustYuan, setAdjustYuan] = useState(0);
+  const [adjustPolicy, setAdjustPolicy] = useState<"block" | "warn">("warn");
   const [analysisLoading, setAnalysisLoading] = useState(false);
 
   const task: BudgetTaskKey = isTaskKey(searchParams.get("task"))
@@ -120,6 +125,44 @@ export function BudgetCenterPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleAdjust = async () => {
+    if (!adjusting) return;
+    try {
+      await updateBudget(adjusting.id, {
+        amountCents: Math.round(adjustYuan * 100),
+        controlPolicy: adjustPolicy
+      });
+      toast.success("额度已调整");
+      setAdjusting(null);
+      await reload();
+    } catch (error) {
+      toast.error(errorMessage(error, "调整失败"));
+    }
+  };
+
+  const handleDelete = (budget: BudgetWithUsage) => {
+    Modal.confirm({
+      title: "删除这条预算？",
+      // 有未结占用时服务端会拒——不在这里预判，因为占用状态随时在变，
+      // 前端判断只会给出一个可能已经过时的结论。
+      content:
+        "如果还有未结束的占用（已批但没落账的单据），服务端会拒绝删除。" +
+        "删除后这个维度的支出不再受预算控制。",
+      okText: "删除",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          await deleteBudget(budget.id);
+          toast.success("预算已删除");
+          await reload();
+        } catch (error) {
+          toast.error(errorMessage(error, "删除失败"));
+        }
+      }
+    });
   };
 
   const handlePeriodChange = (value: dayjs.Dayjs | null) => {
@@ -218,7 +261,16 @@ export function BudgetCenterPage() {
                 </Button>
               </Empty>
             ) : (
-              <BudgetTable items={items} costCenterNames={costCenterNames} />
+              <BudgetTable
+                items={items}
+                costCenterNames={costCenterNames}
+                onAdjust={(budget) => {
+                  setAdjustYuan(budget.amountCents / 100);
+                  setAdjustPolicy(budget.controlPolicy);
+                  setAdjusting(budget);
+                }}
+                onDelete={handleDelete}
+              />
             )}
           </div>
         ) : (
@@ -229,6 +281,62 @@ export function BudgetCenterPage() {
           />
         )}
       </TaskFocusShell>
+
+      <Modal
+        open={adjusting !== null}
+        title="调整预算额度"
+        okText="保存"
+        cancelText="取消"
+        onCancel={() => setAdjusting(null)}
+        onOk={() => void handleAdjust()}
+      >
+        {adjusting && (
+          <div>
+            <Typography.Paragraph>
+              {adjusting.periodKey} · {adjusting.accountCode ?? "不限科目"}
+              <br />
+              当前已占用 <strong>{(adjusting.encumberedCents / 100).toFixed(2)}</strong> 元、
+              已发生 <strong>{(adjusting.actualCents / 100).toFixed(2)}</strong> 元。
+            </Typography.Paragraph>
+
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <Space>
+                <span>新额度（元）</span>
+                <InputNumber
+                  min={0}
+                  precision={2}
+                  value={adjustYuan}
+                  onChange={(value) => setAdjustYuan(value ?? 0)}
+                  style={{ width: 180 }}
+                />
+              </Space>
+              <Space>
+                <span>超支时</span>
+                <Radio.Group
+                  value={adjustPolicy}
+                  onChange={(e) => setAdjustPolicy(e.target.value)}
+                  options={[
+                    { label: "提示", value: "warn" },
+                    { label: "拦截", value: "block" }
+                  ]}
+                />
+              </Space>
+            </Space>
+
+            {/* 调减到低于已用是允许的——年中收紧开支是真实的经营事件，
+                拦住它等于要求会计先去撤单据。差额照实显示为超支。 */}
+            {Math.round(adjustYuan * 100) < adjusting.encumberedCents + adjusting.actualCents && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginTop: 12 }}
+                message="新额度低于已用金额"
+                description="这是允许的（年中收紧开支很常见），调整后该预算会显示为超支。已有的单据不受影响。"
+              />
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -12,7 +12,7 @@
  */
 
 import React from "react";
-import { Table, Tag, Typography } from "antd";
+import { Button, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { BudgetWithUsage } from "../../lib/api-expense-control";
 import {
@@ -36,9 +36,20 @@ export interface BudgetTableProps {
   /** 成本中心 id → 名称，用于把维度显示成人话。 */
   costCenterNames?: Readonly<Record<string, string>>;
   onSelect?: (budget: BudgetWithUsage) => void;
+  /** 调额度。没传则不显示操作列——只读角色看得到预算但改不了。 */
+  onAdjust?: (budget: BudgetWithUsage) => void;
+  /** 删除。有未结占用时服务端会拒，这里不预判。 */
+  onDelete?: (budget: BudgetWithUsage) => void;
 }
 
-export function BudgetTable({ items, loading, costCenterNames, onSelect }: BudgetTableProps) {
+export function BudgetTable({
+  items,
+  loading,
+  costCenterNames,
+  onSelect,
+  onAdjust,
+  onDelete
+}: BudgetTableProps) {
   const columns: ColumnsType<BudgetWithUsage> = [
     {
       title: "期间",
@@ -114,7 +125,45 @@ export function BudgetTable({ items, loading, costCenterNames, onSelect }: Budge
           </span>
         );
       }
-    }
+    },
+    // 操作列只在有回调时出现：只读角色看得到预算但改不了。
+    ...(onAdjust || onDelete
+      ? [
+          {
+            title: "操作",
+            key: "actions",
+            width: 130,
+            render: (_: unknown, row: BudgetWithUsage) => (
+              <Space size={4}>
+                {onAdjust && (
+                  <Button
+                    size="small"
+                    onClick={(e) => {
+                      // 行本身可能带 onSelect，别让点按钮也触发选中。
+                      e.stopPropagation();
+                      onAdjust(row);
+                    }}
+                  >
+                    调额度
+                  </Button>
+                )}
+                {onDelete && (
+                  <Button
+                    size="small"
+                    danger
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(row);
+                    }}
+                  >
+                    删除
+                  </Button>
+                )}
+              </Space>
+            )
+          } as ColumnsType<BudgetWithUsage>[number]
+        ]
+      : [])
   ];
 
   return (
