@@ -2,7 +2,7 @@
  * 系统中心页面（G2 聚合）
  * 路由：/settings（承载原 /settings、/billing、/feedback 三个页面）
  * 功能：
- *   - 用 Tab 承载「系统设置 / 订阅计费 / 反馈与升级」三个既有页面
+ *   - 用 Tab 承载「系统设置 / 费控配置 / 订阅计费 / 反馈与升级」
  *   - Tab 切换与 URL 查询参数（?tab=）双向同步，支持深链
  *   - 不改三个子页面内部逻辑，仅作为容器复用
  *   - 外层 URL 参数固定使用 `tab`；SettingsPage 内部自有一套 Tab 状态（公司/AI/
@@ -17,10 +17,11 @@ import { ProPageBanner } from "../../components/ui/ProPageBanner";
 import { SettingsPage } from "../SettingsPage";
 import { BillingPage } from "../BillingPage";
 import { FeedbackPage } from "../FeedbackPage";
+import { ExpenseControlPanel } from "./expense-control/ExpenseControlPanel";
 
 const TAB_PARAM_KEY = "tab";
 
-const SYSTEM_TAB_KEYS = ["settings", "billing", "feedback"] as const;
+const SYSTEM_TAB_KEYS = ["settings", "expense-control", "billing", "feedback"] as const;
 
 type SystemTabKey = (typeof SYSTEM_TAB_KEYS)[number];
 
@@ -57,6 +58,13 @@ export function SystemHubPage() {
       key: "settings",
       label: "系统设置",
       children: <SettingsPage />
+    },
+    {
+      // V13：费用标准与审批流。它们是**配置**而非日常操作，所以在系统中心
+      // 而不是一级导航——低频配置项进侧栏会稀释高频入口。
+      key: "expense-control",
+      label: "费控配置",
+      children: <ExpenseControlPanel />
     },
     {
       key: "billing",
