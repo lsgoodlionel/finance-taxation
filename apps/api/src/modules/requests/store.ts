@@ -328,18 +328,15 @@ async function derivEventId(
   if (request.businessEventId) return request.businessEventId;
 
   const eventId = `evt-${randomUUID()}`;
-  // `business_events` 没有 cost_center_id 列——成本中心是**凭证行**上的维度
-  // （V12-D1 加在 voucher_lines / ledger_entries 上），录凭证时单独选。
-  //
-  // 于是申请单上的成本中心传不到凭证：做账的人要再选一次，而他未必知道
-  // 申请人当初填的是哪个部门。反查路径是有的（requests.business_event_id
-  // 指向本事项），但目前没有代码走这条路。**记入残留清单**，不在这里顺手
-  // 给 business_events 加列——那会牵动事项的读写与前端，超出 B1 的范围。
+  // 成本中心随事项带下去（V13 残留 6 补的列）。它是**建议值**——录凭证时
+  // 仍可改，最终以凭证行上的为准。没有这一步的话，做账的人要重新选一次部门，
+  // 而他未必知道申请人当初填的是哪个；填错了不会报错，那笔费用只是悄悄
+  // 归到了另一个部门头上。
   await tx.query(
     `insert into business_events
        (id, company_id, type, title, description, department, owner_id,
-        occurred_on, amount, currency, status, source)
-     values ($1, $2, $3, $4, $5, '', $6, $7, $8, $9, 'awaiting_documents', 'manual')`,
+        occurred_on, amount, currency, status, source, cost_center_id)
+     values ($1, $2, $3, $4, $5, '', $6, $7, $8, $9, 'awaiting_documents', 'manual', $10)`,
     [
       eventId,
       request.companyId,
@@ -352,7 +349,8 @@ async function derivEventId(
       request.requesterUserId,
       request.expectedDate,
       (request.amountCents / 100).toFixed(2),
-      request.currency
+      request.currency,
+      request.costCenterId
     ]
   );
   return eventId;
