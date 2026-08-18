@@ -227,9 +227,13 @@ const SEED_BUDGETS = [
  * 没有它，费用分摊在页面上是死的——分摊对象的下拉框空着，而用户看不出
  * 是「功能没做」还是「数据没配」。两个部门够了：分摊至少要两个对象才成立。
  */
+//
+// **编码带 SEED- 前缀**：`CC-RND` / `CC-SALES` 这类通用编码会与测试自建的
+// 成本中心撞车（cost-center.integration.test.ts 用的正是 CC-SALES），
+// 而撞车表现为「新建成本中心」用例报 409——从那句话看不出是种子的锅。
 const SEED_COST_CENTERS = [
-  { suffix: "rnd", code: "CC-RND", name: "研发部" },
-  { suffix: "sales", code: "CC-SALES", name: "市场部" }
+  { suffix: "rnd", code: "SEED-RD", name: "研发部" },
+  { suffix: "sales", code: "SEED-MK", name: "市场部" }
 ] as const;
 
 const SEED_STANDARDS = [

@@ -97,7 +97,7 @@ test("预算占用与实际发生的口径", async (t) => {
     note: null
   });
   assert.equal(created.ok, true);
-  const budget = created.ok ? created.budget : null;
+  const budget = created.ok ? created.value : null;
   assert.ok(budget);
 
   await t.test("重复占用同一张单据不会占两遍", async () => {
