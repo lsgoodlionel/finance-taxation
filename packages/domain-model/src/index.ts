@@ -1173,6 +1173,17 @@ export const permissionCatalog = [
   "audit.view",
   "workflow.view",
   "workflow.manage",
+  // V13 费控。预算与费用标准分开授权：预算额度是管理层的决策数据（部门经理
+  // 该看得到自己部门的预算执行），而费用标准是行政/HR 维护的制度配置，
+  // 两者的持有人在多数公司里不是同一批人。
+  "budget.view",
+  "budget.manage",
+  "expense.view",
+  // 提交费用类单据（申请/借款/报销）。**与 expense.view 分开**：只读角色
+  // 与审计要看得到费用标准和别人的单据，但不该能提单——V13-B 的权限护栏
+  // 正是抓到「role-viewer 能建申请单」才拆出这个键。
+  "expense.submit",
+  "expense.manage",
   "knowledge.view",
   "knowledge.manage",
   "settings.manage"

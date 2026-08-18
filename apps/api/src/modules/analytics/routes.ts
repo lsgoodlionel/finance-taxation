@@ -98,14 +98,23 @@ export async function revenueComparisonRoute(req: ApiRequest, res: ServerRespons
 }
 
 /**
- * GET /api/analytics/budget-variance?period=2026-05&budget=100000&category=6201,6301e
- * 预算差异（E1）：比对属期实际发生额（默认 EXPENSE_PREFIXES 费用科目前缀）与传入预算金额。
- * category 传入的前缀按科目表口径书写，例如 6201（销售费用）、6301e（管理费用）、6401（财务费用）。
+ * GET /api/analytics/budget-variance?period=2026-05[&budget=100000][&category=6602,6603]
+ * 预算差异（E1 + V13-D7）。
+ *
+ * ## V13-D7：预算金额不再必须由调用方传入
+ *
+ * 这个接口从 E1 起就存在，但**预算金额一直靠 URL 传参**——接口是对的，
+ * 缺的是数据源。V13-A2 落地 `budgets` 表之后，不传 `budget` 时改为从
+ * 预算表汇总该属期的全部预算额。
+ *
+ * 仍然支持显式传 `budget`：做「如果预算是 X 会怎样」的假设分析时用得上，
+ * 而那是这个接口最初的用途。传了就以传入的为准，并在响应里标明数据来源——
+ * 不标的话，两个人对着同一个屏幕会争论那个数是哪来的。
  */
 export async function budgetVarianceRoute(req: ApiRequest, res: ServerResponse): Promise<void> {
   const url = new URL(req.url || "/", "http://127.0.0.1");
   const period = url.searchParams.get("period") || "";
-  const budget = Number(url.searchParams.get("budget"));
+  const budgetParam = url.searchParams.get("budget");
   const categoryParam = url.searchParams.get("category");
   const prefixes = categoryParam
     ? categoryParam.split(",").map((p) => p.trim()).filter(Boolean)
@@ -115,9 +124,33 @@ export async function budgetVarianceRoute(req: ApiRequest, res: ServerResponse):
     json(res, 400, { error: "period must look like YYYY-MM" });
     return;
   }
-  if (!Number.isFinite(budget) || budget < 0) {
-    json(res, 400, { error: "budget must be a non-negative number" });
-    return;
+  // 传了就用传的（假设分析），没传就从预算表取（V13-D7）。
+  let budget: number;
+  let budgetSource: "param" | "budgets";
+  if (budgetParam === null) {
+    const rows = await query<{ total: string }>(
+      `select coalesce(sum(amount_cents), 0) as total
+         from budgets
+        where company_id = $1
+          and (
+            -- 月度预算按 period_key 精确匹配；年度预算覆盖本月，
+            -- 但**不把年度预算摊到月**——那需要一个「怎么摊」的假设，
+            -- 而任何假设都会让某个月的执行率失真。年度预算在这里
+            -- 按全额计入，界面上要说明这一点。
+            (period_type = 'month' and period_key = $2)
+            or (period_type = 'year' and period_key = left($2, 4))
+          )`,
+      [req.auth!.companyId, period]
+    );
+    budget = Number(rows[0]?.total ?? 0) / 100;
+    budgetSource = "budgets";
+  } else {
+    budget = Number(budgetParam);
+    budgetSource = "param";
+    if (!Number.isFinite(budget) || budget < 0) {
+      json(res, 400, { error: "budget must be a non-negative number" });
+      return;
+    }
   }
   if (prefixes.length === 0) {
     json(res, 400, { error: "category must not be empty" });
@@ -142,6 +175,8 @@ export async function budgetVarianceRoute(req: ApiRequest, res: ServerResponse):
 
   json(res, 200, {
     period,
+    // 标明预算数从哪来：不标的话，两个人对着同一个屏幕会争论那个数是哪来的。
+    budgetSource,
     category: prefixes,
     actualCents,
     budgetCents,

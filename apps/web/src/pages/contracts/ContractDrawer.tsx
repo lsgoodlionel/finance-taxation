@@ -5,6 +5,8 @@ import {
 } from "@ant-design/icons";
 import type { Contract, Task, GeneratedDocument, TaxItem, Voucher } from "@finance-taxation/domain-model";
 import { Term } from "../../components/ui/Term";
+import { DollarOutlined } from "@ant-design/icons";
+import { ContractSchedulePanel } from "./ContractSchedulePanel";
 
 const { Text, Title } = Typography;
 
@@ -77,6 +79,18 @@ export function ContractDrawer({ detail, open, onClose, onCloseContract, onOpenE
             </Space>
           )}
         </Space>
+      ),
+    },
+    {
+      // V13：付款计划排在元数据之后、履行记录之前——先看钱怎么付，
+      // 再看关联了什么。这是蓝图第二节定的顺序。
+      key: "schedules",
+      label: <Space size={4}><DollarOutlined />付款计划</Space>,
+      children: (
+        <ContractSchedulePanel
+          contractId={contract.id}
+          contractAmount={contract.amount}
+        />
       ),
     },
     {

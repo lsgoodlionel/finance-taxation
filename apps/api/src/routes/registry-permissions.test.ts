@@ -60,7 +60,36 @@ const WRITE_ROUTES_WITH_VIEW_PERMISSION: ReadonlyMap<string, string> = new Map([
       "再由 tasks/mutation-scope.ts 的 canMutateTask 按负责人收敛（见 mutation-scope.test.ts）。" +
       "只挂 tasks.manage 会让会计/员工/出纳连自己名下的任务都改不了"
   ],
-  ["POST /api/tasks/:id/remind", "同上，催办与状态变更同一口径"]
+  ["POST /api/tasks/:id/remind", "同上，催办与状态变更同一口径"],
+  // V13-A：两个费控预检接口。用 POST 是因为入参是对象（日期 + 科目 + 部门 + 金额），
+  // 塞进查询串既难读又有长度上限；语义上它们与 GET 无异——纯计算，不落库、不建单据。
+  ["POST /api/budgets/check", "POST 当查询用：预算预检，只读三个数后算差额，不落库"],
+  ["POST /api/expense-standards/check", "POST 当查询用：超标预检，匹配标准后比金额，不落库"],
+  [
+    "POST /api/reimbursements/:id/audit",
+    "POST 当查询用：业财合规审核，读发票与标准后纯计算，不落库、不改单据状态。" +
+      "挂 view 是因为审批人要看得到审核结果，而他未必有提单权限"
+  ],
+  [
+    "POST /api/requests/:id/precheck",
+    "POST 当查询用：申请单的预算预检，读三个数后算差额，不落库、不改单据状态。" +
+      "用 POST 而非 GET 只为与另外两个 check 接口保持一致的调用形态"
+  ],
+  // V13-A 审批：两层守护。workflow.view 只负责放基层角色进门——挂 manage
+  // 会让员工连自己的待办都处理不了、连自己的单子都提不了。能不能动某一单
+  // 由 handler 按数据归属收敛：
+  [
+    "POST /api/approval/instances",
+    "两层守护：workflow.view 放行提交，submitter 固定取 req.auth.userId，" +
+      "提交人永远是自己；同单据并发提交由 uq_approval_instance_pending 排他约束挡住"
+  ],
+  [
+    "POST /api/approval/instances/:id/act",
+    "两层守护：收敛点是 approval/store.ts 的 act —— 批准/驳回按 canActOnStep 判权" +
+      "（role/user/manager 三种，见 engine.test.ts 的 canActOnStep 四条用例），" +
+      "撤回只允许发起人本人。manager 类型的上级在 store 内部解析，" +
+      "不接受调用方传入——传当前用户 id 会让判据恒真"
+  ]
 ]);
 
 /**
@@ -79,7 +108,15 @@ const WRITE_ROUTES_ALLOWED_FOR_READ_ONLY_ROLE: ReadonlySet<string> = new Set([
   "POST /api/ai/automation/decide",
   "POST /api/feedback",
   "PUT /api/tasks/:id",
-  "POST /api/tasks/:id/remind"
+  "POST /api/tasks/:id/remind",
+  // viewer 持有 expense.view（要看得到费用标准才知道自己能报多少），
+  // 而超标预检是纯计算——能看标准的人本就能自己算出同样的结论。
+  "POST /api/expense-standards/check",
+  // 同理：预检只读不写。viewer 提不了单（提交要 expense.submit，它没有），
+  // 但能看一眼某张单会不会超预算，这与它能查预算列表是同一层能力。
+  "POST /api/requests/:id/precheck",
+  // 同理：审核只读不写。
+  "POST /api/reimbursements/:id/audit"
 ]);
 
 /**

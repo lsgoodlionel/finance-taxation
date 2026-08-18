@@ -1,6 +1,67 @@
 import { env } from "../config/env.js";
 import { query } from "../db/client.js";
 import { getMenu } from "../modules/access/routes.js";
+import { expenseAnalysisRoute } from "../modules/reports/expense-analysis-routes.js";
+import {
+  cancelScheduleRoute,
+  confirmPaymentRoute,
+  createPaymentRoute,
+  createScheduleRoute,
+  exportPaymentsRoute,
+  listDuePaymentsRoute,
+  listPaymentsRoute,
+  listSchedulesRoute
+} from "../modules/payments/routes.js";
+
+import {
+  auditReimbursementRoute,
+  createReimbursementRoute,
+  getReimbursementRoute,
+  invoiceReimbursementUsageRoute,
+  listReimbursementsRoute,
+  transitionReimbursementRoute
+} from "../modules/reimbursements/routes.js";
+
+import {
+  createAdvanceRoute,
+  getAdvanceRoute,
+  listAdvancesRoute,
+  payAdvanceRoute,
+  transitionAdvanceRoute
+} from "../modules/advances/routes.js";
+
+import {
+  createRequestRoute,
+  getRequestRoute,
+  listRequestsRoute,
+  precheckRequestRoute,
+  transitionRequestRoute,
+  updateRequestRoute
+} from "../modules/requests/routes.js";
+
+import {
+  actOnApprovalRoute,
+  createFlowRoute,
+  getApprovalDetailRoute,
+  listFlowsRoute,
+  listPendingRoute,
+  submitApprovalRoute
+} from "../modules/approval/routes.js";
+
+import {
+  checkBudgetRoute,
+  createBudgetRoute,
+  deleteBudgetRoute,
+  listBudgetsRoute,
+  updateBudgetRoute
+} from "../modules/budget/routes.js";
+import {
+  checkExpenseStandardRoute,
+  createExpenseStandardRoute,
+  expireExpenseStandardRoute,
+  listExpenseStandardsRoute
+} from "../modules/expense-standards/routes.js";
+
 import { listAccounts, getAccountByCode, createAccount, updateAccount } from "../modules/accounts/routes.js";
 import { handleAuthMeta } from "../modules/auth/routes.js";
 import { handleChairmanDashboard, handleChairmanTrend } from "../modules/dashboard/routes.js";
@@ -577,6 +638,218 @@ const routes: RouteDef[] = [
     permission: "ledger.post",
     handler: (req, res, p) => updateCostCenterRoute(req, res, p.id!)
   },
+
+
+
+  // ── V13-B 申请单 ───────────────────────────────────────────────────
+  //
+  // 读用 expense.view，写用 expense.submit——两者必须分开：只读角色与审计
+  // 要看得到费用标准和别人的单据，但不该能提单。这不是洁癖，是权限护栏
+  // 真的抓到了「role-viewer 能建申请单」。
+  //
+  // 归属收敛在 handler：requesterUserId 固定取 req.auth.userId，提交人永远
+  // 是自己；submit/cancel 另在 store 里判「只有发起人能做」。
+  { method: "GET", path: "/api/requests", auth: true, permission: "expense.view", handler: listRequestsRoute },
+  { method: "POST", path: "/api/requests", auth: true, permission: "expense.submit", handler: createRequestRoute },
+  {
+    method: "GET",
+    path: "/api/requests/:id",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => getRequestRoute(req, res, p.id!)
+  },
+  {
+    method: "PATCH",
+    path: "/api/requests/:id",
+    auth: true,
+    permission: "expense.submit",
+    handler: (req, res, p) => updateRequestRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/requests/:id/precheck",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => precheckRequestRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/requests/:id/transition",
+    auth: true,
+    permission: "expense.submit",
+    handler: (req, res, p) => transitionRequestRoute(req, res, p.id!)
+  },
+
+
+  // ── V13-B 借款单 / 备用金 ────────────────────────────────────────
+  //
+  // 付款挂 banking.manage 而不是 expense.submit：付款是出纳的本职，
+  // 与导流水、做对账同一档。借款人自己不能给自己付款——这是最基本的
+  // 不相容职务分离。
+  { method: "GET", path: "/api/advances", auth: true, permission: "expense.view", handler: listAdvancesRoute },
+  { method: "POST", path: "/api/advances", auth: true, permission: "expense.submit", handler: createAdvanceRoute },
+  {
+    method: "GET",
+    path: "/api/advances/:id",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => getAdvanceRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/advances/:id/transition",
+    auth: true,
+    permission: "expense.submit",
+    handler: (req, res, p) => transitionAdvanceRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/advances/:id/pay",
+    auth: true,
+    permission: "banking.manage",
+    handler: (req, res, p) => payAdvanceRoute(req, res, p.id!)
+  },
+
+
+  // ── V13-B 报销单 ───────────────────────────────────────────────────
+  { method: "GET", path: "/api/reimbursements", auth: true, permission: "expense.view", handler: listReimbursementsRoute },
+  { method: "POST", path: "/api/reimbursements", auth: true, permission: "expense.submit", handler: createReimbursementRoute },
+  {
+    method: "GET",
+    path: "/api/reimbursements/:id",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => getReimbursementRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/reimbursements/:id/transition",
+    auth: true,
+    permission: "expense.submit",
+    handler: (req, res, p) => transitionReimbursementRoute(req, res, p.id!)
+  },
+  // V13-D：业财合规审核。挂 expense.view 而非 submit——审批人要能看到
+  // 审核结果，而他未必有提单权限。POST 当查询用（纯计算不落库），
+  // 已按规矩登记进 registry-permissions 的白名单。
+  {
+    method: "POST",
+    path: "/api/reimbursements/:id/audit",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => auditReimbursementRoute(req, res, p.id!)
+  },
+  // B5：票据中心的「转报销单」按钮要在点之前就知道这张票报没报过——
+  // 挂上去再被拒是最差的顺序。
+  {
+    method: "GET",
+    path: "/api/invoices/:id/reimbursement-usage",
+    auth: true,
+    permission: "expense.view",
+    handler: (req, res, p) => invoiceReimbursementUsageRoute(req, res, p.id!)
+  },
+
+
+  // V13-D6：费用分析。归 expense.view——它读的是报销数据，
+  // 与「谁能看别人的报销单」同一层能力。
+  { method: "GET", path: "/api/reports/expense-analysis", auth: true, permission: "expense.view", handler: expenseAnalysisRoute },
+
+  // ── V13-C 合同付款计划与付款单 ─────────────────────────────────────
+  //
+  // 付款计划的读写归 contracts.*（它是合同条款的一部分）；
+  // 实际付款归 banking.manage（出纳本职，与导流水、做对账同一档）。
+  // 这条分界让「谁能改合同条款」与「谁能把钱付出去」是两个人。
+  {
+    method: "GET",
+    path: "/api/contracts/:id/schedules",
+    auth: true,
+    permission: "contracts.view",
+    handler: (req, res, p) => listSchedulesRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/contracts/:id/schedules",
+    auth: true,
+    permission: "contracts.manage",
+    handler: (req, res, p) => createScheduleRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/schedules/:id/cancel",
+    auth: true,
+    permission: "contracts.manage",
+    handler: (req, res, p) => cancelScheduleRoute(req, res, p.id!)
+  },
+  { method: "GET", path: "/api/payments/due", auth: true, permission: "contracts.view", handler: listDuePaymentsRoute },
+  { method: "GET", path: "/api/payments", auth: true, permission: "contracts.view", handler: listPaymentsRoute },
+  { method: "POST", path: "/api/payments", auth: true, permission: "banking.manage", handler: createPaymentRoute },
+  {
+    method: "POST",
+    path: "/api/payments/:id/confirm",
+    auth: true,
+    permission: "banking.manage",
+    handler: (req, res, p) => confirmPaymentRoute(req, res, p.id!)
+  },
+  { method: "POST", path: "/api/payments/export", auth: true, permission: "banking.manage", handler: exportPaymentsRoute },
+
+  // ── V13-A 审批流（终于用上了 workflow.* 权限键）─────────────────────
+  //
+  // 这两个键在 permissionCatalog 里躺了很久却没有任何路由使用——它们是历史上
+  // 给审批流预留的位置。`workflow.view` 覆盖「看流程 + 处理我的待办」，
+  // `workflow.manage` 只管改流程定义：改审批链等于改谁能放行多大的钱。
+  { method: "GET", path: "/api/approval/flows", auth: true, permission: "workflow.view", handler: listFlowsRoute },
+  { method: "POST", path: "/api/approval/flows", auth: true, permission: "workflow.manage", handler: createFlowRoute },
+  { method: "GET", path: "/api/approval/pending", auth: true, permission: "workflow.view", handler: listPendingRoute },
+  { method: "POST", path: "/api/approval/instances", auth: true, permission: "workflow.view", handler: submitApprovalRoute },
+  {
+    method: "POST",
+    path: "/api/approval/instances/:id/act",
+    auth: true,
+    permission: "workflow.view",
+    handler: (req, res, p) => actOnApprovalRoute(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/approval/instances/:id",
+    auth: true,
+    permission: "workflow.view",
+    handler: (req, res, p) => getApprovalDetailRoute(req, res, p.id!)
+  },
+
+  // ── V13-A 费控地基：预算与费用标准 ──────────────────────────────────
+  //
+  // 预算读写分权：`budget.view` 给到部门经理与审计（要看得到执行情况），
+  // `budget.manage` 只给财务与管理层。
+  { method: "GET", path: "/api/budgets", auth: true, permission: "budget.view", handler: listBudgetsRoute },
+  { method: "POST", path: "/api/budgets", auth: true, permission: "budget.manage", handler: createBudgetRoute },
+  {
+    method: "PATCH",
+    path: "/api/budgets/:id",
+    auth: true,
+    permission: "budget.manage",
+    handler: (req, res, p) => updateBudgetRoute(req, res, p.id!)
+  },
+  {
+    method: "DELETE",
+    path: "/api/budgets/:id",
+    auth: true,
+    permission: "budget.manage",
+    handler: (req, res, p) => deleteBudgetRoute(req, res, p.id!)
+  },
+  // 预检挂 budget.view 而不是 manage：提单的人要能看到自己这笔会不会超预算，
+  // 但不该因此获得改预算的权限。
+  { method: "POST", path: "/api/budgets/check", auth: true, permission: "budget.view", handler: checkBudgetRoute },
+
+  { method: "GET", path: "/api/expense-standards", auth: true, permission: "expense.view", handler: listExpenseStandardsRoute },
+  { method: "POST", path: "/api/expense-standards", auth: true, permission: "expense.manage", handler: createExpenseStandardRoute },
+  {
+    method: "PATCH",
+    path: "/api/expense-standards/:id",
+    auth: true,
+    permission: "expense.manage",
+    handler: (req, res, p) => expireExpenseStandardRoute(req, res, p.id!)
+  },
+  { method: "POST", path: "/api/expense-standards/check", auth: true, permission: "expense.view", handler: checkExpenseStandardRoute },
+
   { method: "GET", path: "/api/reports/cost-centers", auth: true, permission: "ledger.view", handler: getCostCenterReportRoute },
 
   // 税率主数据（V12-D2）

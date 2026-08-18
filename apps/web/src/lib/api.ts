@@ -204,7 +204,14 @@ function throwAuthRequired() {
   throw new Error("AUTH_REQUIRED");
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * 导出供新的领域 API 模块复用（V13）。
+ *
+ * 本文件已近 3000 行，远超仓库约定的单文件上限。新增领域接口一律另开模块
+ * （如 `api-expense-control.ts`），共用这里的鉴权、超时与错误归一逻辑——
+ * 各自再实现一遍 fetch 包装才是真正的问题：token 刷新与 401 处理会立刻分叉。
+ */
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getStoredToken();
   const headers = new Headers(init?.headers);
   headers.set("Content-Type", "application/json");
