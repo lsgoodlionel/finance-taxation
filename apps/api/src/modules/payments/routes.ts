@@ -14,6 +14,7 @@
 import type { ServerResponse } from "node:http";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
+import { query } from "../../db/client.js";
 import { writeAudit } from "../../services/audit.js";
 import {
   cancelSchedule,
@@ -251,19 +252,46 @@ export async function exportPaymentsRoute(req: ApiRequest, res: ServerResponse):
   );
   const found = payments.filter((item): item is NonNullable<typeof item> => item !== null);
 
-  // 收款人信息（户名/账号/开户行）在 FT 里还没有落点——供应商银行账户
-  // 需要在往来单位档案上扩展，那超出 C6 的范围。这里先导出付款单本身的
-  // 信息，账号列留空由出纳补。**明说而不是编造空字符串**：
-  // 导出的文件直接进银行系统，编出来的账号是要出事的。
+  // 收款人信息从往来单位档案取（V13 残留 9 补的字段）。
+  //
+  // **没维护账户的仍然导出，只是那几列为空**——不因为一条缺账户就整批
+  // 导不出来。出纳看到空账号会去补，而整批失败他只会重试第二次。
+  const payeeRows = await query<{
+    payment_id: string;
+    bank_account_name: string | null;
+    bank_account: string | null;
+    bank_name: string | null;
+    fallback_name: string | null;
+  }>(
+    `select p.id as payment_id,
+            cp.bank_account_name, cp.bank_account, cp.bank_name,
+            coalesce(cp.name, c.counterparty_name) as fallback_name
+       from payments p
+       left join reimbursements r on r.id = p.reimbursement_id
+       left join contract_payment_schedules s on s.id = p.schedule_id
+       left join contracts c on c.id = s.contract_id
+       left join counterparties cp
+              on cp.id = r.counterparty_id
+              or (cp.company_id = p.company_id and cp.name = c.counterparty_name)
+      where p.company_id = $1 and p.id = any($2::text[])`,
+    [req.auth!.companyId, found.map((item) => item.id)]
+  );
+  const payeeById = new Map(payeeRows.map((row) => [row.payment_id, row]));
+
   const rows = buildBankExportRows(
-    found.map((payment) => ({
-      paymentNo: payment.paymentNo,
-      payeeName: "",
-      payeeAccount: "",
-      payeeBank: "",
-      amountCents: payment.amountCents,
-      note: payment.note ?? ""
-    }))
+    found.map((payment) => {
+      const payee = payeeById.get(payment.id);
+      return {
+        paymentNo: payment.paymentNo,
+        // 户名优先取账户户名——收款户名未必等于往来单位名称（供应商可能
+        // 用关联公司账户收款）。没维护则退回单位名，让出纳一眼看出要补哪个。
+        payeeName: payee?.bank_account_name ?? payee?.fallback_name ?? "",
+        payeeAccount: payee?.bank_account ?? "",
+        payeeBank: payee?.bank_name ?? "",
+        amountCents: payment.amountCents,
+        note: payment.note ?? ""
+      };
+    })
   );
 
   const batchNo = `EXP-${todayIso().replace(/-/g, "")}-${found.length}`;
