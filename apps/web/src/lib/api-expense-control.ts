@@ -388,6 +388,8 @@ export interface ReimbursementLine {
   quantity: number;
   invoiceId: string | null;
   summary: string;
+  /** 费用发生地的城市等级（V13 残留 8）。在**行**上——一次出差可能跨城市。 */
+  cityTier: string | null;
   allocations: ReimbursementAllocation[];
 }
 
@@ -423,6 +425,7 @@ export interface ReimbursementLineInput {
   quantity?: number;
   invoiceId?: string | null;
   summary?: string;
+  cityTier?: string | null;
   allocationsByRatio?: { costCenterId: string; ratioBp: number }[];
   allocationsByAmount?: { costCenterId: string; amountCents: number }[];
 }
@@ -631,5 +634,23 @@ export interface ExpenseAnalysis {
 export async function getExpenseAnalysis(period: string) {
   return request<ExpenseAnalysis>(
     `/api/reports/expense-analysis?period=${encodeURIComponent(period)}`
+  );
+}
+
+/** 抄送给我的审批（V13 残留 4）。已结束的也返回——抄送是知会，不是待办。 */
+export interface WatchedApproval extends ApprovalInstance {
+  readAt: string | null;
+}
+
+export async function listWatchedApprovals() {
+  return request<{ items: WatchedApproval[]; total: number; unread: number }>(
+    "/api/approval/watched"
+  );
+}
+
+export async function markWatchedRead(instanceId: string) {
+  return request<{ ok: true }>(
+    `/api/approval/watched/${encodeURIComponent(instanceId)}/read`,
+    { method: "POST" }
   );
 }

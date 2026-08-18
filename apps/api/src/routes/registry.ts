@@ -41,6 +41,8 @@ import {
 
 import {
   actOnApprovalRoute,
+  listWatchedRoute,
+  markWatchedReadRoute,
   createFlowRoute,
   getApprovalDetailRoute,
   listFlowsRoute,
@@ -799,6 +801,16 @@ const routes: RouteDef[] = [
   { method: "GET", path: "/api/approval/flows", auth: true, permission: "workflow.view", handler: listFlowsRoute },
   { method: "POST", path: "/api/approval/flows", auth: true, permission: "workflow.manage", handler: createFlowRoute },
   { method: "GET", path: "/api/approval/pending", auth: true, permission: "workflow.view", handler: listPendingRoute },
+  // 抄送给我的（V13 残留 4）。归属收敛在 handler：userId 固定取 req.auth，
+  // 只可能看到抄送给自己的。
+  { method: "GET", path: "/api/approval/watched", auth: true, permission: "workflow.view", handler: listWatchedRoute },
+  {
+    method: "POST",
+    path: "/api/approval/watched/:id/read",
+    auth: true,
+    permission: "workflow.view",
+    handler: (req, res, p) => markWatchedReadRoute(req, res, p.id!)
+  },
   { method: "POST", path: "/api/approval/instances", auth: true, permission: "workflow.view", handler: submitApprovalRoute },
   {
     method: "POST",

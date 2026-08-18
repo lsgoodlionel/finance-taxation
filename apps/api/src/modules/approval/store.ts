@@ -510,3 +510,63 @@ export async function listActions(instanceId: string) {
     [instanceId]
   );
 }
+
+/**
+ * 抄送给我的审批（V13 残留 4）。
+ *
+ * ## 为什么抄送需要一个独立入口
+ *
+ * 抄送人不是审批人——他不在待办里，也没有任何动作要做。但他被抄送正是因为
+ * 「这件事你该知道」。没有入口的话，`approval_watchers` 写进去的记录没有任何
+ * 消费方，抄送这个功能等于不存在。
+ *
+ * ## 已结束的也返回
+ *
+ * 与待办不同：待办只看 pending（没结束的才要处理），而抄送是「知会」——
+ * 一张单批完了、被驳回了，抄送人同样该看到结果。只按 pending 过滤会让
+ * 抄送人永远看不到最终结论。
+ *
+ * `readAt` 一并返回，供界面区分「新的」与「看过的」。
+ */
+export interface WatchedApproval extends ApprovalInstance {
+  readAt: string | null;
+}
+
+export async function listWatchedBy(
+  companyId: string,
+  userId: string
+): Promise<WatchedApproval[]> {
+  const rows = await query<InstanceDbRow & { read_at: string | Date | null }>(
+    `select i.id, i.company_id, i.flow_id, i.document_type, i.document_id,
+            i.submitter_user_id, i.status, i.current_step_order,
+            i.required_step_orders, i.amount_cents, w.read_at
+       from approval_watchers w
+       join approval_instances i on i.id = w.instance_id
+      where w.user_id = $1 and i.company_id = $2
+      order by w.read_at nulls first, i.created_at desc`,
+    [userId, companyId]
+  );
+  return rows.map((row) => ({
+    ...mapInstance(row),
+    readAt:
+      row.read_at === null
+        ? null
+        : typeof row.read_at === "string"
+          ? row.read_at
+          : row.read_at.toISOString()
+  }));
+}
+
+/**
+ * 标记抄送已读。
+ *
+ * 幂等：已读的再标一次不改时间——否则「什么时候看到的」这个信息会被
+ * 每次打开页面刷掉，而它在争议时是有用的。
+ */
+export async function markWatchRead(instanceId: string, userId: string): Promise<void> {
+  await query(
+    `update approval_watchers set read_at = now()
+      where instance_id = $1 and user_id = $2 and read_at is null`,
+    [instanceId, userId]
+  );
+}

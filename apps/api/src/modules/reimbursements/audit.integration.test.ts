@@ -321,6 +321,119 @@ test("报销审核与费用分析", async (t) => {
     assert.equal(unassigned.label, "未指定部门");
   });
 
+  await t.test("按职级 + 城市匹配到更具体的标准（V13 残留 8）", async () => {
+    // 种子里有两条住宿标准：通配 300/晚 warn、M2 一线 600/晚 escalate。
+    // 给用户设上 M2 职级、给行标上 tier1，就该命中后者。
+    await pool.query(`update users set grade_code = 'M2' where id = $1`, [userId]);
+
+    const overrun = await createReimbursement({
+      companyId: COMPANY_ID,
+      requestId: null,
+      advanceId: null,
+      applicantUserId: userId,
+      counterpartyId,
+      expenseDate: "2026-09-26",
+      lines: [
+        {
+          expenseType: "travel_hotel",
+          accountCode: TRAVEL_ACCOUNT,
+          // M2 一线标准 600/晚 × 2 晚 = 1200 限额，报 1500 → 超 300
+          amountCents: 150000,
+          quantity: 2,
+          cityTier: "tier1",
+          invoiceId: null,
+          summary: "上海住宿"
+        }
+      ],
+      note: null
+    });
+    assert.equal(overrun.ok, true);
+    if (!overrun.ok) return;
+
+    const audit = await runReimbursementAudit(COMPANY_ID, overrun.value);
+    const finding = audit.findings.find((item) => item.code === "standard.overrun");
+
+    assert.ok(finding, "应命中标准");
+    assert.equal(finding.level, "escalate", "M2 一线的标准策略是加签，不是通配那条的 warn");
+    assert.match(finding.message, /超标 300\.00/, "应按 600/晚 而非 300/晚 判定");
+  });
+
+  await t.test("同一行未设城市时退回通配标准", async () => {
+    // 城市没填就只能按通配判——不能拿一线的宽标准去套。
+    const noCity = await createReimbursement({
+      companyId: COMPANY_ID,
+      requestId: null,
+      advanceId: null,
+      applicantUserId: userId,
+      counterpartyId,
+      expenseDate: "2026-09-27",
+      lines: [
+        {
+          expenseType: "travel_hotel",
+          accountCode: TRAVEL_ACCOUNT,
+          amountCents: 150000,
+          quantity: 2,
+          cityTier: null,
+          invoiceId: null,
+          summary: "未填城市"
+        }
+      ],
+      note: null
+    });
+    assert.equal(noCity.ok, true);
+    if (!noCity.ok) return;
+
+    const audit = await runReimbursementAudit(COMPANY_ID, noCity.value);
+    const finding = audit.findings.find((item) => item.code === "standard.overrun");
+
+    assert.ok(finding);
+    // 通配 300/晚 × 2 = 600 限额，报 1500 → 超 900
+    assert.match(finding.message, /超标 900\.00/, "未填城市应按通配标准判");
+  });
+
+  await t.test("同单内两行用同一张票由数据库唯一约束挡住", async () => {
+    // 原本想测「逐行审核后同单内重复仍查得出」，写完发现**这个状态在库层
+    // 根本造不出来**：uq_reimbursement_line_invoice 是 (reimbursement_id,
+    // invoice_id) 唯一约束。
+    //
+    // 于是真正的防线是数据库，审核引擎里的 duplicate_invoice_in_form 是
+    // 第二层保险（绕过创建接口直接调引擎时才用得上）。这条用例改为钉住
+    // 库层拦截——那才是实际生效的那一道。
+    const dup = await createReimbursement({
+      companyId: COMPANY_ID,
+      requestId: null,
+      advanceId: null,
+      applicantUserId: userId,
+      counterpartyId,
+      expenseDate: "2026-09-28",
+      lines: [
+        { expenseType: "office", accountCode: TRAVEL_ACCOUNT, amountCents: 1000, summary: "行一" },
+        { expenseType: "office", accountCode: TRAVEL_ACCOUNT, amountCents: 2000, summary: "行二" }
+      ],
+      note: null
+    });
+    assert.equal(dup.ok, true);
+    if (!dup.ok) return;
+
+    await pool.query(
+      `insert into invoices (id, company_id, invoice_no, invoice_date, seller_name,
+                             buyer_name, buyer_tax_no, total_amount)
+       values ('inv-dupline', $1, 'DUPLINE-001', '2026-09-28'::date, '某供应商', $2, $3, 100.00)
+       on conflict (id) do nothing`,
+      [COMPANY_ID, companyName, creditCode]
+    );
+
+    await assert.rejects(
+      () =>
+        pool.query(
+          `update reimbursement_lines set invoice_id = 'inv-dupline' where reimbursement_id = $1`,
+          [dup.value.id]
+        ),
+      /uq_reimbursement_line_invoice/,
+      "同单内两行指向同一张票应被唯一约束拒绝"
+    );
+  });
+
   await t.test("跨年月份的分析不报错", async () => {
     // nextMonthFirstDay 的 12 月进位——漏了会让 12 月的报表永远没数据。
     const december = await buildExpenseAnalysis(COMPANY_ID, "2026-12");

@@ -38,6 +38,13 @@ export interface ReimbursementLine {
   quantity: number;
   invoiceId: string | null;
   summary: string;
+  /**
+   * 费用发生地的城市等级（V13 残留 8）。
+   *
+   * **在行上而不是单头**：一次出差可能跨城市（上海开会、再去苏州验收），
+   * 住宿两晚适用的标准不同。null 表示未指定，此时只匹配不限城市的标准。
+   */
+  cityTier: string | null;
   allocations: AllocationResult[];
 }
 
@@ -94,6 +101,7 @@ interface LineDbRow {
   quantity: number;
   invoice_id: string | null;
   summary: string;
+  city_tier: string | null;
 }
 
 interface AllocationDbRow {
@@ -116,7 +124,7 @@ const HEADER_COLUMNS = `
 async function assemble(header: HeaderDbRow): Promise<ReimbursementRow> {
   const lineRows = await query<LineDbRow>(
     `select id, reimbursement_id, expense_type, account_code, amount_cents,
-            quantity, invoice_id, summary
+            quantity, invoice_id, summary, city_tier
        from reimbursement_lines where reimbursement_id = $1 order by sort_order, id`,
     [header.id]
   );
@@ -137,6 +145,7 @@ async function assemble(header: HeaderDbRow): Promise<ReimbursementRow> {
     quantity: row.quantity,
     invoiceId: row.invoice_id,
     summary: row.summary,
+    cityTier: row.city_tier,
     allocations: allocationRows
       .filter((item) => item.line_id === row.id)
       .map((item) => ({
@@ -204,6 +213,8 @@ export interface ReimbursementLineInput {
   quantity?: number;
   invoiceId?: string | null;
   summary?: string;
+  /** 费用发生地的城市等级，供费用标准按城市匹配。 */
+  cityTier?: string | null;
   allocationsByRatio?: readonly { costCenterId: string; ratioBp: number }[];
   allocationsByAmount?: readonly { costCenterId: string; amountCents: number }[];
 }
@@ -299,8 +310,8 @@ export async function createReimbursement(
       await tx.query(
         `insert into reimbursement_lines
            (id, company_id, reimbursement_id, expense_type, account_code,
-            amount_cents, quantity, invoice_id, summary, sort_order)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            amount_cents, quantity, invoice_id, summary, sort_order, city_tier)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
         [
           lineId,
           input.companyId,
@@ -311,7 +322,8 @@ export async function createReimbursement(
           line.quantity ?? 1,
           line.invoiceId ?? null,
           line.summary ?? "",
-          index
+          index,
+          line.cityTier ?? null
         ]
       );
       for (const allocation of resolved[index]!) {

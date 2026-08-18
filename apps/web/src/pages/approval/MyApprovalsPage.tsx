@@ -11,7 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Empty, Input, Modal, Skeleton, Space, Table, Tag, Typography } from "antd";
+import { Alert, Badge, Button, Empty, Input, Modal, Skeleton, Space, Table, Tabs, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { CheckOutlined, CloseOutlined, ReloadOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
@@ -20,7 +20,10 @@ import { errorMessage } from "../../lib/errors";
 import {
   actOnApproval,
   listPendingApprovals,
-  type ApprovalInstance
+  listWatchedApprovals,
+  markWatchedRead,
+  type ApprovalInstance,
+  type WatchedApproval
 } from "../../lib/api-expense-control";
 import {
   DOCUMENT_TYPE_LABELS,
@@ -37,13 +40,22 @@ export function MyApprovalsPage() {
   const [acting, setActing] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<ApprovalInstance | null>(null);
   const [rejectComment, setRejectComment] = useState("");
+  const [watched, setWatched] = useState<WatchedApproval[]>([]);
+  const [unread, setUnread] = useState(0);
+  const [tab, setTab] = useState("pending");
 
   const reload = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await listPendingApprovals();
+      const [data, watchedData] = await Promise.all([
+        listPendingApprovals(),
+        // 抄送与待办一起取：切 tab 时不该再等一次网络。
+        listWatchedApprovals()
+      ]);
       setItems(data.items);
+      setWatched(watchedData.items);
+      setUnread(watchedData.unread);
     } catch (error) {
       // 不静默：加载失败显示成空列表会让审批人以为没单要批，
       // 而单据就那么一直等着。
@@ -144,6 +156,67 @@ export function MyApprovalsPage() {
     }
   ];
 
+  const watchedColumns: ColumnsType<WatchedApproval> = [
+    {
+      title: "单据",
+      key: "document",
+      render: (_, row) => (
+        <Space size={4}>
+          {/* 未读用圆点标出来——抄送来了没人知道等于没抄送。 */}
+          {row.readAt === null && <Badge status="processing" />}
+          <Tag>{DOCUMENT_TYPE_LABELS[row.documentType]}</Tag>
+          <Typography.Text code>{row.documentId}</Typography.Text>
+        </Space>
+      )
+    },
+    {
+      title: "金额",
+      dataIndex: "amountCents",
+      align: "right",
+      width: 130,
+      render: (value: number) => formatCents(value)
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      width: 110,
+      // 抄送要看到最终结论——已批完、被驳回都该显示出来，
+      // 只显示「进行中」会让抄送人永远不知道结果。
+      render: (status: WatchedApproval["status"]) => {
+        const meta: Record<string, { label: string; color: string }> = {
+          pending: { label: "审批中", color: "processing" },
+          approved: { label: "已通过", color: "success" },
+          rejected: { label: "已驳回", color: "error" },
+          cancelled: { label: "已撤回", color: "default" }
+        };
+        return <Tag color={meta[status]?.color}>{meta[status]?.label ?? status}</Tag>;
+      }
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 100,
+      render: (_, row) =>
+        row.readAt === null ? (
+          <Button
+            size="small"
+            onClick={async () => {
+              try {
+                await markWatchedRead(row.id);
+                await reload();
+              } catch (error) {
+                toast.error(errorMessage(error, "标记失败"));
+              }
+            }}
+          >
+            标为已读
+          </Button>
+        ) : (
+          <Typography.Text type="secondary">已读</Typography.Text>
+        )
+    }
+  ];
+
   return (
     <div>
       <PageHeader
@@ -171,19 +244,46 @@ export function MyApprovalsPage() {
         />
       )}
 
-      {loading ? (
-        <Skeleton active paragraph={{ rows: 4 }} />
-      ) : sorted.length === 0 && !loadError ? (
-        <Empty description="没有待你处理的审批" />
-      ) : (
-        <Table<ApprovalInstance>
-          rowKey="id"
-          size="small"
-          dataSource={sorted}
-          columns={columns}
-          pagination={false}
-        />
-      )}
+      <Tabs
+        activeKey={tab}
+        onChange={setTab}
+        items={[
+          {
+            key: "pending",
+            label: <Badge count={sorted.length} offset={[8, 0]}>待我审批</Badge>,
+            children: loading ? (
+              <Skeleton active paragraph={{ rows: 4 }} />
+            ) : sorted.length === 0 && !loadError ? (
+              <Empty description="没有待你处理的审批" />
+            ) : (
+              <Table<ApprovalInstance>
+                rowKey="id"
+                size="small"
+                dataSource={sorted}
+                columns={columns}
+                pagination={false}
+              />
+            )
+          },
+          {
+            key: "watched",
+            label: <Badge count={unread} offset={[8, 0]}>抄送给我</Badge>,
+            children: loading ? (
+              <Skeleton active paragraph={{ rows: 3 }} />
+            ) : watched.length === 0 ? (
+              <Empty description="没有抄送给你的审批" />
+            ) : (
+              <Table<WatchedApproval>
+                rowKey="id"
+                size="small"
+                dataSource={watched}
+                columns={watchedColumns}
+                pagination={false}
+              />
+            )
+          }
+        ]}
+      />
 
       <Modal
         open={rejecting !== null}
