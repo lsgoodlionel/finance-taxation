@@ -72,6 +72,8 @@ interface DraftLine {
   quantity: number;
   summary: string;
   costCenterId?: string;
+  /** 费用发生地城市等级。填了才能按「职级 × 城市」匹配到更具体的标准。 */
+  cityTier?: string;
 }
 
 export function ReimbursementsPage() {
@@ -154,6 +156,7 @@ export function ReimbursementsPage() {
         amountCents: Math.round((line.amountYuan || 0) * 100),
         quantity: line.quantity || 1,
         summary: line.summary,
+        cityTier: line.cityTier ?? null,
         // 单部门时用比例 100%，多部门分摊留给详情页做——一次填太多字段
         // 会让报销这件本该三十秒完成的事变成填表作业。
         allocationsByRatio: line.costCenterId
@@ -428,6 +431,32 @@ export function ReimbursementsPage() {
                         setLines((prev) =>
                           prev.map((item) =>
                             item.key === row.key ? { ...item, quantity: next ?? 1 } : item
+                          )
+                        )
+                      }
+                    />
+                  )
+                },
+                {
+                  title: "城市",
+                  dataIndex: "cityTier",
+                  width: 110,
+                  render: (value: string | undefined, row) => (
+                    <Select
+                      size="small"
+                      allowClear
+                      style={{ width: "100%" }}
+                      placeholder="不限"
+                      value={value}
+                      options={[
+                        { value: "tier1", label: "一线" },
+                        { value: "tier2", label: "二线" },
+                        { value: "tier3", label: "其他" }
+                      ]}
+                      onChange={(next) =>
+                        setLines((prev) =>
+                          prev.map((item) =>
+                            item.key === row.key ? { ...item, cityTier: next } : item
                           )
                         )
                       }

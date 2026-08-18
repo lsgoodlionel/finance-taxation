@@ -80,27 +80,44 @@ export async function runReimbursementAudit(
     for (const row of rows) usedInvoiceIds.add(row.invoice_id);
   }
 
-  // 申请人职级与目的地城市等级：FT 的用户档案里目前没有这两项，
-  // 传 null 会让匹配只命中通配标准（match.ts 的既定行为）。
-  // **记入残留清单**——补上职级后，按职级的差旅标准才真正生效。
+  // 申请人职级（V13 残留 8 已补）。没设职级的用户仍传 null——
+  // 那时只命中通配标准，是 match.ts 的既定行为，不会出错。
+  const applicant = await queryOne<{ grade_code: string | null }>(
+    `select grade_code from users where id = $1 and company_id = $2`,
+    [reimbursement.applicantUserId, companyId]
+  );
   const standards = await listExpenseStandards(companyId);
 
-  const findings = auditReimbursement({
-    company: { name: company?.name ?? "", creditCode: company?.credit_code ?? null },
-    lines: reimbursement.lines.map((line) => ({
-      lineId: line.id,
-      expenseType: line.expenseType,
-      amountCents: line.amountCents,
-      quantity: line.quantity,
-      invoiceId: line.invoiceId
-    })),
-    invoices,
-    usedInvoiceIds,
-    standards,
-    onDate: reimbursement.expenseDate,
-    gradeCode: null,
-    cityTier: null
-  });
+  // **逐行审核而不是整单一次**：城市等级在行上（一次出差可能跨城市），
+  // 而超标判定要按行的城市匹配标准。整单传一个 cityTier 会让苏州那一晚
+  // 按上海的标准判——而上海标准更宽，等于漏判。
+  const findings = reimbursement.lines.flatMap((line) =>
+    auditReimbursement({
+      company: { name: company?.name ?? "", creditCode: company?.credit_code ?? null },
+      lines: [
+        {
+          lineId: line.id,
+          expenseType: line.expenseType,
+          amountCents: line.amountCents,
+          quantity: line.quantity,
+          invoiceId: line.invoiceId
+        }
+      ],
+      invoices,
+      // 逐行调用时，同单内重复用票的检测会失效（每次只看一行）——
+      // 所以把本单已出现过的票也并进「已占用」集合，由调用方在这里合并。
+      usedInvoiceIds: new Set([
+        ...usedInvoiceIds,
+        ...reimbursement.lines
+          .filter((other) => other.id !== line.id && other.invoiceId !== null)
+          .map((other) => other.invoiceId!)
+      ]),
+      standards,
+      onDate: reimbursement.expenseDate,
+      gradeCode: applicant?.grade_code ?? null,
+      cityTier: line.cityTier
+    })
+  );
 
   return { level: highestLevel(findings), findings };
 }

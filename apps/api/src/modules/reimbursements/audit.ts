@@ -86,6 +86,10 @@ export function auditReimbursement(context: AuditContext): AuditFinding[] {
           message: `该发票已在其他报销单中使用过，不能重复报销。`
         });
       } else if (seenInThisForm.has(line.invoiceId)) {
+        // **实际由数据库唯一约束兜底**（uq_reimbursement_line_invoice 是
+        // (reimbursement_id, invoice_id) 唯一）——这个状态经正常创建路径
+        // 根本落不了库。留着这一条是第二层保险：将来若有批量导入之类
+        // 绕过创建接口的路径，引擎自己也能发现。
         findings.push({
           lineId: line.lineId,
           level: "block",

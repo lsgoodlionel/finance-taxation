@@ -31,6 +31,7 @@ function makeReimbursement(overrides: Partial<ReimbursementRow> = {}): Reimburse
       quantity: 2,
       invoiceId: null,
       summary: "住宿",
+      cityTier: null,
       allocations: []
     }
   ];
@@ -92,6 +93,7 @@ test("分摊展开成多条借方分录，各带各的成本中心", () => {
         quantity: 1,
         invoiceId: null,
         summary: "招待",
+        cityTier: null,
         allocations: [
           { costCenterId: "cc-rnd", ratioBp: 6000, amountCents: 60000 },
           { costCenterId: "cc-sales", ratioBp: 4000, amountCents: 40000 }
@@ -125,6 +127,7 @@ test("分摊金额直接取用，不按比例重算", () => {
         quantity: 1,
         invoiceId: null,
         summary: "杂费",
+        cityTier: null,
         allocations: [
           { costCenterId: "a", ratioBp: 3333, amountCents: 33 },
           { costCenterId: "b", ratioBp: 3333, amountCents: 33 },
@@ -153,6 +156,7 @@ test("多行费用各自分摊，合计仍平", () => {
         quantity: 2,
         invoiceId: null,
         summary: "住宿",
+        cityTier: null,
         // 住宿全归研发部
         allocations: [{ costCenterId: "cc-rnd", ratioBp: 10000, amountCents: 70000 }]
       },
@@ -164,6 +168,7 @@ test("多行费用各自分摊，合计仍平", () => {
         quantity: 1,
         invoiceId: null,
         summary: "招待",
+        cityTier: null,
         // 招待两个部门对半——这正是「挂单头表达不了」的差别
         allocations: [
           { costCenterId: "cc-rnd", ratioBp: 5000, amountCents: 15000 },
