@@ -55,6 +55,8 @@ interface EligibleEventRow {
   title: string;
   amount: string | null;
   has_draft: boolean;
+  /** 事项上的成本中心（V13 残留 6）。从申请单派生时带过来，随草稿流到凭证。 */
+  cost_center_id: string | null;
 }
 
 interface DraftRow {
@@ -83,6 +85,7 @@ interface DraftLineRow {
   debit: string | number;
   credit: string | number;
   sort_order: number;
+  cost_center_id: string | null;
 }
 
 function toAmountString(value: string | number | null | undefined): string {
@@ -96,7 +99,7 @@ async function findEligibleEvents(companyId: string, period: string): Promise<El
   return query<EligibleEventRow>(
     `
       select
-        be.id, be.type, be.title, be.amount::text as amount,
+        be.id, be.type, be.title, be.amount::text as amount, be.cost_center_id,
         exists(
           select 1 from event_voucher_drafts d where d.business_event_id = be.id
         ) as has_draft
@@ -161,10 +164,12 @@ async function insertDraftProposal(
     }
     for (const [index, line] of proposal.lines.entries()) {
       await client.query(
+        // 成本中心从事项带下来（V13 残留 6）。事项上的是**建议值**——
+        // 会计过账前仍可改，但至少不用凭空重选一次。
         `insert into voucher_draft_lines (
-           id, draft_id, summary, account_code, account_name, debit, credit, sort_order
-         ) values ($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8)`,
-        [`${draftId}-line-${index + 1}`, draftId, line.summary, line.accountCode, line.accountName, line.debit, line.credit, index]
+           id, draft_id, summary, account_code, account_name, debit, credit, sort_order, cost_center_id
+         ) values ($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8,$9)`,
+        [`${draftId}-line-${index + 1}`, draftId, line.summary, line.accountCode, line.accountName, line.debit, line.credit, index, event.cost_center_id ?? null]
       );
     }
     return true;
@@ -284,7 +289,7 @@ export async function listCloseDrafts(req: ApiRequest, res: ServerResponse): Pro
   }
   const draftIds = draftRows.map((row) => row.id);
   const lineRows = await query<DraftLineRow>(
-    `select id, draft_id, summary, account_code, account_name, debit, credit, sort_order
+    `select id, draft_id, summary, account_code, account_name, debit, credit, sort_order, cost_center_id
      from voucher_draft_lines where draft_id = any($1::text[]) order by sort_order asc`,
     [draftIds]
   );
@@ -302,7 +307,7 @@ async function getDraftWithLines(
   );
   if (!draft) return null;
   const lines = await query<DraftLineRow>(
-    `select id, draft_id, summary, account_code, account_name, debit, credit, sort_order
+    `select id, draft_id, summary, account_code, account_name, debit, credit, sort_order, cost_center_id
      from voucher_draft_lines where draft_id = $1 order by sort_order asc`,
     [draftId]
   );
@@ -330,10 +335,12 @@ async function createApprovedVoucher(
     );
     for (const [index, line] of lines.entries()) {
       await client.query(
+        // cost_center_id 从草稿行带过来（V13 残留 6）——没有这一步，
+        // 事项上的部门信息在草稿转正式那一刻就丢了。
         `insert into voucher_lines (
-           id, voucher_id, summary, account_code, account_name, debit, credit, sort_order
-         ) values ($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8)`,
-        [`${voucherId}-line-${index + 1}`, voucherId, line.summary, line.account_code, line.account_name, line.debit, line.credit, index]
+           id, voucher_id, summary, account_code, account_name, debit, credit, sort_order, cost_center_id
+         ) values ($1,$2,$3,$4,$5,$6::numeric,$7::numeric,$8,$9)`,
+        [`${voucherId}-line-${index + 1}`, voucherId, line.summary, line.account_code, line.account_name, line.debit, line.credit, index, line.cost_center_id ?? null]
       );
     }
     // H-1 竞态守卫：仅当仍处于待批状态时落地。若并发 approve/reject 已改状态，rowCount=0
