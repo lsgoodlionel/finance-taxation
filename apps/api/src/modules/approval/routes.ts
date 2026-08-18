@@ -7,6 +7,8 @@
  * - `POST /api/approval/instances`        提交审批
  * - `POST /api/approval/instances/:id/act` 批准 / 驳回 / 撤回
  * - `GET  /api/approval/instances/:id`    审批详情与历史
+ * - `GET  /api/approval/watched`          抄送给我的（V13 残留 4）
+ * - `POST /api/approval/watched/:id/read` 标记已读
  */
 
 import type { ServerResponse } from "node:http";
@@ -21,6 +23,8 @@ import {
   listActions,
   listFlows,
   listPendingFor,
+  listWatchedBy,
+  markWatchRead,
   submitForApproval,
   type ApprovalDocumentType,
   type ApprovalFailureCode
@@ -235,4 +239,30 @@ export async function getApprovalDetailRoute(
 ): Promise<void> {
   const actions = await listActions(id);
   json(res, 200, { actions, total: actions.length });
+}
+
+/**
+ * 抄送给我的审批（V13 残留 4）。
+ *
+ * 与待办不同：**已结束的也返回**。待办只看 pending（没结束的才要处理），
+ * 而抄送是「知会」——一张单批完了、被驳回了，抄送人同样该看到结果。
+ */
+export async function listWatchedRoute(req: ApiRequest, res: ServerResponse): Promise<void> {
+  const items = await listWatchedBy(req.auth!.companyId, req.auth!.userId);
+  json(res, 200, {
+    items,
+    total: items.length,
+    // 未读数单独给：界面上要在入口挂角标，不然抄送来了没人知道。
+    unread: items.filter((item) => item.readAt === null).length
+  });
+}
+
+export async function markWatchedReadRoute(
+  req: ApiRequest,
+  res: ServerResponse,
+  id: string
+): Promise<void> {
+  // 只能标记自己的抄送——userId 固定取 req.auth，不接受传入。
+  await markWatchRead(id, req.auth!.userId);
+  json(res, 200, { ok: true });
 }

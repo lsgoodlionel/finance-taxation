@@ -66,6 +66,12 @@ const WRITE_ROUTES_WITH_VIEW_PERMISSION: ReadonlyMap<string, string> = new Map([
   ["POST /api/budgets/check", "POST 当查询用：预算预检，只读三个数后算差额，不落库"],
   ["POST /api/expense-standards/check", "POST 当查询用：超标预检，匹配标准后比金额，不落库"],
   [
+    "POST /api/approval/watched/:id/read",
+    "两层守护：workflow.view 放行，handler 用 req.auth.userId 收敛——" +
+      "SQL 的 where 同时限定 instance_id 与 user_id，只可能标记抄送给自己的那条。" +
+      "挂 manage 会让被抄送的基层角色标不了已读，而抄送的全部意义就是知会他们"
+  ],
+  [
     "POST /api/reimbursements/:id/audit",
     "POST 当查询用：业财合规审核，读发票与标准后纯计算，不落库、不改单据状态。" +
       "挂 view 是因为审批人要看得到审核结果，而他未必有提单权限"
@@ -116,7 +122,9 @@ const WRITE_ROUTES_ALLOWED_FOR_READ_ONLY_ROLE: ReadonlySet<string> = new Set([
   // 但能看一眼某张单会不会超预算，这与它能查预算列表是同一层能力。
   "POST /api/requests/:id/precheck",
   // 同理：审核只读不写。
-  "POST /api/reimbursements/:id/audit"
+  "POST /api/reimbursements/:id/audit",
+  // viewer 也可能被抄送——标记已读只作用于自己那一行。
+  "POST /api/approval/watched/:id/read"
 ]);
 
 /**
