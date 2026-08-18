@@ -1,6 +1,12 @@
 import { env } from "../config/env.js";
 import { query } from "../db/client.js";
 import { getMenu } from "../modules/access/routes.js";
+import {
+  createAcceptanceRoute,
+  listAcceptancesRoute,
+  scheduleThreeWayRoute,
+  transitionAcceptanceRoute
+} from "../modules/acceptances/routes.js";
 import { expenseAnalysisRoute } from "../modules/reports/expense-analysis-routes.js";
 import {
   cancelScheduleRoute,
@@ -754,6 +760,28 @@ const routes: RouteDef[] = [
   // V13-D6：费用分析。归 expense.view——它读的是报销数据，
   // 与「谁能看别人的报销单」同一层能力。
   { method: "GET", path: "/api/reports/expense-analysis", auth: true, permission: "expense.view", handler: expenseAnalysisRoute },
+
+  // ── V13 残留 7：验收单与三单匹配 ────────────────────────────────
+  //
+  // 归 contracts.*：验收是合同履行的一环，与付款计划同一授权域。
+  // 建验收单要 manage——验收是「另一个人确认东西真的到了」，
+  // 不该是任何能看合同的人都能做的事。
+  { method: "GET", path: "/api/acceptances", auth: true, permission: "contracts.view", handler: listAcceptancesRoute },
+  { method: "POST", path: "/api/acceptances", auth: true, permission: "contracts.manage", handler: createAcceptanceRoute },
+  {
+    method: "POST",
+    path: "/api/acceptances/:id/transition",
+    auth: true,
+    permission: "contracts.manage",
+    handler: (req, res, p) => transitionAcceptanceRoute(req, res, p.id!)
+  },
+  {
+    method: "GET",
+    path: "/api/schedules/:id/three-way",
+    auth: true,
+    permission: "contracts.view",
+    handler: (req, res, p) => scheduleThreeWayRoute(req, res, p.id!)
+  },
 
   // ── V13-C 合同付款计划与付款单 ─────────────────────────────────────
   //
