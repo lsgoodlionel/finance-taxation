@@ -64,6 +64,8 @@ const ALL_MENU_ITEMS: readonly MenuItem[] = [
   { key: "vouchers", label: "凭证中心", route: "/vouchers", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "ledger", label: "总账中心", route: "/ledger", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "asset-center", label: "资产与往来", route: "/asset-center", permissionKey: "ledger.view", ...GROUP_FINANCE },
+  // V14-C 成本结转。归 ledger.view 与凭证、总账同一档——它的产物就是一张凭证。
+  { key: "cost-carryover", label: "成本结转", route: "/cost-carryover", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "reports", label: "财务报表", route: "/reports", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "export-center", label: "导出与归档", route: "/export-center", permissionKey: "documents.view", ...GROUP_FINANCE },
   { key: "tax", label: "税务中心", route: "/tax", permissionKey: "tax.view", ...GROUP_TAX },

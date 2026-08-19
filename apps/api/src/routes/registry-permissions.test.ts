@@ -65,6 +65,14 @@ const WRITE_ROUTES_WITH_VIEW_PERMISSION: ReadonlyMap<string, string> = new Map([
   // 塞进查询串既难读又有长度上限；语义上它们与 GET 无异——纯计算，不落库、不建单据。
   ["POST /api/budgets/check", "POST 当查询用：预算预检，只读三个数后算差额，不落库"],
   ["POST /api/expense-standards/check", "POST 当查询用：超标预检，匹配标准后比金额，不落库"],
+  // V14-D 发票匹配建议。入参是对象（金额 + 日期 + 关键词 + 排除单据），
+  // 塞进查询串既难读又有长度上限；语义上与 GET 无异。
+  [
+    "POST /api/invoices/suggest",
+    "POST 当查询用：发票匹配建议，读发票池后纯打分排序，不落库、不挂载任何发票。" +
+      "挂 expense.view 是因为填报销单的人要用它，而候选票的可见范围与" +
+      "「谁能看报销单」一致"
+  ],
   [
     "POST /api/approval/watched/:id/read",
     "两层守护：workflow.view 放行，handler 用 req.auth.userId 收敛——" +
@@ -123,6 +131,10 @@ const WRITE_ROUTES_ALLOWED_FOR_READ_ONLY_ROLE: ReadonlySet<string> = new Set([
   "POST /api/feedback",
   "PUT /api/tasks/:id",
   "POST /api/tasks/:id/remind",
+  // V14-D：viewer 持有 expense.view，而匹配建议是纯读——它返回的发票
+  // 本来就在发票池里，能看报销的人本就能看到它们。建议不改任何数据，
+  // 也不会把票挂到任何单据上。
+  "POST /api/invoices/suggest",
   // viewer 持有 expense.view（要看得到费用标准才知道自己能报多少），
   // 而超标预检是纯计算——能看标准的人本就能自己算出同样的结论。
   "POST /api/expense-standards/check",

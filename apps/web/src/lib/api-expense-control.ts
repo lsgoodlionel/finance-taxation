@@ -760,3 +760,44 @@ export async function getScheduleThreeWay(scheduleId: string, amountCents: numbe
     `/api/schedules/${encodeURIComponent(scheduleId)}/three-way?amountCents=${amountCents}`
   );
 }
+
+// ── V14-D 发票匹配建议 ────────────────────────────────────────────
+
+export interface InvoiceMatchCandidate {
+  id: string;
+  invoiceNo: string;
+  invoiceDate: string;
+  sellerName: string | null;
+  totalAmountCents: number;
+  verifyStatus: string | null;
+}
+
+export interface InvoiceMatchSuggestion {
+  invoice: InvoiceMatchCandidate;
+  score: number;
+  /** 得分理由。「为什么这张排在前面」是用户会问的问题。 */
+  reasons: string[];
+  dayGap: number;
+}
+
+/**
+ * 给一笔报销明细找候选发票。
+ *
+ * **只给建议，不自动挂载。** 分数只用于排序，没有阈值自动选中——
+ * 设阈值就等于自动挂载，而误配的代价高于省下的那一次点击。
+ */
+export async function suggestInvoicesForLine(body: {
+  amountCents: number;
+  expenseOn: string;
+  keyword?: string | null;
+  /** 正在编辑的报销单。它自己已挂的票仍然要出现在候选里。 */
+  reimbursementId?: string | null;
+  limit?: number;
+}) {
+  return request<{
+    suggestions: InvoiceMatchSuggestion[];
+    totalCandidates: number;
+    /** 截断了要说出来——不说等于假装全看过了。 */
+    truncated: boolean;
+  }>("/api/invoices/suggest", { method: "POST", body: JSON.stringify(body) });
+}

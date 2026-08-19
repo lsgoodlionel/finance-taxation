@@ -27,12 +27,13 @@ import {
   Typography
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { DeleteOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { FileSearchOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import type { Dayjs } from "dayjs";
 import { toast } from "sonner";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { TaskFocusShell } from "../../components/ui/TaskFocusShell";
 import { errorMessage } from "../../lib/errors";
+import { InvoicePicker } from "./InvoicePicker";
 import { listCostCenters } from "../../lib/api";
 import {
   auditReimbursement,
@@ -74,6 +75,10 @@ interface DraftLine {
   costCenterId?: string;
   /** 费用发生地城市等级。填了才能按「职级 × 城市」匹配到更具体的标准。 */
   cityTier?: string;
+  /** V14-D：关联的发票。由用户从匹配建议里点选，系统不自动挂。 */
+  invoiceId?: string;
+  /** 选中发票的号码，仅用于显示——不回头查一次接口。 */
+  invoiceNo?: string;
 }
 
 export function ReimbursementsPage() {
@@ -89,6 +94,9 @@ export function ReimbursementsPage() {
   const [audits, setAudits] = useState<Record<string, AuditOutcome>>({});
   const [auditing, setAuditing] = useState<string | null>(null);
 
+  // V14-D：正在给哪一行找发票。存 key 而不是整行——行的内容随时在改，
+  // 存快照会让选中后写回一个过期的金额。
+  const [pickingLineKey, setPickingLineKey] = useState<number | null>(null);
   const [expenseDate, setExpenseDate] = useState<Dayjs | null>(null);
   const [advanceId, setAdvanceId] = useState<string | undefined>(undefined);
   const [lines, setLines] = useState<DraftLine[]>([
@@ -157,6 +165,8 @@ export function ReimbursementsPage() {
         quantity: line.quantity || 1,
         summary: line.summary,
         cityTier: line.cityTier ?? null,
+        // V14-D：用户点选的发票。没选就是 null——不猜。
+        invoiceId: line.invoiceId ?? null,
         // 单部门时用比例 100%，多部门分摊留给详情页做——一次填太多字段
         // 会让报销这件本该三十秒完成的事变成填表作业。
         allocationsByRatio: line.costCenterId
@@ -503,6 +513,45 @@ export function ReimbursementsPage() {
                   )
                 },
                 {
+                  // V14-D：只给建议，不自动挂。点开才去查候选——
+                  // 每行都自动查会在建单时打出几十次请求，而多数行用不上。
+                  title: "发票",
+                  key: "invoice",
+                  width: 130,
+                  render: (_, row) =>
+                    row.invoiceId ? (
+                      <Space size={2}>
+                        <Typography.Text code style={{ fontSize: 12 }}>
+                          {row.invoiceNo}
+                        </Typography.Text>
+                        <Button
+                          size="small"
+                          type="text"
+                          danger
+                          icon={<DeleteOutlined />}
+                          onClick={() =>
+                            setLines((prev) =>
+                              prev.map((item) =>
+                                item.key === row.key
+                                  ? { ...item, invoiceId: undefined, invoiceNo: undefined }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+                      </Space>
+                    ) : (
+                      <Button
+                        size="small"
+                        icon={<FileSearchOutlined />}
+                        disabled={!expenseDate || (row.amountYuan || 0) <= 0}
+                        onClick={() => setPickingLineKey(row.key)}
+                      >
+                        找发票
+                      </Button>
+                    )
+                },
+                {
                   title: "",
                   key: "remove",
                   width: 50,
@@ -625,6 +674,30 @@ export function ReimbursementsPage() {
           />
         )}
       </TaskFocusShell>
+
+      {/* V14-D：发票匹配建议。**系统不替用户选**——只按相关度排序，
+          用户点一下选中。误挂一张票要到对账时才发现。 */}
+      {pickingLineKey !== null && (() => {
+        const line = lines.find((item) => item.key === pickingLineKey);
+        if (!line || !expenseDate) return null;
+        return (
+          <InvoicePicker
+            open
+            amountCents={Math.round((line.amountYuan || 0) * 100)}
+            expenseOn={expenseDate.format("YYYY-MM-DD")}
+            keyword={line.summary}
+            onPick={(invoiceId, invoiceNo) => {
+              setLines((prev) =>
+                prev.map((item) =>
+                  item.key === pickingLineKey ? { ...item, invoiceId, invoiceNo } : item
+                )
+              );
+              setPickingLineKey(null);
+            }}
+            onClose={() => setPickingLineKey(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
