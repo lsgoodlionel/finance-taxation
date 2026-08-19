@@ -179,13 +179,42 @@ export interface ApprovalStep {
   minAmountCents: number;
 }
 
+/** 步骤的推进模式（V14-B）。**没有 serial**——一个审批人时两者行为相同。 */
+export type StepMode = "all" | "any";
+
+/**
+ * 流程里的一个步骤（V14-B）。
+ *
+ * V13 时「一个步骤 = 一个审批人」，会签需要「一个步骤 = 一组审批人」。
+ * `ApprovalStep` 保持原样表示**一个审批人槽位**。
+ */
+export interface ApprovalFlowStep {
+  stepOrder: number;
+  minAmountCents: number;
+  mode: StepMode;
+  approvers: ApprovalStep[];
+}
+
 export interface ApprovalFlow {
   id: string;
   name: string;
   documentType: ApprovalDocumentType;
   isActive: boolean;
   note: string | null;
-  steps: ApprovalStep[];
+  steps: ApprovalFlowStep[];
+}
+
+export type ParticipantStatus = "pending" | "approved" | "rejected";
+
+export interface ApprovalParticipant {
+  stepOrder: number;
+  userId: string;
+  status: ParticipantStatus;
+  actedAt: string | null;
+  comment: string | null;
+  /** 审批中被拉进来的，而不是流程里本来就有的。 */
+  isAdded: boolean;
+  addedByUserId: string | null;
 }
 
 export interface ApprovalInstance {
@@ -215,7 +244,11 @@ export async function listApprovalFlows() {
 export async function createApprovalFlow(body: {
   name: string;
   documentType: ApprovalDocumentType;
-  steps: Array<Omit<ApprovalStep, "stepOrder">>;
+  steps: Array<{
+    mode: StepMode;
+    minAmountCents: number;
+    approvers: Array<{ approverType: ApproverType; approverValue: string }>;
+  }>;
   note?: string | null;
 }) {
   return request<{ flow: ApprovalFlow }>("/api/approval/flows", {
@@ -240,8 +273,23 @@ export async function actOnApproval(
 }
 
 export async function getApprovalHistory(id: string) {
-  return request<{ actions: ApprovalActionRecord[]; total: number }>(
-    `/api/approval/instances/${encodeURIComponent(id)}`
+  return request<{
+    actions: ApprovalActionRecord[];
+    // V14-B：会签下「谁批了、还差谁」是详情页最重要的一屏。
+    participants: ApprovalParticipant[];
+    total: number;
+  }>(`/api/approval/instances/${encodeURIComponent(id)}`);
+}
+
+/**
+ * 动态加签（V14-B）。
+ *
+ * 只有当前步骤的参与人能加签——服务端收敛，前端按钮只对参与人显示。
+ */
+export async function addApprovalParticipant(instanceId: string, userId: string) {
+  return request<{ participants: ApprovalParticipant[] }>(
+    `/api/approval/instances/${encodeURIComponent(instanceId)}/participants`,
+    { method: "POST", body: JSON.stringify({ userId }) }
   );
 }
 

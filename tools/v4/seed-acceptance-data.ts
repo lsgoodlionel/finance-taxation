@@ -38,6 +38,9 @@ interface SeedCounts {
   /** V14-A：银企配置。播一条演示适配器的，让「系统设置 → 银企直连」
    *  打开不是空页——空页会被读成「这功能没做」。 */
   bankConnectConfigs: number;
+  /** V14-B：审批流。**V13 做完审批流一条种子都没播**——配置页打开是空的，
+   *  而任何单据提交都会撞 FLOW_NOT_FOUND。「后端有能力、没数据」第七次。 */
+  approvalFlows: number;
 }
 
 async function readJson<T>(fileName: string): Promise<T> {
@@ -281,7 +284,8 @@ const counts: SeedCounts = {
     costCenters: companies.length * SEED_COST_CENTERS.length,
     // 每家公司一条演示银企配置。与上面几项同样先算后播——
     // 边播边累加会让「播失败了但计数照样涨」成为可能。
-    bankConnectConfigs: companies.length
+    bankConnectConfigs: companies.length,
+    approvalFlows: companies.length
   };
 
   const pool = new pg.Pool({ connectionString: databaseUrl });
@@ -568,6 +572,64 @@ const counts: SeedCounts = {
             budget.note
           ]
         );
+      }
+
+      // V14-B：每家公司播一条报销审批流，第二级是**会签**。
+      //
+      // V13 把审批流做完了但一条种子都没播 —— 配置页打开是空的，而任何单据
+      // 提交都会撞 FLOW_NOT_FOUND。这是「后端有能力、没数据」的第七次。
+      //
+      // 步骤全部用角色而不用 manager：manager 步骤要求发起人所在部门设了
+      // 负责人，而那是另一份种子的事。种子的用途是「打开就能走通」，
+      // 不该依赖另一处配置是否到位。
+      const companyRoles = [...uniqueRoles.values()]
+        .filter((role) => role.companyId === company.id)
+        .sort((a, b) => a.id.localeCompare(b.id));
+
+      if (companyRoles.length > 0) {
+        const flowId = `afl-seed-${company.id}`;
+        await client.query(
+          `INSERT INTO approval_flows (id, company_id, name, document_type, is_active, note)
+           VALUES ($1, $2, '报销审批（种子）', 'reimbursement', true,
+                   '第一级单人审批，第二级会签演示 V14-B')
+           ON CONFLICT (id) DO UPDATE
+           SET name = EXCLUDED.name, note = EXCLUDED.note, updated_at = now()`,
+          [flowId, company.id]
+        );
+        await client.query("DELETE FROM approval_flow_step_approvers WHERE flow_id = $1", [flowId]);
+        await client.query("DELETE FROM approval_flow_steps WHERE flow_id = $1", [flowId]);
+
+        // 第一级：任何金额都要走，单人。
+        await client.query(
+          `INSERT INTO approval_flow_steps (id, flow_id, step_order, min_amount_cents, mode)
+           VALUES ($1, $2, 1, 0, 'all')`,
+          [`afs-seed-${company.id}-1`, flowId]
+        );
+        await client.query(
+          `INSERT INTO approval_flow_step_approvers
+             (id, flow_id, step_order, approver_type, approver_value, sort_order)
+           VALUES ($1, $2, 1, 'role', $3, 1)`,
+          [`fsa-seed-${company.id}-1`, flowId, companyRoles[0]!.id]
+        );
+
+        // 第二级：5000 元以上会签。只有一个角色的公司退化成单人——
+        // **不硬凑两个审批人**：把同一个角色列两遍会让他要批两次，
+        // 而他只会看到一条待办，单据永远推不过去。
+        const secondLevelRoles = companyRoles.slice(1, 3);
+        const coSignRoles = secondLevelRoles.length > 0 ? secondLevelRoles : [companyRoles[0]!];
+        await client.query(
+          `INSERT INTO approval_flow_steps (id, flow_id, step_order, min_amount_cents, mode)
+           VALUES ($1, $2, 2, 500000, 'all')`,
+          [`afs-seed-${company.id}-2`, flowId]
+        );
+        for (const [index, role] of coSignRoles.entries()) {
+          await client.query(
+            `INSERT INTO approval_flow_step_approvers
+               (id, flow_id, step_order, approver_type, approver_value, sort_order)
+             VALUES ($1, $2, 2, 'role', $3, $4)`,
+            [`fsa-seed-${company.id}-2-${index}`, flowId, role.id, index + 1]
+          );
+        }
       }
 
       // V14-A：每家公司播一条演示银企配置。
