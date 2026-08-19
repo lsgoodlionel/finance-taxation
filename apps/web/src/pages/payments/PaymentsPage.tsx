@@ -36,8 +36,11 @@ import { errorMessage } from "../../lib/errors";
 import {
   confirmPayment,
   createPayment,
+  getScheduleThreeWay,
   listDuePayments,
   listPayments,
+  type AuditFinding,
+  type ControlLevel,
   type DuePaymentRow,
   type PaymentRow
 } from "../../lib/api-expense-control";
@@ -61,6 +64,12 @@ export function PaymentsPage() {
   const [paying, setPaying] = useState<DuePaymentRow | null>(null);
   const [payAmountYuan, setPayAmountYuan] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  // 三单匹配结果（V13 缺口 13）。付款前跑一次，把差异摆给出纳看——
+  // **不阻断付款**：预付款、先票后货都是正当安排，拦死会让正常业务卡住。
+  const [threeWay, setThreeWay] = useState<{ level: ControlLevel; findings: AuditFinding[] } | null>(
+    null
+  );
+  const [matching, setMatching] = useState(false);
 
   const task: PaymentTaskKey = searchParams.get("task") === "records" ? "records" : "due";
   const month = searchParams.get("month") ?? dayjs().format("YYYY-MM");
@@ -172,8 +181,17 @@ export function PaymentsPage() {
           size="small"
           type="primary"
           onClick={() => {
-            setPayAmountYuan(remainingCents(row) / 100);
+            const amount = remainingCents(row);
+            setPayAmountYuan(amount / 100);
             setPaying(row);
+            // 打开弹窗就跑一次匹配——出纳要在点确认之前看到差异，
+            // 而不是付完款才知道验收还没做。
+            setThreeWay(null);
+            setMatching(true);
+            getScheduleThreeWay(row.scheduleId, amount)
+              .then((result) => setThreeWay(result))
+              .catch(() => setThreeWay(null))
+              .finally(() => setMatching(false));
           }}
         >
           付款
@@ -351,6 +369,27 @@ export function PaymentsPage() {
                 onChange={(value) => setPayAmountYuan(value ?? 0)}
               />
             </Space>
+            {matching ? (
+              <Skeleton active paragraph={{ rows: 1 }} style={{ marginTop: 12 }} />
+            ) : threeWay && threeWay.findings.length > 0 ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginTop: 12 }}
+                message="三单匹配提示"
+                description={
+                  <div>
+                    {threeWay.findings.map((finding) => (
+                      <div key={finding.code}>· {finding.message}</div>
+                    ))}
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      这些不阻断付款——预付款、先票后货都是正当安排。确认无误即可继续。
+                    </Typography.Text>
+                  </div>
+                }
+              />
+            ) : null}
+
             <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
               付款会生成一张<strong><Term k="voucher">凭证</Term>草稿</strong>，
               需会计复核后<Term k="posting">过账</Term>。
