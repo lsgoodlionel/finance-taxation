@@ -12,6 +12,7 @@ import dayjs from "dayjs";
 import { toast } from "sonner";
 import type { Employee, PayrollRecord, PayrollPolicy, PayrollPeriodSummary } from "@finance-taxation/domain-model";
 import { computePayroll, confirmPayroll, listPayroll, syncPayrollReviewLedgers } from "../../lib/api";
+import { useColumnPreset } from "../../components/ui/useColumnPreset";
 
 const { Text } = Typography;
 
@@ -166,20 +167,22 @@ export function PayrollRunWizard({
 
   // ── Columns ─────────────────────────────────────────────────────────────
   const recordColumns: ColumnsType<PayrollRecord> = [
-    { title: "姓名", dataIndex: "employeeName", fixed: "left", width: 90 },
+    { title: "姓名", key: "employeeName", dataIndex: "employeeName", fixed: "left", width: 90 },
     {
       title: "应发工资",
+      key: "grossSalary",
       dataIndex: "grossSalary",
       width: 110,
       render: (v: number) => <Text strong>¥{fmtAmt(v)}</Text>,
     },
-    { title: "个人社保", dataIndex: "socialSecurityEmployee", width: 110, render: (v: number) => `¥${fmtAmt(v)}` },
-    { title: "单位社保", dataIndex: "socialSecurityEmployer", width: 110, render: (v: number) => `¥${fmtAmt(v)}` },
-    { title: "个人公积金", dataIndex: "housingFundEmployee", width: 110, render: (v: number) => `¥${fmtAmt(v)}` },
-    { title: "单位公积金", dataIndex: "housingFundEmployer", width: 110, render: (v: number) => `¥${fmtAmt(v)}` },
-    { title: "代扣个税", dataIndex: "iitWithheld", width: 100, render: (v: number) => `¥${fmtAmt(v)}` },
+    { title: "个人社保", key: "socialSecurityEmployee", dataIndex: "socialSecurityEmployee", width: 110, render: (v: number) => `¥${fmtAmt(v)}` },
+    { title: "单位社保", key: "socialSecurityEmployer", dataIndex: "socialSecurityEmployer", width: 110, render: (v: number) => `¥${fmtAmt(v)}` },
+    { title: "个人公积金", key: "housingFundEmployee", dataIndex: "housingFundEmployee", width: 110, render: (v: number) => `¥${fmtAmt(v)}` },
+    { title: "单位公积金", key: "housingFundEmployer", dataIndex: "housingFundEmployer", width: 110, render: (v: number) => `¥${fmtAmt(v)}` },
+    { title: "代扣个税", key: "iitWithheld", dataIndex: "iitWithheld", width: 100, render: (v: number) => `¥${fmtAmt(v)}` },
     {
       title: "实发工资",
+      key: "netPay",
       dataIndex: "netPay",
       fixed: "right",
       width: 120,
@@ -189,6 +192,7 @@ export function PayrollRunWizard({
     },
     {
       title: "状态",
+      key: "status",
       dataIndex: "status",
       fixed: "right",
       width: 80,
@@ -199,6 +203,48 @@ export function PayrollRunWizard({
       ),
     },
   ];
+
+  // V15：默认藏起「单位社保 / 单位公积金」两列。
+  //
+  // **只藏这两列，其余一列不动**——个人社保、个人公积金、代扣个税都在解释
+  // 「应发为什么不等于实发」，藏了会让这张表的算术说不通。而单位承担的部分
+  // 回答的是另一个问题（公司这个月的用工成本），不属于「这个人拿多少」。
+  const {
+    columns: visibleRecordColumns,
+    preset: recordPreset,
+    setPreset: setRecordPreset,
+    hiddenCount: hiddenRecordColumns
+  } = useColumnPreset("payroll-records", recordColumns, [
+    "employeeName",
+    "grossSalary",
+    "socialSecurityEmployee",
+    "housingFundEmployee",
+    "iitWithheld",
+    "netPay",
+    "status"
+  ]);
+
+  /** 四处表格共用同一份列与同一个切换器。 */
+  const recordTableExtra =
+    hiddenRecordColumns > 0 ? (
+      <Space style={{ marginBottom: 6 }}>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          已折起单位承担部分（{hiddenRecordColumns} 列）
+        </Text>
+        <Button size="small" type="link" onClick={() => setRecordPreset("all")}>
+          显示全部
+        </Button>
+      </Space>
+    ) : recordPreset === "all" ? (
+      <Button
+        size="small"
+        type="link"
+        style={{ marginBottom: 6, paddingLeft: 0 }}
+        onClick={() => setRecordPreset("core")}
+      >
+        只看个人部分
+      </Button>
+    ) : null;
 
   const employeeColumns: ColumnsType<Employee> = [
     { title: "姓名", dataIndex: "name" },
@@ -251,12 +297,12 @@ export function PayrollRunWizard({
       case 1:
         return (
           <div>
-            <Alert
-              type="info"
-              showIcon
-              message={`本期将参与计算的员工：${activeEmployees.length} 人（在职），基本工资合计 ¥${fmtAmt(activeEmployees.reduce((s, e) => s + e.baseSalary, 0))}`}
-              style={{ marginBottom: 16 }}
-            />
+            {/* V15：这是数据摘要不是提示。事实不需要 Alert 的图标与底色——
+                那身衣服会让人以为有什么要注意的。降成正文行，数字一个没少。 */}
+            <Text type="secondary" style={{ display: "block", marginBottom: 16 }}>
+              本期将参与计算的员工：{activeEmployees.length} 人（在职），基本工资合计 ¥
+              {fmtAmt(activeEmployees.reduce((s, e) => s + e.baseSalary, 0))}
+            </Text>
             <Table
               rowKey="id"
               columns={employeeColumns}
@@ -275,7 +321,7 @@ export function PayrollRunWizard({
               <>
                 <Alert type="success" showIcon message={`已有 ${records.length} 条工资记录（${period}），可直接进入下一步`} style={{ marginBottom: 24 }} />
                 <SummaryRow />
-                <Table rowKey="id" columns={recordColumns} dataSource={records} pagination={false} size="small" scroll={{ x: 900 }} />
+                <>{recordTableExtra}<Table rowKey="id" columns={visibleRecordColumns} dataSource={records} pagination={false} size="small" scroll={{ x: 900 }} /></>
               </>
             ) : (
               <>
@@ -305,20 +351,17 @@ export function PayrollRunWizard({
               style={{ marginBottom: 16 }}
             />
             <SummaryRow />
-            <Table rowKey="id" columns={recordColumns} dataSource={records} pagination={false} size="small" scroll={{ x: 900 }} />
+            <>{recordTableExtra}<Table rowKey="id" columns={visibleRecordColumns} dataSource={records} pagination={false} size="small" scroll={{ x: 900 }} /></>
           </div>
         );
       case 4:
         return (
           <div>
-            <Alert
-              type="info"
-              showIcon
-              message={`待确认：${summary.draftCount} 条 · 已确认：${summary.confirmedCount} 条`}
-              style={{ marginBottom: 16 }}
-            />
+            <Text type="secondary" style={{ display: "block", marginBottom: 16 }}>
+              待确认：{summary.draftCount} 条 · 已确认：{summary.confirmedCount} 条
+            </Text>
             <SummaryRow />
-            <Table rowKey="id" columns={recordColumns} dataSource={records} pagination={false} size="small" scroll={{ x: 900 }} />
+            <>{recordTableExtra}<Table rowKey="id" columns={visibleRecordColumns} dataSource={records} pagination={false} size="small" scroll={{ x: 900 }} /></>
             {summary.draftCount > 0 && (
               <div style={{ textAlign: "center", marginTop: 24 }}>
                 <Button
@@ -356,7 +399,7 @@ export function PayrollRunWizard({
             />
             <Divider />
             <SummaryRow />
-            <Table rowKey="id" columns={recordColumns} dataSource={records} pagination={false} size="small" scroll={{ x: 900 }} />
+            <>{recordTableExtra}<Table rowKey="id" columns={visibleRecordColumns} dataSource={records} pagination={false} size="small" scroll={{ x: 900 }} /></>
           </div>
         );
       default:

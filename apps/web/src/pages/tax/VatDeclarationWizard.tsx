@@ -13,6 +13,7 @@ import {
   getVatWorkingPaper, submitTaxFilingBatch, reviewTaxFilingBatch,
 } from "../../lib/api";
 import { Term } from "../../components/ui/Term";
+import { Explain } from "../../components/ui/Explain";
 
 const BATCH_STATUS_LABELS: Record<string, string> = {
   draft: "草稿",
@@ -137,10 +138,10 @@ export function VatDeclarationWizard({
         <div style={{ textAlign: "center", padding: "40px 0", color: "#94a3b8" }}>正在加载工作<Term k="working-paper">底稿</Term>…</div>
       ) : paper ? (
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <Alert
-            type="info" showIcon
-            message="请核对以下增值税计算数据，如有差异可在此修改应缴税额"
-          />
+          {/* V15：纯操作说明折起来；下面的 success/warning 是结论与风险，保持常驻 */}
+          <Explain title="这一步要核对什么" storageKey="vat-wizard.review">
+            请核对以下增值税计算数据，如有差异可在此修改应缴税额。
+          </Explain>
           <Row gutter={[16, 16]}>
             <Col span={8}>
               <Statistic title="销项税额" value={outputTax.toFixed(2)} prefix="¥"
@@ -244,10 +245,9 @@ export function VatDeclarationWizard({
             </Descriptions.Item>
             {reviewNotes && <Descriptions.Item label="审核意见" span={2}>{reviewNotes}</Descriptions.Item>}
           </Descriptions>
-          <Alert
-            type="info"
-            message="申报完成后可在税务日历中查看本期申报状态，申报记录将同步到审计日志。"
-          />
+          <Explain title="申报之后去哪看" storageKey="vat-wizard.after">
+            申报完成后可在税务日历中查看本期申报状态，申报记录将同步到审计日志。
+          </Explain>
         </Space>
       ),
     },
