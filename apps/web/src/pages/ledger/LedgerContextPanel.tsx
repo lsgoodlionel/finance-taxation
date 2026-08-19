@@ -87,6 +87,10 @@ function resolveMetrics(scene: LedgerSceneKey, props: LedgerContextPanelProps): 
         { label: "当前分录", value: String(props.entryCount) },
         { label: "当前过账批次", value: String(props.batchCount) }
       ];
+    case "opening":
+      // 期初建账只有「建了没建」这一个事实，报分录数会让人以为要对着它核。
+      // 具体的借贷合计在面板自己那一屏上，这里不重复。
+      return [{ label: "已入账分录", value: String(props.entryCount) }];
     case "periods":
       return [
         { label: "已锁期间", value: String(props.lockedPeriodCount) },

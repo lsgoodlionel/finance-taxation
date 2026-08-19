@@ -20,6 +20,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Empty, List, Modal, Skeleton, Space, Tag, Typography } from "antd";
 import { errorMessage } from "../../lib/errors";
 import { Term } from "../../components/ui/Term";
+import { Explain } from "../../components/ui/Explain";
 import {
   suggestInvoicesForLine,
   type InvoiceMatchSuggestion
@@ -97,20 +98,13 @@ export function InvoicePicker({
       destroyOnClose
     >
       <Space direction="vertical" size={12} style={{ width: "100%" }}>
-        <Alert
-          type="info"
-          showIcon
-          message="按相关度排序，由你确认"
-          description={
-            <>
-              金额、日期、销方名越接近排得越前。
-              <strong>系统不会替你选</strong>
-              ——误挂一张票要到对账时才发现，而那时<Term k="voucher">凭证</Term>已经做过了。
-              <br />
-              已经挂在别的报销单上、或已经入账的票不会出现在这里。
-            </>
-          }
-        />
+        <Explain title="按相关度排序，系统不会替你选" storageKey="invoice-picker.intro">
+          金额、日期、销方名越接近排得越前。
+          <strong>系统不会替你选</strong>
+          ——误挂一张票要到对账时才发现，而那时<Term k="voucher">凭证</Term>已经做过了。
+          <br />
+          已经挂在别的报销单上、或已经入账的票不会出现在这里。
+        </Explain>
 
         {loadError !== null && <Alert type="error" showIcon message={loadError} />}
 

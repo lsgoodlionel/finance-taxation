@@ -26,7 +26,7 @@ import {
   Typography
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ReloadOutlined } from "@ant-design/icons";
+import { DownloadOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { toast } from "sonner";
 import { Term } from "../../components/ui/Term";
@@ -51,6 +51,7 @@ import {
   remainingCents
 } from "./payment-view";
 import { BankInstructionPanel } from "./BankInstructionPanel";
+import { exportPaymentInstructions } from "../../lib/api-bank-connect";
 
 const TASK_KEYS = ["due", "records"] as const;
 type PaymentTaskKey = (typeof TASK_KEYS)[number];
@@ -59,6 +60,10 @@ export function PaymentsPage() {
   // 银企直连抽屉。存整行而不是 id：抽屉要显示单号与状态，
   // 存 id 再回表里找会在列表刷新后指向一条已经变了的记录。
   const [bankTarget, setBankTarget] = useState<PaymentRow | null>(null);
+  // V15：导出银行付款指令。后端 V13-C6 就做完了，一直没有前台入口——
+  // 没接银企直连的公司只有这一条路，入口断了等于这个能力不存在。
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState<React.Key[]>([]);
+  const [exporting, setExporting] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [due, setDue] = useState<DuePaymentRow[]>([]);
   const [dueTotalCents, setDueTotalCents] = useState(0);
@@ -203,6 +208,29 @@ export function PaymentsPage() {
       )
     }
   ];
+
+  const handleExport = async () => {
+    if (selectedPaymentIds.length === 0) return;
+    setExporting(true);
+    try {
+      const { blobUrl, fileName } = await exportPaymentInstructions(
+        selectedPaymentIds.map(String)
+      );
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = fileName;
+      link.click();
+      // 立刻回收——不回收会让 blob 一直占着内存，导出十几次就很可观。
+      URL.revokeObjectURL(blobUrl);
+      toast.success(`已导出 ${selectedPaymentIds.length} 笔，可在网银批量导入`);
+      setSelectedPaymentIds([]);
+      await reload();
+    } catch (error) {
+      toast.error(errorMessage(error, "导出失败"));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const paymentColumns: ColumnsType<PaymentRow> = [
     {
@@ -349,13 +377,34 @@ export function PaymentsPage() {
         ) : payments.length === 0 ? (
           <Empty description={`${month} 没有付款记录`} />
         ) : (
-          <Table<PaymentRow>
-            rowKey="id"
-            size="small"
-            dataSource={payments}
-            columns={paymentColumns}
-            pagination={false}
-          />
+          <>
+            <Space style={{ marginBottom: 8 }}>
+              <Button
+                icon={<DownloadOutlined />}
+                loading={exporting}
+                disabled={selectedPaymentIds.length === 0}
+                onClick={() => void handleExport()}
+              >
+                导出银行指令{selectedPaymentIds.length > 0 && `（${selectedPaymentIds.length} 笔）`}
+              </Button>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                生成网银可导入的 CSV。已接银企直连的可以直接「发往银行」，二选一。
+              </Typography.Text>
+            </Space>
+            <Table<PaymentRow>
+              rowKey="id"
+              size="small"
+              dataSource={payments}
+              columns={paymentColumns}
+              pagination={false}
+              rowSelection={{
+                selectedRowKeys: selectedPaymentIds,
+                onChange: setSelectedPaymentIds,
+                // 草稿与已作废的付款单不该发给银行——草稿的意思就是还没定。
+                getCheckboxProps: (row) => ({ disabled: row.status !== "submitted" })
+              }}
+            />
+          </>
         )}
       </TaskFocusShell>
 

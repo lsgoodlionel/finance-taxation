@@ -38,6 +38,8 @@ import dayjs from "dayjs";
 import { toast } from "sonner";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Term } from "../../components/ui/Term";
+import { Explain } from "../../components/ui/Explain";
+import { useColumnPreset } from "../../components/ui/useColumnPreset";
 import { errorMessage } from "../../lib/errors";
 import { ProductionRunForm } from "./ProductionRunForm";
 import {
@@ -142,7 +144,7 @@ export function CostCarryoverPage() {
   );
 
   const columns: ColumnsType<ProductionRun> = [
-    { title: "期间", dataIndex: "period", width: 100 },
+    { title: "期间", key: "period", dataIndex: "period", width: 100 },
     {
       title: "产品",
       key: "product",
@@ -155,6 +157,7 @@ export function CostCarryoverPage() {
     },
     {
       title: "完工",
+      key: "finishedQuantity",
       dataIndex: "finishedQuantity",
       align: "right",
       width: 90,
@@ -162,6 +165,7 @@ export function CostCarryoverPage() {
     },
     {
       title: "在产",
+      key: "endingWipQuantity",
       dataIndex: "endingWipQuantity",
       align: "right",
       width: 90,
@@ -192,6 +196,7 @@ export function CostCarryoverPage() {
     },
     {
       title: "状态",
+      key: "status",
       dataIndex: "status",
       width: 90,
       render: (status: ProductionRunStatus) => (
@@ -258,6 +263,22 @@ export function CostCarryoverPage() {
     }
   ];
 
+  // V15：默认只显示核心列。17 列里真正决定「这批要不要结转」的只有 7 列，
+  // 其余（期初在产、归集金额明细）是要查的时候才看。
+  const {
+    columns: visibleColumns,
+    preset,
+    setPreset,
+    hiddenCount
+  } = useColumnPreset("production-runs", columns, [
+    "period",
+    "product",
+    "finishedQuantity",
+    "endingWipQuantity",
+    "status",
+    "actions"
+  ]);
+
   return (
     <div>
       <PageHeader
@@ -277,20 +298,18 @@ export function CostCarryoverPage() {
 
       {loadError && <Alert type="error" showIcon message={loadError} style={{ marginBottom: 16 }} />}
 
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        message="三个成本项的完工程度不一样，这是算对的关键"
-        description={
-          <>
-            <strong>直接材料通常是 100%</strong>
-            ——开工时一次性投料，做了一半的机器里料是齐的；人工与制造费用按加工进度。
-            用同一个进度分三项会让在产品的约当量变小，
-            <strong>完工产品反而多分到成本</strong>，而那笔差额要到毛利异常时才有人发现。
-          </>
-        }
-      />
+      {/* V15：从常驻 Alert 改成折叠。这条给 defaultOpen——**不看会做错**，
+          用同一个完工程度分三项是这里最常见的错，而它的后果在数字上看不出来。 */}
+      <Explain
+        title="三个成本项的完工程度不一样，这是算对的关键"
+        storageKey="cost.completion"
+        defaultOpen
+      >
+        <strong>直接材料通常是 100%</strong>
+        ——开工时一次性投料，做了一半的机器里料是齐的；人工与制造费用按加工进度。
+        用同一个进度分三项会让在产品的约当量变小，
+        <strong>完工产品反而多分到成本</strong>，而那笔差额要到毛利异常时才有人发现。
+      </Explain>
 
       {loading ? (
         <Skeleton active paragraph={{ rows: 4 }} />
@@ -311,13 +330,36 @@ export function CostCarryoverPage() {
               description="没结转的部分一直挂在生产成本上，库存商品与主营业务成本都会偏低。"
             />
           )}
-          <Table<ProductionRun>
-            rowKey="id"
-            size="small"
-            pagination={false}
-            dataSource={runs}
-            columns={columns}
-          />
+          <>
+            {/* 折起来的列数要显示——不显示等于假装表就这么宽 */}
+            {hiddenCount > 0 && (
+              <Space style={{ marginBottom: 8 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  已折起 {hiddenCount} 列
+                </Typography.Text>
+                <Button size="small" type="link" onClick={() => setPreset("all")}>
+                  显示全部
+                </Button>
+              </Space>
+            )}
+            {preset === "all" && (
+              <Button
+                size="small"
+                type="link"
+                style={{ marginBottom: 8, paddingLeft: 0 }}
+                onClick={() => setPreset("core")}
+              >
+                只看核心列
+              </Button>
+            )}
+            <Table<ProductionRun>
+              rowKey="id"
+              size="small"
+              pagination={false}
+              dataSource={runs}
+              columns={visibleColumns}
+            />
+          </>
         </>
       )}
 
@@ -463,15 +505,15 @@ export function CostCarryoverPage() {
             ) : null}
 
             {previewing.status === "draft" ? (
-              <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                结转会生成一张
+              <Explain title="结转会做哪一笔账" storageKey="cost.voucher-shape">
+                生成一张
                 <strong>
                   <Term k="voucher">凭证</Term>草稿
                 </strong>
                 （借 1403 库存商品 / 贷 4001 生产成本），需会计复核后
                 <Term k="posting">过账</Term>。 期末在产品不做
                 <Term k="journal-entry">分录</Term>——它本来就留在生产成本的余额里。
-              </Typography.Paragraph>
+              </Explain>
             ) : (
               <Alert
                 type="success"

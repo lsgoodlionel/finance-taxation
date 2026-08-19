@@ -35,6 +35,7 @@ import {
 import { PlusOutlined, ThunderboltOutlined, WalletOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { errorMessage } from "../../lib/errors";
+import { Explain } from "../../components/ui/Explain";
 import {
   deleteBankConnectConfig,
   getBankConnectBalance,
@@ -193,22 +194,14 @@ export function BankConnectTab() {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <Alert
-        type="info"
-        showIcon
-        message="框架已就位，未接真实银行"
-        description={
-          <>
-            证书与协议信息可以现在就填，付款指令的生成、提交、状态回写整条链路都能走通——
-            走的是<Typography.Text code>演示适配器</Typography.Text>
-            。真实银行的报文实现留给有对接需求时接入，接入后这里的配置无需改动。
-            <br />
-            <Typography.Text type="secondary">
-              证书内容不存进系统，这里填的是证书<strong>路径或密钥库别名</strong>；密码保存后永不回显。
-            </Typography.Text>
-          </>
-        }
-      />
+      {/* V15：这段说明第一次看有用，第二次之后一直挡着配置卡片。折起来。 */}
+      <Explain title="框架已就位，未接真实银行——点开看这意味着什么" storageKey="bank-connect.intro">
+        证书与协议信息可以现在就填，付款指令的生成、提交、状态回写整条链路都能走通——
+        走的是<Typography.Text code>演示适配器</Typography.Text>
+        。真实银行的报文实现留给有对接需求时接入，接入后这里的配置无需改动。
+        <br />
+        证书内容不存进系统，这里填的是证书<strong>路径或密钥库别名</strong>；密码保存后永不回显。
+      </Explain>
 
       {loadError && <Alert type="error" showIcon message={loadError} />}
 

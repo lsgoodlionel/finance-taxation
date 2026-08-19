@@ -47,6 +47,8 @@ export function getWorkbenchViewLabel(view: ReportsWorkbenchView): string {
       return "预算差异";
     case "costCenter":
       return "部门费用";
+    case "trialBalance":
+      return "试算平衡";
     default:
       return "财务报表";
   }
