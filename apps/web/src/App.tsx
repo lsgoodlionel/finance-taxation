@@ -37,6 +37,7 @@ const SystemHubPage = lazy(() => import("./pages/system/SystemHubPage").then((m)
 const PayrollDomainPage = lazy(() => import("./pages/payroll/PayrollDomainPage").then((m) => ({ default: m.PayrollDomainPage })));
 const MonthEndClosePage = lazy(() => import("./pages/MonthEndClosePage").then((m) => ({ default: m.MonthEndClosePage })));
 const AssetsCenterPage = lazy(() => import("./pages/assets/AssetsCenterPage").then((m) => ({ default: m.AssetsCenterPage })));
+const CostCarryoverPage = lazy(() => import("./pages/cost/CostCarryoverPage").then((m) => ({ default: m.CostCarryoverPage })));
 const BudgetCenterPage = lazy(() => import("./pages/budget/BudgetCenterPage").then((m) => ({ default: m.BudgetCenterPage })));
 const MyApprovalsPage = lazy(() => import("./pages/approval/MyApprovalsPage").then((m) => ({ default: m.MyApprovalsPage })));
 const RequestsPage = lazy(() => import("./pages/requests/RequestsPage").then((m) => ({ default: m.RequestsPage })));
@@ -87,6 +88,8 @@ const router = createBrowserRouter([
       // 静态资源规则，用 /assets 做前端路由会被 301 掉（浏览器实测发现，前端单测
       // 不经 nginx，测不出来）。
       { path: "asset-center", element: <AssetsCenterPage /> },
+      // V14-C：成本结转。与凭证、总账同组——它的产物就是一张凭证。
+      { path: "cost-carryover", element: <CostCarryoverPage /> },
       // V13-A：预算中心。费控组的第一项，批次 B/C 会在同组加申请、报销、付款。
       { path: "budget", element: <BudgetCenterPage /> },
       // V13-A6：pro 与 guided 两轨共用同一页——审批对财务和业务人员是同一件事。

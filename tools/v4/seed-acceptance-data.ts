@@ -1,5 +1,9 @@
 import pg from "pg";
 import { readFile } from "node:fs/promises";
+import {
+  SEED_PRODUCTS,
+  SEED_RUNS
+} from "../../apps/api/src/modules/cost/seed-data.js";
 import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,6 +45,9 @@ interface SeedCounts {
   /** V14-B：审批流。**V13 做完审批流一条种子都没播**——配置页打开是空的，
    *  而任何单据提交都会撞 FLOW_NOT_FOUND。「后端有能力、没数据」第七次。 */
   approvalFlows: number;
+  /** V14-C：产品与生产批次。服务器组装的模拟成本结构。 */
+  products: number;
+  productionRuns: number;
 }
 
 async function readJson<T>(fileName: string): Promise<T> {
@@ -285,7 +292,11 @@ const counts: SeedCounts = {
     // 每家公司一条演示银企配置。与上面几项同样先算后播——
     // 边播边累加会让「播失败了但计数照样涨」成为可能。
     bankConnectConfigs: companies.length,
-    approvalFlows: companies.length
+    approvalFlows: companies.length,
+    // 生产数据只播给一家公司（cmp-v4-tech）——制造业成本结转不是每家
+    // 公司都有的场景，全播反而让「哪家是制造业」看不出来。
+    products: SEED_PRODUCTS.length,
+    productionRuns: SEED_RUNS.length
   };
 
   const pool = new pg.Pool({ connectionString: databaseUrl });
@@ -572,6 +583,74 @@ const counts: SeedCounts = {
             budget.note
           ]
         );
+      }
+
+      // V14-C：生产成本数据只播给 cmp-v4-tech。
+      //
+      // 制造业成本结转不是每家公司都有的场景。全播会让「哪家是制造业」
+      // 看不出来，而演示账的价值恰恰在于各家有各家的样子。
+      if (company.id === "cmp-v4-tech") {
+        for (const product of SEED_PRODUCTS) {
+          await client.query(
+            `INSERT INTO products (id, company_id, code, name, unit, note)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (company_id, code) DO UPDATE
+             SET name = EXCLUDED.name, unit = EXCLUDED.unit,
+                 note = EXCLUDED.note, updated_at = now()`,
+            [
+              `prd-seed-${product.code}`,
+              company.id,
+              product.code,
+              product.name,
+              product.unit,
+              product.note
+            ]
+          );
+        }
+
+        for (const run of SEED_RUNS) {
+          const runId = `prn-seed-${run.productCode}-${run.period}`;
+          await client.query(
+            `INSERT INTO production_runs
+               (id, company_id, product_id, period, finished_quantity,
+                ending_wip_quantity, note)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (id) DO UPDATE
+             SET finished_quantity = EXCLUDED.finished_quantity,
+                 ending_wip_quantity = EXCLUDED.ending_wip_quantity,
+                 note = EXCLUDED.note, updated_at = now()`,
+            [
+              runId,
+              company.id,
+              `prd-seed-${run.productCode}`,
+              run.period,
+              run.finishedQuantity,
+              run.endingWipQuantity,
+              run.note
+            ]
+          );
+
+          for (const cost of run.costs) {
+            // **期初在产品留空**，由 store 的 resolveOpeningWip 在结转时从
+            // 上期结果取。种子里硬写会让它与上期期末数对不上，而对不上
+            // 意味着有一笔成本凭空消失或凭空出现。
+            await client.query(
+              `INSERT INTO production_run_costs
+                 (id, run_id, element, incurred_cents, wip_completion_bp)
+               VALUES ($1, $2, $3, $4, $5)
+               ON CONFLICT (run_id, element) DO UPDATE
+               SET incurred_cents = EXCLUDED.incurred_cents,
+                   wip_completion_bp = EXCLUDED.wip_completion_bp`,
+              [
+                `prc-seed-${run.productCode}-${run.period}-${cost.element}`,
+                runId,
+                cost.element,
+                cost.incurredCents,
+                cost.wipCompletionBp
+              ]
+            );
+          }
+        }
       }
 
       // V14-B：每家公司播一条报销审批流，第二级是**会签**。

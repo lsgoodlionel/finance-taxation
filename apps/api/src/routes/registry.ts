@@ -28,6 +28,15 @@ import {
   testBankConnectConfigRoute,
   upsertBankConnectConfigRoute
 } from "../modules/bank-connect/routes.js";
+import {
+  carryOverRunRoute,
+  listProductsRoute,
+  listRunsRoute,
+  previewRunRoute,
+  upsertProductRoute,
+  upsertRunRoute
+} from "../modules/cost/routes.js";
+import { suggestInvoicesRoute } from "../modules/invoices/match-routes.js";
 
 import {
   auditReimbursementRoute,
@@ -792,6 +801,40 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "contracts.view",
     handler: (req, res, p) => scheduleThreeWayRoute(req, res, p.id!)
+  },
+
+  // ── V14-D 发票池匹配建议 ───────────────────────────────────────────
+  //
+  // **只给建议，不自动挂载。** 分数只用于排序，没有「高于 X 就自动选中」——
+  // 设阈值自动选等于自动挂载，绕回 V13 判断的原点。
+  //
+  // POST 当查询用：入参是对象（金额 + 日期 + 关键词 + 排除单据），塞进查询串
+  // 既难读又有长度上限。纯查询，不落库、不改任何单据。
+  { method: "POST", path: "/api/invoices/suggest", auth: true, permission: "expense.view", handler: suggestInvoicesRoute },
+
+  // ── V14-C 生产成本与完工结转 ───────────────────────────────────────
+  //
+  // **归 ledger.* 而不是新开一档权限。** 成本结转的产物是一张凭证，
+  // 与折旧、期末调汇、增值税结转同一性质——谁能做那些，谁就能做这个。
+  // 读用 ledger.view（成本数据是看账的人要看的），结转用 ledger.post
+  // （它生成凭证）。产品档案跟着走同一档：只有会做结转的人才需要维护它。
+  { method: "GET", path: "/api/products", auth: true, permission: "ledger.view", handler: listProductsRoute },
+  { method: "PUT", path: "/api/products", auth: true, permission: "ledger.post", handler: upsertProductRoute },
+  { method: "GET", path: "/api/production-runs", auth: true, permission: "ledger.view", handler: listRunsRoute },
+  { method: "PUT", path: "/api/production-runs", auth: true, permission: "ledger.post", handler: upsertRunRoute },
+  {
+    method: "GET",
+    path: "/api/production-runs/:id/preview",
+    auth: true,
+    permission: "ledger.view",
+    handler: (req, res, p) => previewRunRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/production-runs/:id/carry-over",
+    auth: true,
+    permission: "ledger.post",
+    handler: (req, res, p) => carryOverRunRoute(req, res, p.id!)
   },
 
   // ── V14-A 银企直连 ────────────────────────────────────────────────────
