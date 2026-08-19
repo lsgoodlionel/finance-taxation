@@ -14,11 +14,16 @@
  * 靠「记得检查」防不住——V13 的蓝图里写了应对办法，V14 里我自己又犯了两次。
  * 所以做成护栏：**新增路由而前台没有调用点时，这条测试会失败**。
  *
- * ## 判定方式是字符串包含，故意粗糙
+ * ## 判定方式：字面前缀，或末段这个有区分度的词
  *
- * 只要前端源码里出现路径的字面前缀就算有入口。这会漏掉动态拼接的 URL
- * （误判为「没入口」，进而被逼着登记白名单——那正好），
- * 但不会把没有入口的说成有。**宁可多问一句，不可漏放一个。**
+ * 先看前端源码里有没有路径的字面前缀。找不到时再找**末段**——
+ * 前端常把 URL 拼起来（`/api/tax-integration/${type}`），字面比对看不见那种，
+ * 但 `vat-xml` 这个词一定在前端某处出现过（下拉选项、类型联合、按钮配置）。
+ *
+ * **只认末段，不做逐段回退。** 回退到 `/api/ledger` 这种两段前缀会哪里都能命中，
+ * 等于把没入口的说成有——那比漏报严重得多，因为它让护栏静默失效。
+ *
+ * 末段太短（少于 4 个字符）或看着像通用词时不认，理由同上。
  */
 
 import assert from "node:assert/strict";
@@ -75,18 +80,49 @@ const KNOWN_GAPS: ReadonlyMap<string, string> = new Map([
   ["GET /api/analytics/revenue-comparison", "收入对比：同上"],
   ["GET /api/runtime/tasks", "运行时摘要：前端有自己的汇总口径，这个端点暂无消费方"],
   ["GET /api/runtime/tax", "同上"],
-  ["GET /api/runtime/vouchers", "同上"],
-  ["GET /api/runtime/payroll", "同上"],
-  ["GET /api/runtime/payroll-transfer", "同上"],
-  ["GET /api/tax-integration/vat-xml", "增值税申报 XML 导出：报税必需，待接入税务中心页面"],
-  ["GET /api/tax-integration/iit-csv", "个税申报 CSV：同上"],
-  ["GET /api/tax-integration/si-csv", "社保申报 CSV：同上"],
-  ["GET /api/tax-integration/fund-csv", "公积金申报 CSV：同上"],
-  ["GET /api/banking/reconciliation/sessions", "对账会话列表：对账页用的是另一套接口"],
   ["POST /api/banking/sync-statements", "银行流水同步：手工模式下走 CSV 导入，这个端点待接入"],
   ["DELETE /api/settlement/settlements/:id", "核销撤销：列表页只做了核销，撤销待补"],
   ["GET /api/settings/users", "用户管理：权限页有自己的取数，这个端点暂无消费方"],
-  ["POST /api/boss-qa/chat", "老板问答：页面走的是 assistant 接口，这个端点暂无消费方"]
+]);
+
+/**
+ * 前端有没有调用这条路径。
+ *
+ * `/api/tax-integration/vat-xml` 在前端写成 `/api/tax-integration/${type}`——
+ * 字面比对看不见，所以逐段砍尾巴再找。砍到只剩两段就停：
+ * 再短没有区分度，任何 `/api` 都能命中。
+ */
+function hasFrontendCaller(routePath: string, webSource: string): boolean {
+  const literal = routePath.split("/:")[0]!;
+  if (webSource.includes(literal)) return true;
+
+  const segments = literal.split("/").filter((part) => part !== "");
+  const last = segments[segments.length - 1];
+  // 只有三段以上的路径才看末段：`/api/jobs` 的末段是 `jobs`，
+  // 那个词在前端到处都是，认它等于不判。
+  if (last === undefined || segments.length < 3) return false;
+  if (last.length < 4 || GENERIC_SEGMENTS.has(last)) return false;
+
+  return webSource.includes(last);
+}
+
+/**
+ * 末段太通用、认了等于不判的词。
+ *
+ * 这份名单只该收「在前端源码里必然大量出现」的词——不是「我觉得不重要」的词。
+ */
+const GENERIC_SEGMENTS: ReadonlySet<string> = new Set([
+  "list",
+  "items",
+  "data",
+  "info",
+  "status",
+  "detail",
+  "summary",
+  "config",
+  "settings",
+  "users",
+  "tasks"
 ]);
 
 async function collectWebSource(dir: string): Promise<string[]> {
@@ -110,11 +146,7 @@ test("后端路由必须有前台调用点（白名单与已知缺口除外）",
   const files = await collectWebSource(webRoot);
   const webSource = (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
 
-  const orphans = routes.filter((route) => {
-    // `:param` 之前的字面前缀。前端总会包含这一段，无论后面怎么拼。
-    const literal = route.path.split("/:")[0]!;
-    return !webSource.includes(literal);
-  });
+  const orphans = routes.filter((route) => !hasFrontendCaller(route.path, webSource));
 
   const unexplained = orphans.filter(
     (route) => !BACKEND_ONLY_ROUTES.has(route.id) && !KNOWN_GAPS.has(route.id)
@@ -156,8 +188,9 @@ test("白名单与已知缺口里不能有已经补上入口的条目", async ()
       stale.push(`${id}（路由已不存在）`);
       continue;
     }
-    const path = id.split(" ")[1]!.split("/:")[0]!;
-    if (webSource.includes(path)) stale.push(`${id}（前台已有入口，请删除登记）`);
+    if (hasFrontendCaller(id.split(" ")[1]!, webSource)) {
+      stale.push(`${id}（前台已有入口，请删除登记）`);
+    }
   }
   for (const id of BACKEND_ONLY_ROUTES.keys()) {
     if (!routeSet.has(id)) stale.push(`${id}（路由已不存在）`);
