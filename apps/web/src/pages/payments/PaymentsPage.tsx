@@ -50,11 +50,15 @@ import {
   groupDueByCounterparty,
   remainingCents
 } from "./payment-view";
+import { BankInstructionPanel } from "./BankInstructionPanel";
 
 const TASK_KEYS = ["due", "records"] as const;
 type PaymentTaskKey = (typeof TASK_KEYS)[number];
 
 export function PaymentsPage() {
+  // 银企直连抽屉。存整行而不是 id：抽屉要显示单号与状态，
+  // 存 id 再回表里找会在列表刷新后指向一条已经变了的记录。
+  const [bankTarget, setBankTarget] = useState<PaymentRow | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [due, setDue] = useState<DuePaymentRow[]>([]);
   const [dueTotalCents, setDueTotalCents] = useState(0);
@@ -241,6 +245,18 @@ export function PaymentsPage() {
       dataIndex: "exportBatchNo",
       render: (value: string | null) =>
         value ?? <Typography.Text type="secondary">未导出</Typography.Text>
+    },
+    {
+      // V14-A：银企直连的入口。与「导出批次」并列——两者是同一件事的
+      // 两条路径（导 CSV 去网银上传，或直接发给银行），放一起才看得出可以二选一。
+      title: "银企直连",
+      key: "bankConnect",
+      width: 110,
+      render: (_: unknown, row: PaymentRow) => (
+        <Button size="small" onClick={() => setBankTarget(row)}>
+          发往银行
+        </Button>
+      )
     }
   ];
 
@@ -398,6 +414,13 @@ export function PaymentsPage() {
           </div>
         )}
       </Modal>
+
+      <BankInstructionPanel
+        paymentId={bankTarget?.id ?? null}
+        paymentNo={bankTarget?.paymentNo ?? ""}
+        paymentStatus={bankTarget?.status ?? ""}
+        onClose={() => setBankTarget(null)}
+      />
     </div>
   );
 }

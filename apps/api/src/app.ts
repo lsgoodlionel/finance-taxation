@@ -8,6 +8,7 @@ import { logger, newRequestId } from "./observability/logger.js";
 import { applySecurityHeaders } from "./security/headers.js";
 import { createRateLimiter, clientKey } from "./security/rate-limit.js";
 import { createAppRouter } from "./routes/registry.js";
+import { registerBankAdapters } from "./modules/bank-connect/register.js";
 
 const appRouter = createAppRouter();
 
@@ -80,6 +81,10 @@ async function router(req: ApiRequest, res: ServerResponse) {
 }
 
 export function buildApp() {
+  // V14-A：银企适配器在建 app 时注册一次。放在这里而不是模块顶层，
+  // 是为了让测试能控制注册时机。
+  registerBankAdapters();
+
   // Error boundary: `router` is async, so a rejected handler promise would
   // otherwise surface as an unhandledRejection and terminate the whole process
   // (taking every subsequent request down with it — nginx then returns 502).

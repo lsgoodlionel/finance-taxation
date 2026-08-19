@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PageHeader } from "../components/ui/PageHeader";
 import { buildResultPageSubtitle } from "../lib/entry-guidance";
 import { IntegrationSettingsTab } from "./settings/IntegrationSettingsTab";
+import { BankConnectTab } from "./settings/BankConnectTab";
 import { OpenApiSettingsTab } from "./settings/OpenApiSettingsTab";
 import { AutomationGovernanceTab } from "./settings/AutomationGovernanceTab";
 import { CompanyTab } from "./settings/CompanyTab";
@@ -9,7 +10,7 @@ import { AiConfigTab } from "./settings/AiConfigTab";
 import { DisplayTab } from "./settings/DisplayTab";
 import { AboutTab } from "./settings/AboutTab";
 
-type Tab = "company" | "ai" | "integration" | "openApi" | "automation" | "display" | "about";
+type Tab = "company" | "ai" | "integration" | "bankConnect" | "openApi" | "automation" | "display" | "about";
 
 function tabBtn(active: boolean, onClick: () => void, label: string) {
   return (
@@ -47,6 +48,7 @@ export function SettingsPage() {
           {tabBtn(tab === "company", () => setTab("company"), "公司信息")}
           {tabBtn(tab === "ai", () => setTab("ai"), "AI 配置")}
           {tabBtn(tab === "integration", () => setTab("integration"), "外部对接")}
+          {tabBtn(tab === "bankConnect", () => setTab("bankConnect"), "银企直连")}
           {tabBtn(tab === "openApi", () => setTab("openApi"), "开放 API")}
           {tabBtn(tab === "automation", () => setTab("automation"), "AI 自动化治理")}
           {tabBtn(tab === "display", () => setTab("display"), "显示设置")}
@@ -57,6 +59,7 @@ export function SettingsPage() {
       {tab === "company" && <CompanyTab />}
       {tab === "ai" && <AiConfigTab />}
       {tab === "integration" && <IntegrationSettingsTab />}
+      {tab === "bankConnect" && <BankConnectTab />}
       {tab === "openApi" && <OpenApiSettingsTab />}
       {tab === "automation" && <AutomationGovernanceTab />}
       {tab === "display" && <DisplayTab />}

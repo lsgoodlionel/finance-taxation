@@ -35,6 +35,9 @@ interface SeedCounts {
   /** V13-B：成本中心。V12-D1 做了这个能力，但种子库里一条都没有——
    *  于是费用分摊、部门费用报表在种子账上全是空的。写报销集成测试时发现。 */
   costCenters: number;
+  /** V14-A：银企配置。播一条演示适配器的，让「系统设置 → 银企直连」
+   *  打开不是空页——空页会被读成「这功能没做」。 */
+  bankConnectConfigs: number;
 }
 
 async function readJson<T>(fileName: string): Promise<T> {
@@ -275,7 +278,10 @@ const counts: SeedCounts = {
     taxMappings: scenarios.length,
     budgets: companies.length * SEED_BUDGETS.length,
     expenseStandards: companies.length * SEED_STANDARDS.length,
-    costCenters: companies.length * SEED_COST_CENTERS.length
+    costCenters: companies.length * SEED_COST_CENTERS.length,
+    // 每家公司一条演示银企配置。与上面几项同样先算后播——
+    // 边播边累加会让「播失败了但计数照样涨」成为可能。
+    bankConnectConfigs: companies.length
   };
 
   const pool = new pg.Pool({ connectionString: databaseUrl });
@@ -526,7 +532,7 @@ const counts: SeedCounts = {
     // 入口」出现过五次，四次的读口径测试全绿——因为用例直接往库里塞数据造
     // 场景，而种子库那一列一行都没有。这里播下去，budget.integration.test 之外
     // 的任何人打开页面都能看到真实数据。
-    for (const company of companies) {
+    for (const [companyIndex, company] of companies.entries()) {
       for (const costCenter of SEED_COST_CENTERS) {
         await client.query(
           `INSERT INTO cost_centers (id, company_id, code, name)
@@ -563,6 +569,32 @@ const counts: SeedCounts = {
           ]
         );
       }
+
+      // V14-A：每家公司播一条演示银企配置。
+      //
+      // 用 mock 适配器而不是真银行：真银行的 provider 在没有适配器实现时
+      // 只能保存不能提交，而种子的用途正是「打开就能走通全流程」。
+      await client.query(
+        `INSERT INTO bank_connect_configs
+           (id, company_id, provider, display_name, payer_account, customer_no, endpoint,
+            sign_algorithm, cert_ref, cert_fingerprint, cert_expires_on, enabled, note)
+         VALUES ($1, $2, 'mock', '演示付款账户', $3, 'DEMO-CUST-001',
+                 'https://bank.example.com/api', 'RSA', '/certs/demo.pfx',
+                 'DE:MO:00:01', '2030-12-31'::date, true,
+                 '演示适配器，不连真实银行。接入真实银行后新建配置即可。')
+         ON CONFLICT (company_id, payer_account) DO UPDATE
+         SET display_name = EXCLUDED.display_name,
+             enabled = EXCLUDED.enabled,
+             updated_at = now()`,
+        [
+          `bkc-seed-${company.id}`,
+          company.id,
+          // 账号按序号编，**不能从 company.id 里截**——公司 id 是
+          // `cmp-v4-tech` 这样的文本，截出来的「账号」里会有字母，
+          // 而银行账号是纯数字。看起来像真的比明显是假的更麻烦。
+          `62220000000${String(companyIndex + 1).padStart(5, "0")}`
+        ]
+      );
 
       for (const standard of SEED_STANDARDS) {
         await client.query(
