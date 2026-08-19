@@ -81,7 +81,6 @@ const KNOWN_GAPS: ReadonlyMap<string, string> = new Map([
   ["GET /api/runtime/tasks", "运行时摘要：前端有自己的汇总口径，这个端点暂无消费方"],
   ["GET /api/runtime/tax", "同上"],
   ["POST /api/banking/sync-statements", "银行流水同步：手工模式下走 CSV 导入，这个端点待接入"],
-  ["DELETE /api/settlement/settlements/:id", "核销撤销：列表页只做了核销，撤销待补"],
   ["GET /api/settings/users", "用户管理：权限页有自己的取数，这个端点暂无消费方"],
 ]);
 

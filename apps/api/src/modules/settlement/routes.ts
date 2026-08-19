@@ -4,7 +4,13 @@
  * - `GET    /api/settlement/aging?direction=&asOf=` 账龄分析表
  * - `GET    /api/settlement/open-items?direction=`  待核销明细（发生方 + 核销方）
  * - `POST   /api/settlement/settle`                 核销
+ * - `GET    /api/settlement/settlements?entryId=`   某笔分录上的核销记录
  * - `DELETE /api/settlement/settlements/:id`        撤销核销
+ *
+ * ## 查询接口是 V15 补的
+ *
+ * `listSettlements` 早就写好了，只是**没接成路由**——于是撤销接口存在、
+ * 但前台拿不到要撤哪一条的 id，核销错了改不了。
  */
 
 import type { ServerResponse } from "node:http";
@@ -14,7 +20,7 @@ import { json } from "../../utils/http.js";
 import { fromCents } from "../../utils/money.js";
 import { writeAudit } from "../../services/audit.js";
 import { buildAgingReport, AGING_BUCKETS, type AgingReport } from "./aging.js";
-import { deleteSettlement, loadSettlementEntries } from "./settlement-store.js";
+import { deleteSettlement, listSettlements, loadSettlementEntries } from "./settlement-store.js";
 import { directionOf } from "./settlement-store.js";
 import { settleEntries } from "./settle.js";
 
@@ -192,6 +198,26 @@ export async function settleRoute(req: ApiRequest, res: ServerResponse): Promise
   });
 
   json(res, 201, result.summary);
+}
+
+/**
+ * 某笔分录上的核销记录（V15）。
+ *
+ * `entryId` 既可以是欠款那一笔，也可以是核销方那一笔——两边都能查到同一条记录，
+ * 因为用户从哪一侧点进来都应当看得见。
+ */
+export async function listSettlementsRoute(req: ApiRequest, res: ServerResponse): Promise<void> {
+  const url = new URL(req.url || "/", "http://127.0.0.1");
+  const entryId = url.searchParams.get("entryId") ?? "";
+  if (entryId === "") {
+    json(res, 400, { error: "entryId 不能为空" });
+    return;
+  }
+
+  const items = await withTransaction((client) =>
+    listSettlements(client, req.auth!.companyId, entryId)
+  );
+  json(res, 200, { items, total: items.length });
 }
 
 export async function deleteSettlementRoute(

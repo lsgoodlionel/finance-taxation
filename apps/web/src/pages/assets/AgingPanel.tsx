@@ -5,17 +5,20 @@
  * 账龄自发生日算（坏账准备的依据），逾期自发生日加信用账期算（违约判断）。
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Modal, Radio, Select, Space, Statistic, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, List, Modal, Popconfirm, Radio, Select, Space, Statistic, Table, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import {
   getAging,
   getSettlementOpenItems,
+  listSettlements,
   settleEntries,
+  unsettleEntry,
   type AgingBucketAmount,
   type AgingCounterpartyRow,
   type AgingItem,
-  type SettlementCandidate
+  type SettlementCandidate,
+  type SettlementRecord
 } from "../../lib/api";
 import { errorMessage, todayIso } from "../../lib/errors";
 
@@ -39,6 +42,15 @@ export function AgingPanel() {
   const [openEntryId, setOpenEntryId] = useState<string | null>(null);
   const [settleEntryId, setSettleEntryId] = useState<string | null>(null);
   const [settling, setSettling] = useState(false);
+
+  // V15：已核销记录与撤销。
+  //
+  // 上面的说明里写着「记错了撤销即可」——**而撤销一直没有入口**。
+  // 后端的 DELETE 接口和 listSettlements 都早就写好了，只是前台拿不到
+  // 要撤哪一条的 id。说明文字承诺了一个做不到的事，比不说更糟。
+  const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
+  const [settlementsLoading, setSettlementsLoading] = useState(false);
+  const [unsettling, setUnsettling] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,6 +126,43 @@ export function AgingPanel() {
       }))
     ],
     [buckets]
+  );
+
+  /** 选中一笔欠款时，把它上面已有的核销记录拉出来——撤销从这里进。 */
+  const loadSettlements = useCallback(async (entryId: string | null) => {
+    if (entryId === null) {
+      setSettlements([]);
+      return;
+    }
+    setSettlementsLoading(true);
+    try {
+      const res = await listSettlements(entryId);
+      setSettlements(res.items);
+    } catch (err) {
+      // 不静默：加载失败显示成「没有核销记录」，用户会以为这笔还没核销过，
+      // 于是再核销一次。
+      toast.error(errorMessage(err, "加载核销记录失败"));
+      setSettlements([]);
+    } finally {
+      setSettlementsLoading(false);
+    }
+  }, []);
+
+  const handleUnsettle = useCallback(
+    async (settlementId: string) => {
+      setUnsettling(settlementId);
+      try {
+        await unsettleEntry(settlementId);
+        toast.success("已撤销，两侧余额恢复");
+        await loadSettlements(openEntryId);
+        await load();
+      } catch (err) {
+        toast.error(errorMessage(err, "撤销失败"));
+      } finally {
+        setUnsettling(null);
+      }
+    },
+    [openEntryId, loadSettlements, load]
   );
 
   const directionLabel = direction === "receivable" ? "应收" : "应付";
@@ -240,7 +289,10 @@ export function AgingPanel() {
               style={{ width: "100%", marginTop: 8 }}
               placeholder="选择一笔未结清的欠款"
               value={openEntryId}
-              onChange={setOpenEntryId}
+              onChange={(value: string) => {
+                setOpenEntryId(value);
+                void loadSettlements(value);
+              }}
               options={openItems.map((item) => ({
                 value: item.entryId,
                 label: `${item.entryDate} ${item.counterpartyName} ${item.summary} 剩余 ${item.remaining}`
@@ -265,6 +317,51 @@ export function AgingPanel() {
           <Typography.Text type="secondary">
             往来单位必须一致，应收与应付不能互相核销——跨单位或跨口径核销会让两边的往来余额同时算错。
           </Typography.Text>
+
+          {/* V15：这笔欠款上已有的核销，撤销从这里进。
+              只在选了欠款之后出现——没选之前显示一个空区块只是噪音。 */}
+          {openEntryId !== null && (
+            <div>
+              <Typography.Text strong>这笔欠款已有的核销</Typography.Text>
+              {settlementsLoading ? (
+                <Typography.Text type="secondary" style={{ display: "block", marginTop: 8 }}>
+                  加载中…
+                </Typography.Text>
+              ) : settlements.length === 0 ? (
+                <Typography.Text type="secondary" style={{ display: "block", marginTop: 8 }}>
+                  还没有核销过
+                </Typography.Text>
+              ) : (
+                <List
+                  size="small"
+                  bordered
+                  style={{ marginTop: 8 }}
+                  dataSource={settlements}
+                  renderItem={(record) => (
+                    <List.Item
+                      actions={[
+                        <Popconfirm
+                          key="undo"
+                          title="撤销这条核销？"
+                          description="账面数字一分不动——核销本来就不产生凭证，撤销只是把「这笔抵那笔」的声明取消。"
+                          onConfirm={() => void handleUnsettle(record.id)}
+                        >
+                          <Button size="small" danger loading={unsettling === record.id}>
+                            撤销
+                          </Button>
+                        </Popconfirm>
+                      ]}
+                    >
+                      <Space size={8}>
+                        <span>{record.settledOn}</span>
+                        <Typography.Text strong>{record.amount}</Typography.Text>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              )}
+            </div>
+          )}
         </div>
       </Modal>
     </div>

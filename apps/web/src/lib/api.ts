@@ -2608,6 +2608,38 @@ export async function settleEntries(body: {
   );
 }
 
+export interface SettlementRecord {
+  id: string;
+  openEntryId: string;
+  settleEntryId: string;
+  amount: string;
+  settledOn: string;
+}
+
+/**
+ * 某笔分录上的核销记录（V15）。
+ *
+ * `entryId` 既可以是欠款那一笔，也可以是核销方那一笔——两边都能查到同一条，
+ * 因为用户从哪一侧点进来都应当看得见。
+ */
+export async function listSettlements(entryId: string) {
+  return request<{ items: SettlementRecord[]; total: number }>(
+    `/api/settlement/settlements?entryId=${encodeURIComponent(entryId)}`
+  );
+}
+
+/**
+ * 撤销核销（V15）。
+ *
+ * **核销错了以前改不了**——撤销接口一直存在，但前台拿不到要撤哪一条的 id。
+ */
+export async function unsettleEntry(settlementId: string) {
+  return request<{ deleted: boolean; id: string }>(
+    `/api/settlement/settlements/${encodeURIComponent(settlementId)}`,
+    { method: "DELETE" }
+  );
+}
+
 export interface ReconciliationItemView {
   itemType: "book_only_receipt" | "book_only_payment" | "bank_only_receipt" | "bank_only_payment";
   occurredOn: string;
