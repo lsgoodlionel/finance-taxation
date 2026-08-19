@@ -23,7 +23,9 @@ export const TAX_TASK_KEYS = {
   items: "items",
   profile: "profile",
   /** 税率主数据与账簿口径底稿（V12-D2）。 */
-  rates: "rates"
+  rates: "rates",
+  /** V15：增值税期末结转。每月必做，后端 V12-B8 就做完了但一直没有入口。 */
+  settlement: "settlement"
 } as const;
 
 export type TaxTaskKey = (typeof TAX_TASK_KEYS)[keyof typeof TAX_TASK_KEYS];
@@ -72,6 +74,13 @@ export function buildTaxTasks({ batches, items, overdueCount }: TaxTaskInput): T
       key: TAX_TASK_KEYS.rates,
       label: "核对税率与账簿",
       description: "看这个属期该用哪档税率、按账簿算出来的增值税与税目记录差多少，以及折旧的税会差异。"
+    },
+    {
+      key: TAX_TASK_KEYS.settlement,
+      label: "做增值税结转",
+      description:
+        "月末把应交增值税各专栏轧平，该缴的转到未交增值税。不做的话应交税费" +
+        "会变成几个月的和，报税时对不上。"
     },
     {
       key: TAX_TASK_KEYS.calendar,

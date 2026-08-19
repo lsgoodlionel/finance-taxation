@@ -35,6 +35,8 @@ import { LedgerEntriesPanel } from "./ledger/LedgerEntriesPanel";
 import { LedgerHeader } from "./ledger/LedgerHeader";
 import { LedgerJournalPanel } from "./ledger/LedgerJournalPanel";
 import { LedgerPeriodsPanel } from "./ledger/LedgerPeriodsPanel";
+import { OpeningBalancePanel } from "./ledger/OpeningBalancePanel";
+import { FiscalYearPanel } from "./ledger/FiscalYearPanel";
 import { LedgerRevaluationPanel } from "./ledger/LedgerRevaluationPanel";
 import { LedgerShell } from "./ledger/LedgerShell";
 import { LedgerSummaryPanel } from "./ledger/LedgerSummaryPanel";
@@ -330,6 +332,10 @@ export function LedgerPage() {
             }}
           />
         );
+      case "opening":
+        return <OpeningBalancePanel />;
+      case "fiscalYear":
+        return <FiscalYearPanel />;
       case "revaluation":
         // 面板自己管汇率、截止日与预览：它们只服务这一件事，提到页面层
         // 只会让另外五件事的状态里多出几个用不上的字段。

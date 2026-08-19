@@ -34,6 +34,10 @@ export type ReportsTaskKey = (typeof REPORTS_TASK_KEYS)[keyof typeof REPORTS_TAS
  * 强行分到另一件事只会让用户为看一眼费用多点两次。
  */
 export const STATEMENT_VIEWS: readonly ReportsWorkbenchView[] = [
+  // **试算平衡排在最前**：它是月结前的第一张表。三组合计不平意味着账本身
+  // 有问题，而后面三张法定报表照样出得来、只是它们是错的。
+  // 排在后面等于让人先看错的结论。
+  "trialBalance",
   "balanceSheet",
   "profitStatement",
   "cashFlow",

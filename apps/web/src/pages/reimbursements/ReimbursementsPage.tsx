@@ -33,7 +33,13 @@ import { toast } from "sonner";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { TaskFocusShell } from "../../components/ui/TaskFocusShell";
 import { errorMessage } from "../../lib/errors";
+import { Term } from "../../components/ui/Term";
 import { InvoicePicker } from "./InvoicePicker";
+import {
+  EXPENSE_TYPE_OPTIONS,
+  accountNameOf,
+  defaultAccountFor
+} from "./expense-account-map";
 import { listCostCenters } from "../../lib/api";
 import {
   auditReimbursement,
@@ -54,17 +60,6 @@ const TASK_KEYS = ["mine", "create"] as const;
 type ReimbursementTaskKey = (typeof TASK_KEYS)[number];
 
 /** 费用类型与费用标准的 expense_type 同一套取值。 */
-const EXPENSE_TYPES = [
-  { value: "travel_hotel", label: "差旅-住宿" },
-  { value: "travel_meal", label: "差旅-餐补" },
-  { value: "travel_transport", label: "差旅-交通" },
-  { value: "entertainment", label: "业务招待" },
-  { value: "office", label: "办公用品" },
-  { value: "communication", label: "通讯" },
-  { value: "training", label: "培训" },
-  { value: "other", label: "其他" }
-];
-
 interface DraftLine {
   key: number;
   expenseType: string;
@@ -368,6 +363,104 @@ export function ReimbursementsPage() {
               size="small"
               pagination={false}
               dataSource={lines}
+              /* V15：科目、数量、城市、归属部门收进展开区。
+                 它们是**可选的细化**，不是填报销的必经之路——摆在常驻列位上
+                 会让一张三行的报销单要横向读 10 列，而多数人四列都不用改。
+                 能力一个没删，只是不再默认占位置。 */
+              expandable={{
+                expandedRowRender: (row) => (
+                  <Space wrap size={16} style={{ paddingLeft: 8 }}>
+                    <Space size={4}>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {/* 挪进展开区之后更该挂释义——展开它的人正是不确定
+                            科目该填什么的那个人 */}
+                        <Term k="account">科目</Term>
+                      </Typography.Text>
+                      <Input
+                        size="small"
+                        style={{ width: 150 }}
+                        value={row.accountCode}
+                        onChange={(e) =>
+                          setLines((prev) =>
+                            prev.map((item) =>
+                              item.key === row.key ? { ...item, accountCode: e.target.value } : item
+                            )
+                          )
+                        }
+                      />
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {accountNameOf(row.accountCode)}
+                      </Typography.Text>
+                    </Space>
+
+                    <Space size={4}>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        数量
+                      </Typography.Text>
+                      <InputNumber
+                        size="small"
+                        style={{ width: 80 }}
+                        min={1}
+                        precision={0}
+                        value={row.quantity}
+                        onChange={(next) =>
+                          setLines((prev) =>
+                            prev.map((item) =>
+                              item.key === row.key ? { ...item, quantity: next ?? 1 } : item
+                            )
+                          )
+                        }
+                      />
+                    </Space>
+
+                    <Space size={4}>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        城市
+                      </Typography.Text>
+                      <Select
+                        size="small"
+                        allowClear
+                        style={{ width: 110 }}
+                        placeholder="不限"
+                        value={row.cityTier}
+                        options={[
+                          { value: "tier1", label: "一线" },
+                          { value: "tier2", label: "二线" },
+                          { value: "tier3", label: "其他" }
+                        ]}
+                        onChange={(next) =>
+                          setLines((prev) =>
+                            prev.map((item) =>
+                              item.key === row.key ? { ...item, cityTier: next } : item
+                            )
+                          )
+                        }
+                      />
+                    </Space>
+
+                    <Space size={4}>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        归属部门
+                      </Typography.Text>
+                      <Select
+                        size="small"
+                        allowClear
+                        style={{ width: 150 }}
+                        placeholder="未指定"
+                        value={row.costCenterId}
+                        options={costCenters.map((item) => ({ value: item.id, label: item.name }))}
+                        onChange={(next) =>
+                          setLines((prev) =>
+                            prev.map((item) =>
+                              item.key === row.key ? { ...item, costCenterId: next } : item
+                            )
+                          )
+                        }
+                      />
+                    </Space>
+                  </Space>
+                )
+              }}
               columns={[
                 {
                   title: "费用类型",
@@ -378,29 +471,24 @@ export function ReimbursementsPage() {
                       size="small"
                       style={{ width: "100%" }}
                       value={value}
-                      options={EXPENSE_TYPES}
+                      options={EXPENSE_TYPE_OPTIONS.map((option) => ({
+                        value: option.value,
+                        label: option.label
+                      }))}
                       onChange={(next) =>
                         setLines((prev) =>
                           prev.map((item) =>
-                            item.key === row.key ? { ...item, expenseType: next } : item
-                          )
-                        )
-                      }
-                    />
-                  )
-                },
-                {
-                  title: "科目",
-                  dataIndex: "accountCode",
-                  width: 110,
-                  render: (value: string, row) => (
-                    <Input
-                      size="small"
-                      value={value}
-                      onChange={(e) =>
-                        setLines((prev) =>
-                          prev.map((item) =>
-                            item.key === row.key ? { ...item, accountCode: e.target.value } : item
+                            item.key === row.key
+                              ? {
+                                  ...item,
+                                  expenseType: next,
+                                  // V15：科目跟着费用类型自动带出。填报销的人多数不是
+                                  // 会计——他知道自己住了酒店，不知道住宿费挂哪个科目。
+                                  // 手填的后果不是填不出来，是填错：660204 是业务招待费，
+                                  // 而它的税前扣除口径完全不同，挂错要到汇算清缴才发现。
+                                  accountCode: defaultAccountFor(next).code
+                                }
+                              : item
                           )
                         )
                       }
@@ -421,74 +509,6 @@ export function ReimbursementsPage() {
                         setLines((prev) =>
                           prev.map((item) =>
                             item.key === row.key ? { ...item, amountYuan: next ?? 0 } : item
-                          )
-                        )
-                      }
-                    />
-                  )
-                },
-                {
-                  title: "数量",
-                  dataIndex: "quantity",
-                  width: 80,
-                  render: (value: number, row) => (
-                    <InputNumber
-                      size="small"
-                      min={1}
-                      precision={0}
-                      value={value}
-                      onChange={(next) =>
-                        setLines((prev) =>
-                          prev.map((item) =>
-                            item.key === row.key ? { ...item, quantity: next ?? 1 } : item
-                          )
-                        )
-                      }
-                    />
-                  )
-                },
-                {
-                  title: "城市",
-                  dataIndex: "cityTier",
-                  width: 110,
-                  render: (value: string | undefined, row) => (
-                    <Select
-                      size="small"
-                      allowClear
-                      style={{ width: "100%" }}
-                      placeholder="不限"
-                      value={value}
-                      options={[
-                        { value: "tier1", label: "一线" },
-                        { value: "tier2", label: "二线" },
-                        { value: "tier3", label: "其他" }
-                      ]}
-                      onChange={(next) =>
-                        setLines((prev) =>
-                          prev.map((item) =>
-                            item.key === row.key ? { ...item, cityTier: next } : item
-                          )
-                        )
-                      }
-                    />
-                  )
-                },
-                {
-                  title: "归属部门",
-                  dataIndex: "costCenterId",
-                  width: 140,
-                  render: (value: string | undefined, row) => (
-                    <Select
-                      size="small"
-                      allowClear
-                      style={{ width: "100%" }}
-                      placeholder="未指定"
-                      value={value}
-                      options={costCenters.map((item) => ({ value: item.id, label: item.name }))}
-                      onChange={(next) =>
-                        setLines((prev) =>
-                          prev.map((item) =>
-                            item.key === row.key ? { ...item, costCenterId: next } : item
                           )
                         )
                       }

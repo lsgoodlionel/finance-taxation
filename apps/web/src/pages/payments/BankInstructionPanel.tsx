@@ -31,6 +31,7 @@ import type { ColumnsType } from "antd/es/table";
 import { ReloadOutlined, SendOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { errorMessage } from "../../lib/errors";
+import { Explain } from "../../components/ui/Explain";
 import {
   listBankConnectConfigs,
   listBankInstructions,
@@ -204,12 +205,9 @@ export function BankInstructionPanel({
         <Skeleton active paragraph={{ rows: 3 }} />
       ) : (
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <Alert
-            type="info"
-            showIcon
-            message="提交给银行不会改动付款单状态"
-            description="银行说「已受理」不等于钱到账。核对银行流水后，仍由出纳自己把付款单标记为已付。"
-          />
+          <Explain title="提交给银行不会改动付款单状态" storageKey="bank-instruction.no-auto-status">
+            银行说「已受理」不等于钱到账。核对银行流水后，仍由出纳自己把付款单标记为已付。
+          </Explain>
 
           {configs.length === 0 ? (
             <Alert

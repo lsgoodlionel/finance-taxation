@@ -3,6 +3,8 @@ import { Alert, Col, Descriptions, Empty, Row, Space, Statistic, Typography } fr
 import type { SuperDeductionPackage } from "@finance-taxation/domain-model";
 import type { RndProjectDetail } from "../../lib/api";
 import { SUPER_DEDUCTION_EXTRA_MULTIPLE, computeExtraDeduction, parseAmount } from "./rnd-tasks";
+import { Explain } from "../../components/ui/Explain";
+import { Term } from "../../components/ui/Term";
 
 const { Text } = Typography;
 
@@ -122,11 +124,11 @@ export function RndDeductionPanel({ project, deductionPackage, packageError }: R
         <Text type="secondary" style={{ fontSize: 12 }}>正在取资料清单…</Text>
       )}
 
-      <Alert
-        type="info"
-        showIcon
-        message="最终加计扣除金额以年度汇算清缴时税务机关核定的数额为准，本页为台账口径的测算。"
-      />
+      {/* V15：纯免责说明折起来。上面的 warning/success/error 是结论，保持常驻 */}
+      <Explain title="这个数是测算，不是最终口径" storageKey="rnd.deduction-disclaimer">
+        最终<Term k="super-deduction">加计扣除</Term>金额以年度汇算清缴时税务机关核定的
+        数额为准，本页为台账口径的测算。
+      </Explain>
     </Space>
   );
 }

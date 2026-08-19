@@ -9,6 +9,7 @@ import {
 } from "@ant-design/icons";
 import { toast } from "sonner";
 import type { RndProjectDetail } from "../../lib/api";
+import { Explain } from "../../components/ui/Explain";
 import { createRndCostLine } from "../../lib/api";
 import { COST_TYPE_LABELS, ACCOUNTING_TREATMENT_LABELS, useI18n } from "../../lib/i18n";
 import { Term } from "../../components/ui/Term";
@@ -115,12 +116,12 @@ export function RndCostWizard({ open, project, onClose, onComplete }: RndCostWiz
       icon: <ExperimentOutlined />,
       content: (
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <Alert
-            type="info"
-            showIcon
-            message="项目合规性确认"
-            description="请确认研发项目满足以下高新技术企业研发费用加计扣除条件，再进行费用归集。"
-          />
+          {/* V15：纯说明折起来，风险与结果类的 Alert 保持常驻——
+              那两类是结论，藏起来等于没提示。 */}
+          <Explain title="项目合规性确认：这一步在确认什么" storageKey="rnd.step1-intro">
+            请确认研发项目满足以下高新技术企业研发费用
+            <Term k="super-deduction">加计扣除</Term>条件，再进行费用归集。
+          </Explain>
           <Descriptions column={1} bordered size="small">
             <Descriptions.Item label="项目名称">{project.name}</Descriptions.Item>
             <Descriptions.Item label="项目编号">{project.code}</Descriptions.Item>
@@ -168,11 +169,10 @@ export function RndCostWizard({ open, project, onClose, onComplete }: RndCostWiz
       icon: <CalculatorOutlined />,
       content: (
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <Alert
-            type="info"
-            showIcon
-            message="按费用类别录入本期研发费用。费用化部分直接进入损益，资本化部分形成无形资产分期摊销。"
-          />
+          <Explain title="费用化与资本化的区别" storageKey="rnd.step2-intro">
+            按费用类别录入本期研发费用。费用化部分直接进入损益，资本化部分形成无形资产分期
+            <Term k="amortization">摊销</Term>。
+          </Explain>
           <Form form={form} layout="vertical" size="small">
             <Row gutter={[12, 0]}>
               <Col span={8}>

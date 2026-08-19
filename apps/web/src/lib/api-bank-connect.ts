@@ -136,3 +136,40 @@ export async function refreshBankInstruction(id: string) {
     { method: "POST" }
   );
 }
+
+/**
+ * 导出银行付款指令 CSV（V13-C6 的前台入口，V15 补）。
+ *
+ * ## 与银企直连是二选一，不是替代
+ *
+ * 直连是把指令发给银行；导出是生成一个网银能导入的文件，出纳自己去传。
+ * **没接银行的公司只有这一条路**，而后端这个能力做完之后一直没有入口——
+ * 前台建不出这个文件，等于这条路是断的。
+ *
+ * 返回 blob url 与文件名，与申报文件下载同一套（`downloadDeclarationFile`）。
+ */
+export async function exportPaymentInstructions(
+  paymentIds: readonly string[]
+): Promise<{ blobUrl: string; fileName: string }> {
+  const { getStoredToken } = await import("./api");
+  const res = await fetch("/api/payments/export", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getStoredToken() ?? ""}`
+    },
+    body: JSON.stringify({ paymentIds: [...paymentIds] })
+  });
+
+  if (!res.ok) {
+    // 后端用 JSON 报错、用 CSV 报成功——失败时按 JSON 读，读不出来给个兜底。
+    const err = (await res.json().catch(() => ({ error: "导出失败" }))) as { error?: string };
+    throw new Error(err.error ?? `HTTP ${res.status}`);
+  }
+
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const nameMatch = disposition.match(/filename="?([^";]+)"?/);
+  const fileName = nameMatch?.[1] ? decodeURIComponent(nameMatch[1]) : "payments.csv";
+  const blob = await res.blob();
+  return { blobUrl: URL.createObjectURL(blob), fileName };
+}

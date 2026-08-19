@@ -4,6 +4,8 @@ import {
   CheckSquareOutlined, AlertOutlined, CheckCircleOutlined, FileProtectOutlined,
 } from "@ant-design/icons";
 import type { Contract } from "@finance-taxation/domain-model";
+import { Explain } from "../../components/ui/Explain";
+import { Term } from "../../components/ui/Term";
 
 const { Text } = Typography;
 
@@ -170,10 +172,11 @@ export function ContractCloseWizard({ contract, closeStatus, open, onClose, onCo
             </Descriptions.Item>
             {notes && <Descriptions.Item label="备注" span={2}>{notes}</Descriptions.Item>}
           </Descriptions>
-          <Alert
-            type="info"
-            message="关闭后可在合同列表筛选「已履行/已终止」查看历史合同，不影响已过账凭证数据。"
-          />
+          {/* V15：纯说明折起来。上面的 error/success/warning 是结论与风险，保持常驻 */}
+          <Explain title="关闭之后这份合同还看得到吗" storageKey="contract-close.after">
+            关闭后可在合同列表筛选「已履行/已终止」查看历史合同，不影响已
+            <Term k="posting">过账</Term><Term k="voucher">凭证</Term>数据。
+          </Explain>
         </Space>
       ),
       nextDisabled: false,

@@ -22,6 +22,8 @@ export const LEDGER_TASK_KEYS = {
   balances: "balances",
   journal: "journal",
   entries: "entries",
+  opening: "opening",
+  fiscalYear: "fiscalYear",
   periods: "periods",
   revaluation: "revaluation"
 } as const satisfies Record<LedgerSceneKey, LedgerSceneKey>;
@@ -87,6 +89,18 @@ const LEDGER_TASK_TEXT: Record<LedgerSceneKey, { label: string; description: str
   entries: {
     label: "追一笔分录的来源",
     description: "按凭证号或经营事项号定位，看这一笔过账形成了哪些分录、走的是哪个过账批次。"
+  },
+  opening: {
+    label: "录入期初余额",
+    description:
+      "把启用系统之前的账面余额一次性录进来——之后所有的账都建立在这个起点上。" +
+      "借贷必须相等，差额不会被自动补平。"
+  },
+  fiscalYear: {
+    label: "做年度结转",
+    description:
+      "年末把本年利润结转到未分配利润。不做的后果不是报错，是第二年的利润表" +
+      "把第一年的利润也算进去——那个错通常要到报税时才被发现。"
   },
   periods: {
     label: "锁定已结账期间",

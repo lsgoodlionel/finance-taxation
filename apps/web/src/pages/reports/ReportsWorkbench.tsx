@@ -10,6 +10,7 @@ import { ResultBanner } from "../../components/ui/ResultBanner";
 import type { ReportsStatus, ReportsWorkbenchView } from "./report-types";
 import { getWorkbenchViewLabel } from "./reports-helpers";
 import { STATEMENT_VIEWS, isStatementView } from "./reports-tasks";
+import { TrialBalancePanel } from "./panels/TrialBalancePanel";
 import { BalanceSheetPanel } from "./panels/BalanceSheetPanel";
 import { BudgetVariancePanel } from "./panels/BudgetVariancePanel";
 import { CostCenterPanel } from "./panels/CostCenterPanel";
@@ -136,6 +137,9 @@ export function ReportsWorkbench({
       {activeView === "chairman" ? <ChairmanSummaryPanel summary={chairmanSummary} /> : null}
       {activeView === "budgetVariance" ? <BudgetVariancePanel defaultPeriod={defaultPeriod} /> : null}
       {activeView === "costCenter" ? <CostCenterPanel /> : null}
+      {/* 期间用 defaultPeriod：它就是页头选中的那个期间，
+          Workbench 里没有第二个期间概念 */}
+      {activeView === "trialBalance" ? <TrialBalancePanel period={defaultPeriod} /> : null}
     </>
   );
 }

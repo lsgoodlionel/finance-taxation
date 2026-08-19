@@ -156,6 +156,7 @@ import {
 } from "../modules/banking/reconciliation-session.routes.js";
 import {
   deleteSettlementRoute,
+  listSettlementsRoute,
   getAgingRoute,
   getOpenItemsRoute,
   settleRoute
@@ -1046,6 +1047,9 @@ const routes: RouteDef[] = [
   { method: "GET", path: "/api/settlement/aging", auth: true, permission: "ledger.view", handler: getAgingRoute },
   { method: "GET", path: "/api/settlement/open-items", auth: true, permission: "ledger.view", handler: getOpenItemsRoute },
   { method: "POST", path: "/api/settlement/settle", auth: true, permission: "ledger.post", handler: settleRoute },
+  // V15：查某笔分录上的核销记录。`listSettlements` 早就写好了只是没接路由——
+  // 于是撤销接口存在、但前台拿不到要撤哪一条的 id，核销错了改不了。
+  { method: "GET", path: "/api/settlement/settlements", auth: true, permission: "ledger.view", handler: listSettlementsRoute },
   {
     method: "DELETE",
     path: "/api/settlement/settlements/:id",
