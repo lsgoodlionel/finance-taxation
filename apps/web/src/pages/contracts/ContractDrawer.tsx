@@ -7,6 +7,8 @@ import type { Contract, Task, GeneratedDocument, TaxItem, Voucher } from "@finan
 import { Term } from "../../components/ui/Term";
 import { DollarOutlined } from "@ant-design/icons";
 import { ContractSchedulePanel } from "./ContractSchedulePanel";
+import { ContractAcceptancePanel } from "./ContractAcceptancePanel";
+import { CheckSquareOutlined } from "@ant-design/icons";
 
 const { Text, Title } = Typography;
 
@@ -92,6 +94,13 @@ export function ContractDrawer({ detail, open, onClose, onCloseContract, onOpenE
           contractAmount={contract.amount}
         />
       ),
+    },
+    {
+      // V13 缺口 12：验收与付款计划并列——一个说「什么时候该付多少」，
+      // 一个说「东西什么时候真的收到了」，是同一件事的两面。
+      key: "acceptances",
+      label: <Space size={4}><CheckSquareOutlined />验收</Space>,
+      children: <ContractAcceptancePanel contractId={contract.id} />,
     },
     {
       key: "performance",

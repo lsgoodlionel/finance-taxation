@@ -654,3 +654,61 @@ export async function markWatchedRead(instanceId: string) {
     { method: "POST" }
   );
 }
+
+// ── 验收单与三单匹配（V13 残留 7 / 缺口 12、13）─────────────────
+
+export type AcceptanceStatus = "draft" | "confirmed" | "cancelled";
+
+export interface Acceptance {
+  id: string;
+  acceptanceNo: string;
+  contractId: string;
+  scheduleId: string | null;
+  acceptedOn: string;
+  amountCents: number;
+  quantityNote: string;
+  status: AcceptanceStatus;
+  acceptedByUserId: string;
+  note: string | null;
+}
+
+export async function listAcceptances(params: { contractId?: string; scheduleId?: string } = {}) {
+  const qs = new URLSearchParams();
+  if (params.contractId) qs.set("contractId", params.contractId);
+  if (params.scheduleId) qs.set("scheduleId", params.scheduleId);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return request<{ items: Acceptance[]; total: number }>(`/api/acceptances${suffix}`);
+}
+
+export async function createAcceptance(body: {
+  contractId: string;
+  scheduleId?: string | null;
+  acceptedOn: string;
+  amountCents: number;
+  quantityNote?: string;
+  note?: string | null;
+}) {
+  return request<{ acceptance: Acceptance }>("/api/acceptances", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export async function transitionAcceptance(id: string, action: "confirm" | "cancel") {
+  return request<{ acceptance: Acceptance }>(
+    `/api/acceptances/${encodeURIComponent(id)}/transition`,
+    { method: "POST", body: JSON.stringify({ action }) }
+  );
+}
+
+/**
+ * 某期次的三单匹配（合同期次 × 验收 × 发票）。
+ *
+ * **一条都不 block**——三种不一致都有正当解释（预付款、先票后货、货到票未到）。
+ * 价值在于让付款的人看见，而不是拦住他。
+ */
+export async function getScheduleThreeWay(scheduleId: string, amountCents: number) {
+  return request<{ level: ControlLevel; findings: AuditFinding[]; total: number }>(
+    `/api/schedules/${encodeURIComponent(scheduleId)}/three-way?amountCents=${amountCents}`
+  );
+}
