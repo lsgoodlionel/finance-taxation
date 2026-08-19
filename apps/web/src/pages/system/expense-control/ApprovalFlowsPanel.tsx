@@ -1,10 +1,17 @@
 /**
  * 审批流配置（V13 残留 2）。
  *
- * ## 只做表单式配置，不做流程图编辑器
+ * ## 表单配置 + 只读流程图
  *
- * 蓝图第五节明确排除了可视化编辑器——表单足够覆盖 V13 的范围
- *（串行多级 + 金额分级 + 驳回发起人 + 抄送），而编辑器是独立产品的工作量。
+ * V13 排除了可视化编辑器，V14-B 加了**只读预览**（`ApprovalFlowDiagram`）
+ * 但仍然不做拖拽编辑。会签出现之后「第 2 步是三个人都要批还是任一个批」
+ * 在文字里要读两处才看得出来，在图上一眼就能看到——可视化的价值在这里，
+ * 而不在拖拽。
+ *
+ * ## 会签 / 或签（V14-B）
+ *
+ * 一个步骤可以有多个审批人，`mode` 决定都要批（会签）还是任一批（或签）。
+ * 只有一个审批人时两者行为相同，界面上因此不显示模式标签——显示会误导。
  *
  * ## 新增即停用旧的
  *
@@ -26,7 +33,6 @@ import {
   Select,
   Skeleton,
   Space,
-  Steps,
   Tag,
   Typography
 } from "antd";
@@ -38,8 +44,11 @@ import {
   listApprovalFlows,
   type ApprovalDocumentType,
   type ApprovalFlow,
-  type ApproverType
+  type ApprovalFlowStep,
+  type ApproverType,
+  type StepMode
 } from "../../../lib/api-expense-control";
+import { ApprovalFlowDiagram } from "./ApprovalFlowDiagram";
 
 const DOCUMENT_TYPE_LABELS: Record<ApprovalDocumentType, string> = {
   request: "申请单",
@@ -55,20 +64,46 @@ const APPROVER_TYPE_LABELS: Record<ApproverType, string> = {
   manager: "发起人的直属上级"
 };
 
-interface DraftStep {
+interface DraftApprover {
   key: number;
   approverType: ApproverType;
   approverValue: string;
-  minAmountYuan: number;
 }
 
-function describeStep(step: DraftStep): string {
-  const who =
-    step.approverType === "manager"
-      ? "直属上级"
-      : `${APPROVER_TYPE_LABELS[step.approverType]} ${step.approverValue || "（未指定）"}`;
-  // 门槛是「达到即触发」——制度写「1 万以上需财务审批」，1 万整就该走财务。
-  return step.minAmountYuan > 0 ? `${who}（≥ ${step.minAmountYuan} 元）` : `${who}（不限额）`;
+interface DraftStep {
+  key: number;
+  mode: StepMode;
+  minAmountYuan: number;
+  approvers: DraftApprover[];
+}
+
+const MODE_OPTIONS: Array<{ value: StepMode; label: string }> = [
+  { value: "all", label: "会签（都要批）" },
+  { value: "any", label: "或签（任一批）" }
+];
+
+function newStep(key: number): DraftStep {
+  return {
+    key,
+    mode: "all",
+    minAmountYuan: 0,
+    approvers: [{ key: 1, approverType: "role", approverValue: "" }]
+  };
+}
+
+/** 草稿转成流程图组件要的形状，让新建时也能预览。 */
+function draftToSteps(steps: readonly DraftStep[]): ApprovalFlowStep[] {
+  return steps.map((step, index) => ({
+    stepOrder: index + 1,
+    minAmountCents: Math.round(step.minAmountYuan * 100),
+    mode: step.mode,
+    approvers: step.approvers.map((approver) => ({
+      stepOrder: index + 1,
+      approverType: approver.approverType,
+      approverValue: approver.approverType === "manager" ? "" : approver.approverValue.trim(),
+      minAmountCents: Math.round(step.minAmountYuan * 100)
+    }))
+  }));
 }
 
 export function ApprovalFlowsPanel() {
@@ -79,9 +114,7 @@ export function ApprovalFlowsPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [name, setName] = useState("");
   const [documentType, setDocumentType] = useState<ApprovalDocumentType>("reimbursement");
-  const [steps, setSteps] = useState<DraftStep[]>([
-    { key: 1, approverType: "manager", approverValue: "", minAmountYuan: 0 }
-  ]);
+  const [steps, setSteps] = useState<DraftStep[]>([newStep(1)]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -105,14 +138,21 @@ export function ApprovalFlowsPanel() {
       toast.error("请填写流程名称");
       return;
     }
-    const invalid = steps.find(
-      (step) => step.approverType !== "manager" && step.approverValue.trim() === ""
-    );
-    if (invalid) {
-      // 库上有 CHECK 兜底，但在这里拦能说人话：审批人为空的步骤会让
-      // 任何人都批不了，单据永久卡死。
-      toast.error("指定到角色或人的步骤必须填审批人");
+    // 库上有 CHECK 兜底，但在这里拦能说人话：审批人为空的步骤会让
+    // 任何人都批不了，单据永久卡死。
+    const emptyStep = steps.findIndex((step) => step.approvers.length === 0);
+    if (emptyStep >= 0) {
+      toast.error(`第 ${emptyStep + 1} 步没有审批人`);
       return;
+    }
+    for (const [index, step] of steps.entries()) {
+      const invalid = step.approvers.find(
+        (approver) => approver.approverType !== "manager" && approver.approverValue.trim() === ""
+      );
+      if (invalid) {
+        toast.error(`第 ${index + 1} 步：指定到角色或人的审批人必须填具体对象`);
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -121,15 +161,18 @@ export function ApprovalFlowsPanel() {
         name: name.trim(),
         documentType,
         steps: steps.map((step) => ({
-          approverType: step.approverType,
-          approverValue: step.approverType === "manager" ? "" : step.approverValue.trim(),
-          minAmountCents: Math.round(step.minAmountYuan * 100)
+          mode: step.mode,
+          minAmountCents: Math.round(step.minAmountYuan * 100),
+          approvers: step.approvers.map((approver) => ({
+            approverType: approver.approverType,
+            approverValue: approver.approverType === "manager" ? "" : approver.approverValue.trim()
+          }))
         }))
       });
       toast.success("流程已启用，同类单据的旧流程已自动停用");
       setCreating(false);
       setName("");
-      setSteps([{ key: 1, approverType: "manager", approverValue: "", minAmountYuan: 0 }]);
+      setSteps([newStep(1)]);
       await reload();
     } catch (error) {
       toast.error(errorMessage(error, "保存失败"));
@@ -192,20 +235,7 @@ export function ApprovalFlowsPanel() {
                 </Space>
               }
             >
-              <Steps
-                size="small"
-                direction="horizontal"
-                current={-1}
-                items={flow.steps.map((step) => ({
-                  title: `第 ${step.stepOrder} 步`,
-                  description: describeStep({
-                    key: step.stepOrder,
-                    approverType: step.approverType,
-                    approverValue: step.approverValue,
-                    minAmountYuan: step.minAmountCents / 100
-                  })
-                }))}
-              />
+              <ApprovalFlowDiagram steps={flow.steps} />
             </Card>
           ))}
 
@@ -259,82 +289,174 @@ export function ApprovalFlowsPanel() {
           第一级建议留 0（不限额），否则小额单据会因为没有任何一级适用而提交失败。
         </Typography.Paragraph>
 
-        <Space direction="vertical" style={{ width: "100%" }}>
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
           {steps.map((step, index) => (
-            <Space key={step.key} align="start" wrap>
-              <Tag>第 {index + 1} 步</Tag>
-              <Select
-                style={{ width: 180 }}
-                value={step.approverType}
-                onChange={(value) =>
-                  setSteps((prev) =>
-                    prev.map((item) =>
-                      item.key === step.key ? { ...item, approverType: value } : item
-                    )
-                  )
-                }
-                options={Object.entries(APPROVER_TYPE_LABELS).map(([value, label]) => ({
-                  value,
-                  label
-                }))}
-              />
-              {step.approverType !== "manager" && (
-                <Input
-                  style={{ width: 180 }}
-                  placeholder={step.approverType === "role" ? "角色码，如 role-accountant" : "用户 id"}
-                  value={step.approverValue}
-                  onChange={(e) =>
+            <div
+              key={step.key}
+              style={{ border: "1px solid #f0f0f0", borderRadius: 8, padding: 12 }}
+            >
+              <Space align="center" wrap style={{ marginBottom: 8 }}>
+                <Tag>第 {index + 1} 步</Tag>
+                <InputNumber
+                  style={{ width: 170 }}
+                  min={0}
+                  precision={2}
+                  addonBefore="≥"
+                  addonAfter="元"
+                  value={step.minAmountYuan}
+                  onChange={(value) =>
                     setSteps((prev) =>
                       prev.map((item) =>
-                        item.key === step.key ? { ...item, approverValue: e.target.value } : item
+                        item.key === step.key ? { ...item, minAmountYuan: value ?? 0 } : item
                       )
                     )
                   }
                 />
-              )}
-              <InputNumber
-                style={{ width: 150 }}
-                min={0}
-                precision={2}
-                addonBefore="≥"
-                addonAfter="元"
-                value={step.minAmountYuan}
-                onChange={(value) =>
-                  setSteps((prev) =>
-                    prev.map((item) =>
-                      item.key === step.key ? { ...item, minAmountYuan: value ?? 0 } : item
+                {/* 只有一个审批人时会签与或签行为相同，选它没有意义——藏起来 */}
+                {step.approvers.length > 1 && (
+                  <Select
+                    style={{ width: 170 }}
+                    value={step.mode}
+                    onChange={(value: StepMode) =>
+                      setSteps((prev) =>
+                        prev.map((item) =>
+                          item.key === step.key ? { ...item, mode: value } : item
+                        )
+                      )
+                    }
+                    options={MODE_OPTIONS}
+                  />
+                )}
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={steps.length === 1}
+                  onClick={() => setSteps((prev) => prev.filter((item) => item.key !== step.key))}
+                />
+              </Space>
+
+              <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                {step.approvers.map((approver) => (
+                  <Space key={approver.key} align="start" wrap>
+                    <Select
+                      style={{ width: 180 }}
+                      value={approver.approverType}
+                      onChange={(value: ApproverType) =>
+                        setSteps((prev) =>
+                          prev.map((item) =>
+                            item.key === step.key
+                              ? {
+                                  ...item,
+                                  approvers: item.approvers.map((a) =>
+                                    a.key === approver.key ? { ...a, approverType: value } : a
+                                  )
+                                }
+                              : item
+                          )
+                        )
+                      }
+                      options={Object.entries(APPROVER_TYPE_LABELS).map(([value, label]) => ({
+                        value,
+                        label
+                      }))}
+                    />
+                    {approver.approverType !== "manager" && (
+                      <Input
+                        style={{ width: 200 }}
+                        placeholder={
+                          approver.approverType === "role" ? "角色码，如 role-accountant" : "用户 id"
+                        }
+                        value={approver.approverValue}
+                        onChange={(e) =>
+                          setSteps((prev) =>
+                            prev.map((item) =>
+                              item.key === step.key
+                                ? {
+                                    ...item,
+                                    approvers: item.approvers.map((a) =>
+                                      a.key === approver.key
+                                        ? { ...a, approverValue: e.target.value }
+                                        : a
+                                    )
+                                  }
+                                : item
+                            )
+                          )
+                        }
+                      />
+                    )}
+                    <Button
+                      type="text"
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      disabled={step.approvers.length === 1}
+                      onClick={() =>
+                        setSteps((prev) =>
+                          prev.map((item) =>
+                            item.key === step.key
+                              ? {
+                                  ...item,
+                                  approvers: item.approvers.filter((a) => a.key !== approver.key)
+                                }
+                              : item
+                          )
+                        )
+                      }
+                    />
+                  </Space>
+                ))}
+
+                <Button
+                  size="small"
+                  type="dashed"
+                  icon={<PlusOutlined />}
+                  onClick={() =>
+                    setSteps((prev) =>
+                      prev.map((item) =>
+                        item.key === step.key
+                          ? {
+                              ...item,
+                              approvers: [
+                                ...item.approvers,
+                                {
+                                  key: Math.max(...item.approvers.map((a) => a.key)) + 1,
+                                  approverType: "role" as ApproverType,
+                                  approverValue: ""
+                                }
+                              ]
+                            }
+                          : item
+                      )
                     )
-                  )
-                }
-              />
-              <Button
-                type="text"
-                danger
-                icon={<DeleteOutlined />}
-                disabled={steps.length === 1}
-                onClick={() => setSteps((prev) => prev.filter((item) => item.key !== step.key))}
-              />
-            </Space>
+                  }
+                >
+                  这一步再加一个审批人（会签 / 或签）
+                </Button>
+              </Space>
+            </div>
           ))}
 
           <Button
             size="small"
             icon={<PlusOutlined />}
             onClick={() =>
-              setSteps((prev) => [
-                ...prev,
-                {
-                  key: Math.max(...prev.map((item) => item.key)) + 1,
-                  approverType: "role",
-                  approverValue: "",
-                  minAmountYuan: 0
-                }
-              ])
+              setSteps((prev) => [...prev, newStep(Math.max(...prev.map((item) => item.key)) + 1)])
             }
           >
             加一级
           </Button>
         </Space>
+
+        <Typography.Title level={5} style={{ marginTop: 20 }}>
+          预览
+        </Typography.Title>
+        <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+          启用前先看一眼形状。会签步骤的多个审批人在同一格里并列，
+          「哪几步是并行的」不用读文字就看得出来。
+        </Typography.Paragraph>
+        <ApprovalFlowDiagram steps={draftToSteps(steps)} />
       </Modal>
     </div>
   );

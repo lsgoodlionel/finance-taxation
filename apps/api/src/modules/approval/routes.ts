@@ -22,6 +22,8 @@ import {
   createFlow,
   listActions,
   listFlows,
+  addParticipant,
+  listParticipants,
   listPendingFor,
   listWatchedBy,
   markWatchRead,
@@ -29,15 +31,20 @@ import {
   type ApprovalDocumentType,
   type ApprovalFailureCode
 } from "./store.js";
+import type { StepMode } from "./engine.js";
 
 const STATUS_BY_FAILURE: Record<ApprovalFailureCode, number> = {
   FLOW_NOT_FOUND: 404,
   FLOW_NO_APPLICABLE_STEP: 400,
+  FLOW_STEP_HAS_NO_APPROVER: 400,
   INSTANCE_NOT_FOUND: 404,
   INSTANCE_ALREADY_PENDING: 409,
   NOT_AUTHORIZED: 403,
-  INVALID_TRANSITION: 409
+  INVALID_TRANSITION: 409,
+  PARTICIPANT_ALREADY_ACTED: 409
 };
+
+const STEP_MODES: readonly StepMode[] = ["all", "any"];
 
 const DOCUMENT_TYPES: readonly ApprovalDocumentType[] = [
   "request",
@@ -86,26 +93,48 @@ export async function createFlowRoute(req: ApiRequest, res: ServerResponse): Pro
   const rawSteps = Array.isArray(body.steps) ? body.steps : [];
   const steps = rawSteps.map((raw) => {
     const step = (raw ?? {}) as Record<string, unknown>;
-    const approverType = APPROVER_TYPES.includes(step.approverType as ApproverType)
-      ? (step.approverType as ApproverType)
-      : "role";
+
+    // V14-B：审批人从一个变成一组。**旧的单审批人格式仍然接受**——
+    // 已有的前端与脚本还在用它，一次改完两边不现实，而把单个包成
+    // 只有一项的数组，语义完全一致（一个人时会签与或签行为相同）。
+    const rawApprovers = Array.isArray(step.approvers)
+      ? step.approvers
+      : [{ approverType: step.approverType, approverValue: step.approverValue }];
+
     return {
-      approverType,
-      approverValue: typeof step.approverValue === "string" ? step.approverValue : "",
+      mode: STEP_MODES.includes(step.mode as StepMode) ? (step.mode as StepMode) : "all",
       minAmountCents: Number.isInteger(Number(step.minAmountCents))
         ? Number(step.minAmountCents)
-        : 0
+        : 0,
+      approvers: rawApprovers.map((rawApprover) => {
+        const approver = (rawApprover ?? {}) as Record<string, unknown>;
+        return {
+          approverType: APPROVER_TYPES.includes(approver.approverType as ApproverType)
+            ? (approver.approverType as ApproverType)
+            : "role",
+          approverValue:
+            typeof approver.approverValue === "string" ? approver.approverValue : ""
+        };
+      })
     };
   });
 
-  // 门槛为空的步骤会让任何人都批不了、单据永久卡死。库上有 CHECK 兜底，
+  // 审批人为空的步骤会让任何人都批不了、单据永久卡死。库上有 CHECK 兜底，
   // 但在这里拒能给出看得懂的话。
-  const invalid = steps.find(
-    (step) => step.approverType !== "manager" && step.approverValue.trim() === ""
-  );
-  if (invalid) {
-    json(res, 400, { error: `${invalid.approverType} 类型的步骤必须指定审批人` });
-    return;
+  for (const [index, step] of steps.entries()) {
+    if (step.approvers.length === 0) {
+      json(res, 400, { error: `第 ${index + 1} 步没有指定审批人` });
+      return;
+    }
+    const invalid = step.approvers.find(
+      (approver) => approver.approverType !== "manager" && approver.approverValue.trim() === ""
+    );
+    if (invalid) {
+      json(res, 400, {
+        error: `第 ${index + 1} 步的 ${invalid.approverType} 类型审批人必须指定具体对象`
+      });
+      return;
+    }
   }
 
   const result = await createFlow({
@@ -237,8 +266,58 @@ export async function getApprovalDetailRoute(
   res: ServerResponse,
   id: string
 ): Promise<void> {
-  const actions = await listActions(id);
-  json(res, 200, { actions, total: actions.length });
+  const [actions, participants] = await Promise.all([listActions(id), listParticipants(id)]);
+  // V14-B：参与人一并返回。会签下「谁批了、还差谁」是详情页最重要的一屏——
+  // 只给动作历史的话，「还差谁」要用户自己拿流程定义去减，那不是他的活。
+  json(res, 200, { actions, participants, total: actions.length });
+}
+
+/**
+ * 动态加签（V14-B）。
+ *
+ * 权限门是 `workflow.view`（能看审批就能操作自己那一步），真正的判权收敛在
+ * `addParticipant` 里：**只有当前步骤的参与人能加签**。加签的语义是「这事我
+ * 拿不准，得让 X 也看看」，说这句话的人必须是正在处理这一步的人——任何人
+ * 都能加签的话，加签就成了往别人流程里塞人的工具。
+ */
+export async function addParticipantRoute(
+  req: ApiRequest,
+  res: ServerResponse,
+  id: string
+): Promise<void> {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const targetUserId = typeof body.userId === "string" ? body.userId.trim() : "";
+  if (targetUserId === "") {
+    json(res, 400, { error: "userId 不能为空" });
+    return;
+  }
+
+  const result = await addParticipant({
+    companyId: req.auth!.companyId,
+    instanceId: id,
+    targetUserId,
+    actorUserId: req.auth!.userId
+  });
+
+  if (!result.ok) {
+    json(res, STATUS_BY_FAILURE[result.failure.code], {
+      error: result.failure.message,
+      code: result.failure.code
+    });
+    return;
+  }
+
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    action: "approval.add_participant",
+    resourceType: "approval_instance",
+    resourceId: id,
+    resourceLabel: `加签 ${targetUserId}`,
+    changes: { targetUserId }
+  });
+
+  json(res, 200, { participants: result.value });
 }
 
 /**

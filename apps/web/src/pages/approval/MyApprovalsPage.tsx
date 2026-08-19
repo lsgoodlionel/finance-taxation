@@ -13,10 +13,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Badge, Button, Empty, Input, Modal, Skeleton, Space, Table, Tabs, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { CheckOutlined, CloseOutlined, ReloadOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, ReloadOutlined, TeamOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { errorMessage } from "../../lib/errors";
+import { ApprovalParticipantsPanel } from "./ApprovalParticipantsPanel";
 import {
   actOnApproval,
   listPendingApprovals,
@@ -39,6 +40,8 @@ export function MyApprovalsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [acting, setActing] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<ApprovalInstance | null>(null);
+  // V14-B：会签进度与加签抽屉。存整行——抽屉要用到当前步骤与状态。
+  const [inspecting, setInspecting] = useState<ApprovalInstance | null>(null);
   const [rejectComment, setRejectComment] = useState("");
   const [watched, setWatched] = useState<WatchedApproval[]>([]);
   const [unread, setUnread] = useState(0);
@@ -127,7 +130,7 @@ export function MyApprovalsPage() {
     {
       title: "操作",
       key: "actions",
-      width: 180,
+      width: 250,
       render: (_, row) => (
         <Space>
           <Button
@@ -150,6 +153,11 @@ export function MyApprovalsPage() {
             }}
           >
             驳回
+          </Button>
+          {/* V14-B：会签下「还差谁」是个真问题——批过的人看到单据还没通过，
+              会以为是自己没批成。这个入口把每个人的表态摆出来。 */}
+          <Button size="small" icon={<TeamOutlined />} onClick={() => setInspecting(row)}>
+            进度
           </Button>
         </Space>
       )
@@ -311,6 +319,15 @@ export function MyApprovalsPage() {
           placeholder="例如：发票抬头不是公司名称，请换开后重提"
         />
       </Modal>
+
+      <ApprovalParticipantsPanel
+        instanceId={inspecting?.id ?? null}
+        currentStepOrder={inspecting?.currentStepOrder ?? null}
+        isPending={inspecting?.status === "pending"}
+        onClose={() => setInspecting(null)}
+        // 加签会改变「还差谁」，待办列表要跟着变。
+        onChanged={() => void reload()}
+      />
     </div>
   );
 }

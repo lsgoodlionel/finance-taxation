@@ -60,6 +60,7 @@ import {
   listWatchedRoute,
   markWatchedReadRoute,
   createFlowRoute,
+  addParticipantRoute,
   getApprovalDetailRoute,
   listFlowsRoute,
   listPendingRoute,
@@ -905,6 +906,16 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "workflow.view",
     handler: (req, res, p) => getApprovalDetailRoute(req, res, p.id!)
+  },
+  {
+    // V14-B 动态加签。权限门是 workflow.view，真正的判权收敛在
+    // `addParticipant`——只有当前步骤的参与人能加签。收敛点有自己的测试
+    // （approval.integration.test.ts 的加签用例），符合权限白名单第 3 类。
+    method: "POST",
+    path: "/api/approval/instances/:id/participants",
+    auth: true,
+    permission: "workflow.view",
+    handler: (req, res, p) => addParticipantRoute(req, res, p.id!)
   },
 
   // ── V13-A 费控地基：预算与费用标准 ──────────────────────────────────

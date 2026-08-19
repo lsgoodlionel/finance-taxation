@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applyApprovalAction,
+  isStepSatisfied,
   canActOnStep,
   resolveRequiredSteps,
   type ApprovalInstanceState,
@@ -197,4 +198,94 @@ test("manager 步骤：解析不到上级时一律拒绝", () => {
 
   assert.equal(canActOnStep(step, { userId: "u1", roleCodes: ["role-chairman"] }, null), false);
   assert.equal(canActOnStep(step, { userId: "u1", roleCodes: [] }, undefined), false);
+});
+
+// ── V14-B：会签 / 或签 ────────────────────────────────────────────────
+//
+// 上面 17 条是 V13 写的，改造后一条没动——那是护栏 2 的全部意义。
+// 下面是新增能力的用例。
+
+test("或签：任一人批准即满足", () => {
+  assert.equal(
+    isStepSatisfied("any", [{ status: "approved" }, { status: "pending" }]),
+    true
+  );
+  assert.equal(
+    isStepSatisfied("any", [{ status: "pending" }, { status: "pending" }]),
+    false
+  );
+});
+
+test("会签：所有人都批准才满足", () => {
+  assert.equal(
+    isStepSatisfied("all", [{ status: "approved" }, { status: "approved" }]),
+    true
+  );
+  assert.equal(
+    isStepSatisfied("all", [{ status: "approved" }, { status: "pending" }]),
+    false
+  );
+});
+
+test("空参与人列表两种模式都不满足", () => {
+  // 会签下「所有人都批了」在空列表上数学成立，但业务上它意味着这一步
+  // 没人能批。放行等于让这一级审批凭空消失。
+  assert.equal(isStepSatisfied("all", []), false);
+  assert.equal(isStepSatisfied("any", []), false);
+});
+
+test("有人驳回时会签不满足——即便其余都批了", () => {
+  assert.equal(
+    isStepSatisfied("all", [{ status: "approved" }, { status: "rejected" }]),
+    false
+  );
+});
+
+test("会签未满足时实例停在原步骤，状态仍是 pending", () => {
+  const instance = {
+    status: "pending" as const,
+    currentStepOrder: 1,
+    requiredStepOrders: [1, 2]
+  };
+
+  const next = applyApprovalAction(
+    instance,
+    { action: "approve", stepOrder: 1 },
+    { stepSatisfied: false }
+  );
+
+  assert.equal(next.status, "pending");
+  assert.equal(next.currentStepOrder, 1, "会签没批完就推进了");
+  // 不修改入参——审批状态变更要能在日志里对照前后快照。
+  assert.equal(instance.currentStepOrder, 1);
+});
+
+test("会签满足后照常推进到下一步", () => {
+  const next = applyApprovalAction(
+    { status: "pending", currentStepOrder: 1, requiredStepOrders: [1, 3] },
+    { action: "approve", stepOrder: 1 },
+    { stepSatisfied: true }
+  );
+  assert.equal(next.currentStepOrder, 3);
+});
+
+test("不传 options 就是 V13 的行为——一个人批完即推进", () => {
+  // 这条钉住的是向后兼容本身：默认值一旦从 true 变成 false，
+  // 上面 17 条老用例会集体失败，而失败原因会很难看出来。
+  const next = applyApprovalAction(
+    { status: "pending", currentStepOrder: 1, requiredStepOrders: [1, 2] },
+    { action: "approve", stepOrder: 1 }
+  );
+  assert.equal(next.currentStepOrder, 2);
+});
+
+test("会签里一人驳回即整单驳回，不等其他人", () => {
+  // 会签的意思是「都同意才算过」，一票否决是它的定义而不是简化。
+  const next = applyApprovalAction(
+    { status: "pending", currentStepOrder: 1, requiredStepOrders: [1, 2] },
+    { action: "reject", stepOrder: 1 },
+    { stepSatisfied: false }
+  );
+  assert.equal(next.status, "rejected");
+  assert.equal(next.currentStepOrder, null);
 });

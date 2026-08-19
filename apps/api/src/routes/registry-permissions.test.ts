@@ -91,10 +91,18 @@ const WRITE_ROUTES_WITH_VIEW_PERMISSION: ReadonlyMap<string, string> = new Map([
   ],
   [
     "POST /api/approval/instances/:id/act",
-    "两层守护：收敛点是 approval/store.ts 的 act —— 批准/驳回按 canActOnStep 判权" +
-      "（role/user/manager 三种，见 engine.test.ts 的 canActOnStep 四条用例），" +
+    "两层守护：收敛点是 approval/store.ts 的 act —— 批准/驳回按参与人表判权" +
+      "（V14-B 起改查 approval_step_participants，不再回头查流程定义），" +
       "撤回只允许发起人本人。manager 类型的上级在 store 内部解析，" +
       "不接受调用方传入——传当前用户 id 会让判据恒真"
+  ],
+  [
+    // V14-B 动态加签。
+    "POST /api/approval/instances/:id/participants",
+    "两层守护：收敛点是 approval/store.ts 的 addParticipant —— 只有当前步骤的" +
+      "参与人能加签（见 approval.integration.test.ts 的「非参与人加不了签」用例）。" +
+      "挂 manage 会让基层审批人没法说「这事我拿不准，得让 X 也看看」，" +
+      "而那正是加签的全部用途"
   ]
 ]);
 
