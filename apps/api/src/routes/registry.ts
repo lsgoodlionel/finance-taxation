@@ -18,6 +18,16 @@ import {
   listPaymentsRoute,
   listSchedulesRoute
 } from "../modules/payments/routes.js";
+import {
+  bankConnectBalanceRoute,
+  deleteBankConnectConfigRoute,
+  listBankConnectConfigsRoute,
+  listInstructionsRoute,
+  refreshInstructionRoute,
+  submitInstructionRoute,
+  testBankConnectConfigRoute,
+  upsertBankConnectConfigRoute
+} from "../modules/bank-connect/routes.js";
 
 import {
   auditReimbursementRoute,
@@ -781,6 +791,48 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "contracts.view",
     handler: (req, res, p) => scheduleThreeWayRoute(req, res, p.id!)
+  },
+
+  // ── V14-A 银企直连 ────────────────────────────────────────────────────
+  //
+  // **配置归 settings.manage，指令归 banking.manage。**
+  // 这条分界与「谁能改合同条款 vs 谁能把钱付出去」同一逻辑：配银行证书是
+  // 系统管理员的事（一次性、涉及密钥），发付款指令是出纳的日常。
+  // 合在一起等于让每个出纳都能改证书路径，那是把付款能力交出去。
+  { method: "GET", path: "/api/bank-connect/configs", auth: true, permission: "settings.manage", handler: listBankConnectConfigsRoute },
+  { method: "PUT", path: "/api/bank-connect/configs", auth: true, permission: "settings.manage", handler: upsertBankConnectConfigRoute },
+  {
+    method: "DELETE",
+    path: "/api/bank-connect/configs/:id",
+    auth: true,
+    permission: "settings.manage",
+    handler: (req, res, p) => deleteBankConnectConfigRoute(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/bank-connect/configs/:id/test",
+    auth: true,
+    permission: "settings.manage",
+    handler: (req, res, p) => testBankConnectConfigRoute(req, res, p.id!)
+  },
+  {
+    // 余额与指令列表归 banking.manage 而不是 settings.manage——配证书和查余额
+    // 是两拨人。**读也用 manage 而不是 contracts.view**：这些数据里有收款方
+    // 银行账号，比付款单本身更敏感，不该是任何能看合同的人都能翻的。
+    method: "GET",
+    path: "/api/bank-connect/configs/:id/balance",
+    auth: true,
+    permission: "banking.manage",
+    handler: (req, res, p) => bankConnectBalanceRoute(req, res, p.id!)
+  },
+  { method: "GET", path: "/api/bank-connect/instructions", auth: true, permission: "banking.manage", handler: listInstructionsRoute },
+  { method: "POST", path: "/api/bank-connect/instructions", auth: true, permission: "banking.manage", handler: submitInstructionRoute },
+  {
+    method: "POST",
+    path: "/api/bank-connect/instructions/:id/refresh",
+    auth: true,
+    permission: "banking.manage",
+    handler: (req, res, p) => refreshInstructionRoute(req, res, p.id!)
   },
 
   // ── V13-C 合同付款计划与付款单 ─────────────────────────────────────
