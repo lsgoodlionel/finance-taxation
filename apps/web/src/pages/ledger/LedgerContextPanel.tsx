@@ -91,6 +91,10 @@ function resolveMetrics(scene: LedgerSceneKey, props: LedgerContextPanelProps): 
       // 期初建账只有「建了没建」这一个事实，报分录数会让人以为要对着它核。
       // 具体的借贷合计在面板自己那一屏上，这里不重复。
       return [{ label: "已入账分录", value: String(props.entryCount) }];
+    case "fiscalYear":
+      // 年度结转关心的是「哪一年还没结」，而那在表上一眼可见。
+      // 这里报未锁期间——十二个月没结完就结不了年，两者是同一条链。
+      return [{ label: "未锁期间", value: String(props.unlockedPeriodCount) }];
     case "periods":
       return [
         { label: "已锁期间", value: String(props.lockedPeriodCount) },

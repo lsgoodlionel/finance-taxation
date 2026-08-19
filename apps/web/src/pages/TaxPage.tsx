@@ -43,6 +43,7 @@ import { countOverdueObligations, currentFilingPeriod, deriveTaxObligations } fr
 import { TAX_TASK_KEYS, TAX_TASK_QUERY_KEY, buildTaxTasks, type TaxTaskKey } from "./tax/tax-tasks";
 import { actionButtonStyle } from "./tax/taxStyles";
 import { needsRuntimeAttention } from "../features/runtime/runtime-attention";
+import { VatSettlementPanel } from "./tax/VatSettlementPanel";
 
 const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
   vat: "增值税底稿",
@@ -247,6 +248,8 @@ export function TaxPage() {
         return renderMaterialsWorkspace();
       case TAX_TASK_KEYS.rates:
         return <TaxRatePanel />;
+      case TAX_TASK_KEYS.settlement:
+        return <VatSettlementPanel />;
       case TAX_TASK_KEYS.calendar:
         return <TaxCalendar batches={batches} onStartVatDeclaration={() => setVatWizardOpen(true)} />;
       case TAX_TASK_KEYS.items:

@@ -176,3 +176,44 @@ export async function getTrialBalance(period: string) {
     `/api/reports/trial-balance?period=${encodeURIComponent(period)}`
   );
 }
+
+// ── 年度结转（V15 补的前台入口，后端是 V12-B5）─────────────────────────
+
+export interface FiscalYearRow {
+  id: string;
+  year: number;
+  startDate: string;
+  endDate: string;
+  status: "open" | "closed";
+  closingVoucherId: string | null;
+  /** 该年度的净利润。未结转时为 null——**不是 0**，两者语义不同。 */
+  netProfit: string | null;
+  closedAt: string | null;
+  closedBy: string | null;
+}
+
+export async function listFiscalYears() {
+  return request<{ fiscalYears: FiscalYearRow[] }>("/api/ledger/fiscal-years");
+}
+
+export interface CloseFiscalYearResult {
+  /** 已经结过就返回 true，不再生成第二张凭证。 */
+  alreadyClosed: boolean;
+  year: number;
+  netProfit: string;
+  voucherId: string;
+  fiscalYear: FiscalYearRow;
+}
+
+/**
+ * 年末结转：把本年利润（3131）结转到未分配利润（3141）。
+ *
+ * 后端会拒绝的两种情况都要在界面上说清楚：
+ * 十二个月里还有月份没做损益结转、上一年度还没结账。
+ */
+export async function closeFiscalYear(year: number) {
+  return request<CloseFiscalYearResult>(
+    `/api/ledger/fiscal-years/${encodeURIComponent(String(year))}/close`,
+    { method: "POST" }
+  );
+}

@@ -6,6 +6,8 @@ export type LedgerSceneKey =
   // V15：期初建账。后端 V12-B4 就做完了，一直没有前台入口——
   // 没有它，新公司迁进 FT 建不了账，后面所有的账都没有起点。
   | "opening"
+  // V15：年度结转。年末必做，不做会让第二年的利润表把第一年也算进去。
+  | "fiscalYear"
   | "periods"
   | "revaluation";
 
@@ -45,6 +47,7 @@ export const LEDGER_SCENE_OPTIONS: LedgerSceneOption[] = [
   { key: "journal", title: "现金/银行日记账", description: "按资金账类型与日期区间加载资金流水。", emoji: "💸" },
   { key: "entries", title: "总账分录", description: "按凭证或事项过滤分录与过账批次。", emoji: "🧾" },
   { key: "opening", title: "期初建账", description: "把启用系统之前的账面余额一次性录进来。", emoji: "🏁" },
+  { key: "fiscalYear", title: "年度结转", description: "年末把本年利润结转到未分配利润。", emoji: "🗓️" },
   { key: "periods", title: "期间锁账", description: "管理会计期间锁定状态，保护已关闭账期。", emoji: "🔒" },
   // V12-D5。与「期间锁账」同属月结控制而非查账：它会生成凭证、改变损益。
   { key: "revaluation", title: "外币调汇", description: "维护汇率并按期末汇率重估外币货币性项目。", emoji: "💱" }
