@@ -15,9 +15,21 @@
  * 管理员要配什么——那些在单页指南里放不下。
  */
 
-import { useMemo, useState } from "react";
-import { Anchor, Card, Descriptions, Input, Space, Table, Tag, Typography } from "antd";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, Button, Card, Descriptions, Input, Space, Table, Tag, Typography } from "antd";
+import { FilePdfOutlined, EyeOutlined } from "@ant-design/icons";
+import { toast } from "sonner";
 import { PAGE_GUIDES, type PageGuide } from "../../lib/page-guides";
+import {
+  ADMIN_SETUP,
+  DATA_FLOWS,
+  FAQ,
+  RHYTHM,
+  ROLE_MATRIX,
+  TROUBLESHOOTING
+} from "../../lib/manual-content";
+import { buildManualHtml } from "../../lib/manual-print";
+import { TERMINOLOGY } from "../../lib/terminology";
 import { Term } from "../../components/ui/Term";
 
 /** 系统事实。**改了版本号要连同下面的能力清单一起改**，只改数字等于说谎。 */
@@ -31,7 +43,9 @@ const SYSTEM_FACTS: ReadonlyArray<readonly [string, string]> = [
   [
     "AI 后端",
     "Anthropic / OpenAI / DeepSeek / 智谱 / 通义千问 / 月之暗面 / 本地 Ollama"
-  ]
+  ],
+  ["术语表", `${TERMINOLOGY.length} 条（界面上标注的专业词都可点开释义）`],
+  ["常见问题", `${FAQ.length} 条 + 故障排查 ${TROUBLESHOOTING.length} 条`]
 ];
 
 /**
@@ -40,95 +54,35 @@ const SYSTEM_FACTS: ReadonlyArray<readonly [string, string]> = [
  * 与后端 `middleware/auth.ts` 的 `ROLE_PERMISSIONS` 对应——
  * 那里是权威，这里是给人读的版本。
  */
-const ROLE_MATRIX: ReadonlyArray<{
-  role: string;
-  scope: string;
-  cannot: string;
-}> = [
-  {
-    role: "董事长 / 创始人",
-    scope: "全部功能，含系统配置",
-    cannot: "无限制。但仍受职责分离约束：复核过的凭证不能自己再过账"
-  },
-  {
-    role: "财务负责人",
-    scope: "全部业务功能 + 系统配置（V15 起）",
-    cannot: "无业务限制。系统配置里的银企证书等于付款能力，操作全部留审计日志"
-  },
-  {
-    role: "会计",
-    scope: "记账、凭证、总账、报表、税务、成本结转、预算、报销审核",
-    cannot: "不能改合同条款、不能配系统、不能管工资"
-  },
-  {
-    role: "出纳",
-    scope: "银行账户、流水导入、对账、付款、银企直连指令",
-    cannot: "**不能记账**（无 ledger.post）——这是最基本的钱账分离"
-  },
-  {
-    role: "税务专员",
-    scope: "税务申报、税率、税务事项、研发辅助账",
-    cannot: "不能记账、不能付款"
-  },
-  {
-    role: "审计员",
-    scope: "只读全部业务数据 + 审计日志",
-    cannot: "**任何写操作**——审计的独立性靠这个保证"
-  },
-  {
-    role: "员工",
-    scope: "提申请、借款、报销，看自己的单据",
-    cannot: "看不到别人的报销、进不了账务与税务"
-  }
-];
-
-/** 管理员上手顺序。**顺序是有意义的**——跳步会让后面的步骤做不了。 */
-const ADMIN_SETUP: ReadonlyArray<{ step: string; why: string }> = [
-  {
-    step: "1. 系统中心 → 公司信息：填工商与税务基本信息",
-    why: "纳税人身份决定增值税怎么算，不填后面的税务功能判断不了"
-  },
-  {
-    step: "2. 系统中心 → 银企直连（可选）：配对公付款账号与证书",
-    why: "不配也能用，付款走导出 CSV 到网银上传"
-  },
-  {
-    step: "3. 系统中心 → 外部对接：配发票服务商与通知渠道",
-    why: "不配则发票只能手工录、通知不发送"
-  },
-  {
-    step: "4. 制度库 → 费用标准 / 审批流：定报销标准与审批链",
-    why: "**没有审批流，任何单据都提交不了**（会报「没有配置启用的审批流程」）"
-  },
-  {
-    step: "5. 总账中心 → 录入期初余额",
-    why: "**这是最关键的一步**。把启用系统之前的账面余额录进来，之后所有的账都建立在这个起点上。不做的话银行存款从零开始，报表全是错的"
-  },
-  {
-    step: "6. 合同与往来 → 建往来单位，填银行账号与户名",
-    why: "不填的话付款导出与银企直连都拿不到收款方"
-  }
-];
-
-/** 日常节奏。写「什么时候做」，不写「有什么功能」。 */
-const RHYTHM: ReadonlyArray<{ when: string; who: string; what: string }> = [
-  { when: "每天", who: "员工", what: "提报销、提申请" },
-  { when: "每天", who: "审批人", what: "在「我的审批」里处理待办" },
-  { when: "每天", who: "会计", what: "记一笔 / 经营事项 → 凭证草稿" },
-  { when: "每天", who: "出纳", what: "付款、导流水" },
-  { when: "每周", who: "会计", what: "复核并过账凭证草稿" },
-  { when: "每周", who: "出纳", what: "银行余额调节表对账" },
-  {
-    when: "每月末",
-    who: "会计",
-    what: "计提折旧 → 成本结转（制造业）→ 增值税结转 → 看试算平衡 → 出报表 → 锁账"
-  },
-  { when: "每月初", who: "税务专员", what: "申报各税种，导出申报文件" },
-  { when: "每年末", who: "会计", what: "十二个月都锁账后，做**年度结转**" }
-];
-
 export function AboutTab() {
   const [keyword, setKeyword] = useState("");
+
+  /**
+   * 在新窗口打开打印版说明书。
+   *
+   * 用 `Blob` + `createObjectURL` 而不是 `document.write`——后者在多数浏览器里
+   * 已被弃用，且会把新窗口的 URL 留成 about:blank，用户想再打开一次只能回来点。
+   *
+   * 弹窗被拦时明确告诉用户，不静默失败。
+   */
+  const openManual = useCallback(() => {
+    const html = buildManualHtml({
+      // 公司名从设置里取不到时用通用称呼——手册的内容不依赖它。
+      companyName: "本公司",
+      generatedAt: new Date().toLocaleString("zh-CN")
+    });
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank", "noopener");
+    if (win === null) {
+      URL.revokeObjectURL(url);
+      toast.error("浏览器拦截了新窗口，请允许弹窗后重试");
+      return;
+    }
+    // 不立刻 revoke：新窗口还要用这个 URL 加载。给足加载时间后再回收，
+    // 不回收会让 blob 一直占着内存。
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }, []);
 
   const filtered = useMemo(() => {
     const term = keyword.trim();
@@ -142,6 +96,31 @@ export function AboutTab() {
 
   return (
     <Space direction="vertical" size={24} style={{ width: "100%" }}>
+      <Alert
+        type="info"
+        showIcon
+        message="完整说明书可以在线预览，也能存成 PDF"
+        description={
+          <Space direction="vertical" size={8}>
+            <span>
+              说明书由系统<strong>实时生成</strong>——它与界面上每页右上角的「本页指南」
+              读的是同一份数据，不会出现手册说一套、界面做另一套。
+            </span>
+            <Space>
+              <Button type="primary" icon={<EyeOutlined />} onClick={openManual}>
+                在线预览完整说明书
+              </Button>
+              <Button icon={<FilePdfOutlined />} onClick={openManual}>
+                存为 PDF
+              </Button>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                预览页右下角有「打印 / 存为 PDF」，在打印对话框里选「另存为 PDF」
+              </Typography.Text>
+            </Space>
+          </Space>
+        }
+      />
+
       <Card size="small" title="系统信息">
         <Descriptions size="small" column={2}>
           {SYSTEM_FACTS.map(([label, value]) => (
@@ -204,9 +183,26 @@ export function AboutTab() {
         />
       </Card>
 
+      <Card size="small" title="四、数据怎么流动">
+        <Typography.Paragraph type="secondary" style={{ fontSize: 13 }}>
+          用户问「我录的东西去哪了」时看这一节。
+        </Typography.Paragraph>
+        <Space direction="vertical" size={14} style={{ width: "100%" }}>
+          {DATA_FLOWS.map((flow) => (
+            <div key={flow.title}>
+              <Typography.Text strong>{flow.title}</Typography.Text>
+              <Typography.Paragraph style={{ marginBottom: 2 }}>{flow.chain}</Typography.Paragraph>
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 13 }}>
+                {flow.note}
+              </Typography.Paragraph>
+            </div>
+          ))}
+        </Space>
+      </Card>
+
       <Card
         size="small"
-        title={`四、逐页说明（${PAGE_GUIDES.length} 个页面）`}
+        title={`五、逐页说明（${PAGE_GUIDES.length} 个页面）`}
         extra={
           <Input.Search
             allowClear
@@ -231,6 +227,56 @@ export function AboutTab() {
             ))}
           </Space>
         )}
+      </Card>
+
+      <Card size="small" title={`六、术语表（${TERMINOLOGY.length} 条）`}>
+        <Typography.Paragraph type="secondary" style={{ fontSize: 13 }}>
+          界面上带虚线下划线的专业词都能点开看释义，这里是全集。
+        </Typography.Paragraph>
+        <Table
+          rowKey="key"
+          size="small"
+          pagination={false}
+          dataSource={[...TERMINOLOGY]}
+          columns={[
+            { title: "术语", dataIndex: "term", width: 130 },
+            { title: "白话", dataIndex: "plain", width: 150 },
+            {
+              title: "说明",
+              key: "explain",
+              render: (_, row) => (row.detail ? `${row.brief}。${row.detail}` : row.brief)
+            }
+          ]}
+        />
+      </Card>
+
+      <Card size="small" title={`七、常见问题（${FAQ.length} 条）`}>
+        <Space direction="vertical" size={14} style={{ width: "100%" }}>
+          {FAQ.map((item) => (
+            <div key={item.question}>
+              <Typography.Text strong>Q：{item.question}</Typography.Text>
+              <Typography.Paragraph style={{ marginBottom: 0 }}>
+                A：{item.answer}
+              </Typography.Paragraph>
+            </div>
+          ))}
+        </Space>
+      </Card>
+
+      <Card size="small" title={`八、故障排查（${TROUBLESHOOTING.length} 条）`}>
+        <Typography.Paragraph type="secondary" style={{ fontSize: 13 }}>
+          这一节是「结果不对」而不是「用不了」的那类问题。
+        </Typography.Paragraph>
+        <Space direction="vertical" size={14} style={{ width: "100%" }}>
+          {TROUBLESHOOTING.map((item) => (
+            <div key={item.question}>
+              <Typography.Text strong>Q：{item.question}</Typography.Text>
+              <Typography.Paragraph style={{ marginBottom: 0 }}>
+                A：{item.answer}
+              </Typography.Paragraph>
+            </div>
+          ))}
+        </Space>
       </Card>
     </Space>
   );
