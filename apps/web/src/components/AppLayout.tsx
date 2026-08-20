@@ -408,7 +408,7 @@ export function AppLayout() {
             {/* V15：移动端也要有本页指南。第一版只加在桌面顶栏，
                 窗口一窄整条就没了——而窄屏上更需要它，因为屏幕小、
                 页面上能放的提示更少。 */}
-            <PageGuideButton compact />
+            <PageGuideButton compact fallbackOnly />
             <Button type="text" icon={<SearchOutlined style={{ color: "#f1f5f9", fontSize: 16 }} />}
               onClick={() => cmd.setOpen(true)} aria-label="全局搜索" style={{ padding: "0 4px" }} />
             <GlobalPeriodPicker compact />
@@ -476,10 +476,10 @@ export function AppLayout() {
             );
           })()}
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {/* V15：本页指南。放在全局顶栏而不是每页各挂一个——
-              改造前只有 5 个页面挂了帮助，其余 20 多个没有，
-              因为「每页顺手写一段」是不会发生的。 */}
-          <PageGuideButton />
+          {/* V15：本页指南的**兜底**位置。主位置在 PageHeader（页面标题那一行），
+              这里只服务没有用 PageHeader 的 8 个页面——它们有自己的页头。
+              两处同时出现会重复，由 fallbackOnly 靠实际渲染计数避免。 */}
+          <PageGuideButton fallbackOnly />
           {modeSwitcher(false)}
           <button
             onClick={() => cmd.setOpen(true)}

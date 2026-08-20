@@ -1,26 +1,67 @@
 /**
  * 每页右上角的「本页指南」（V15）。
  *
- * ## 放在全局顶栏，不是每页各挂一个
+ * ## 两个位置，各有分工
  *
- * 改造前只有 5 个页面挂了帮助按钮，其余 20 多个没有——因为每挂一个都要在那个
- * 页面里写一段 JSX，而**「顺手写一段」是不会发生的**。
+ * 改造前只有 5 个页面挂了帮助按钮——因为每挂一个都要在那个页面里写 JSX，
+ * 而「顺手写一段」是不会发生的。所以做成组件 + 注册表，两处自动渲染：
  *
- * 放进 `AppLayout` 的顶栏之后，每个页面自动就有；内容按当前路由从
- * `page-guides.ts` 取。新页面漏写指南由 `page-guides.test.ts` 拦下。
+ * 1. **`PageHeader` 里**（页面标题那一行的右上角）——用户最先看的地方。
+ *    这个应用里页面级操作（刷新、新建、导出）本来就都在那儿。
+ * 2. **全局顶栏**（面包屑那一行）——给**没有用 `PageHeader` 的 8 个页面**兜底
+ *    （总账、报表、税务、风险、审计、制度库、AI 助手、工资域，它们有自己的页头）。
+ *
+ * 两处同时出现会重复，所以顶栏那个用 `fallbackOnly`：只在当前页面没有渲染过
+ * 页头版本时才显示。判断靠一个渲染计数器，而不是猜路由——**路由白名单会在
+ * 页面改用/弃用 `PageHeader` 时悄悄失准**，而失准的表现（按钮消失或出现两个）
+ * 不会报错。
  *
  * ## 没有指南时不显示按钮
  *
  * 显示一个点开是空的按钮，比没有按钮更让人失望。
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Drawer, Space, Tag, Typography } from "antd";
 import { QuestionCircleOutlined } from "@ant-design/icons";
 import { useLocation } from "react-router-dom";
 import { findPageGuide } from "../../lib/page-guides";
 
+/**
+ * 当前路径。**不在 Router 里时返回 null 而不是抛错。**
+ *
+ * `PageHeader` 现在渲染这个按钮，而页头的单测是纯渲染（不套 Router）——
+ * 让组件为了一个辅助按钮就强依赖路由上下文是本末倒置：那会逼着每一处用到
+ * 页头的测试都去套一个 Router，而它们测的根本不是路由。
+ *
+ * 拿不到路径就不显示按钮，页头的其余部分照常渲染。
+ */
+function useOptionalPathname(): string | null {
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- try/catch 只为兜住
+    // 「不在 Router 内」这一种情况；同一棵树里它的结果是稳定的，不会时有时无。
+    return useLocation().pathname;
+  } catch {
+    return null;
+  }
+}
+
+/** 当前视图里已渲染的页头版指南按钮数量。 */
+let pageHeaderGuideCount = 0;
+const subscribers = new Set<() => void>();
+
+function notify(): void {
+  for (const fn of subscribers) fn();
+}
+
 export interface PageGuideButtonProps {
+  /**
+   * 只在页面没有渲染页头版按钮时显示。全局顶栏用这个。
+   *
+   * **不是「顶栏专用」的意思**——它表达的是「我是兜底的那个」，
+   * 而兜底与否由实际渲染情况决定，不由位置决定。
+   */
+  fallbackOnly?: boolean;
   /**
    * 紧凑形态：只显示图标，用在移动端深色顶栏上。
    *
@@ -30,13 +71,38 @@ export interface PageGuideButtonProps {
   compact?: boolean;
 }
 
-export function PageGuideButton({ compact = false }: PageGuideButtonProps = {}) {
-  const location = useLocation();
+export function PageGuideButton({
+  compact = false,
+  fallbackOnly = false
+}: PageGuideButtonProps = {}) {
+  const pathname = useOptionalPathname();
   const [open, setOpen] = useState(false);
-  const guide = findPageGuide(location.pathname);
+  const [headerCount, setHeaderCount] = useState(pageHeaderGuideCount);
+  const guide = pathname === null ? null : findPageGuide(pathname);
+
+  // 页头版的挂载与卸载都要通知兜底版重新判断。
+  useEffect(() => {
+    if (fallbackOnly) {
+      const update = () => setHeaderCount(pageHeaderGuideCount);
+      subscribers.add(update);
+      update();
+      return () => {
+        subscribers.delete(update);
+      };
+    }
+
+    pageHeaderGuideCount += 1;
+    notify();
+    return () => {
+      pageHeaderGuideCount -= 1;
+      notify();
+    };
+  }, [fallbackOnly]);
 
   // 点开是空的按钮比没有按钮更让人失望。
   if (guide === null) return null;
+  // 页面自己的页头已经有一个了，兜底版就不重复显示。
+  if (fallbackOnly && headerCount > 0) return null;
 
   return (
     <>
