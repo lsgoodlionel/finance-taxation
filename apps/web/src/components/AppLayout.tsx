@@ -17,6 +17,7 @@ import {
   buildBreadcrumb, filterNavByAllowedRoutes, guidedNavItems, proNavItems,
   type NavEntry, type NavLeaf,
 } from "../lib/nav-filter";
+import { PageGuideButton } from "./ui/PageGuideButton";
 
 type NavBadges = Record<string, number>;
 
@@ -471,6 +472,10 @@ export function AppLayout() {
             );
           })()}
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {/* V15：本页指南。放在全局顶栏而不是每页各挂一个——
+              改造前只有 5 个页面挂了帮助，其余 20 多个没有，
+              因为「每页顺手写一段」是不会发生的。 */}
+          <PageGuideButton />
           {modeSwitcher(false)}
           <button
             onClick={() => cmd.setOpen(true)}

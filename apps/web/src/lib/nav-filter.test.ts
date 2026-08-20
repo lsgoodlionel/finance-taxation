@@ -62,9 +62,20 @@ assert(filterNavByAllowedRoutes(items, new Set()).length === 0, "expected empty 
 // 费用标准没有独立入口：它是**配置**而非日常操作，归入系统中心，与科目表、
 // 往来单位一致——低频配置项进一级导航会稀释高频入口。
 // 这一组到此为止。再想往里加，先问「能不能并进已有的五项之一」。
-assert(proNavItems.length === 8, "expected 8 pro nav groups");
+//
+// V15 从 8 组降到 6 组：「税务人力」与「AI 与工具」两个**单项组**被并掉。
+// 一个分组标题下只挂一项，标题本身不提供任何归类信息，只是多占一行、
+// 多一层视觉层级。税务中心并入财务运营（它就是财务日常的一部分），
+// 制度库并入研发风控（制度、风控、审计是同一类「要遵守什么」的事）。
+//
+// 「系统」保留为单项组是有意的例外：它是唯一一个管理员才进的分组，
+// 与业务功能混在一起会让人误点——那里的隔离比省一行更重要。
+assert(proNavItems.length === 6, "expected 6 pro nav groups");
 const proLeafCount = proNavItems.reduce((count, group) => count + (group.children?.length ?? 0), 0);
-assert(proLeafCount === 24, "expected 24 pro nav leaves");
+// V15：24 → 25。并组不改变叶子数，多出来的一项是**「成本结转」**——
+// 它在后端菜单里一直有、这份清单里漏了，于是专业模式的左侧栏根本点不到。
+// 两份清单从此由 nav-sync.test.mjs 钉住不再漂移。
+assert(proLeafCount === 25, `expected 25 pro nav leaves, got ${proLeafCount}`);
 
 // guided 导航常量：扁平且 ≤6 项，路由必须是 pro 导航或 guided 专属路由清单的成员
 assert(guidedNavItems.length <= 6, "expected guided nav to stay minimal");

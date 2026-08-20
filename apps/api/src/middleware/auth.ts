@@ -25,11 +25,21 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "knowledge.view", "knowledge.manage",
     "budget.view", "budget.manage", "expense.view", "expense.submit", "expense.manage"
   ],
+  // V15：财务负责人补 `settings.manage`。
+  //
+  // 此前只有董事长有这个权限，后果是**一家没有董事长账号的公司谁都进不了
+  // 系统中心**——配不了发票服务商、配不了银企直连、看不到公司信息。
+  // 而这些恰恰是财务负责人的职责范围：签银企直连协议、选发票服务商、
+  // 定会计政策的就是他。
+  //
+  // 风险是实的：`settings.manage` 能改银企直连的证书路径，而那等于付款能力。
+  // 但把它锁在董事长一个人身上并不更安全——现实里董事长会把账号给财务用，
+  // 那比多给一个角色更糟（审计日志上全是董事长做的）。
   "role-finance-director": [
     "dashboard.view", "events.view", "events.create", "events.assign",
     "tasks.view", "tasks.manage", "documents.view", "documents.manage",
     "ledger.view", "ledger.post", "banking.manage", "tax.view", "tax.manage",
-    "rnd.view", "rnd.manage", "risk.view", "risk.manage",
+    "rnd.view", "rnd.manage", "risk.view", "risk.manage", "settings.manage",
     "contracts.view", "contracts.manage",
     "payroll.view", "payroll.manage",
     "audit.view", "workflow.view", "workflow.manage",
