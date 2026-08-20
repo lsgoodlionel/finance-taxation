@@ -20,7 +20,17 @@ import { QuestionCircleOutlined } from "@ant-design/icons";
 import { useLocation } from "react-router-dom";
 import { findPageGuide } from "../../lib/page-guides";
 
-export function PageGuideButton() {
+export interface PageGuideButtonProps {
+  /**
+   * 紧凑形态：只显示图标，用在移动端深色顶栏上。
+   *
+   * **窄屏更需要这个按钮**——屏幕小、页面上能放的提示更少，
+   * 第一版只加在桌面顶栏是漏了。
+   */
+  compact?: boolean;
+}
+
+export function PageGuideButton({ compact = false }: PageGuideButtonProps = {}) {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const guide = findPageGuide(location.pathname);
@@ -35,21 +45,35 @@ export function PageGuideButton() {
         onClick={() => setOpen(true)}
         aria-label={`查看「${guide.title}」的内容与操作指南`}
         title="本页指南"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          cursor: "pointer",
-          background: "#f1f5f9",
-          border: "1px solid rgba(20,40,60,0.1)",
-          borderRadius: 8,
-          padding: "5px 12px",
-          color: "#475569",
-          fontSize: 13
-        }}
+        style={
+          compact
+            ? {
+                // 深色顶栏上的图标按钮，与旁边的搜索、期间选择器同一套外观。
+                display: "inline-flex",
+                alignItems: "center",
+                cursor: "pointer",
+                background: "transparent",
+                border: "none",
+                padding: "0 4px",
+                color: "#f1f5f9",
+                fontSize: 16
+              }
+            : {
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                cursor: "pointer",
+                background: "#f1f5f9",
+                border: "1px solid rgba(20,40,60,0.1)",
+                borderRadius: 8,
+                padding: "5px 12px",
+                color: "#475569",
+                fontSize: 13
+              }
+        }
       >
         <QuestionCircleOutlined />
-        <span>本页指南</span>
+        {!compact && <span>本页指南</span>}
       </button>
 
       <Drawer

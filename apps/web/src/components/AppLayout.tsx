@@ -405,6 +405,10 @@ export function AppLayout() {
           </div>
           <span style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700 }}>Finance Taxation</span>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+            {/* V15：移动端也要有本页指南。第一版只加在桌面顶栏，
+                窗口一窄整条就没了——而窄屏上更需要它，因为屏幕小、
+                页面上能放的提示更少。 */}
+            <PageGuideButton compact />
             <Button type="text" icon={<SearchOutlined style={{ color: "#f1f5f9", fontSize: 16 }} />}
               onClick={() => cmd.setOpen(true)} aria-label="全局搜索" style={{ padding: "0 4px" }} />
             <GlobalPeriodPicker compact />
