@@ -18,7 +18,7 @@
  * - 目录带页码占位不做——HTML 打印拿不到最终页码，写了就是假的
  */
 
-import { PAGE_GUIDES } from "./page-guides";
+import { PAGE_GUIDES, guideAnchorId, guideTitleOf } from "./page-guides";
 import {
   ADMIN_SETUP,
   DATA_FLOWS,
@@ -83,6 +83,8 @@ th { background: #f2f2f2; font-weight: 600; }
 .faq-item { margin-bottom: 12px; }
 .faq-q { font-weight: 600; }
 .faq-a { color: #333; }
+.sub-title { font-weight: 600; font-size: 12.5px; margin: 8px 0 2px; }
+.guide a { color: #1e40af; text-decoration: none; }
 .print-btn {
   position: fixed; bottom: 24px; right: 24px; padding: 12px 24px;
   background: #1e2a37; color: #fff; border: none; border-radius: 8px;
@@ -94,11 +96,35 @@ th { background: #f2f2f2; font-weight: 600; }
 function renderGuides(): string {
   return PAGE_GUIDES.map(
     (guide) => `
-    <div class="guide">
+    <div class="guide" id="${guideAnchorId(guide.route)}">
       <div class="guide-head">${esc(guide.title)} <span class="route">${esc(guide.route)}</span></div>
-      <div class="audience">适用对象：${inline(guide.audience)}</div>
+      <div class="audience">适用对象：${inline(guide.audience)}${
+        guide.permission !== undefined ? ` · 需要权限：${esc(guide.permission)}` : ""
+      }</div>
       <p>${inline(guide.purpose)}</p>
+      ${
+        guide.prerequisites !== undefined && guide.prerequisites.length > 0
+          ? `<p class="sub-title">用之前要先有</p><ul>${guide.prerequisites
+              .map((item) => `<li>${inline(item)}</li>`)
+              .join("")}</ul>`
+          : ""
+      }
+      <p class="sub-title">怎么用</p>
       <ol>${guide.steps.map((step) => `<li>${inline(step)}</li>`).join("")}</ol>
+      ${
+        guide.fields !== undefined && guide.fields.length > 0
+          ? `<p class="sub-title">关键字段</p><ul>${guide.fields
+              .map(
+                (field) =>
+                  `<li><strong>${esc(field.name)}</strong>：${inline(field.meaning)}${
+                    field.note !== undefined
+                      ? ` <span class="caution">${inline(field.note)}</span>`
+                      : ""
+                  }</li>`
+              )
+              .join("")}</ul>`
+          : ""
+      }
       ${
         guide.caution !== undefined && guide.caution.length > 0
           ? `<ul class="caution">${guide.caution
@@ -106,7 +132,29 @@ function renderGuides(): string {
               .join("")}</ul>`
           : ""
       }
+      ${
+        guide.pitfalls !== undefined && guide.pitfalls.length > 0
+          ? `<p class="sub-title">遇到问题</p><ul>${guide.pitfalls
+              .map(
+                (item) =>
+                  `<li><strong>${inline(item.symptom)}</strong><br>` +
+                  `<span class="audience">原因：${inline(item.cause)}</span><br>` +
+                  `怎么办：${inline(item.fix)}</li>`
+              )
+              .join("")}</ul>`
+          : ""
+      }
       ${guide.flow !== undefined ? `<p class="audience">上下游：${inline(guide.flow)}</p>` : ""}
+      ${
+        guide.related !== undefined && guide.related.length > 0
+          ? `<p class="audience">相关：${guide.related
+              .map(
+                (route) =>
+                  `<a href="#${guideAnchorId(route)}">${esc(guideTitleOf(route))}</a>`
+              )
+              .join("、")}</p>`
+          : ""
+      }
     </div>`
   ).join("");
 }
@@ -199,6 +247,11 @@ ${DATA_FLOWS.map(
 
 <div class="page-break"></div>
 <h2 id="pages">五、逐页说明（${PAGE_GUIDES.length} 个页面）</h2>
+<div class="toc">
+  <ul>${PAGE_GUIDES.map(
+    (g) => `<li><a href="#${guideAnchorId(g.route)}">${esc(g.title)}</a></li>`
+  ).join("")}</ul>
+</div>
 ${renderGuides()}
 
 <div class="page-break"></div>

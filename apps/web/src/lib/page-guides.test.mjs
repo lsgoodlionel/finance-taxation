@@ -22,7 +22,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PAGE_GUIDES, findPageGuide } from "./page-guides.ts";
+import { PAGE_GUIDES, findPageGuide, guideAnchorId } from "./page-guides.ts";
 
 function assert(condition, message) {
   if (!condition) {
@@ -125,6 +125,90 @@ for (const guide of PAGE_GUIDES) {
     guide.audience.trim() !== "所有",
     `${guide.route} 的适用对象写得太含糊`
   );
+}
+
+// ── 相关页面必须指向真实存在的指南（双向链接的基础）────────────────────────
+//
+// 写错一个路由的表现是「点了没反应」——不报错，因为跳转目标只是不存在。
+const routeSet = new Set(PAGE_GUIDES.map((guide) => guide.route));
+for (const guide of PAGE_GUIDES) {
+  for (const route of guide.related ?? []) {
+    assert(
+      routeSet.has(route),
+      `${guide.route} 的「相关页面」指向了不存在的 ${route}——点了会没反应`
+    );
+    assert(route !== guide.route, `${guide.route} 的「相关页面」指向了自己`);
+  }
+}
+
+// ── 锚点 id 唯一且合法 ─────────────────────────────────────────────────────
+//
+// 页面指南跳手册、手册内部跳转都靠它。重复的 id 会让跳转落到第一个，
+// 而「跳错了」在界面上看起来像「跳转坏了」。
+const anchors = new Set();
+for (const guide of PAGE_GUIDES) {
+  const id = guideAnchorId(guide.route);
+  assert(/^[a-zA-Z][\w-]*$/.test(id), `${guide.route} 生成的锚点 id 不合法：${id}`);
+  assert(!anchors.has(id), `锚点 id 重复：${id}`);
+  anchors.add(id);
+}
+
+// ── 新增字段的质量 ─────────────────────────────────────────────────────────
+for (const guide of PAGE_GUIDES) {
+  for (const field of guide.fields ?? []) {
+    assert(field.name.trim().length > 0, `${guide.route} 有字段缺名字`);
+    assert(
+      field.meaning.trim().length >= 6,
+      `${guide.route} 的字段「${field.name}」说明太短——要说清它是什么意思`
+    );
+    if (field.note !== undefined) {
+      assert(
+        field.note.trim().length >= 10,
+        `${guide.route} 的字段「${field.name}」的提示太短。` +
+          "note 是写「填错会怎样」的，没有真实后果就不要写。"
+      );
+    }
+  }
+
+  for (const pitfall of guide.pitfalls ?? []) {
+    assert(
+      pitfall.symptom.trim().length >= 6,
+      `${guide.route} 有一条问题的症状太短——要从用户看到的现象写起`
+    );
+    assert(pitfall.cause.trim().length >= 6, `${guide.route} 的「${pitfall.symptom}」缺原因`);
+    assert(
+      pitfall.fix.trim().length >= 8,
+      `${guide.route} 的「${pitfall.symptom}」缺解决办法——只说原因不说怎么办等于没说`
+    );
+  }
+
+  for (const item of guide.prerequisites ?? []) {
+    assert(item.trim().length >= 6, `${guide.route} 有一条前置条件太短`);
+  }
+}
+
+// ── 核心业务页面必须有字段说明与相关页面 ───────────────────────────────────
+//
+// 这几页是**用户最常卡住**的地方：填错字段或漏了前置配置，界面上只报一句
+// 「提交失败」。指南里没有这两节，用户就只能猜。
+const MUST_BE_DETAILED = [
+  "/reimbursements",
+  "/requests",
+  "/payments",
+  "/vouchers",
+  "/ledger",
+  "/cost-carryover",
+  "/contracts",
+  "/budget"
+];
+for (const route of MUST_BE_DETAILED) {
+  const guide = PAGE_GUIDES.find((item) => item.route === route);
+  assert(guide !== undefined, `缺 ${route} 的指南`);
+  assert(
+    (guide.fields ?? []).length > 0,
+    `${route} 缺「关键字段怎么填」——这是用户最常卡住的页面之一`
+  );
+  assert((guide.related ?? []).length > 0, `${route} 缺「相关页面」，用户做完不知道去哪`);
 }
 
 // ── 最长前缀匹配：/dashboard/chairman 要匹配到它自己 ────────────────────────

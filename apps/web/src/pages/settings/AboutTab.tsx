@@ -15,11 +15,12 @@
  * 管理员要配什么——那些在单页指南里放不下。
  */
 
-import { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Alert, Button, Card, Descriptions, Input, Space, Table, Tag, Typography } from "antd";
-import { FilePdfOutlined, EyeOutlined } from "@ant-design/icons";
+import { ExportOutlined, FilePdfOutlined, EyeOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
-import { PAGE_GUIDES, type PageGuide } from "../../lib/page-guides";
+import { PAGE_GUIDES, guideAnchorId, guideTitleOf, type PageGuide } from "../../lib/page-guides";
 import {
   ADMIN_SETUP,
   DATA_FLOWS,
@@ -55,6 +56,7 @@ const SYSTEM_FACTS: ReadonlyArray<readonly [string, string]> = [
  * 那里是权威，这里是给人读的版本。
  */
 export function AboutTab() {
+  const navigate = useNavigate();
   const [keyword, setKeyword] = useState("");
 
   /**
@@ -87,8 +89,20 @@ export function AboutTab() {
   const filtered = useMemo(() => {
     const term = keyword.trim();
     if (term === "") return PAGE_GUIDES;
+    // 搜索范围包含新增的四类内容——用户多半是拿着一个报错或一个字段名来搜的，
+    // 只搜标题与步骤会搜不到。
     return PAGE_GUIDES.filter((guide) =>
-      [guide.title, guide.purpose, guide.audience, ...guide.steps, ...(guide.caution ?? [])]
+      [
+        guide.title,
+        guide.route,
+        guide.purpose,
+        guide.audience,
+        ...guide.steps,
+        ...(guide.prerequisites ?? []),
+        ...(guide.caution ?? []),
+        ...(guide.fields ?? []).flatMap((f) => [f.name, f.meaning, f.note ?? ""]),
+        ...(guide.pitfalls ?? []).flatMap((p) => [p.symptom, p.cause, p.fix])
+      ]
         .join(" ")
         .includes(term)
     );
@@ -223,7 +237,11 @@ export function AboutTab() {
         ) : (
           <Space direction="vertical" size={20} style={{ width: "100%" }}>
             {filtered.map((guide) => (
-              <GuideSection key={guide.route} guide={guide} />
+              <GuideSection
+                key={guide.route}
+                guide={guide}
+                onOpenPage={(route) => navigate(route)}
+              />
             ))}
           </Space>
         )}
@@ -282,9 +300,16 @@ export function AboutTab() {
   );
 }
 
-function GuideSection({ guide }: { guide: PageGuide }) {
+function GuideSection({
+  guide,
+  onOpenPage
+}: {
+  guide: PageGuide;
+  onOpenPage: (route: string) => void;
+}) {
   return (
-    <div style={{ borderLeft: "3px solid #e2e8f0", paddingLeft: 14 }}>
+    // 锚点 id 与页面指南里的「在完整手册中查看」对应——两处共用 guideAnchorId
+    <div id={guideAnchorId(guide.route)} style={{ borderLeft: "3px solid #e2e8f0", paddingLeft: 14 }}>
       <Space size={8} wrap style={{ marginBottom: 4 }}>
         <Typography.Text strong style={{ fontSize: 15 }}>
           {guide.title}
@@ -293,37 +318,135 @@ function GuideSection({ guide }: { guide: PageGuide }) {
           {guide.route}
         </Typography.Text>
         <Tag>{guide.audience}</Tag>
+        {/* 反向链接：从手册直接打开这个页面 */}
+        <Button size="small" type="link" icon={<ExportOutlined />} onClick={() => onOpenPage(guide.route)}>
+          打开这个页面
+        </Button>
       </Space>
+
+      {guide.permission !== undefined && (
+        <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 4 }}>
+          需要权限：{guide.permission}
+        </Typography.Paragraph>
+      )}
 
       <Typography.Paragraph style={{ marginBottom: 6 }}>{guide.purpose}</Typography.Paragraph>
 
-      <ol style={{ paddingLeft: 20, margin: "0 0 6px", lineHeight: 1.9, fontSize: 13 }}>
+      {guide.prerequisites !== undefined && guide.prerequisites.length > 0 && (
+        <>
+          <Typography.Text strong style={{ fontSize: 13 }}>
+            用之前要先有
+          </Typography.Text>
+          <ul style={SUB_LIST}>
+            {guide.prerequisites.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <Typography.Text strong style={{ fontSize: 13 }}>
+        怎么用
+      </Typography.Text>
+      <ol style={SUB_LIST}>
         {guide.steps.map((step) => (
-          <li key={step}>{step}</li>
+          <li key={step}>{emphasize(step)}</li>
         ))}
       </ol>
 
+      {guide.fields !== undefined && guide.fields.length > 0 && (
+        <>
+          <Typography.Text strong style={{ fontSize: 13 }}>
+            关键字段
+          </Typography.Text>
+          <ul style={SUB_LIST}>
+            {guide.fields.map((field) => (
+              <li key={field.name}>
+                <strong>{field.name}</strong>：{field.meaning}
+                {field.note !== undefined && (
+                  <span style={{ color: "#b45309" }}> {emphasize(field.note)}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       {guide.caution !== undefined && guide.caution.length > 0 && (
-        <ul
-          style={{
-            paddingLeft: 20,
-            margin: "0 0 6px",
-            lineHeight: 1.9,
-            fontSize: 13,
-            color: "#b45309"
-          }}
-        >
+        <ul style={{ ...SUB_LIST, color: "#b45309" }}>
           {guide.caution.map((item) => (
-            <li key={item}>{item}</li>
+            <li key={item}>{emphasize(item)}</li>
           ))}
         </ul>
       )}
 
+      {guide.pitfalls !== undefined && guide.pitfalls.length > 0 && (
+        <>
+          <Typography.Text strong style={{ fontSize: 13 }}>
+            遇到问题
+          </Typography.Text>
+          <ul style={SUB_LIST}>
+            {guide.pitfalls.map((item) => (
+              <li key={item.symptom}>
+                <strong>{item.symptom}</strong>
+                <br />
+                <span style={{ color: "#64748b" }}>原因：{item.cause}</span>
+                <br />
+                怎么办：{emphasize(item.fix)}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       {guide.flow !== undefined && (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 4 }}>
           上下游：{guide.flow}
-        </Typography.Text>
+        </Typography.Paragraph>
+      )}
+
+      {guide.related !== undefined && guide.related.length > 0 && (
+        <Space size={4} wrap>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            相关：
+          </Typography.Text>
+          {guide.related.map((route) => (
+            <Button
+              key={route}
+              size="small"
+              type="link"
+              style={{ padding: "0 4px", fontSize: 12 }}
+              onClick={() => {
+                // 手册里的相关页面链接跳到手册的那一节，而不是打开页面——
+                // 用户正在读手册，多半想接着读下一节而不是离开。
+                document
+                  .getElementById(guideAnchorId(route))
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              {guideTitleOf(route)}
+            </Button>
+          ))}
+        </Space>
       )}
     </div>
+  );
+}
+
+const SUB_LIST: React.CSSProperties = {
+  paddingLeft: 20,
+  margin: "0 0 8px",
+  lineHeight: 1.9,
+  fontSize: 13
+};
+
+/** 把 `**强调**` 渲染成加粗。与打印版、页面指南共用同一套标记。 */
+function emphasize(text: string): React.ReactNode {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={index}>{part.slice(2, -2)}</strong>
+    ) : (
+      part
+    )
   );
 }
