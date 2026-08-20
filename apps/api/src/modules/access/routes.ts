@@ -22,9 +22,17 @@ const GROUP_MGMT = { groupKey: "g-mgmt", groupLabel: "经营管理" } as const;
  */
 const GROUP_EXPENSE = { groupKey: "g-expense", groupLabel: "费用与支付" } as const;
 const GROUP_FINANCE = { groupKey: "g-finance", groupLabel: "财务运营" } as const;
-const GROUP_TAX = { groupKey: "g-tax", groupLabel: "税务人力" } as const;
+/**
+ * V15：「税务人力」与「AI 与工具」两个单项组已并掉。
+ *
+ * 一个分组标题下只挂一项，标题本身不提供任何归类信息，只是多占一行、
+ * 多一层视觉层级。税务中心并入财务运营（它就是财务日常的一部分），
+ * 制度库并入研发风控（制度、风控、审计是同一类「要遵守什么」的事）。
+ *
+ * 与前端 `lib/nav-filter.ts` 的 `proNavItems` 由 `nav-sync.test.mjs` 钉住不漂移。
+ */
 const GROUP_RISK = { groupKey: "g-risk", groupLabel: "研发风控" } as const;
-const GROUP_TOOLS = { groupKey: "g-tools", groupLabel: "AI 与工具" } as const;
+
 const GROUP_SYS = { groupKey: "g-sys", groupLabel: "系统" } as const;
 
 /**
@@ -68,11 +76,11 @@ const ALL_MENU_ITEMS: readonly MenuItem[] = [
   { key: "cost-carryover", label: "成本结转", route: "/cost-carryover", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "reports", label: "财务报表", route: "/reports", permissionKey: "ledger.view", ...GROUP_FINANCE },
   { key: "export-center", label: "导出与归档", route: "/export-center", permissionKey: "documents.view", ...GROUP_FINANCE },
-  { key: "tax", label: "税务中心", route: "/tax", permissionKey: "tax.view", ...GROUP_TAX },
+  { key: "tax", label: "税务中心", route: "/tax", permissionKey: "tax.view", ...GROUP_FINANCE },
   { key: "rnd", label: "研发辅助账", route: "/rnd", permissionKey: "rnd.view", ...GROUP_RISK },
   { key: "risk", label: "风险勾稽", route: "/risk", permissionKey: "risk.view", ...GROUP_RISK },
   { key: "audit", label: "审计日志", route: "/audit", permissionKey: "audit.view", ...GROUP_RISK },
-  { key: "knowledge", label: "制度库", route: "/knowledge", permissionKey: "knowledge.view", ...GROUP_TOOLS },
+  { key: "knowledge", label: "制度库", route: "/knowledge", permissionKey: "knowledge.view", ...GROUP_RISK },
   { key: "settings", label: "系统中心", route: "/settings", permissionKey: "settings.manage", ...GROUP_SYS },
   // 余额调节表不进侧栏（它是月结流程里的一步，由向导跳转进入），
   // 但深链权限判断要认得它，故列在这里。

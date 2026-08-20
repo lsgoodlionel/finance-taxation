@@ -21,7 +21,23 @@ export interface NavEntry extends NavLeaf {
   children?: NavLeaf[];
 }
 
-/** pro 模式：完整 8 组 24 项导航（与后端 /api/access/menu 的 group 元数据一致）。 */
+/**
+ * pro 模式：**7 组**导航（与后端 `/api/access/menu` 的 group 元数据一致，
+ * 由 `nav-sync.test.mjs` 钉住两边不漂移）。
+ *
+ * ## V15 的两处调整
+ *
+ * **补上「成本结转」**——它在后端菜单里有、这份清单里没有，于是专业模式的
+ * 左侧栏根本看不到。功能做完了、页面也做了，但用户点不到。
+ *
+ * **「税务人力」「AI 与工具」两个单项组并掉**：一个分组标题下只挂一项，
+ * 标题本身不提供任何归类信息，只是多占一行、多一层视觉层级。
+ * 税务中心并入财务运营（它就是财务日常的一部分），制度库并入研发风控
+ * （制度与风控、审计是同一类「要遵守什么」的事）。
+ *
+ * 「系统」保持单项组：它是**唯一一个管理员才进的分组**，
+ * 与业务功能混在一起会让人误点。单项在这里是有意义的隔离，不是冗余。
+ */
 export const proNavItems: readonly NavEntry[] = [
   {
     key: "g-entry",
@@ -70,16 +86,13 @@ export const proNavItems: readonly NavEntry[] = [
       { key: "/vouchers", icon: createElement(AuditOutlined), label: "凭证中心" },
       { key: "/ledger", icon: createElement(BarChartOutlined), label: "总账中心" },
       { key: "/asset-center", icon: createElement(GoldOutlined), label: "资产与往来" },
+      // V15 补：后端菜单里一直有，这份清单里漏了——于是左侧栏点不到。
+      { key: "/cost-carryover", icon: createElement(ExperimentOutlined), label: "成本结转" },
+      // V15：税务中心从单项组「税务人力」并进来。它是财务日常的一部分，
+      // 单开一个分组标题不提供任何归类信息，只多占一行。
+      { key: "/tax", icon: createElement(CalculatorOutlined), label: "税务中心" },
       { key: "/reports", icon: createElement(LineChartOutlined), label: "财务报表" },
       { key: "/export-center", icon: createElement(ExportOutlined), label: "导出与归档" },
-    ],
-  },
-  {
-    key: "g-tax",
-    label: "税务人力",
-    type: "group",
-    children: [
-      { key: "/tax", icon: createElement(CalculatorOutlined), label: "税务中心" },
     ],
   },
   {
@@ -90,17 +103,14 @@ export const proNavItems: readonly NavEntry[] = [
       { key: "/rnd", icon: createElement(ExperimentOutlined), label: "研发辅助账" },
       { key: "/risk", icon: createElement(AlertOutlined), label: "风险勾稽" },
       { key: "/audit", icon: createElement(FileSearchOutlined), label: "审计日志" },
-    ],
-  },
-  {
-    key: "g-tools",
-    label: "AI 与工具",
-    type: "group",
-    children: [
+      // V15：制度库从单项组「AI 与工具」并进来——制度、风控、审计是同一类
+      // 「要遵守什么」的事，分开反而割裂。
       { key: "/knowledge", icon: createElement(BookOutlined), label: "制度库" },
     ],
   },
   {
+    // 「系统」保持单项组：它是唯一一个管理员才进的分组，与业务功能混在一起
+    // 会让人误点。单项在这里是有意义的隔离，不是冗余。
     key: "g-sys",
     label: "系统",
     type: "group",
