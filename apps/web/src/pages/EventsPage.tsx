@@ -15,7 +15,6 @@ import {
 import { useI18n, EVENT_TYPE_LABELS, EVENT_STATUS_LABELS } from "../lib/i18n";
 import { EVENTS_ENTRY_SUBTITLE } from "../lib/entry-guidance";
 import { PageHeader } from "../components/ui/PageHeader";
-import { HelpTriggerButton } from "../components/ui/HelpPanel";
 import { NextStepBar } from "../components/ui/NextStepBar";
 import { ProPageBanner } from "../components/ui/ProPageBanner";
 import { PageSkeleton } from "../components/ui/PageSkeleton";
@@ -27,7 +26,6 @@ import { EventCreateModal } from "./events/EventCreateModal";
 import { EventDetailPanel } from "./events/EventDetailPanel";
 import { EventDetailActions } from "./events/EventDetailActions";
 import { EventDetailBody } from "./events/EventDetailBody";
-import { EventsHelpPanel } from "./events/EventsHelpPanel";
 
 const EVENT_TYPE_KEYS = [
   "sales", "procurement", "expense", "payroll",
@@ -40,7 +38,6 @@ export function EventsPage() {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState("idle");
   const [message, setMessage] = useState("");
-  const [showHelp, setShowHelp] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
     type: "general",
@@ -206,7 +203,6 @@ export function EventsPage() {
         subtitle={EVENTS_ENTRY_SUBTITLE}
         actions={(
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <HelpTriggerButton onClick={() => setShowHelp(true)} label="查看经营事项页说明" />
           </div>
         )}
       />
@@ -258,7 +254,6 @@ export function EventsPage() {
 
   return (
     <>
-      <EventsHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
       {createModal}
       <EventsShell
         header={header}

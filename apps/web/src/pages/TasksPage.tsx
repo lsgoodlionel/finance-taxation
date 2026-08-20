@@ -32,7 +32,6 @@ import { useQueryState } from "../hooks/useQueryState";
 import { TaskKanbanView } from "./tasks/TaskKanbanView";
 import { TaskListView } from "./tasks/TaskListView";
 import { TaskDrawer } from "./tasks/TaskDrawer";
-import { TasksHelpPanel } from "./tasks/TasksHelpPanel";
 import { buildTaskFlow, buildTaskFlowTitle, buildTaskRelatedObjects } from "./tasks/task-flow";
 import { needsRuntimeAttention } from "../features/runtime/runtime-attention";
 import { deriveContractRevenueTaskGuidance } from "./tasks/contract-revenue-task-guidance";
@@ -85,7 +84,6 @@ export function TasksPage() {
   const [remindingId, setRemindingId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [runtimeActionKey, setRuntimeActionKey] = useState<string | null>(null);
-  const [helpOpen, setHelpOpen] = useState(false);
   const [detailTask, setDetailTask] = useState<TaskWithOverdue | null>(null);
   const [viewStr, setViewStr] = useQueryState("view", "kanban");
   const viewMode = (viewStr === "list" ? "list" : "kanban") as ViewMode;
@@ -242,15 +240,6 @@ export function TasksPage() {
                 ]}
                 aria-label="视图切换"
               />
-              <Tooltip title="操作说明">
-                <Button
-                  shape="circle"
-                  size="small"
-                  icon={<QuestionCircleOutlined />}
-                  onClick={() => setHelpOpen(true)}
-                  aria-label="任务说明"
-                />
-              </Tooltip>
             </Space>
           )}
         />
@@ -337,7 +326,6 @@ export function TasksPage() {
         onOpenVouchers={(eventId) => openEventScoped("/vouchers", eventId)}
       />
 
-      <TasksHelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

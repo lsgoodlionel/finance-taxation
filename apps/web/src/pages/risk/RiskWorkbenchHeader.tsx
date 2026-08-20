@@ -9,28 +9,13 @@
  */
 import type { DrilldownState } from "../drilldown";
 import { Term } from "../../components/ui/Term";
+import { PageGuideButton } from "../../components/ui/PageGuideButton";
 
 const PANEL_STYLE = {
   background: "rgba(255,255,255,0.82)",
   borderRadius: "24px",
   border: "1px solid rgba(20,40,60,0.08)",
   padding: "20px 24px"
-} as const;
-
-const HELP_BUTTON_STYLE = {
-  width: "26px",
-  height: "26px",
-  borderRadius: "50%",
-  border: "1.5px solid rgba(79,142,247,0.6)",
-  background: "rgba(79,142,247,0.08)",
-  color: "#4f8ef7",
-  fontWeight: 700,
-  fontSize: "13px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0
 } as const;
 
 export function resolveRiskContextLabel(navState: DrilldownState): string {
@@ -43,10 +28,9 @@ export function resolveRiskContextLabel(navState: DrilldownState): string {
 export type RiskWorkbenchHeaderProps = {
   message: string;
   navState: DrilldownState;
-  onShowHelp: () => void;
 };
 
-export function RiskWorkbenchHeader({ message, navState, onShowHelp }: RiskWorkbenchHeaderProps) {
+export function RiskWorkbenchHeader({ message, navState }: RiskWorkbenchHeaderProps) {
   return (
     <article style={PANEL_STYLE}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
@@ -58,9 +42,9 @@ export function RiskWorkbenchHeader({ message, navState, onShowHelp }: RiskWorkb
             {resolveRiskContextLabel(navState)}
           </div>
         </div>
-        <button onClick={onShowHelp} title="操作说明" style={HELP_BUTTON_STYLE}>
-          ?
-        </button>
+        {/* V15：原来这里是一个「?」按钮，与全局的「本页指南」重复。
+            页面右上角只保留一个入口——两个问号会让人以为自己点错了。 */}
+        <PageGuideButton />
       </div>
       <p style={{ margin: "10px 0 0", fontSize: "13px", color: "#4b5563" }} role="status">
         {message}

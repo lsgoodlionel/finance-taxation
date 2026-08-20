@@ -1,6 +1,5 @@
 import React, { type ReactNode } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { HelpTriggerButton } from "../../components/ui/HelpPanel";
 import { buildResultPageSubtitle } from "../../lib/entry-guidance";
 
 type ReportsHeaderProps = {
@@ -27,7 +26,6 @@ export function ReportsHeader({ activeViewLabel, periodControl, onOpenHelp }: Re
             <span style={{ fontSize: "12px", color: "#6c7a89" }}>当前视图</span>
             <strong style={{ fontSize: "14px", color: "#1e2a37" }}>{activeViewLabel}</strong>
           </div>
-          {onOpenHelp ? <HelpTriggerButton onClick={onOpenHelp} label="查看财务报表中心操作说明" /> : null}
         </div>
       )}
     />

@@ -93,8 +93,10 @@ export const FINANCE_GUIDES: readonly PageGuide[] = [
         fix: "两条路：解锁那个期间（会留审计记录），或者在当前期间做一笔调整分录。"
       }
     ],
-    flow: "各处生成草稿 → 这一页复核过账 → 总账 → 报表",
-    related: ["/ledger", "/reports", "/events"]
+    flow:
+      "经营事项定义业务背景、单据中心提供发票与回单等原始依据 → 本页转成正式凭证并过账 → " +
+      "总账中心 → 财务报表。标准链路：事项 / 单据 → 凭证 → 总账 / 报表",
+    related: ["/ledger", "/reports", "/events", "/bills", "/documents"]
   },
   {
     route: "/ledger",
@@ -281,6 +283,13 @@ export const FINANCE_GUIDES: readonly PageGuide[] = [
         name: "结转期间",
         meaning: "要轧平哪个月的增值税。",
         note: "默认上个月——月末结转通常在次月初做。"
+      },
+      {
+        name: "税务事项状态",
+        meaning:
+          "待处理（已生成未处理）/ 需关注（有潜在风险要人工复核）/ 已申报 / " +
+          "已逾期（申报期已过未报）/ 免申报（如小规模纳税人本期免报）。",
+        note: "「需关注」不等于有错，它是让人去看一眼；「已逾期」要立刻处理，滞纳金按日计。"
       }
     ],
     caution: [
@@ -299,8 +308,10 @@ export const FINANCE_GUIDES: readonly PageGuide[] = [
         fix: "先把那张凭证过账。不然本期取数会把上期的税额重复计入。"
       }
     ],
-    flow: "开票/收票 → 进销项累计 → 月末结转到未交增值税 → 次月申报缴纳",
-    related: ["/bills", "/export-center", "/vouchers"]
+    flow:
+      "经营事项识别出税务关注点 → 单据与凭证提供申报依据 → 本页归集成税务事项与申报批次 → " +
+      "校验、复核、申报、留档 → 结果回流到归档与风险管理",
+    related: ["/bills", "/export-center", "/vouchers", "/events", "/risk"]
   },
   {
     route: "/reports",
@@ -314,6 +325,23 @@ export const FINANCE_GUIDES: readonly PageGuide[] = [
       "**先看「试算平衡」**——三组合计不平就说明账本身有问题",
       "平了再看资产负债表、利润表、现金流量表",
       "需要时做两期对比或对预算"
+    ],
+    fields: [
+      {
+        name: "资产负债表",
+        meaning: "回答「某一天公司值多少」：有多少资产、欠多少债、净资产还剩多少。",
+        note: "它是**时点**报表——看的是选定期间最后一天那个瞬间。"
+      },
+      {
+        name: "利润表",
+        meaning: "回答「这段时间经营得怎么样」：收入多少、花了多少、赚了还是亏了。",
+        note: "它是**期间**报表。跨年看的时候注意上一年度有没有做年度结转。"
+      },
+      {
+        name: "现金流量表",
+        meaning: "回答「账上现金为什么变多或变少」：经营、投资、筹资各进出了多少。",
+        note: "利润高不等于现金多——赊销的收入进了利润表但钱还没到账。"
+      }
     ],
     caution: [
       "试算不平时三张法定报表**照样出得来，只是它们是错的**",
@@ -331,8 +359,10 @@ export const FINANCE_GUIDES: readonly PageGuide[] = [
         fix: "先到资产与往来计提折旧，再到总账中心做年度结转。"
       }
     ],
-    flow: "已过账凭证 → 总账 → 本页各张报表",
-    related: ["/ledger", "/vouchers", "/export-center", "/budget"]
+    flow:
+      "凭证过账后进入总账 → 本页基于总账自动编制三大报表 → 支撑董事长驾驶舱的经营判断，" +
+      "并流向税务申报、PDF 导出与归档",
+    related: ["/ledger", "/vouchers", "/export-center", "/budget", "/dashboard/chairman"]
   },
   {
     route: "/export-center",
@@ -369,7 +399,9 @@ export const FINANCE_GUIDES: readonly PageGuide[] = [
     permission: "documents.view",
     purpose: "按单据编号查各类业务单据与它们的附件。",
     steps: ["按类型或编号搜索", "点进去看单据详情与关联的凭证"],
-    flow: "各业务模块生成单据 → 这里统一检索",
-    related: ["/bills", "/vouchers", "/audit"]
+    flow:
+      "事项分析 → 任务分发 → 本页补齐发票、回单、审批单与附件 → 凭证中心审核过账。" +
+      "任务中心告诉谁去做，单据中心沉淀原始资料，凭证中心转成正式会计凭证",
+    related: ["/bills", "/vouchers", "/audit", "/tasks", "/events"]
   }
 ];

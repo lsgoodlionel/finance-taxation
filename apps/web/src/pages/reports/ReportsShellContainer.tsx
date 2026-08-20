@@ -14,7 +14,6 @@ import { TaskFocusShell } from "../../components/ui/TaskFocusShell";
 import { resolveActiveTask } from "../../lib/task-focus";
 import { useWorkspaceMode } from "../../lib/workspace-mode";
 import { ReportsHeader } from "./ReportsHeader";
-import { ReportsHelpPanel } from "./ReportsHelpPanel";
 import { ReportsPeriodControl } from "./ReportsPeriodControl";
 import { ReportsShell } from "./ReportsShell";
 import { ReportsWorkbench } from "./ReportsWorkbench";
@@ -62,7 +61,6 @@ export function ReportsShellContainer() {
       urlState.report || "balanceSheet"
     )
   );
-  const [showHelp, setShowHelp] = useState(false);
   const [status, setStatus] = useState<ReportsStatus>({
     tone: "info",
     message: "正在准备财务报表。"
@@ -205,7 +203,6 @@ export function ReportsShellContainer() {
 
   return (
     <>
-      <ReportsHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
       <ReportsShell
         header={(
           <ReportsHeader
@@ -223,7 +220,6 @@ export function ReportsShellContainer() {
                 onReload={() => void loadReports()}
               />
             )}
-            onOpenHelp={() => setShowHelp(true)}
           />
         )}
       >

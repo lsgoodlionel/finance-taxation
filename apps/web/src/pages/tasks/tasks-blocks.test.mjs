@@ -42,13 +42,16 @@ test("运行态面板只在确有异常时占首屏，否则收进折叠区", ()
   assert.ok(SOURCE.includes("!runtimeAttention && ("), "无异常时收进默认收起的折叠区，能力不丢");
 });
 
-test("帮助浮层换成统一 HelpPanel，重复的空抽屉已删除", () => {
-  assert.ok(SOURCE.includes("<TasksHelpPanel"), "帮助改用统一面板");
+test("帮助入口只有一个：页面右上角的「本页指南」", () => {
+  // 这条断言原来要求「用统一的 HelpPanel」。V15 把帮助统一到了
+  // `PageGuideButton`（内容来自 page-guides 注册表），页面里不该再有
+  // 自己的帮助浮层——用户报过「税务中心右上角有两个说明」，
+  // 就是两套帮助并存造成的。
+  assert.ok(!SOURCE.includes("TasksHelpPanel"), "不应再有页面自己的帮助浮层");
+  assert.ok(!SOURCE.includes("helpOpen"), "不应再有帮助浮层的开关状态");
   assert.ok(!SOURCE.includes('position: "fixed"'), "手写的浮层应删除");
   const drawers = SOURCE.match(/<TaskDrawer/g) ?? [];
   assert.equal(drawers.length, 1, "只应有一个任务详情抽屉");
-  const help = readFileSync(new URL("./TasksHelpPanel.tsx", import.meta.url), "utf8");
-  assert.ok(!help.includes("<Alert"), "帮助内容用 HelpPanel 的分段结构，不再叠 Alert");
 });
 
 test("「这个任务走到哪了」由真实字段推导，且只在详情里画", () => {

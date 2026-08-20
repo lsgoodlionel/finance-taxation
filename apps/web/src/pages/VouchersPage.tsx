@@ -26,12 +26,10 @@ import {
 import { normalizeDrilldownState } from "./drilldown";
 import { EntityLink } from "../components/ui/EntityLink";
 import { PageHeader } from "../components/ui/PageHeader";
-import { HelpTriggerButton } from "../components/ui/HelpPanel";
 import { Term } from "../components/ui/Term";
 import { VoucherCreateModal } from "./vouchers/VoucherCreateModal";
 import { VoucherFlowPanel } from "./vouchers/VoucherFlowPanel";
 import { VoucherRuntimeSection } from "./vouchers/VoucherRuntimeSection";
-import { VouchersHelpPanel } from "./vouchers/VouchersHelpPanel";
 import { VouchersShell } from "./vouchers/VouchersShell";
 import { VouchersWorkspace } from "./vouchers/VouchersWorkspace";
 import { useVoucherBatch } from "./vouchers/useVoucherBatch";
@@ -67,7 +65,6 @@ export function VouchersPage() {
   const [updating,  setUpdating]  = useState(false);
   const [creating,  setCreating]  = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
   const [runtimeActionKey, setRuntimeActionKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<VoucherTab>("all");
   const accessUser = useAccessUser();
@@ -353,7 +350,6 @@ export function VouchersPage() {
               actions={(
                 <Space>
                   <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>按模板生成</Button>
-                  <HelpTriggerButton onClick={() => setHelpOpen(true)} label="查看凭证中心操作说明" />
                 </Space>
               )}
             />
@@ -418,7 +414,6 @@ export function VouchersPage() {
       </VouchersShell>
 
       {/* 抽屉与弹窗不占首屏，放在外壳之外 */}
-      <VouchersHelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
       <VoucherCreateModal
         open={modalOpen}
         templates={templates}

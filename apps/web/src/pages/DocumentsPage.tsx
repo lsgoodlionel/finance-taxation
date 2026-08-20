@@ -22,7 +22,6 @@ import { DocumentsHeader } from "./documents/DocumentsHeader";
 import { DocumentsSummary } from "./documents/DocumentsSummary";
 import { DocumentsList } from "./documents/DocumentsList";
 import { DocumentDetailPanel } from "./documents/DocumentDetailPanel";
-import { DocumentsHelpModal } from "./documents/DocumentsHelpModal";
 
 
 const TOKEN_KEY = "finance-taxation-v2-token";
@@ -44,7 +43,6 @@ export function DocumentsPage() {
   const [detail, setDetail] = useState<DocumentDetail | null>(null);
   const [message, setMessage] = useState("正在加载单据数据...");
   const [uploading, setUploading] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadRelations(businessEventId: string | null) {
@@ -182,7 +180,6 @@ export function DocumentsPage() {
 
   return (
     <>
-      {showHelp && <DocumentsHelpModal onClose={() => setShowHelp(false)} />}
       {navEventId && (
         <Alert
           type="info" showIcon style={{ borderRadius: 8, marginBottom: 12 }}
@@ -192,7 +189,7 @@ export function DocumentsPage() {
       <DocumentsShell
         summary={(
           <div style={{ display: "grid", gap: "14px" }}>
-            <DocumentsHeader onOpenHelp={() => setShowHelp(true)} />
+            <DocumentsHeader />
             <DocumentsSummary summary={summary} message={message} />
           </div>
         )}

@@ -100,8 +100,10 @@ export const ENTRY_GUIDES: readonly PageGuide[] = [
         fix: "已过账的先红冲；期间锁了的先解锁或改在当前期间处理。"
       }
     ],
-    flow: "事项 → 分析 → 凭证草稿 → 复核过账",
-    related: ["/vouchers", "/quick-entry", "/risk"]
+    flow:
+      "本页是整个流程的**起点**：记录业务背景与 AI 分析结果 → 拆到任务中心推进执行 → " +
+      "沉淀到单据中心、凭证中心与税务中心 → 由风险勾稽做横向检查与闭环跟踪",
+    related: ["/vouchers", "/quick-entry", "/risk", "/tasks", "/tax"]
   },
   {
     route: "/dashboard/chairman",
@@ -120,9 +122,15 @@ export const ENTRY_GUIDES: readonly PageGuide[] = [
     audience: "所有人",
     permission: "tasks.view",
     purpose: "看和管派给自己或自己派出去的任务。",
-    steps: ["按状态筛选", "点进去更新进度或标记完成", "看板视图可以拖拽改状态"],
-    flow: "任务由各模块自动派发或人工创建",
-    related: ["/inbox", "/events"]
+    steps: [
+      "按状态筛选，或切到看板视图",
+      "看板里把卡片拖到目标列，或在列表里点「开始执行」推进状态",
+      "缺资料就去单据中心补齐，补齐后回来继续推进"
+    ],
+    flow:
+      "系统按经营事项拆出任务并分派到责任部门 → 本页推进执行 → 缺资料回单据中心补 → " +
+      "凭证中心最终入账。三者之中任务中心最靠前",
+    related: ["/inbox", "/events", "/documents", "/vouchers"]
   },
   {
     route: "/contracts",
