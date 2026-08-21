@@ -594,6 +594,19 @@ export async function postVoucher(voucherId: string) {
   });
 }
 
+/**
+ * 红冲一张已过账的凭证。
+ *
+ * 返回的是新生成的**红冲凭证草稿**——系统生成的凭证一律是草稿，
+ * 要到凭证中心复核过账之后原分录才真的被冲平。
+ */
+export async function reverseVoucher(voucherId: string, reason?: string) {
+  return request<{ reversal: Voucher; original: Voucher }>(
+    `/api/vouchers/${encodeURIComponent(voucherId)}/reverse`,
+    { method: "POST", body: JSON.stringify(reason ? { reason } : {}) }
+  );
+}
+
 export async function getDocumentDetail(documentId: string) {
   return request<DocumentDetail>(`/api/documents/${documentId}`);
 }
@@ -806,9 +819,22 @@ export async function createReportSnapshot(input: {
   });
 }
 
+/**
+ * 快照还准不准（V15/P1）。
+ *
+ * `unknown` 是**合法状态**，不能当成 `fresh` 渲染：老快照没有溯源信息，
+ * 给它打绿勾会让人拿着一份可能已经失效的报表去申报。
+ */
+export type SnapshotFreshness =
+  | { status: "fresh" }
+  | { status: "stale"; reason: string }
+  | { status: "unknown"; reason: string };
+
+export type ReportSnapshotWithFreshness = ReportSnapshot & { freshness?: SnapshotFreshness };
+
 export async function listReportSnapshots(reportType?: string) {
   const path = reportType ? `/api/reports/snapshots?reportType=${reportType}` : "/api/reports/snapshots";
-  return request<{ items: ReportSnapshot[]; total: number }>(path);
+  return request<{ items: ReportSnapshotWithFreshness[]; total: number }>(path);
 }
 
 export async function getReportDiff(fromSnapshotId: string, toSnapshotId: string) {
@@ -1033,8 +1059,21 @@ export interface DashboardQueueItem {
   severity: "high" | "medium" | "low";
 }
 
+/** 费用构成的一块，按科目汇总（P1：替换前端的固定比例估算）。 */
+export interface DashboardExpenseSlice {
+  name: string;
+  accountCode: string;
+  amount: number;
+  kind: "cost" | "expense" | "incomeTax";
+}
+
 export interface DashboardData {
   cards: DashboardCard[];
+  /**
+   * 费用构成明细。**可选**是为了兼容还没升级的后端：
+   * `undefined` 表示没下发（前端退回估算并标注），`[]` 表示本期确实没有费用。
+   */
+  expenseBreakdown?: DashboardExpenseSlice[];
   queues: { approvals: number; blockedTasks: number; overdueTasks: number };
   profitOverview: {
     revenue: string;
@@ -1355,6 +1394,28 @@ export async function buildTransferBatch(period: string, bankAccountId?: string)
 export async function approveTransferBatch(batchId: string) {
   return request<{ ok: boolean }>(`/api/payroll/transfer/batches/${batchId}/approve`, {
     method: "POST", body: JSON.stringify({})
+  });
+}
+
+/**
+ * 通过银企接口直接提交代发（V15 补入口）。
+ *
+ * 与「导出 CSV 再去网银导入」二选一：接了银企直连的公司走这条，
+ * 成功后批次直接标记已代发并联动经营事项。
+ *
+ * 后端 `POST .../submit-api` 从 V13 起就在，一直没有前台入口——
+ * 于是配好了银企直连的公司，仍然只能导出 CSV 手工上传。
+ */
+export async function submitTransferBatchViaApi(batchId: string) {
+  return request<{
+    ok: boolean;
+    provider: string;
+    bankTransferRef: string | null;
+    message: string;
+    eventId: string;
+  }>(`/api/payroll/transfer/batches/${encodeURIComponent(batchId)}/submit-api`, {
+    method: "POST",
+    body: JSON.stringify({})
   });
 }
 
@@ -2445,6 +2506,30 @@ export async function getClosePlan(period: string) {
   );
 }
 
+export interface CloseIncomeResult {
+  alreadyClosed: boolean;
+  periodLabel: string;
+  voucherId?: string | null;
+  profitCents?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * 结转损益：把 6xxx 收入费用类科目结平到本年利润。
+ *
+ * **幂等**：已结转过的属期再调返回 200 与 `alreadyClosed: true`，不会重复生成分录。
+ * 生成的凭证是草稿，要复核过账。
+ *
+ * 后端 `POST /api/ledger/periods/:id/close-income` 从 V12 起就在，
+ * 而月结向导「结转损益」那一步一直把人引到总账中心——那里却没有执行入口。
+ */
+export async function closeIncomeForPeriod(period: string) {
+  return request<CloseIncomeResult>(
+    `/api/ledger/periods/${encodeURIComponent(period)}/close-income`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
 export interface AnomalyFinding {
   kind: string;
   severity: "info" | "warning" | "alert";
@@ -2806,6 +2891,19 @@ export async function listTaxRates(taxType: string, on?: string) {
   return request<{ items: TaxRateView[]; total: number; on: string | null }>(
     `/api/tax/rates?${params.toString()}`
   );
+}
+
+/**
+ * 给一档税率设失效日（停用）。
+ *
+ * **没有删除接口**：历史凭证要按当时适用的那一档解释，删掉旧档
+ * 会让重算旧属期的底稿全部算错。停用只是划一条止日。
+ */
+export async function expireTaxRate(rateId: string, effectiveTo: string) {
+  return request<{ rate: TaxRateView }>(`/api/tax/rates/${encodeURIComponent(rateId)}/expire`, {
+    method: "POST",
+    body: JSON.stringify({ effectiveTo })
+  });
 }
 
 export interface LedgerVatPaperView {

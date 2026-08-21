@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import type { Voucher } from "@finance-taxation/domain-model";
 import {
   approveVoucher, createVoucherFromTemplate, getVoucherDetail,
-  listVouchers, listVoucherTemplates, postVoucher, updateVoucher,
+  listVouchers, listVoucherTemplates, postVoucher, reverseVoucher, updateVoucher,
   validateVoucher, type VoucherDetail, type VoucherTemplate, type WorkflowRunDetail,
 } from "../lib/api";
 import { normalizeDrilldownState } from "./drilldown";
@@ -266,6 +266,26 @@ export function VouchersPage() {
     }
   }
 
+  // ── Reverse ───────────────────────────────────────────────────────────────
+
+  /**
+   * 红冲。生成的是**草稿**，还要复核过账才真的冲平——
+   * 提示里必须说清这一点，否则用户点完以为账已经改好了。
+   */
+  async function handleReverse() {
+    if (!detail) return;
+    setUpdating(true);
+    try {
+      await reverseVoucher(detail.id);
+      await refresh(detail.id);
+      toast.success("已生成红冲凭证草稿，去凭证列表复核并过账后原分录才被冲平");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setUpdating(false);
+    }
+  }
+
   // ── Update summary ────────────────────────────────────────────────────────
 
   async function handleSummaryUpdate(summary: string) {
@@ -405,6 +425,7 @@ export function VouchersPage() {
           onValidate={handleValidate}
           onApprove={handleApprove}
           onPost={handlePost}
+          onReverse={handleReverse}
           onSummaryUpdate={handleSummaryUpdate}
           onOpenEvent={(businessEventId) => navigate("/events", { state: { businessEventId } })}
           onOpenDocuments={(businessEventId) => navigate("/documents", { state: { businessEventId } })}

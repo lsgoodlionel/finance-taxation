@@ -16,6 +16,8 @@ type LedgerPeriodsPanelProps = {
   onLockNew: () => void;
   onLock: (period: string) => void;
   onUnlock: (period: string) => void;
+  /** 结转损益。月结向导「结转损益」这一步就是把人引到这里。 */
+  onCloseIncome: (period: string) => void;
 };
 
 function confirmLock(period: string, onConfirm: () => void) {
@@ -49,8 +51,29 @@ function confirmUnlock(period: string, onConfirm: () => void) {
   });
 }
 
+function confirmCloseIncome(period: string, onConfirm: () => void) {
+  Modal.confirm({
+    title: `结转 ${period} 的损益`,
+    content: (
+      <div style={{ lineHeight: 1.7 }}>
+        <p>
+          把这个月的收入、成本、费用类科目（6xxx）结平到<strong>本年利润</strong>，
+          生成一张结转凭证<strong>草稿</strong>——复核过账之后才真的入账。
+        </p>
+        <p style={{ marginBottom: 0, color: "#6b7280" }}>
+          已经结转过的属期再点一次不会重复生成，只会告诉你「已结转」。
+        </p>
+      </div>
+    ),
+    okText: "生成结转凭证",
+    cancelText: "取消",
+    onOk: onConfirm,
+  });
+}
+
 export function LedgerPeriodsPanel(props: LedgerPeriodsPanelProps) {
-  const { periods, newPeriod, periodOp, onNewPeriodChange, onLockNew, onLock, onUnlock } = props;
+  const { periods, newPeriod, periodOp, onNewPeriodChange, onLockNew, onLock, onUnlock, onCloseIncome } =
+    props;
 
   const columns: ColumnsType<AccountingPeriod> = [
     {
@@ -91,8 +114,19 @@ export function LedgerPeriodsPanel(props: LedgerPeriodsPanelProps) {
     {
       title: "操作",
       key: "action",
-      render: (_, row) =>
-        row.isLocked ? (
+      render: (_, row) => (
+        <Space size={4}>
+          {/* 锁了的期间不给结转入口：结转要写分录，写不进去。 */}
+          {!row.isLocked && (
+            <Button
+              size="small"
+              loading={periodOp === row.period}
+              onClick={() => confirmCloseIncome(row.period, () => onCloseIncome(row.period))}
+            >
+              结转损益
+            </Button>
+          )}
+          {row.isLocked ? (
           <Button
             size="small"
             icon={<UnlockOutlined />}
@@ -111,7 +145,9 @@ export function LedgerPeriodsPanel(props: LedgerPeriodsPanelProps) {
           >
             锁账
           </Button>
-        ),
+        )}
+        </Space>
+      ),
     },
   ];
 

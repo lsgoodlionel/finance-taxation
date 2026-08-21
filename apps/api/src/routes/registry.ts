@@ -340,6 +340,11 @@ import {
 import { login, logout, me, refresh } from "../middleware/auth.js";
 import { json } from "../utils/http.js";
 import { createRouter, type Router, type RouteDef, type RouteHandler } from "../router/router.js";
+import {
+  deleteEventCollaborator,
+  getEventCollaborators,
+  postEventCollaborator
+} from "../modules/events/collaborator.routes.js";
 // P1 外部系统对接模块
 import {
   exportVatXml,
@@ -502,6 +507,30 @@ const routes: RouteDef[] = [
     auth: true,
     permission: "events.create",
     handler: (req, res, p) => analyzeEvent(req, res, p.id!)
+  },
+  // 协作人：可见性收敛到「owner + 显式协作人」之后的加人入口。
+  // 读用 events.view（看得见事项才看得到名单，handler 里还有一层），
+  // 写不给 events.create——能建事项不等于能往别人的事项里塞人。
+  {
+    method: "GET",
+    path: "/api/events/:id/collaborators",
+    auth: true,
+    permission: "events.view",
+    handler: (req, res, p) => getEventCollaborators(req, res, p.id!)
+  },
+  {
+    method: "POST",
+    path: "/api/events/:id/collaborators",
+    auth: true,
+    permission: { anyOf: ["events.assign", "events.create"] },
+    handler: (req, res, p) => postEventCollaborator(req, res, p.id!)
+  },
+  {
+    method: "DELETE",
+    path: "/api/events/:id/collaborators/:userId",
+    auth: true,
+    permission: { anyOf: ["events.assign", "events.create"] },
+    handler: (req, res, p) => deleteEventCollaborator(req, res, p.id!, p.userId!)
   },
   {
     method: "POST",

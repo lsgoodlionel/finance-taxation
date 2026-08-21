@@ -1,8 +1,8 @@
-import { Button, Space, Tag, Typography, Descriptions, Divider, Table } from "antd";
+import { Button, Popconfirm, Space, Tag, Typography, Descriptions, Divider, Table } from "antd";
 import type { WorkflowRunDetail } from "../../lib/api";
 import type { ColumnsType } from "antd/es/table";
 import {
-  CheckOutlined, AuditOutlined, PrinterOutlined, EditOutlined, SafetyCertificateOutlined,
+  CheckOutlined, AuditOutlined, PrinterOutlined, EditOutlined, RollbackOutlined, SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import type { VoucherDetail, VoucherTemplate } from "../../lib/api";
 import { VOUCHER_STATUS_LABELS, VOUCHER_TYPE_LABELS, useI18n } from "../../lib/i18n";
@@ -29,6 +29,14 @@ interface VoucherDetailPanelProps {
   onValidate: () => Promise<void>;
   onApprove: () => Promise<void>;
   onPost: () => Promise<void>;
+  /**
+   * 红冲已过账的凭证。
+   *
+   * 手册和页面指南一直写着「过错了用红冲」「红冲按钮点了报…」，
+   * 而这个按钮在前台**根本不存在**——后端 `POST /api/vouchers/:id/reverse`
+   * 从 V12 起就在，只是没人接上来。
+   */
+  onReverse: () => Promise<void>;
   onSummaryUpdate: (summary: string) => Promise<void>;
   onOpenEvent?: (businessEventId: string) => void;
   onOpenDocuments?: (businessEventId: string) => void;
@@ -67,6 +75,7 @@ export function VoucherDetailPanel({
   onValidate,
   onApprove,
   onPost,
+  onReverse,
   onSummaryUpdate,
   onOpenEvent,
   onOpenDocuments,
@@ -202,6 +211,21 @@ export function VoucherDetailPanel({
             >
               过账
             </Button>
+          )}
+          {detail.status === "posted" && (
+            // 只对已过账的凭证出现：未过账的直接改就是了，摆个红冲按钮
+            // 会诱使人用红冲去处理一张草稿。
+            <Popconfirm
+              title="红冲这张凭证？"
+              description="会生成一张方向相反的红冲凭证（草稿），复核过账后原分录才被冲平。原凭证不会被改动。"
+              okText="生成红冲凭证"
+              cancelText="取消"
+              onConfirm={() => void onReverse()}
+            >
+              <Button size="small" danger icon={<RollbackOutlined />} loading={updating}>
+                红冲
+              </Button>
+            </Popconfirm>
           )}
           <Button size="small" icon={<PrinterOutlined />} disabled>打印预览</Button>
         </Space>

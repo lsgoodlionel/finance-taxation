@@ -52,8 +52,9 @@ import {
 } from "./payment-view";
 import { BankInstructionPanel } from "./BankInstructionPanel";
 import { exportPaymentInstructions } from "../../lib/api-bank-connect";
+import { listAdvances, payAdvance, type AdvanceRow } from "../../lib/api-expense-control";
 
-const TASK_KEYS = ["due", "records"] as const;
+const TASK_KEYS = ["due", "advances", "records"] as const;
 type PaymentTaskKey = (typeof TASK_KEYS)[number];
 
 export function PaymentsPage() {
@@ -79,8 +80,16 @@ export function PaymentsPage() {
     null
   );
   const [matching, setMatching] = useState(false);
+  // 待付借款：已批准但还没打款的备用金。后端 POST /api/advances/:id/pay
+  // 从 V13 起就在，一直没有前台入口——出纳只能在系统外转账，
+  // 借款单永远停在「已批准」，账上的 1221 也就永远挂不上。
+  const [advances, setAdvances] = useState<AdvanceRow[]>([]);
+  const [payingAdvanceId, setPayingAdvanceId] = useState<string | null>(null);
 
-  const task: PaymentTaskKey = searchParams.get("task") === "records" ? "records" : "due";
+  const requestedTask = searchParams.get("task");
+  const task: PaymentTaskKey = (TASK_KEYS as readonly string[]).includes(requestedTask ?? "")
+    ? (requestedTask as PaymentTaskKey)
+    : "due";
   const month = searchParams.get("month") ?? dayjs().format("YYYY-MM");
 
   const setTask = useCallback(
@@ -98,13 +107,17 @@ export function PaymentsPage() {
     try {
       const from = `${month}-01`;
       const to = dayjs(from).endOf("month").format("YYYY-MM-DD");
-      const [dueData, paymentData] = await Promise.all([
+      const [dueData, paymentData, advanceData] = await Promise.all([
         listDuePayments({ from, to }),
-        listPayments({ from, to })
+        listPayments({ from, to }),
+        // 借款不按月筛：一张两个月前批的借款单今天还是要打款的，
+        // 按当前月份过滤会让它从出纳眼前消失。
+        listAdvances({ status: "approved" })
       ]);
       setDue(dueData.items);
       setDueTotalCents(dueData.totalCents);
       setPayments(paymentData.items);
+      setAdvances(advanceData.items);
     } catch (error) {
       // 不静默：应付列表加载失败显示成空，出纳会以为这个月没有要付的。
       setLoadError(errorMessage(error, "加载失败，请重试"));
@@ -116,6 +129,23 @@ export function PaymentsPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  /** 打款。凭证是草稿，提示必须说清，否则出纳以为账已经做好了。 */
+  const handlePayAdvance = useCallback(
+    async (row: AdvanceRow) => {
+      setPayingAdvanceId(row.id);
+      try {
+        const result = await payAdvance(row.id);
+        toast.success(result.note || "已生成付款凭证草稿，需会计复核过账");
+        await reload();
+      } catch (error) {
+        toast.error(errorMessage(error, "借款打款失败"));
+      } finally {
+        setPayingAdvanceId(null);
+      }
+    },
+    [reload]
+  );
 
   const grouped = useMemo(() => groupDueByCounterparty(due), [due]);
 
@@ -330,6 +360,12 @@ export function PaymentsPage() {
       <TaskFocusShell
         tasks={[
           { key: "due", label: "本月应付", description: "到期未付清的合同期次", badge: due.length || undefined },
+          {
+            key: "advances",
+            label: "待付借款",
+            description: "已批准、还没打款的备用金借款单",
+            badge: advances.length || undefined
+          },
           { key: "records", label: "付款记录", description: "已建的付款单与凭证状态" }
         ]}
         activeKey={task}
@@ -371,6 +407,46 @@ export function PaymentsPage() {
                 pagination={false}
               />
             </div>
+          )
+        ) : task === "advances" ? (
+          loading ? (
+            <Skeleton active paragraph={{ rows: 4 }} />
+          ) : advances.length === 0 ? (
+            <Empty description="没有已批准待打款的借款单" />
+          ) : (
+            <Table<AdvanceRow>
+              rowKey="id"
+              size="small"
+              dataSource={advances}
+              pagination={false}
+              columns={[
+                { title: "借款单号", dataIndex: "advanceNo", width: 150 },
+                { title: "用途", dataIndex: "purpose", ellipsis: true },
+                {
+                  title: "金额",
+                  dataIndex: "amountCents",
+                  align: "right",
+                  width: 120,
+                  render: (cents: number) => <Typography.Text strong>{formatCents(cents)}</Typography.Text>
+                },
+                { title: "预计归还", dataIndex: "expectedReturnDate", width: 120, render: (v: string | null) => v ?? "—" },
+                {
+                  title: "操作",
+                  key: "actions",
+                  width: 110,
+                  render: (_: unknown, row: AdvanceRow) => (
+                    <Button
+                      size="small"
+                      type="primary"
+                      loading={payingAdvanceId === row.id}
+                      onClick={() => void handlePayAdvance(row)}
+                    >
+                      打款
+                    </Button>
+                  )
+                }
+              ]}
+            />
           )
         ) : loading ? (
           <Skeleton active paragraph={{ rows: 4 }} />

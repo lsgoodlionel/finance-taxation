@@ -23,6 +23,7 @@ import {
   listLedgerEntries,
   listLedgerPostingBatches,
   listAccountingPeriods,
+  closeIncomeForPeriod,
   lockPeriod,
   unlockPeriod
 } from "../lib/api";
@@ -191,6 +192,28 @@ export function LedgerPage() {
     }
   }
 
+  /**
+   * 结转损益。幂等：已结转过的属期不会重复生成分录。
+   *
+   * 提示要区分「刚生成」和「本来就已结转」——两种都成功，但用户该做的事不同。
+   */
+  async function handleCloseIncome(period: string) {
+    setPeriodOp(period);
+    try {
+      const result = await closeIncomeForPeriod(period);
+      setMessage(
+        result.alreadyClosed
+          ? `期间 ${period} 之前已经结转过损益，本次未重复生成。`
+          : `已生成 ${period} 的结转损益凭证草稿，去凭证中心复核过账后才入账。`
+      );
+      await loadPeriods();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setPeriodOp(null);
+    }
+  }
+
   async function handleUnlock(period: string) {
     setPeriodOp(period);
     try {
@@ -293,6 +316,9 @@ export function LedgerPage() {
             }}
             onUnlock={(period) => {
               void handleUnlock(period);
+            }}
+            onCloseIncome={(period) => {
+              void handleCloseIncome(period);
             }}
           />
         );

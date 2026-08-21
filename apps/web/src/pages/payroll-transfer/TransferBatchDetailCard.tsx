@@ -1,5 +1,5 @@
 import { Alert, Button, Card, Popconfirm, Space, Table, Tag, Typography } from "antd";
-import { CheckCircleOutlined, DownloadOutlined, FileDoneOutlined } from "@ant-design/icons";
+import { ApiOutlined, CheckCircleOutlined, DownloadOutlined, FileDoneOutlined } from "@ant-design/icons";
 import type { AuditLog } from "@finance-taxation/domain-model";
 import type { PayrollTransferLine } from "../../lib/api";
 import { STATUS_TAG } from "./transfer-status";
@@ -14,6 +14,8 @@ export interface TransferBatchDetailCardProps {
   onApprove: () => Promise<void>;
   onDownload: (format: "generic" | "cmb") => Promise<void>;
   onDisburse: () => Promise<void>;
+  /** 走银企直连提交代发。与「导出 CSV 去网银」二选一。 */
+  onSubmitViaApi: () => Promise<void>;
   onCompensate: () => Promise<void>;
 }
 
@@ -24,6 +26,7 @@ export function TransferBatchDetailCard({
   onApprove,
   onDownload,
   onDisburse,
+  onSubmitViaApi,
   onCompensate
 }: TransferBatchDetailCardProps) {
   const st = selected.batch.status;
@@ -69,6 +72,17 @@ export function TransferBatchDetailCard({
             <Button icon={<DownloadOutlined />} onClick={() => void onDownload("generic")}>导出通用CSV</Button>
             <Button icon={<DownloadOutlined />} onClick={() => void onDownload("cmb")}>导出招行格式</Button>
           </>
+        )}
+        {(st === "approved" || st === "exported") && (
+          <Popconfirm
+            title="通过银企直连提交代发？"
+            description="直接把这批工资发往银行，成功后批次标记为已代发。没接银企直连的公司请走导出 CSV。"
+            okText="提交银行"
+            cancelText="取消"
+            onConfirm={() => void onSubmitViaApi()}
+          >
+            <Button icon={<ApiOutlined />} loading={busy}>发往银行（银企直连）</Button>
+          </Popconfirm>
         )}
         {st === "exported" && (
           <Popconfirm title="确认银行已代发完成？将联动生成经营事项" onConfirm={() => void onDisburse()}>

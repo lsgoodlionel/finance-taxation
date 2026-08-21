@@ -24,6 +24,15 @@
  * 等于把没入口的说成有——那比漏报严重得多，因为它让护栏静默失效。
  *
  * 末段太短（少于 4 个字符）或看着像通用词时不认，理由同上。
+ *
+ * ## 参数之后还有静态段时，前缀不作数（V15/P1 修）
+ *
+ * 这条护栏放行过 `/api/events/:id/collaborators`：`split("/:")[0]` 把它砍成
+ * `/api/events`，而那个串前端到处都是——于是一条前台根本点不到的新路由
+ * 被判成「有入口」。同族的 `/api/events`、`/api/events/:id` 会替它顶包，
+ * 这正是护栏最坏的失效方式：**绿的，但什么都没在看**。
+ *
+ * 所以路径在参数之后还有静态段时（`.../:id/collaborators`），只认那个静态段。
  */
 
 import assert from "node:assert/strict";
@@ -79,9 +88,24 @@ const KNOWN_GAPS: ReadonlyMap<string, string> = new Map([
   ["GET /api/analytics/cash-forecast", "现金流预测：分析类，不阻塞日常记账"],
   ["GET /api/analytics/revenue-comparison", "收入对比：同上"],
   ["GET /api/runtime/tasks", "运行时摘要：前端有自己的汇总口径，这个端点暂无消费方"],
+  [
+    "GET /api/contracts/:id/events",
+    "**重复端点**：合同详情 GET /api/contracts/:id 已经把 relatedEvents 一起返回，" +
+      "工作台就在用。同上，不编消费方"
+  ],
+  [
+    "GET /api/documents/:id/attachments",
+    "**重复端点**：单据详情 GET /api/documents/:id 已经把 attachments 一起返回。" +
+      "同 posting-records，不为它编一个消费方"
+  ],
+  [
+    "GET /api/vouchers/:id/posting-records",
+    "**重复端点**：凭证详情 GET /api/vouchers/:id 已经把 postingRecords 一起返回，" +
+      "前端也在用。这里不接一个前端函数硬凑消费方——那只会造出一个没人调的调用点，" +
+      "让护栏看起来是绿的。真要收拾的话是删掉这个端点，而不是给它编一个用户"
+  ],
   ["GET /api/runtime/tax", "同上"],
   ["POST /api/banking/sync-statements", "银行流水同步：手工模式下走 CSV 导入，这个端点待接入"],
-  ["GET /api/settings/users", "用户管理：权限页有自己的取数，这个端点暂无消费方"],
 ]);
 
 /**
@@ -92,6 +116,26 @@ const KNOWN_GAPS: ReadonlyMap<string, string> = new Map([
  * 再短没有区分度，任何 `/api` 都能命中。
  */
 function hasFrontendCaller(routePath: string, webSource: string): boolean {
+  const allSegments = routePath.split("/").filter((part) => part !== "");
+  const lastSegment = allSegments[allSegments.length - 1];
+
+  // `.../:id/collaborators` 这种：参数后面还有静态段，说明它是同族路由里
+  // 一条**独立的**能力。用参数前的前缀去判，等于让 `/api/events` 替它顶包。
+  const endsWithStaticAfterParam =
+    allSegments.some((part) => part.startsWith(":")) &&
+    lastSegment !== undefined &&
+    !lastSegment.startsWith(":");
+  if (endsWithStaticAfterParam) {
+    // 前缀 + 中间的插值 + 末段，整条一起匹配：
+    // `/api/approval/instances/${encodeURIComponent(id)}/act` 要能命中，
+    // 而 `/api/events` 单独出现不能替 `/api/events/:id/collaborators` 顶包。
+    //
+    // 前缀提供了区分度，所以这一支不再受「末段至少 4 字符 / 不是通用词」的限制——
+    // 那两条规则是给「只有末段可看」的情形兜底的，用在这里会把 `/act`、`/status`
+    // 这类真有入口的路由误报成缺口。
+    return buildPathPattern(routePath).test(webSource);
+  }
+
   const literal = routePath.split("/:")[0]!;
   if (webSource.includes(literal)) return true;
 
@@ -103,6 +147,28 @@ function hasFrontendCaller(routePath: string, webSource: string): boolean {
   if (last.length < 4 || GENERIC_SEGMENTS.has(last)) return false;
 
   return webSource.includes(last);
+}
+
+/**
+ * 把带参数的路径变成能匹配前端拼串写法的正则。
+ *
+ * `/api/events/:id/collaborators` → `/api/events/<非引号非空白>/collaborators`
+ * 参数位允许出现 `${encodeURIComponent(id)}` 这类模板表达式，但不允许跨越引号
+ * 或换行——否则整段源码里任意两处碎片都能连成一条「路径」。
+ */
+function buildPathPattern(routePath: string): RegExp {
+  const escaped = routePath
+    .split("/")
+    .filter((part) => part !== "")
+    .map((part) => (part.startsWith(":") ? null : part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    .map((part) => (part === null ? "[^\"'`\\s]+" : part))
+    .join("/");
+  return new RegExp("/" + escaped);
+}
+
+/** 这个词有没有区分度——认通用词等于不判。 */
+function isDistinctive(segment: string): boolean {
+  return segment.length >= 4 && !GENERIC_SEGMENTS.has(segment);
 }
 
 /**

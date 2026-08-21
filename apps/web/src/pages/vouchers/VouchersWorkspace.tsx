@@ -36,6 +36,7 @@ interface VouchersWorkspaceProps {
   onValidate: () => Promise<void>;
   onApprove: () => Promise<void>;
   onPost: () => Promise<void>;
+  onReverse: () => Promise<void>;
   onSummaryUpdate: (summary: string) => Promise<void>;
   onOpenEvent: (businessEventId: string) => void;
   onOpenDocuments: (businessEventId: string) => void;
@@ -102,6 +103,7 @@ export function VouchersWorkspace(props: VouchersWorkspaceProps) {
             onValidate={props.onValidate}
             onApprove={props.onApprove}
             onPost={props.onPost}
+            onReverse={props.onReverse}
             onSummaryUpdate={props.onSummaryUpdate}
             onOpenEvent={props.onOpenEvent}
             onOpenDocuments={props.onOpenDocuments}

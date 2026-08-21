@@ -412,6 +412,22 @@ export async function transitionAdvance(id: string, action: string) {
   );
 }
 
+/**
+ * 借款单付款（出纳动作）。
+ *
+ * 生成的是**付款凭证草稿**——出纳点完付款不会立刻在账上看到这笔，
+ * 要会计复核过账之后才进总账。提示里必须说清，否则会被当成故障。
+ */
+export async function payAdvance(
+  id: string,
+  body: { paidOn?: string; bankAccountCode?: string } = {}
+) {
+  return request<{ voucherId: string; status: AdvanceStatus; note: string }>(
+    `/api/advances/${encodeURIComponent(id)}/pay`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
 // ── 报销单（V13-B4/B5/B7）────────────────────────────────────────
 
 export type ReimbursementStatus =

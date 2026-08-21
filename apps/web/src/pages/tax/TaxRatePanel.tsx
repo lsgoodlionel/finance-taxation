@@ -8,7 +8,7 @@
  * 与上面两件的月度口径不同，这一点在卡片标题上写明。
  */
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Card, Descriptions, Radio, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Popconfirm, Radio, Space, Table, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { Term } from "../../components/ui/Term";
@@ -16,6 +16,7 @@ import { usePeriod } from "../../lib/period-context";
 import {
   getLedgerVatPaper,
   getTaxDepreciationReport,
+  expireTaxRate,
   listTaxRates,
   type LedgerVatPaperView,
   type TaxDepreciationRow,
@@ -76,6 +77,27 @@ export function TaxRatePanel() {
       setLoading(false);
     }
   }, [period, scope]);
+
+  /**
+   * 停用一档税率。止日取属期末——用户在某个属期里做这件事，
+   * 意思几乎总是「这个月之后不再用它」，而不是「从今天起」。
+   */
+  const expire = useCallback(
+    async (row: TaxRateView) => {
+      const lastDay = new Date(Date.UTC(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0))
+        .toISOString()
+        .slice(0, 10);
+      try {
+        await expireTaxRate(row.id, lastDay);
+        toast.success(`已给「${row.name}」设止日 ${lastDay}，此后不再适用`);
+        await load();
+      } catch (err) {
+        toast.error(errorMessage(err, "停用税率失败"));
+      }
+    },
+    [period, load]
+  );
+
 
   useEffect(() => {
     void load();
@@ -152,6 +174,36 @@ export function TaxRatePanel() {
               width: 90,
               render: (isSystem: boolean) =>
                 isSystem ? <Tag>系统内置</Tag> : <Tag color="blue">公司自定义</Tag>
+            },
+            {
+              title: "操作",
+              key: "actions",
+              width: 100,
+              render: (_: unknown, row: TaxRateView) =>
+                // 只对「公司自定义 且 仍有效」的档给停用入口：
+                // 系统内置档是法定税率沿革，公司改不得；已有止日的不用再停一次。
+                row.isSystem || row.effectiveTo ? (
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    —
+                  </Typography.Text>
+                ) : (
+                  <Popconfirm
+                    title="停用这一档税率"
+                    description={
+                      <span style={{ fontSize: 12 }}>
+                        止日之后不再适用，止日当天仍然适用。<br />
+                        历史凭证按当时的档解释，**不会**被改动。
+                      </span>
+                    }
+                    okText="确认停用"
+                    cancelText="取消"
+                    onConfirm={() => void expire(row)}
+                  >
+                    <Button size="small" danger type="link">
+                      停用
+                    </Button>
+                  </Popconfirm>
+                )
             }
           ]}
         />
