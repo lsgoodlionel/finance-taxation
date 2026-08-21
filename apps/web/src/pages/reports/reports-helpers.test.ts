@@ -1,6 +1,7 @@
 import {
   defaultReportsView,
   formatSnapshotLabel,
+  parseSnapshotPeriod,
   pickLatestSnapshotId,
   resolveInitialReportsView
 } from "./reports-helpers";
@@ -35,3 +36,34 @@ assertEqual(
   "s3",
   "expected the snapshot with the latest date"
 );
+
+// ─── 快照期间解析（P1 重算）──────────────────────────────────────────────────
+// 解析错了会静默生成一份期间不对的报表，覆盖掉原来那份——比解析不出来严重得多。
+
+function ok(condition: boolean, message: string) {
+  if (!condition) throw new Error(message);
+}
+
+ok(
+  JSON.stringify(parseSnapshotPeriod("2026-07")) ===
+    JSON.stringify({ periodType: "month", year: 2026, month: 7, quarter: 3 }),
+  "月度标签解析出年月，并带上对应季度"
+);
+
+ok(
+  JSON.stringify(parseSnapshotPeriod("2026 Q3")) ===
+    JSON.stringify({ periodType: "quarter", year: 2026, month: 9, quarter: 3 }),
+  "季度标签不能被当成 3 月"
+);
+
+ok(
+  JSON.stringify(parseSnapshotPeriod("2026")) ===
+    JSON.stringify({ periodType: "year", year: 2026, month: 12, quarter: 4 }),
+  "年度标签解析为整年"
+);
+
+ok(parseSnapshotPeriod("2026-13") === null, "13 月不是有效期间，返回 null 而不是硬算");
+ok(parseSnapshotPeriod("2026-00") === null, "0 月同样无效");
+ok(parseSnapshotPeriod("2026 Q5") === null, "没有第 5 季度");
+ok(parseSnapshotPeriod("") === null, "空标签返回 null");
+ok(parseSnapshotPeriod("上个月") === null, "认不出的格式一律 null，让调用方禁用按钮");

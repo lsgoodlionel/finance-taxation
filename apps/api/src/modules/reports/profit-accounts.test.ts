@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { generateClosingEntries, PROFIT_ACCOUNT } from "../ledger/closing.js";
-import { classifyProfitAccount, summarizeProfitTotals } from "./profit-accounts.js";
+import {
+  classifyProfitAccount,
+  summarizeExpenseBreakdown,
+  summarizeProfitTotals
+} from "./profit-accounts.js";
 
 function entry(accountCode: string, debit: string, credit: string) {
   return { accountCode, debit, credit };
@@ -257,4 +261,68 @@ test("summarizeProfitTotals ignores balance-sheet accounts and returns zeros for
   const totals = summarizeProfitTotals([entry("1002", "500.00", "0.00"), entry("2221", "0.00", "500.00")]);
   assert.equal(totals.revenue, 0);
   assert.equal(totals.netProfit, 0);
+});
+
+// ─── 费用构成明细（P1）────────────────────────────────────────────────────────
+// 驾驶舱饼图此前按固定比例估算成本与费用的内部拆分。这个汇总函数是它的替代品，
+// 口径必须是「已过账分录按科目的真实借方净额」，而不是任何形式的推算。
+
+test("费用构成：按科目分组，同科目多笔累加", () => {
+  const slices = summarizeExpenseBreakdown([
+    { accountCode: "6602", accountName: "管理费用", accountCategory: "expense", debit: "300", credit: "0" },
+    { accountCode: "6602", accountName: "管理费用", accountCategory: "expense", debit: "200", credit: "0" },
+    { accountCode: "6601", accountName: "销售费用", accountCategory: "expense", debit: "100", credit: "0" }
+  ]);
+
+  assert.equal(slices.length, 2);
+  // 按金额降序——饼图图例里最大的一块该排在最前面。
+  assert.deepEqual(
+    slices.map((s) => [s.accountCode, s.amount]),
+    [["6602", 500], ["6601", 100]]
+  );
+});
+
+test("费用构成：冲销按净额算，冲平的科目不出现", () => {
+  // 红字冲销后净额为 0 的科目画进饼图就是一块看不见的图例，只会让人困惑。
+  const slices = summarizeExpenseBreakdown([
+    { accountCode: "6602", accountName: "管理费用", accountCategory: "expense", debit: "500", credit: "0" },
+    { accountCode: "6602", accountName: "管理费用", accountCategory: "expense", debit: "0", credit: "500" },
+    { accountCode: "6601", accountName: "销售费用", accountCategory: "expense", debit: "800", credit: "300" }
+  ]);
+
+  assert.deepEqual(slices.map((s) => [s.accountCode, s.amount]), [["6601", 500]]);
+});
+
+test("费用构成：收入类科目不算费用", () => {
+  // 混进来会让饼图各块之和超过营业收入，利润那一块被挤成负数。
+  const slices = summarizeExpenseBreakdown([
+    { accountCode: "6001", accountName: "主营业务收入", accountCategory: "revenue", debit: "0", credit: "1000" },
+    { accountCode: "6602", accountName: "管理费用", accountCategory: "expense", debit: "200", credit: "0" }
+  ]);
+
+  assert.deepEqual(slices.map((s) => s.accountCode), ["6602"]);
+});
+
+test("费用构成：所得税费用单列 kind，不混进期间费用", () => {
+  // 利润表口径里所得税不属于期间费用（利润总额不扣它），下发时也不能混。
+  const slices = summarizeExpenseBreakdown([
+    { accountCode: "6801", accountName: "所得税费用", accountCategory: "expense", debit: "50", credit: "0" },
+    { accountCode: "6602", accountName: "管理费用", accountCategory: "expense", debit: "200", credit: "0" }
+  ]);
+
+  assert.equal(slices.find((s) => s.accountCode === "6801")?.kind, "incomeTax");
+  assert.equal(slices.find((s) => s.accountCode === "6602")?.kind, "expense");
+});
+
+test("费用构成：科目名缺失时回退到编码", () => {
+  const slices = summarizeExpenseBreakdown([
+    { accountCode: "660203", accountCategory: "expense", debit: "10", credit: "0" }
+  ]);
+
+  assert.equal(slices[0]?.name, "660203", "显示编码也好过显示空白");
+});
+
+test("费用构成：没有费用分录时返回空数组而不是编一个", () => {
+  // 空数组是合法状态，前端据此显示「本期还没有费用」。
+  assert.deepEqual(summarizeExpenseBreakdown([]), []);
 });

@@ -17,6 +17,8 @@ import type {
   Voucher,
   VoucherDraftLine
 } from "@finance-taxation/domain-model";
+import { loadCollaboratingEventIds } from "./collaborators.js";
+import { filterVisibleEvents, hasCompanyWideEventAccess } from "./visibility.js";
 import type { ApiRequest } from "../../types.js";
 import { query, withTransaction } from "../../db/client.js";
 import { toDateOnly } from "../../db/date-column.js";
@@ -286,8 +288,14 @@ function buildVoucherDrafts(
   }));
 }
 
+/**
+ * 公司级可见范围。实现搬到了 `visibility.ts`，这里只保留一层薄包装——
+ * 角色清单有两份拷贝时，改了一份忘了另一份，就是一次静默的越权。
+ *
+ * tasks / runtime 仍从这里引用，签名不变。
+ */
 export function hasCompanyWideAccess(roleCodes: string[]) {
-  return roleCodes.some((role) => ["role-chairman", "role-finance-director"].includes(role));
+  return hasCompanyWideEventAccess(roleCodes);
 }
 
 export function buildTaskTree(tasks: Task[]): TaskTreeNode[] {
@@ -309,13 +317,29 @@ export function buildTaskTree(tasks: Task[]): TaskTreeNode[] {
   return roots;
 }
 
-export function scopeEvents(rows: BusinessEvent[], req: ApiRequest) {
+/**
+ * 事项可见性（V15/P1 收敛后）。
+ *
+ * 口径从「owner 或**同部门**」改成「owner 或**显式协作人**」——
+ * 部门口径让财务部任何人看得到财务部每一条事项（含薪酬、补偿），
+ * 而且是拿部门名字符串比的，改个部门名可见性就变了。
+ *
+ * 存量的部门可见关系由迁移 097 一次性固化成协作人，所以升级当天没人会
+ * 突然看不到东西；变的是机制：此后新建的事项不再自动扩散给整个部门。
+ *
+ * 协作人集合必须由调用方查好传进来（`loadCollaboratingEventIds`）——
+ * 让这个函数保持同步纯函数，才能被单测直接钉住。
+ */
+export function scopeEvents(
+  rows: BusinessEvent[],
+  req: ApiRequest,
+  collaboratingEventIds: ReadonlySet<string>
+) {
   const companyRows = rows.filter((row) => row.companyId === req.auth!.companyId);
-  if (hasCompanyWideAccess(req.auth!.roleCodes)) {
-    return companyRows;
-  }
-  return companyRows.filter(
-    (row) => row.ownerId === req.auth!.userId || row.department === req.auth!.departmentName
+  return filterVisibleEvents(
+    companyRows,
+    { userId: req.auth!.userId, roleCodes: req.auth!.roleCodes },
+    collaboratingEventIds
   );
 }
 
@@ -1293,8 +1317,11 @@ export function handleEventsMeta(_req: ApiRequest, res: ServerResponse) {
 }
 
 export async function listEvents(req: ApiRequest, res: ServerResponse) {
-  const rows = await listCompanyEvents(req.auth!.companyId);
-  const scoped = scopeEvents(rows, req);
+  const [rows, collaborating] = await Promise.all([
+    listCompanyEvents(req.auth!.companyId),
+    loadCollaboratingEventIds(req.auth!.companyId, req.auth!.userId)
+  ]);
+  const scoped = scopeEvents(rows, req, collaborating);
   return json(res, 200, { items: scoped, total: scoped.length });
 }
 
@@ -1401,8 +1428,11 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
 }
 
 export async function getEventDetail(req: ApiRequest, res: ServerResponse, eventId: string) {
-  const companyEvents = await listCompanyEvents(req.auth!.companyId);
-  const event = scopeEvents(companyEvents, req).find((row) => row.id === eventId);
+  const [companyEvents, collaborating] = await Promise.all([
+    listCompanyEvents(req.auth!.companyId),
+    loadCollaboratingEventIds(req.auth!.companyId, req.auth!.userId)
+  ]);
+  const event = scopeEvents(companyEvents, req, collaborating).find((row) => row.id === eventId);
   if (!event) {
     return json(res, 404, { error: "Event not found" });
   }
@@ -1513,8 +1543,11 @@ export async function getEventDetail(req: ApiRequest, res: ServerResponse, event
 }
 
 export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId: string) {
-  const companyEvents = await listCompanyEvents(req.auth!.companyId);
-  const existing = scopeEvents(companyEvents, req).find((row) => row.id === eventId);
+  const [companyEvents, collaborating] = await Promise.all([
+    listCompanyEvents(req.auth!.companyId),
+    loadCollaboratingEventIds(req.auth!.companyId, req.auth!.userId)
+  ]);
+  const existing = scopeEvents(companyEvents, req, collaborating).find((row) => row.id === eventId);
   if (!existing) {
     return json(res, 404, { error: "Event not found" });
   }
@@ -1732,8 +1765,11 @@ async function loadAnalyzeGuardInput(
 }
 
 export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId: string) {
-  const companyEvents = await listCompanyEvents(req.auth!.companyId);
-  const target = scopeEvents(companyEvents, req).find((row) => row.id === eventId);
+  const [companyEvents, collaborating] = await Promise.all([
+    listCompanyEvents(req.auth!.companyId),
+    loadCollaboratingEventIds(req.auth!.companyId, req.auth!.userId)
+  ]);
+  const target = scopeEvents(companyEvents, req, collaborating).find((row) => row.id === eventId);
   if (!target) {
     // 越权/探测同样留痕：调用方持有 events.create，但该事项不在其可见范围内。
     auditAnalyze(req, eventId, "event.analyze.denied", { reason: "not_found_or_out_of_scope" });

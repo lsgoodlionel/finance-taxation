@@ -19,7 +19,7 @@ import { ReportsShell } from "./ReportsShell";
 import { ReportsWorkbench } from "./ReportsWorkbench";
 import { SnapshotComparePanel } from "./panels/SnapshotComparePanel";
 import type { ReportsStatus, ReportsWorkbenchView } from "./report-types";
-import { getWorkbenchViewLabel, pickLatestSnapshotId } from "./reports-helpers";
+import { getWorkbenchViewLabel, parseSnapshotPeriod, pickLatestSnapshotId } from "./reports-helpers";
 import {
   buildReportsTasks,
   isStatementView,
@@ -122,6 +122,31 @@ export function ReportsShellContainer() {
       message: `已更新 ${bs.periodLabel} 财务三表。`
     });
     return snapshotsPayload.items;
+  }
+
+  /**
+   * 重算一份已过期的快照。
+   *
+   * 期间从快照标签还原，解析不出来就不做——拿当前页面的期间去生成会**覆盖掉
+   * 另一个期间的快照**，而 payload 一旦被覆盖就找不回来了。
+   */
+  async function regenerateSnapshot(snapshot: (typeof snapshots)[number]) {
+    const period = parseSnapshotPeriod(snapshot.periodLabel);
+    if (!period) {
+      setStatus({ tone: "error", message: `认不出期间「${snapshot.periodLabel}」，无法自动重算。` });
+      return;
+    }
+    try {
+      await createReportSnapshot({ reportType: snapshot.reportType, ...period });
+      const snapshotsPayload = await listReportSnapshots();
+      setSnapshots(snapshotsPayload.items);
+      setStatus({ tone: "success", message: `已按当前账面重算 ${snapshot.periodLabel} 的快照。` });
+    } catch (error) {
+      setStatus({
+        tone: "error",
+        message: error instanceof Error ? error.message : "重算快照失败。"
+      });
+    }
   }
 
   async function saveSnapshot() {
@@ -248,6 +273,7 @@ export function ReportsShellContainer() {
                 onSelectFrom={setFromSnapshotId}
                 onSelectTo={setToSnapshotId}
                 onSaveSnapshot={() => void saveSnapshot()}
+                onRegenerate={(snapshot) => void regenerateSnapshot(snapshot)}
                 onGenerateDiff={() => void generateDiff()}
                 onGenerateSummary={() => void generateSummary()}
                 onOpenPrintable={() => void openPrintable()}

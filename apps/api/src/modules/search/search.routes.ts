@@ -4,12 +4,23 @@
  *
  * 跨实体模糊搜索：经营事项 / 合同 / 发票 / 凭证 / 员工 / 任务 / 单据。
  * 每类最多返回 5 条，统一结构供前端命令面板直达。
+ *
+ * ## P1：按调用者权限逐类过滤
+ *
+ * 一个月回顾的「发现三」点名这里：**跨六类对象聚合却不按调用者逐类过滤**。
+ * 后果是一个只有 `expense.view` 的员工，搜关键词同样能看到合同标题、
+ * 凭证摘要、员工姓名——路由上那个权限键挡不住「看到不该看的那一类」。
+ *
+ * 现在每一类都绑一个权限键，没有那个权限的类**根本不查**（不是查完再滤）：
+ * 查完再滤会让数据库白做工，而且一旦哪天有人在过滤前 push 了结果就漏了。
  */
 
 import type { ServerResponse } from "node:http";
 import { query } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
+import { hasPermission } from "../../middleware/auth.js";
+import type { PermissionKey } from "@finance-taxation/domain-model";
 
 export interface SearchResult {
   type: string;
@@ -22,6 +33,23 @@ export interface SearchResult {
 
 const PER_TYPE = 5;
 
+/**
+ * 每一类要什么权限才能搜到。
+ *
+ * 权限键与该类对象所属页面的**读权限**一致——能进那个页面就能搜到它，
+ * 不能进就搜不到。用一套口径，用户不会遇到「列表里看得到、搜索里搜不到」
+ * 这种自相矛盾的行为。
+ */
+const TYPE_PERMISSIONS = {
+  event: "events.view",
+  contract: "contracts.view",
+  invoice: "documents.view",
+  voucher: "ledger.view",
+  employee: "payroll.view",
+  task: "tasks.view",
+  document: "documents.view"
+} as const satisfies Record<string, PermissionKey>;
+
 export async function globalSearch(req: ApiRequest, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
   const q = (url.searchParams.get("q") ?? "").trim();
@@ -30,9 +58,14 @@ export async function globalSearch(req: ApiRequest, res: ServerResponse): Promis
 
   const like = `%${q}%`;
   const results: SearchResult[] = [];
+  const roleCodes = req.auth!.roleCodes;
+
+  /** 这一类要不要查。**没权限的类根本不查**，不是查完再滤。 */
+  const may = (type: keyof typeof TYPE_PERMISSIONS): boolean =>
+    hasPermission(roleCodes, TYPE_PERMISSIONS[type]);
 
   // 经营事项
-  const events = await query<{ id: string; title: string; type: string; status: string }>(
+  const events = !may("event") ? [] : await query<{ id: string; title: string; type: string; status: string }>(
     `SELECT id, title, type, status FROM business_events
      WHERE company_id=$1 AND title ILIKE $2 ORDER BY created_at DESC LIMIT ${PER_TYPE}`, [cid, like]);
   for (const e of events) results.push({
@@ -41,7 +74,7 @@ export async function globalSearch(req: ApiRequest, res: ServerResponse): Promis
   });
 
   // 合同
-  const contracts = await query<{ id: string; title: string; counterparty_name: string; contract_no: string }>(
+  const contracts = !may("contract") ? [] : await query<{ id: string; title: string; counterparty_name: string; contract_no: string }>(
     `SELECT id, title, counterparty_name, contract_no FROM contracts
      WHERE company_id=$1 AND (title ILIKE $2 OR counterparty_name ILIKE $2 OR contract_no ILIKE $2)
      ORDER BY created_at DESC LIMIT ${PER_TYPE}`, [cid, like]);
@@ -51,7 +84,7 @@ export async function globalSearch(req: ApiRequest, res: ServerResponse): Promis
   });
 
   // 发票
-  const invoices = await query<{ id: string; invoice_no: string; seller_name: string; total_amount: string }>(
+  const invoices = !may("invoice") ? [] : await query<{ id: string; invoice_no: string; seller_name: string; total_amount: string }>(
     `SELECT id, invoice_no, seller_name, total_amount FROM invoices
      WHERE company_id=$1 AND (invoice_no ILIKE $2 OR seller_name ILIKE $2)
      ORDER BY created_at DESC LIMIT ${PER_TYPE}`, [cid, like]);
@@ -61,7 +94,7 @@ export async function globalSearch(req: ApiRequest, res: ServerResponse): Promis
   });
 
   // 凭证
-  const vouchers = await query<{ id: string; summary: string; status: string }>(
+  const vouchers = !may("voucher") ? [] : await query<{ id: string; summary: string; status: string }>(
     `SELECT id, summary, status FROM vouchers
      WHERE company_id=$1 AND summary ILIKE $2 ORDER BY created_at DESC LIMIT ${PER_TYPE}`, [cid, like]);
   for (const v of vouchers) results.push({
@@ -70,7 +103,7 @@ export async function globalSearch(req: ApiRequest, res: ServerResponse): Promis
   });
 
   // 员工
-  const employees = await query<{ id: string; name: string; position: string }>(
+  const employees = !may("employee") ? [] : await query<{ id: string; name: string; position: string }>(
     `SELECT id, name, position FROM employees
      WHERE company_id=$1 AND name ILIKE $2 ORDER BY name LIMIT ${PER_TYPE}`, [cid, like]);
   for (const e of employees) results.push({
@@ -79,7 +112,7 @@ export async function globalSearch(req: ApiRequest, res: ServerResponse): Promis
   });
 
   // 任务
-  const tasks = await query<{ id: string; title: string; status: string }>(
+  const tasks = !may("task") ? [] : await query<{ id: string; title: string; status: string }>(
     `SELECT id, title, status FROM tasks
      WHERE company_id=$1 AND title ILIKE $2 ORDER BY created_at DESC LIMIT ${PER_TYPE}`, [cid, like]);
   for (const t of tasks) results.push({
@@ -88,7 +121,7 @@ export async function globalSearch(req: ApiRequest, res: ServerResponse): Promis
   });
 
   // 单据
-  const docs = await query<{ id: string; title: string; status: string }>(
+  const docs = !may("document") ? [] : await query<{ id: string; title: string; status: string }>(
     `SELECT id, title, status FROM generated_documents
      WHERE company_id=$1 AND title ILIKE $2 ORDER BY created_at DESC LIMIT ${PER_TYPE}`, [cid, like]);
   for (const d of docs) results.push({

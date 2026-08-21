@@ -9,19 +9,22 @@
  * 那边是同一个 closing-bundle 接口的等价能力，还会把导出登记进导出历史与审计轨迹。
  */
 import React from "react";
-import type { ReportDiffResult, ReportSnapshot } from "@finance-taxation/domain-model";
+import type { ReportDiffResult } from "@finance-taxation/domain-model";
+import type { ReportSnapshotWithFreshness, SnapshotFreshness } from "../../../lib/api";
 import { Term } from "../../../components/ui/Term";
 import { formatSnapshotLabel, getSnapshotSelectionLabel } from "../reports-helpers";
 import { ReportDiffPanel } from "./ReportDiffPanel";
 
 export type SnapshotComparePanelProps = {
-  snapshots: ReportSnapshot[];
+  snapshots: ReportSnapshotWithFreshness[];
   fromSnapshotId: string;
   toSnapshotId: string;
   diff: ReportDiffResult | null;
   onSelectFrom: (snapshotId: string) => void;
   onSelectTo: (snapshotId: string) => void;
   onSaveSnapshot: () => void;
+  /** 重算一份已过期的快照。只对判定为 stale / unknown 的那几条显示入口。 */
+  onRegenerate: (snapshot: ReportSnapshotWithFreshness) => void;
   onGenerateDiff: () => void;
   onGenerateSummary: () => void;
   onOpenPrintable: () => void;
@@ -48,6 +51,31 @@ const ACTION_ROW_STYLE: React.CSSProperties = { display: "flex", gap: 8, flexWra
 
 const HINT_STYLE: React.CSSProperties = { fontSize: 13, color: "#4d5d6c", margin: 0 };
 
+/**
+ * 快照生成之后账还动过没有。
+ *
+ * 「最新」不显示——一屏几十条全挂绿标只会变成背景噪音，**要显示的是异常**。
+ * `unknown` 照实说「无法判断」，不许悄悄按最新处理。
+ */
+function FreshnessTag({ freshness }: { freshness?: SnapshotFreshness }) {
+  if (!freshness || freshness.status === "fresh") return null;
+  const isStale = freshness.status === "stale";
+  return (
+    <span
+      title={freshness.reason}
+      style={{
+        fontSize: 11,
+        padding: "1px 8px",
+        borderRadius: 999,
+        color: isStale ? "#b42318" : "#7a5b00",
+        background: isStale ? "rgba(180,35,24,0.08)" : "rgba(217,119,6,0.10)"
+      }}
+    >
+      {isStale ? "账已变动，需重新生成" : "无法判断是否最新"}
+    </span>
+  );
+}
+
 function snapshotRowStyle(isFrom: boolean, isTo: boolean): React.CSSProperties {
   return {
     display: "grid",
@@ -67,6 +95,7 @@ export function SnapshotComparePanel({
   onSelectFrom,
   onSelectTo,
   onSaveSnapshot,
+  onRegenerate,
   onGenerateDiff,
   onGenerateSummary,
   onOpenPrintable,
@@ -91,7 +120,12 @@ export function SnapshotComparePanel({
               return (
                 <div key={snapshot.id} style={snapshotRowStyle(isFrom, isTo)}>
                   <div style={{ display: "grid", gap: 4 }}>
-                    <strong style={{ fontSize: 13, color: "#1e2a37" }}>{formatSnapshotLabel(snapshot)}</strong>
+                    <span style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <strong style={{ fontSize: 13, color: "#1e2a37" }}>
+                        {formatSnapshotLabel(snapshot)}
+                      </strong>
+                      <FreshnessTag freshness={snapshot.freshness} />
+                    </span>
                     <span style={{ fontSize: 11, color: "#9aa5b4", fontFamily: "monospace" }}>
                       SNP-{String(index + 1).padStart(3, "0")} · {snapshot.snapshotDate}
                     </span>
@@ -103,6 +137,13 @@ export function SnapshotComparePanel({
                     <button className="btn btn-outline" onClick={() => onSelectTo(snapshot.id)}>
                       设为对比
                     </button>
+                    {snapshot.freshness && snapshot.freshness.status !== "fresh" && (
+                      // 只在这里出现：一份还准的报表不需要重算按钮，
+                      // 到处都摆一个只会让人误以为该点。
+                      <button className="btn btn-outline" onClick={() => onRegenerate(snapshot)}>
+                        按当前账面重算
+                      </button>
+                    )}
                   </div>
                 </div>
               );

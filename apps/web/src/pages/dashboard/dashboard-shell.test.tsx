@@ -1,6 +1,6 @@
 // Pure-logic unit tests for ChairmanDashboardPage — no DOM required
 import type { DashboardData } from "../../lib/api";
-import { buildExpenseData, type ExpenseSlice } from "./expense-slices";
+import { buildExpenseData, resolveExpenseChart, type ExpenseSlice } from "./expense-slices";
 
 function okDash(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -52,6 +52,44 @@ const formattedPie = buildExpenseData({
   revenue: "1,000,000.00", cost: "600,000.00", expense: "200,000.00", incomeTax: "50,000.00",
 });
 okDash(sliceSum(formattedPie) === 1000000, "带千分位的金额解析后分块之和仍等于营业收入");
+
+// ─── 真实费用构成（P1）────────────────────────────────────────────────────────
+// 此前成本与费用的内部拆分是按固定比例编的（主营成本 65%、人工 20%……）。
+// 老板会拿那张图判断「人工占比是不是太高」，而那个数字没人算过。
+// 后端现在下发 expenseBreakdown，这里钉住三件事：用真的、标估算、空不补。
+
+function dashWith(breakdown: DashboardData["expenseBreakdown"]): DashboardData {
+  return { profitOverview: overview, expenseBreakdown: breakdown } as DashboardData;
+}
+
+const realChart = resolveExpenseChart(
+  dashWith([
+    { name: "主营业务成本", accountCode: "5001", amount: 600000, kind: "cost" },
+    { name: "管理费用", accountCode: "6602", amount: 200000, kind: "expense" },
+    { name: "所得税费用", accountCode: "6801", amount: 50000, kind: "incomeTax" },
+  ])
+);
+okDash(realChart.isEstimated === false, "下发了明细就不是估算");
+okDash(sliceValue(realChart.slices, "主营业务成本") === 600000, "分块金额直接取后端科目金额");
+okDash(
+  sliceValue(realChart.slices, "人工成本") === undefined,
+  "不再凭空造出后端没有的『人工成本』分块"
+);
+okDash(sliceValue(realChart.slices, "净利润") === 150000, "净利润 = 收入 - 后端各项之和");
+okDash(sliceSum(realChart.slices) === 1000000, "真实构成下各分块之和仍等于营业收入");
+
+// undefined ≠ []：前者是旧后端没这个字段，后者是本期确实没有费用。
+const legacyChart = resolveExpenseChart(dashWith(undefined));
+okDash(legacyChart.isEstimated === true, "后端没下发时必须自报是估算");
+okDash(sliceSum(legacyChart.slices) === 1000000, "降级路径的口径不变");
+
+const emptyChart = resolveExpenseChart(dashWith([]));
+okDash(emptyChart.isEstimated === false, "本期无费用不是估算");
+okDash(
+  sliceValue(emptyChart.slices, "主营成本") === undefined,
+  "本期无费用时不许拿估算比例去填——那会让零费用公司看到一张编出来的图"
+);
+okDash(sliceValue(emptyChart.slices, "净利润") === 1000000, "没有费用时收入全是利润");
 
 // ─── Trend tag color ──────────────────────────────────────────────────────────
 

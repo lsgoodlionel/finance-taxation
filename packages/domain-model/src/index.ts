@@ -662,6 +662,17 @@ export interface ReportSnapshot {
   snapshotDate: string;
   payload: BalanceSheetReport | ProfitStatementReport | CashFlowReport;
   createdAt: string;
+  /**
+   * 溯源回指（V15/P1）。全部可空——迁移 096 之前生成的快照没有这些信息，
+   * 那是事实，取不到时前端显示「无法判断是否为最新」而不是给绿勾。
+   */
+  generatedByUserId?: string | null;
+  /** 生成时纳入计算的分录条数。与当前条数不一致即说明快照已过期。 */
+  sourceEntryCount?: number | null;
+  /** 数据截止时点：纳入计算的最后一笔分录的过账时间。 */
+  sourceLatestPostedAt?: string | null;
+  periodStart?: string | null;
+  periodEnd?: string | null;
 }
 
 export interface ReportDiffLine {
