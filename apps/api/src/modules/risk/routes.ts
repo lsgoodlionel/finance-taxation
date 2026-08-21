@@ -8,7 +8,10 @@ import { getEventDetail } from "../events/routes.js";
 import { listCompanyEvents, listCompanyTasks } from "../events/event-persistence.js";
 import { listCompanyRndProjects } from "../rnd/routes.js";
 import { listCompanyTaxFilingBatches, listCompanyTaxItems } from "../tax/routes.js";
-import { listCompanyLedgerEntries, listCompanyVouchers } from "../vouchers/routes.js";
+import {
+  listCompanyLedgerEntries,
+  listCompanyVouchers
+} from "../vouchers/voucher-queries.js";
 import { evaluateRiskFindings } from "./engine.js";
 import { scoreRiskFindings } from "./scoring.js";
 import { notify } from "../notifications/dispatch.js";

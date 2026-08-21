@@ -56,8 +56,10 @@ const FILE_LIMITS = new Map([
 
   // ── 这条护栏第一次跑就抓出来的五个，回顾里一个都没提到 ────────────────
   // 「摩擦最大的三个文件」是人工数的，而人只会数自己最近碰过的。
-  // 下面几条先钉住现值止住增长，按摩擦排序逐个处理。
-  ["apps/api/src/modules/vouchers/routes.ts", 1550],
+  // 最大的那个（vouchers/routes.ts，1462 行）已在 P3 拆完；
+  // 其余先钉住现值止住增长，按摩擦排序逐个处理。
+  // P3 拆过之后只剩 HTTP 层（查询层、行 mapper、模板生成都搬走了），
+  // 已经回到默认上限之下，这条线随之删除。
   ["apps/api/src/modules/tax/routes.ts", 1160],
   ["apps/api/src/modules/approval/store.ts", 1010],
   ["apps/web/src/lib/api-expense-control.ts", 860],

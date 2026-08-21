@@ -11,7 +11,9 @@ import {
   listCompanyTaxItems,
   listCompanyTaxpayerProfiles
 } from "../tax/routes.js";
-import { listCompanyVouchers } from "../vouchers/routes.js";
+import {
+  listCompanyVouchers
+} from "../vouchers/voucher-queries.js";
 import {
   derivePayrollRuntimeSummary,
   derivePayrollTransferRuntimeSummary,

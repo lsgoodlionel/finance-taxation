@@ -5,7 +5,10 @@ import { json } from "../../utils/http.js";
 import { listCompanyEvents, listCompanyTasks } from "../events/event-persistence.js";
 import { listCompanyRiskFindings } from "../risk/routes.js";
 import { listCompanyTaxFilingBatches } from "../tax/routes.js";
-import { listCompanyLedgerEntries, listCompanyVouchers } from "../vouchers/routes.js";
+import {
+  listCompanyLedgerEntries,
+  listCompanyVouchers
+} from "../vouchers/voucher-queries.js";
 import {
   formatAmount,
   formatBalanceTrend,

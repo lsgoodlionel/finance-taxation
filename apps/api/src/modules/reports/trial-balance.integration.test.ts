@@ -426,7 +426,7 @@ test("listCompanyLedgerEntries keeps its exact previous behaviour when no date r
   const { closePool } = await import("../../db/client.js");
   try {
     await seedLedgerFixtures(pool, [...APRIL_ENTRIES, ...MAY_ENTRIES, ...JUNE_ENTRIES]);
-    const { listCompanyLedgerEntries } = await import("../vouchers/routes.js");
+    const { listCompanyLedgerEntries } = await import("../vouchers/voucher-queries.js");
 
     // 不传参：全部分录，一条不少
     const all = await listCompanyLedgerEntries(COMPANY_ID);

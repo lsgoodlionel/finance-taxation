@@ -58,7 +58,9 @@ import { query, withTransaction } from "../../db/client.js";
 import { toDateOnly } from "../../db/date-column.js";
 import { listCompanyDocuments } from "../documents/routes.js";
 import { listCompanyTaxItems } from "../tax/routes.js";
-import { listCompanyVouchers } from "../vouchers/routes.js";
+import {
+  listCompanyVouchers
+} from "../vouchers/voucher-queries.js";
 import { json } from "../../utils/http.js";
 import { uniqueId } from "../../utils/id.js";
 import { writeAudit } from "../../services/audit.js";

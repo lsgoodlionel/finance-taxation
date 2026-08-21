@@ -5,7 +5,9 @@ import { query, queryOne, withTransaction } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import { listCompanyRiskFindings } from "../risk/routes.js";
 import { listCompanyTaxpayerProfiles } from "../tax/routes.js";
-import { listCompanyLedgerEntries } from "../vouchers/routes.js";
+import {
+  listCompanyLedgerEntries
+} from "../vouchers/voucher-queries.js";
 import { checkBalanceSheet } from "../ledger/balance-check.js";
 import { buildSnapshotProvenance } from "./provenance.js";
 import { attachFreshness, loadCurrentProvenance } from "./snapshot-freshness.js";

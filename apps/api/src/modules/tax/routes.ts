@@ -17,7 +17,9 @@ import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { listCompanyRndCostLines, listCompanyRndProjects, listCompanyRndTimeEntries } from "../rnd/routes.js";
 import { buildRndProjectSummary } from "../rnd/summary.js";
-import { listCompanyLedgerEntries } from "../vouchers/routes.js";
+import {
+  listCompanyLedgerEntries
+} from "../vouchers/voucher-queries.js";
 import { buildProfitStatementReport } from "../reports/summary.js";
 import { buildCorporateIncomeTaxPreparation } from "./corporate-income-tax.js";
 import { buildArchiveRecord, buildReviewRecord, canArchiveBatch } from "./filing-workflow.js";

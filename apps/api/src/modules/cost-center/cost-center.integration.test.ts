@@ -287,7 +287,7 @@ test("凭证创建时指定成本中心，费用行才带得上它", async (t) =
   let voucherId = "";
 
   await t.test("费用行贴上成本中心，非费用行不贴", async () => {
-    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const { createVoucherFromTemplate } = await import("../vouchers/voucher-from-template.js");
     const capture = createResponseCapture();
     await createVoucherFromTemplate(
       {
@@ -329,7 +329,7 @@ test("凭证创建时指定成本中心，费用行才带得上它", async (t) =
        values ('evt-cc-2', $1, 'expense', '未指定部门的费用', '', '财务部', '2026-06-16'::date, 300, 'CNY', 'analyzed', 'manual')`,
       [COMPANY_ID]
     );
-    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const { createVoucherFromTemplate } = await import("../vouchers/voucher-from-template.js");
     const capture = createResponseCapture();
     await createVoucherFromTemplate(
       {
