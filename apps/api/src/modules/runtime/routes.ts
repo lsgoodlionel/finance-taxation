@@ -1,7 +1,8 @@
 import type { ServerResponse } from "node:http";
 import { json } from "../../utils/http.js";
 import type { ApiRequest } from "../../types.js";
-import { hasCompanyWideAccess, listCompanyEvents, listCompanyTasks } from "../events/routes.js";
+import { hasCompanyWideAccess } from "../events/routes.js";
+import { listCompanyEvents, listCompanyTasks } from "../events/event-persistence.js";
 import { listCompanyPayrollRecords, listCompanyPayrollReviewLedgers } from "../payroll/routes.js";
 import { getBatchWithLines, listBatches } from "../payroll/transfer.js";
 import { listCompanyRiskFindings } from "../risk/routes.js";

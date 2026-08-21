@@ -42,7 +42,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
-const registryPath = join(repoRoot, "apps/api/src/routes/registry.ts");
+/**
+ * 路由定义所在的目录（V15/P2 拆分后）。
+ *
+ * 拆分那天这条测试立刻红了——`registry.ts` 里已经没有路由字面量，
+ * 解析出 0 条。那个 `routes.length > 200` 的兜底断言就是为这种情况留的：
+ * **一条读不到数据却依然通过的护栏，比没有护栏更糟**。
+ */
+const routeGroupsDir = join(repoRoot, "apps/api/src/routes/groups");
 const webRoot = join(repoRoot, "apps/web/src");
 
 /**
@@ -200,8 +207,16 @@ async function collectWebSource(dir: string): Promise<string[]> {
   return out;
 }
 
+async function readRouteDefinitions(): Promise<string> {
+  const files = (await readdir(routeGroupsDir)).filter((name) => name.endsWith(".ts"));
+  const bodies = await Promise.all(
+    files.map((name) => readFile(join(routeGroupsDir, name), "utf8"))
+  );
+  return bodies.join("\n");
+}
+
 test("后端路由必须有前台调用点（白名单与已知缺口除外）", async () => {
-  const registry = await readFile(registryPath, "utf8");
+  const registry = await readRouteDefinitions();
   const routes = [...registry.matchAll(/method:\s*"(\w+)",?\s*\n?\s*path:\s*"([^"]+)"/g)].map(
     ([, method, path]) => ({ method: method!, path: path!, id: `${method} ${path}` })
   );
@@ -238,7 +253,7 @@ test("后端路由必须有前台调用点（白名单与已知缺口除外）",
 test("白名单与已知缺口里不能有已经补上入口的条目", async () => {
   // 补上入口却忘了删登记，会让这份清单越读越不可信——
   // 而不可信的清单等于没有清单。
-  const registry = await readFile(registryPath, "utf8");
+  const registry = await readRouteDefinitions();
   const routes = [...registry.matchAll(/method:\s*"(\w+)",?\s*\n?\s*path:\s*"([^"]+)"/g)].map(
     ([, method, path]) => `${method} ${path}`
   );

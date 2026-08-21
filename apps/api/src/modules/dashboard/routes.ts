@@ -2,7 +2,7 @@ import type { ServerResponse } from "node:http";
 import type { LedgerEntry } from "@finance-taxation/domain-model";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
-import { listCompanyEvents, listCompanyTasks } from "../events/routes.js";
+import { listCompanyEvents, listCompanyTasks } from "../events/event-persistence.js";
 import { listCompanyRiskFindings } from "../risk/routes.js";
 import { listCompanyTaxFilingBatches } from "../tax/routes.js";
 import { listCompanyLedgerEntries, listCompanyVouchers } from "../vouchers/routes.js";

@@ -3,6 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import type { DashboardData } from "../../lib/api";
+import { Term } from "../../components/ui/Term";
 import { resolveExpenseChart } from "./expense-slices";
 
 const { Text } = Typography;
@@ -34,7 +35,7 @@ export function DashboardPieChart({ data }: DashboardPieChartProps) {
     >
       {pieData.length === 0 ? (
         <Text type="secondary" style={{ fontSize: 12 }}>
-          本期还没有已过账的收入与费用。
+          本期还没有已<Term k="posting">过账</Term>的收入与费用。
         </Text>
       ) : (
       <ResponsiveContainer width="100%" height={220}>

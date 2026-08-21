@@ -4,7 +4,8 @@ import type { RiskClosureRecord, RiskFinding } from "@finance-taxation/domain-mo
 import { query, queryOne, withTransaction } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import { listCompanyDocuments } from "../documents/routes.js";
-import { getEventDetail, listCompanyEvents, listCompanyTasks } from "../events/routes.js";
+import { getEventDetail } from "../events/routes.js";
+import { listCompanyEvents, listCompanyTasks } from "../events/event-persistence.js";
 import { listCompanyRndProjects } from "../rnd/routes.js";
 import { listCompanyTaxFilingBatches, listCompanyTaxItems } from "../tax/routes.js";
 import { listCompanyLedgerEntries, listCompanyVouchers } from "../vouchers/routes.js";

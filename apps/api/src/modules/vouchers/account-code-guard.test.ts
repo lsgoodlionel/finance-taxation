@@ -23,7 +23,7 @@ import { buildSocialSecurityVouchers } from "../payroll/social-security-vouchers
 import { buildPurchaseExpenseBundle } from "../events/purchase-expense-rules.js";
 import { buildTravelExpenseBundle } from "../events/travel-expense-rules.js";
 import { buildContractRevenueBundle } from "../events/contract-revenue-rules.js";
-import { buildEventMappings, PENDING_ACCOUNT_CODE } from "../events/routes.js";
+import { buildEventMappings, PENDING_ACCOUNT_CODE } from "../events/event-mappings.js";
 import { EXPENSE_PREFIXES, REVENUE_PREFIXES } from "../analytics/routes.js";
 import { REVENUE_PREFIXES as CONSISTENCY_REVENUE_PREFIXES } from "../tax-integration/consistency.routes.js";
 import { REVENUE_PREFIXES as ANOMALY_REVENUE_PREFIXES } from "../ai-agents/anomaly/anomaly.routes.js";

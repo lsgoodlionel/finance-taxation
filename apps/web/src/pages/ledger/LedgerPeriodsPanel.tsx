@@ -57,7 +57,7 @@ function confirmCloseIncome(period: string, onConfirm: () => void) {
     content: (
       <div style={{ lineHeight: 1.7 }}>
         <p>
-          把这个月的收入、成本、费用类科目（6xxx）结平到<strong>本年利润</strong>，
+          把这个月的收入、成本、费用类<Term k="account">科目</Term>（6xxx）结平到<strong>本年利润</strong>，
           生成一张结转凭证<strong>草稿</strong>——复核过账之后才真的入账。
         </p>
         <p style={{ marginBottom: 0, color: "#6b7280" }}>
