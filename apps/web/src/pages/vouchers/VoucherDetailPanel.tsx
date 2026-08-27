@@ -31,7 +31,14 @@ interface VoucherDetailPanelProps {
   updating: boolean;
   onValidate: () => Promise<void>;
   onApprove: () => Promise<void>;
-  onPost: () => Promise<void>;
+  /**
+   * 过账。
+   *
+   * 返回 `void` 而不是 `Promise<void>`：它内部弹一个需要选终审人的确认框，
+   * 真正的过账发生在用户点「确认」之后。让它返回 Promise 会诱使调用方 `await`，
+   * 而那个 Promise 在对话框弹出时就已经 resolve 了——等于什么都没等到。
+   */
+  onPost: () => void;
   /**
    * 红冲已过账的凭证。
    *
@@ -192,7 +199,17 @@ export function VoucherDetailPanel({
           >
             借贷校验
           </Button>
-          {detail.status === "draft" && (
+          {/*
+            「复核过没有」的判据是 **approvedAt**，不是 status。
+
+            事项分析生成的凭证落库即 `review_required` 但 `approvedAt` 为 null——
+            按 status 判，它既拿不到「审核通过」（那只给 draft），
+            点「过账」又必然 400（服务端要求 approvedAt 非空）。
+            这类凭证在界面上**无路可走**，实验时库里卡了 5 张。
+
+            status 是粗粒度标记，approvedAt 才是「有没有人复核过」的事实。
+          */}
+          {!detail.approvedAt && (
             <Button
               size="small"
               type="primary"
@@ -204,7 +221,7 @@ export function VoucherDetailPanel({
               审核通过
             </Button>
           )}
-          {detail.status === "review_required" && (
+          {detail.approvedAt && (
             <Button
               size="small"
               type="primary"

@@ -35,7 +35,8 @@ interface VouchersWorkspaceProps {
   onSelect: (id: string) => void;
   onValidate: () => Promise<void>;
   onApprove: () => Promise<void>;
-  onPost: () => Promise<void>;
+  /** 过账。内部弹确认框（要选终审人），真正的过账在用户确认之后发生。 */
+  onPost: () => void;
   onReverse: () => Promise<void>;
   onSummaryUpdate: (summary: string) => Promise<void>;
   onOpenEvent: (businessEventId: string) => void;

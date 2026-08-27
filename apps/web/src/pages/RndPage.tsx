@@ -63,6 +63,8 @@ export function RndPage() {
   const [newName, setNewName] = useState(DEFAULT_PROJECT_NAME);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("正在加载研发项目。");
+  /** 项目清单加载失败的原因。null 表示没出错（可能只是没有项目）。 */
+  const [projectsError, setProjectsError] = useState<string | null>(null);
 
   const activeTask = readRndTask(searchParams);
   const urlProjectId = readRndProjectId(searchParams);
@@ -106,9 +108,16 @@ export function RndPage() {
     try {
       const payload = await listRndProjects();
       setProjects(payload.items);
+      setProjectsError(null);
       setMessage(`共 ${payload.total} 个研发项目。`);
     } catch (error) {
       const text = (error as Error).message;
+      // 403 说人话，并把它和「没有项目」分开——见 RndProjectListPanel 的注释。
+      setProjectsError(
+        /forbidden|403/i.test(text)
+          ? "当前账号没有查看研发项目的权限（rnd.view）。请联系管理员开通。"
+          : text
+      );
       setMessage(text);
       toast.error(text);
     } finally {
@@ -207,6 +216,7 @@ export function RndPage() {
         return (
           <RndProjectListPanel
             projects={projects}
+            loadError={projectsError}
             selectedProjectId={selectedProjectId}
             onSelectProject={selectProject}
             onCollectCosts={collectCostsFor}

@@ -42,7 +42,14 @@ export interface CompanyMember {
   roleIds: string[];
 }
 
-/** 公司成员名单，用来挑协作人。 */
-export async function listCompanyMembers() {
-  return request<{ items: CompanyMember[]; total: number }>("/api/settings/users");
+/**
+ * 公司成员名单。
+ *
+ * 传 `permission` 可以只要**持有某项权限**的人，例如挑凭证过账的终审人时传
+ * `ledger.post`。过滤在服务端做——「哪个角色有哪项权限」的事实来源在后端的
+ * 权限表里，前端自己按 roleId 判断等于把那张表复制一份，两份迟早漂移。
+ */
+export async function listCompanyMembers(permission?: string) {
+  const suffix = permission ? `?permission=${encodeURIComponent(permission)}` : "";
+  return request<{ items: CompanyMember[]; total: number }>(`/api/settings/users${suffix}`);
 }

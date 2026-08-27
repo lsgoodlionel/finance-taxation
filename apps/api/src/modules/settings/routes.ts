@@ -3,6 +3,8 @@ import { query, queryOne } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import { AI_PROVIDERS, loadAiConfig, listOllamaModels } from "../../services/ai.js";
 import type { ApiRequest } from "../../types.js";
+import { permissionCatalog, type PermissionKey } from "@finance-taxation/domain-model";
+import { hasPermission } from "../../middleware/auth.js";
 
 interface CompanyRow {
   id: string;
@@ -273,24 +275,62 @@ export async function testAiConnection(req: ApiRequest, res: ServerResponse): Pr
   }
 }
 
+/**
+ * 公司成员列表。
+ *
+ * 支持 `?permission=ledger.post` 过滤出**持有某项权限**的人。
+ *
+ * 过滤放在服务端，是因为「哪个角色有哪项权限」的事实来源是
+ * `middleware/auth.ts` 的权限表。前端要是自己按 roleId 判断，
+ * 就等于把那张表复制一份——两份迟早会漂移，而漂移的方向通常是
+ * 前端把不该出现的人列出来（比如让没有记账权的出纳去当过账终审人）。
+ *
+ * 典型用途：凭证过账要选终审人，只能从有 `ledger.post` 的人里选。
+ */
 export async function getUserList(req: ApiRequest, res: ServerResponse): Promise<void> {
-  const rows = await query<{ id: string; username: string; display_name: string; role_ids: string[] }>(
+  const url = new URL(req.url || "/", "http://127.0.0.1");
+  const requiredPermission = url.searchParams.get("permission");
+
+  // 取角色**code** 而不是 role_id：权限表（middleware/auth.ts）按标准 code
+  // 索引（role-accountant），而 user_roles 存的是公司自定义的 id
+  // （role-v4-tech-accountant）。认证中间件走的也是 code——
+  // 这里要是拿 id 去查权限，过滤结果永远是空的。
+  const rows = await query<{
+    id: string;
+    username: string;
+    display_name: string;
+    role_ids: string[];
+    role_codes: string[];
+  }>(
     `select u.id, u.username, u.display_name,
-            array_agg(ur.role_id) filter (where ur.role_id is not null) as role_ids
+            array_agg(ur.role_id) filter (where ur.role_id is not null) as role_ids,
+            array_agg(r.code)     filter (where r.code   is not null) as role_codes
      from users u
      left join user_roles ur on ur.user_id = u.id
-     where u.company_id = $1
+     left join roles r on r.id = ur.role_id
+     where u.company_id = $1 and u.status = 'active'
      group by u.id, u.username, u.display_name
      order by u.display_name`,
     [req.auth!.companyId]
   );
-  json(res, 200, {
-    items: rows.map((r) => ({
+
+  const items = rows
+    .map((r) => ({
       id: r.id,
       username: r.username,
       displayName: r.display_name,
-      roleIds: r.role_ids ?? []
-    })),
-    total: rows.length
-  });
+      roleIds: r.role_ids ?? [],
+      roleCodes: r.role_codes ?? []
+    }))
+    .filter((item) => {
+      if (!requiredPermission) return true;
+      // 权限键不认识时**返回空而不是全部**——把所有人都列出来，
+      // 调用方会以为「这些人都有这项权限」，那比列不出人危险得多。
+      if (!(permissionCatalog as readonly string[]).includes(requiredPermission)) return false;
+      return hasPermission(item.roleCodes, requiredPermission as PermissionKey);
+    })
+    // roleCodes 只用于服务端过滤，不外泄给调用方——响应形状保持不变。
+    .map(({ roleCodes: _roleCodes, ...rest }) => rest);
+
+  json(res, 200, { items, total: items.length });
 }

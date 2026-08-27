@@ -307,7 +307,24 @@ export async function confirmPayment(
   }
 
   const voucherId = `vch-pay-${randomUUID()}`;
+  // 事务外那次 voucherId 检查只是快路径，**挡不住并发**：
+  // 六个并发请求会同时读到 voucherId 为空、同时通过，生成六张付款凭证。
+  // 实验里实测过——同一付款单并发 6 次 confirm，得到 6 个不同的 voucherId。
+  //
+  // 真正的判断必须在事务里、且对付款单行加锁之后再做一次。
+  let alreadyConfirmed: string | null = null;
   await withTransaction(async (tx) => {
+    // select ... for update：后到的请求在这里排队，等前一个提交后
+    // 才读到已经写好的 voucher_id，于是走幂等返回而不是再记一笔账。
+    const locked = await tx.query<{ voucher_id: string | null }>(
+      `select voucher_id from payments where id = $1 and company_id = $2 for update`,
+      [id, companyId]
+    );
+    const lockedVoucherId = locked.rows[0]?.voucher_id ?? null;
+    if (lockedVoucherId) {
+      alreadyConfirmed = lockedVoucherId;
+      return;
+    }
     const accounts = await tx.query<{ code: string; name: string }>(
       `select code, name from accounts where company_id = $1`,
       [companyId]
@@ -364,6 +381,19 @@ export async function confirmPayment(
       [companyId, id, voucherId]
     );
   });
+
+  // 并发时后到的那些请求在锁上排过队，读到的是前一个已经写好的凭证号——
+  // 如实返回它，而不是再记一笔账。对调用方来说这次调用是成功的，
+  // 因为这笔款确实已经付了。
+  if (alreadyConfirmed) {
+    return {
+      ok: true,
+      value: {
+        payment: { ...payment, status: "paid", voucherId: alreadyConfirmed },
+        voucherId: alreadyConfirmed
+      }
+    };
+  }
 
   return {
     ok: true,

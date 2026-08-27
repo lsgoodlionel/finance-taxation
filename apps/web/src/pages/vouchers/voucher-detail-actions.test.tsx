@@ -63,8 +63,12 @@ const BASE_DETAIL = {
   ]
 };
 
-function renderPanel(status: string, postedAt: string | null = null): string {
-  const detail = { ...BASE_DETAIL, status, postedAt } as unknown as VoucherDetail;
+function renderPanel(
+  status: string,
+  postedAt: string | null = null,
+  approvedAt: string | null = null
+): string {
+  const detail = { ...BASE_DETAIL, status, postedAt, approvedAt } as unknown as VoucherDetail;
   // 组件树里有 useNavigate（术语链接会跳转），必须给它一个 Router 上下文。
   return renderToStaticMarkup(
     createElement(
@@ -85,8 +89,11 @@ function renderPanel(status: string, postedAt: string | null = null): string {
 }
 
 const draftHtml = renderPanel("draft");
-const reviewHtml = renderPanel("review_required");
-const postedHtml = renderPanel("posted", "2026-08-02T00:00:00.000Z");
+// 已复核、待过账：approvedAt 有值。
+const reviewHtml = renderPanel("review_required", null, "2026-08-01T10:00:00.000Z");
+const postedHtml = renderPanel("posted", "2026-08-02T00:00:00.000Z", "2026-08-01T10:00:00.000Z");
+// **分析生成态**：status 已是 review_required，但没有人复核过（approvedAt 为空）。
+const analysisHtml = renderPanel("review_required", null, null);
 
 // ── 草稿：能校验、能审核；不能过账、不能红冲 ────────────────────────────────
 assert(draftHtml.includes("借贷校验"), "草稿应当能做借贷校验");
@@ -106,6 +113,22 @@ assert(postedHtml.includes("红冲"), "已过账凭证必须有红冲入口—�
 assert(!postedHtml.includes("审核通过"), "已过账不该再出现审核按钮");
 assert(!postedHtml.includes("借贷校验"), "已过账凭证的动作区不该再挂校验按钮");
 
+// ── 分析生成态：必须给「审核通过」，不能只给一个必然 400 的「过账」 ────────
+//
+// 事项分析生成的凭证落库即 review_required 且 approvedAt 为 null。
+// 按 status 判会让它既拿不到审核按钮（那只给 draft）、点过账又必然 400
+// （服务端要求 approvedAt 非空）——**在界面上无路可走**，实验时卡了 5 张。
+//
+// 判据是 approvedAt，不是 status。
+assert(
+  analysisHtml.includes("审核通过"),
+  "分析生成、尚未复核的凭证必须能复核——否则它在界面上是个死结"
+);
+assert(
+  !analysisHtml.includes("过账"),
+  "还没复核就给过账按钮，点下去必然 400"
+);
+
 // ── 红冲按钮带危险样式 ──────────────────────────────────────────────────────
 // 红冲会生成一张新凭证并影响账面，视觉上要和普通操作区分开。
 assert(
@@ -117,4 +140,4 @@ assert(
 // 服务端渲染的静态 HTML 里只有 children（按钮本身）。
 // 那一层由 E2E 覆盖，不在这里假装测过。
 
-console.log("voucher-detail-actions: 11 assertions passed");
+console.log("voucher-detail-actions: 13 assertions passed");

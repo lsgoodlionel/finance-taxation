@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert } from "antd";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type { BusinessEvent, RiskClosureRecord, RiskFinding } from "@finance-taxation/domain-model";
 import {
@@ -58,6 +59,17 @@ export function RiskPage() {
   const [scopeFilter, setScopeFilter] = useState<RiskScopeFilter>(urlState.scope);
   const [viewFilter, setViewFilter] = useState<RiskViewFilter>(urlState.view);
   const [message, setMessage] = useState("正在准备风险勾稽。");
+  /**
+   * 加载失败的原因。
+   *
+   * **与「没有风险」严格区分**：接口 403 时，KPI 卡片会照常渲染
+   * 「0 条 · 全部已关闭 · 关闭率 0%」——那看起来是一份健康的看板，
+   * 而实际上是这个账号根本读不到数据。税务专员在实验里就这样被误导过：
+   * 同一账号从归档包接口能读到「未关闭 7 项」。
+   *
+   * 给人看「一切正常」比给人看报错危险得多。
+   */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [taskKey, setTaskKey] = useState(urlState.task);
 
   useEffect(() => {
@@ -96,7 +108,14 @@ export function RiskPage() {
           `${navContractId ? `当前合同 ${navContractId}：` : navEventId ? `当前事项 ${navEventId}：` : navRiskFindingId ? `当前风险 ${navRiskFindingId}：` : ""}已加载 ${findingsPayload.total} 条风险发现。`
         );
       } catch (error) {
-        setMessage((error as Error).message);
+        const raw = (error as Error).message;
+        // 403 说人话：用户要知道这是权限问题，而不是「系统坏了」或「没有风险」。
+        setLoadError(
+          /forbidden|403/i.test(raw)
+            ? "当前账号没有查看风险发现的权限（risk.view）。请联系管理员开通，或换一个有权限的账号。"
+            : raw
+        );
+        setMessage("风险数据加载失败。");
       }
     }
     void bootstrap();
@@ -245,7 +264,24 @@ export function RiskPage() {
 
   const findingsWorkspace = (
     <RiskFindingsWorkspace
-      kpiCards={<RiskKpiCards findings={findings} />}
+      kpiCards={
+        loadError ? (
+          <Alert
+            type="error"
+            showIcon
+            message="风险数据没有加载出来"
+            description={
+              <span>
+                {loadError}
+                <br />
+                <strong>下面不是「没有风险」，而是读不到数据</strong>——请不要按当前画面判断风险状况。
+              </span>
+            }
+          />
+        ) : (
+          <RiskKpiCards findings={findings} />
+        )
+      }
       list={
         <RiskFindingsListPanel
           toolbar={findingsToolbar}

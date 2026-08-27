@@ -50,6 +50,11 @@ const DEFAULT_BANK_ACCOUNT = "1002";
  *
  * 幂等：已经有付款凭证的借款单直接返回那一张。付款接口被重试时不能生成
  * 第二张凭证——两张一模一样的付款凭证过账后，账上会认为公司借出了两倍的钱。
+ *
+ * **幂等判断必须在事务里、且对借款单行加锁之后再做一次**。
+ * 函数开头那次检查只是快路径，挡不住并发：六个并发请求会同时读到
+ * `paymentVoucherId` 为空、同时通过，各生成一张凭证。
+ * 出纳在 V16 角色实验里实测过——并发 6 次 pay 得到 6 个不同的 voucherId。
  */
 export async function payAdvance(input: PayAdvanceInput): Promise<PayAdvanceOutcome> {
   const { advance } = input;
@@ -62,7 +67,20 @@ export async function payAdvance(input: PayAdvanceInput): Promise<PayAdvanceOutc
   const amount = fromCents(advance.amountCents);
   const summary = `${advance.advanceNo} 备用金借出`;
 
+  let alreadyPaid: string | null = null;
   await withTransaction(async (tx) => {
+    // select ... for update：后到的请求在这里排队，等前一个提交后
+    // 读到已经写好的凭证号，走幂等返回而不是再借出一笔。
+    const locked = await tx.query<{ payment_voucher_id: string | null }>(
+      `select payment_voucher_id from advances where id = $1 and company_id = $2 for update`,
+      [advance.id, advance.companyId]
+    );
+    const lockedVoucherId = locked.rows[0]?.payment_voucher_id ?? null;
+    if (lockedVoucherId) {
+      alreadyPaid = lockedVoucherId;
+      return;
+    }
+
     const accounts = await tx.query<{ code: string; name: string }>(
       `select code, name from accounts where company_id = $1 and code = any($2::text[])`,
       [advance.companyId, [ADVANCE_ACCOUNT_CODE, bankCode]]
@@ -105,6 +123,11 @@ export async function payAdvance(input: PayAdvanceInput): Promise<PayAdvanceOutc
       [advance.companyId, advance.id, voucherId]
     );
   });
+
+  // 并发时后到的请求在锁上排过队，返回前一个已经写好的凭证号。
+  if (alreadyPaid) {
+    return { voucherId: alreadyPaid, status: "draft" };
+  }
 
   return { voucherId, status: "draft" };
 }

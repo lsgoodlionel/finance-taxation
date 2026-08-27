@@ -20,7 +20,16 @@ export const eventsTasksRoutes: RouteDef[] = [
     method: "POST",
     path: "/api/events/:id/analyze",
     auth: true,
-    permission: "events.create",
+    // **分析产出的是凭证草稿，这是记账动作，不是登记动作。**
+    //
+    // 此前它和「建事项」共用 events.create，后果是会计——这套系统里唯一
+    // 做账的人——跑不了分析（`role-accountant` 没有 events.create，
+    // 因为做账的人不该自己造业务）。V16 角色实验里会计被这条挡死，
+    // 而前台还照常显示按钮，点了只弹一个英文 Forbidden。
+    //
+    // 改成 anyOf：会计凭记账权可以分析，业务发起人凭建单权也能对自己的事项
+    // 触发一次——两条路都通，而「谁能做账」的边界没有被放宽。
+    permission: { anyOf: ["ledger.post", "events.create"] },
     handler: (req, res, p) => analyzeEvent(req, res, p.id!)
   },
   // 协作人：可见性收敛到「owner + 显式协作人」之后的加人入口。

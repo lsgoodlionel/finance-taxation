@@ -66,7 +66,13 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "dashboard.view", "events.view",
     "tasks.view", "documents.view", "documents.manage",
     // 出纳管银行账户、导流水、做对账 —— 这是本职，但不含记账权 ledger.post。
-    "ledger.view", "banking.manage", "tax.view",
+    //
+    // contracts.view（只读）是 V16 角色实验补的：付款按合同期次付，
+    // 而「本月应付」列表、付款单列表、左侧「付款中心」菜单项**全部挂在这个权限上**。
+    // 缺了它，出纳登进来看不到任何应付信息，深链进去整页 403——
+    // 而那段代码的注释写着「出纳每天要看的第一个东西」。
+    // 只给 view 不给 manage：合同条款的维护不是出纳的事。
+    "ledger.view", "banking.manage", "tax.view", "contracts.view",
     "payroll.view", "knowledge.view",
     "expense.view", "expense.submit"
   ],
@@ -74,6 +80,13 @@ const ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
     "dashboard.view", "events.view", "events.create",
     "tasks.view", "documents.view", "documents.manage",
     "ledger.view", "tax.view", "tax.manage",
+    // rnd.view / risk.view 是 V16 角色实验补的，两件都是税务专员的**本职**：
+    //   - 研发费用加计扣除要归集研发项目的费用
+    //   - 风险引擎里的规则本身就是税务规则（「收入已入账但未形成增值税事项」这类）
+    // 缺了它们，这两件工作在页面上被渲染成「还没有研发项目」「0 条风险」——
+    // 不是报错，是**看起来一切正常**，比报错更容易误导人。
+    // 只给 view：立项与关闭风险不是税务专员的决定。
+    "rnd.view", "risk.view",
     "contracts.view", "payroll.view",
     "audit.view", "workflow.view", "workflow.manage", "knowledge.view",
     "expense.view", "expense.submit"

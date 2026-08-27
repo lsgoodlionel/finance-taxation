@@ -3,6 +3,8 @@ import { Modal, Typography } from "antd";
 import { toast } from "sonner";
 import type { Voucher } from "@finance-taxation/domain-model";
 import { approveVoucher, postVoucher, validateVoucher } from "../../lib/api";
+import { useAccessUser } from "../../features/runtime/useAccessUser";
+import { AuthorizerSelect } from "./AuthorizerSelect";
 import { buildValidationHints } from "./validation-hints";
 import { buildBatchOutcome, buildRefreshFailedMessage } from "./batch-outcome";
 import {
@@ -66,6 +68,9 @@ async function approveWithValidation(voucher: Voucher): Promise<void> {
  * 结束汇总成功/失败清单，失败项保留勾选便于修正后重试）。
  */
 export function useVoucherBatch({ vouchers, onCompleted }: UseVoucherBatchOptions) {
+  // 执行人：批量过账同样要求终审人 ≠ 执行人，选择器据此排除自己。
+  const currentUser = useAccessUser();
+  const currentUserId = currentUser?.id ?? "";
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<VoucherBatchProgress | null>(null);
@@ -143,6 +148,8 @@ export function useVoucherBatch({ vouchers, onCompleted }: UseVoucherBatchOption
     if (running || targets.postable.length === 0) return;
     const postable = targets.postable;
     const totalAmount = postable.reduce((sum, voucher) => sum + voucherAmount(voucher), 0);
+    // 一批共用一个终审人：这批凭证是同一次记账决定，由同一个人负责。
+    let picked = "";
     // 过账影响总账和报表：必须二次确认，列出凭证号与合计金额
     Modal.confirm({
       title: `确认批量过账 ${postable.length} 张凭证？`,
@@ -160,17 +167,30 @@ export function useVoucherBatch({ vouchers, onCompleted }: UseVoucherBatchOption
             ))}
           </ul>
           <Text strong>合计金额：¥{totalAmount.toFixed(2)}</Text>
+          <AuthorizerSelect
+            currentUserId={currentUserId}
+            onChange={(value) => {
+              picked = value;
+            }}
+          />
         </div>
       ),
-      onOk: () =>
-        executeBatch(
+      onOk: async () => {
+        if (!picked) {
+          toast.error("请先选择终审人");
+          // 抛错阻止对话框关闭——否则用户会以为这批已经过账了。
+          throw new Error("AUTHORIZER_REQUIRED");
+        }
+        // 一批共用一个终审人：这批凭证是同一次记账决定，由同一个人负责。
+        await executeBatch(
           "批量过账",
           postable,
           async (voucher) => {
-            await postVoucher(voucher.id);
+            await postVoucher(voucher.id, picked);
           },
           (count) => `已过账 ${count} 张凭证，将影响总账和报表`
-        ),
+        );
+      },
     });
   }
 

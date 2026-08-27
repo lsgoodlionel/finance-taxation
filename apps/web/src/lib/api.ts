@@ -330,10 +330,21 @@ export async function approveVoucher(voucherId: string) {
   });
 }
 
-export async function postVoucher(voucherId: string) {
+/**
+ * 过账。
+ *
+ * **必须传终审人**：`voucher.post` 是高风险动作，服务端要求终审人 ≠ 执行人
+ * （`workflows/authorization.ts`）。此前这里写死发空 body，于是前台
+ * **完全无法过账任何一张凭证**——每次都 400 WORKFLOW_AUTHORIZATION_REQUIRED，
+ * 还以未翻译的英文弹出来。
+ *
+ * 终审人不给默认值：默认成当前用户只会撞「执行人 == 终审人」，
+ * 报出的还是含糊的职责冲突。让调用方显式选人。
+ */
+export async function postVoucher(voucherId: string, authorizerUserId: string) {
   return request<VoucherDetail>(`/api/vouchers/${voucherId}/post`, {
     method: "POST",
-    body: JSON.stringify({})
+    body: JSON.stringify({ authorizerUserId })
   });
 }
 

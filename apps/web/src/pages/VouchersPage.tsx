@@ -42,6 +42,7 @@ import {
 } from "./vouchers/voucher-actions";
 import { useListHotkeys } from "../lib/use-list-hotkeys";
 import { useAccessUser } from "../features/runtime/useAccessUser";
+import { AuthorizerSelect } from "./vouchers/AuthorizerSelect";
 import { deriveVoucherRuntimeSummary } from "../features/runtime/workflow-runtime";
 import { useWorkflowRuntimeSummary } from "../features/runtime/useWorkflowRuntimeSummary";
 
@@ -185,19 +186,38 @@ export function VouchersPage() {
   }
 
   function confirmAndPost(voucher: Voucher) {
-    // 过账影响总账和报表：键盘触发也必须二次确认
+    // 过账影响总账和报表：键盘触发也必须二次确认，也一样要选终审人。
+    let picked = "";
     Modal.confirm({
       title: "确认过账该凭证？",
       okText: "确认过账",
       cancelText: "取消",
-      content: `凭证 ${formatVoucherCode(voucher.id)}（¥${voucherAmount(voucher).toFixed(2)}）过账后将正式记入总账，影响总账和财务报表。`,
+      content: (
+        <div>
+          <p style={{ marginBottom: 0 }}>
+            凭证 {formatVoucherCode(voucher.id)}（¥{voucherAmount(voucher).toFixed(2)}）
+            过账后将正式记入总账，影响总账和财务报表。
+          </p>
+          <AuthorizerSelect
+            currentUserId={accessUser?.id ?? ""}
+            onChange={(value) => {
+              picked = value;
+            }}
+          />
+        </div>
+      ),
       onOk: async () => {
+        if (!picked) {
+          toast.error("请先选择终审人");
+          throw new Error("AUTHORIZER_REQUIRED");
+        }
         try {
-          await postVoucher(voucher.id);
+          await postVoucher(voucher.id, picked);
           await refresh(voucher.id);
           toast.success("凭证已过账，将影响总账和报表");
         } catch (err) {
           toast.error((err as Error).message);
+          throw err;
         }
       },
     });
@@ -252,18 +272,51 @@ export function VouchersPage() {
 
   // ── Post ──────────────────────────────────────────────────────────────────
 
-  async function handlePost() {
+  /**
+   * 过账。**必须先选终审人**——服务端要求终审人 ≠ 执行人。
+   *
+   * 此前这里直接调 postVoucher 发空 body，前台一张凭证都过不了账，
+   * 报的还是未翻译的英文 WORKFLOW_AUTHORIZATION_REQUIRED。
+   */
+  function handlePost() {
     if (!detail) return;
-    setUpdating(true);
-    try {
-      await postVoucher(detail.id);
-      await refresh(detail.id);
-      toast.success("凭证已过账，将影响总账和报表");
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setUpdating(false);
-    }
+    let picked = "";
+    Modal.confirm({
+      title: "确认过账该凭证？",
+      okText: "确认过账",
+      cancelText: "取消",
+      content: (
+        <div>
+          <p style={{ marginBottom: 0 }}>
+            过账后正式记入总账，影响总账与财务报表。已过账的凭证不能修改，只能红冲。
+          </p>
+          <AuthorizerSelect
+            currentUserId={accessUser?.id ?? ""}
+            onChange={(value) => {
+              picked = value;
+            }}
+          />
+        </div>
+      ),
+      onOk: async () => {
+        if (!picked) {
+          toast.error("请先选择终审人");
+          // 抛错阻止对话框关闭，用户不会以为已经过账了。
+          throw new Error("AUTHORIZER_REQUIRED");
+        }
+        setUpdating(true);
+        try {
+          await postVoucher(detail.id, picked);
+          await refresh(detail.id);
+          toast.success("凭证已过账，将影响总账和报表");
+        } catch (err) {
+          toast.error((err as Error).message);
+          throw err;
+        } finally {
+          setUpdating(false);
+        }
+      }
+    });
   }
 
   // ── Reverse ───────────────────────────────────────────────────────────────
