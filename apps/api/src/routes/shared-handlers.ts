@@ -66,7 +66,10 @@ export const closingBundleHandler: RouteHandler = async (req, res) => {
       select id
       from rnd_projects
       where company_id = $1 and (
-        started_on like $2
+        -- 两边都要 ::text。started_on 是 date，直接 like 会报
+        -- operator does not exist: date ~~ unknown，让 9 种资料包导出全部 500。
+        -- 下一行的 ended_on 一直是对的，只有这一行漏了。
+        started_on::text like $2
         or coalesce(ended_on::text, '') like $2
       )
       order by created_at desc

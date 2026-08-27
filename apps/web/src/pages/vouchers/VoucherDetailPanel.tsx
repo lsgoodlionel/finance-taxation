@@ -1,3 +1,6 @@
+// 显式 import React：本仓的 web 测试用 `node --import tsx` 直接跑组件做服务端渲染，
+// 那条路径下 JSX 走的是 classic transform，缺了它会在渲染时报 React is not defined。
+import React from "react";
 import { Button, Popconfirm, Space, Tag, Typography, Descriptions, Divider, Table } from "antd";
 import type { WorkflowRunDetail } from "../../lib/api";
 import type { ColumnsType } from "antd/es/table";
@@ -212,21 +215,31 @@ export function VoucherDetailPanel({
               过账
             </Button>
           )}
-          {detail.status === "posted" && (
-            // 只对已过账的凭证出现：未过账的直接改就是了，摆个红冲按钮
-            // 会诱使人用红冲去处理一张草稿。
-            <Popconfirm
-              title="红冲这张凭证？"
-              description="会生成一张方向相反的红冲凭证（草稿），复核过账后原分录才被冲平。原凭证不会被改动。"
-              okText="生成红冲凭证"
-              cancelText="取消"
-              onConfirm={() => void onReverse()}
-            >
-              <Button size="small" danger icon={<RollbackOutlined />} loading={updating}>
-                红冲
-              </Button>
-            </Popconfirm>
-          )}
+          <Button size="small" icon={<PrinterOutlined />} disabled>打印预览</Button>
+        </Space>
+      )}
+
+      {/*
+        已过账凭证的动作区。
+
+        **必须和上面那块并列，不能嵌在 `!isPosted` 里面**——红冲第一版就是嵌进去的，
+        `!isPosted && status === "posted"` 恒假，按钮从来没渲染出来过。
+        tsc 干净、测试全绿、护栏也绿（前端源码里确实出现了 reverseVoucher 这个符号），
+        只有真的打开页面看才发现它不在。
+      */}
+      {isPosted && (
+        <Space size={8} wrap>
+          <Popconfirm
+            title="红冲这张凭证？"
+            description="会生成一张方向相反的红冲凭证（草稿），复核过账后原分录才被冲平。原凭证不会被改动。"
+            okText="生成红冲凭证"
+            cancelText="取消"
+            onConfirm={() => void onReverse()}
+          >
+            <Button size="small" danger icon={<RollbackOutlined />} loading={updating}>
+              红冲
+            </Button>
+          </Popconfirm>
           <Button size="small" icon={<PrinterOutlined />} disabled>打印预览</Button>
         </Space>
       )}

@@ -352,11 +352,15 @@ export async function insertVouchers(executor: DbExecutor, rows: Voucher[]) {
           summary,
           status,
           source,
+          -- 同 voucher-from-template.ts：这一列有 default current_date，
+          -- 漏写不报错，只会把会计日期悄悄记成「今天」。事项派生的凭证走的是这条路径，
+          -- 数量比模板路径更多——总账里 21 条分录 entryDate 清一色是当天，根因就在这。
+          accounting_date,
           approved_at,
           posted_at,
           created_at,
           updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, $10::timestamptz, $11::timestamptz, $12::timestamptz)
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::timestamptz, $11::timestamptz, $12::timestamptz, $13::timestamptz)
       `,
       [
         row.id,
@@ -367,6 +371,7 @@ export async function insertVouchers(executor: DbExecutor, rows: Voucher[]) {
         row.summary,
         row.status,
         row.source,
+        row.accountingDate,
         row.approvedAt,
         row.postedAt,
         row.createdAt,

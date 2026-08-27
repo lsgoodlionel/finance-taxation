@@ -237,7 +237,7 @@ async function loadPayrollData(cid: string, period: string): Promise<{
     housing_fund_employee_rate: string; housing_fund_employer_rate: string;
     iit_threshold: string; updated_at: string;
   }>(
-    "SELECT * FROM payroll_policies WHERE company_id=$1 ORDER BY updated_at DESC LIMIT 1", [cid],
+    "SELECT * FROM payroll_policy WHERE company_id=$1 ORDER BY updated_at DESC LIMIT 1", [cid],
   );
 
   const polRow = polRows[0];

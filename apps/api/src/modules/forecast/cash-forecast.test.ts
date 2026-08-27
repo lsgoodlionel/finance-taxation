@@ -33,3 +33,39 @@ test("负数输入被安全归零", () => {
   assert.equal(f.expectedOutflow, 0);
   assert.equal(f.projectedBalance, 10000);
 });
+
+// ─── 无数据不给结论（V16 角色实验）──────────────────────────────────────────
+// 董事长 agent 在驾驶舱上看到「资金充裕：本期工资社保可发」，而账上一分钱没有。
+// 根因是 0 >= 0 为真。老板会信带数字的那句话。
+
+test("全零输入返回「算不出」，而不是「资金充裕」", () => {
+  const result = buildCashForecast({
+    cashBalance: 0, receivables: 0, payables: 0,
+    taxLiability: 0, upcomingPayroll: 0, upcomingSocialSecurity: 0
+  });
+
+  assert.equal(result.canPaySalary, null, "没有数据时必须是 null，不能是 true");
+  assert.match(result.verdict, /算不出/);
+  assert.doesNotMatch(result.verdict, /充裕/, "一家没录过账的公司不该被告知资金充裕");
+});
+
+test("账上有钱但没有工资需求，仍然给正常结论", () => {
+  // 与上一条的区别：这家公司**有**数据，只是这个月不用发工资。
+  const result = buildCashForecast({
+    cashBalance: 50000, receivables: 0, payables: 0,
+    taxLiability: 0, upcomingPayroll: 0, upcomingSocialSecurity: 0
+  });
+
+  assert.equal(result.canPaySalary, true);
+  assert.match(result.verdict, /充裕/);
+});
+
+test("零余额但有应付：算得出，且结论是负面的", () => {
+  const result = buildCashForecast({
+    cashBalance: 0, receivables: 0, payables: 30000,
+    taxLiability: 0, upcomingPayroll: 20000, upcomingSocialSecurity: 0
+  });
+
+  assert.equal(result.canPaySalary, false, "发不出工资是算得出来的结论，不是「没数据」");
+  assert.match(result.verdict, /不足以支付/);
+});

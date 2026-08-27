@@ -15,6 +15,8 @@ import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { ensureEmployeeCounterparty } from "../advances/store.js";
 import { runReimbursementAudit } from "./audit-service.js";
+import { canMutate } from "../access/ownership.js";
+import { hasPermission } from "../../middleware/auth.js";
 import { createReimbursementVoucher } from "./voucher.js";
 import {
   createReimbursement,
@@ -189,6 +191,50 @@ export async function transitionReimbursementRoute(
         return;
       }
     }
+  }
+
+  // ── 谁能做这个动作（V16 角色实验发现的权限漏洞）────────────────────────
+  //
+  // 此前这个接口只由 `expense.submit` 守护，而**每个员工都持有它**，
+  // `transitionReimbursement` 又根本不接收操作人。实测后果：
+  //   - 员工对自己 2420 元、住宿已超标 580 元的单发 `approve` → 200，直接生成凭证
+  //   - 员工对**出纳的**单发 `submit` → 200，改了别人的单据
+  //   - 出纳自借、自批、自付备用金，同一个人 36 毫秒走完全流程
+  //
+  // 归属规则 `access/ownership.ts` 里早就写好了（applicant_user_id +
+  // expense.manage），只是从来没有人调用它。
+  const target = await getReimbursement(req.auth!.companyId, id);
+  if (!target) {
+    json(res, 404, { error: "报销单不存在", code: "REIMBURSEMENT_NOT_FOUND" });
+    return;
+  }
+
+  const actor = { userId: req.auth!.userId, roleCodes: req.auth!.roleCodes };
+  const isApprovalAction = action === "approve" || action === "reject" || action === "pay";
+
+  if (isApprovalAction) {
+    // **审批人 ≠ 申请人**，任何角色都绕不过去——这是内控的底线，不是可配置项。
+    if (target.applicantUserId === req.auth!.userId) {
+      json(res, 403, {
+        error: "不能审批自己提交的报销单。请交给有审批权限的同事处理。",
+        code: "REIMBURSEMENT_SELF_APPROVAL"
+      });
+      return;
+    }
+    if (!hasPermission(req.auth!.roleCodes, "expense.manage")) {
+      json(res, 403, {
+        error: "只有有费用审批权限的人可以批准、驳回或付款。",
+        code: "REIMBURSEMENT_APPROVAL_FORBIDDEN"
+      });
+      return;
+    }
+  } else if (!canMutate("reimbursement", target.applicantUserId, actor)) {
+    // submit / cancel 只能动自己的单。
+    json(res, 403, {
+      error: "只能提交或撤回自己的报销单。",
+      code: "REIMBURSEMENT_NOT_OWNER"
+    });
+    return;
   }
 
   const result = await transitionReimbursement(req.auth!.companyId, id, action);

@@ -128,11 +128,21 @@ async function remainingCents(
   tx: { query: <T extends object>(sql: string, params?: unknown[]) => Promise<{ rows: T[] }> },
   input: { scheduleId: string | null; reimbursementId: string | null }
 ): Promise<number | null> {
+  // **在途的付款单也要占额度**（V16 角色实验发现）。
+  //
+  // 此前只减 status='paid' 的付款单，理由是「钱还没出去」——这句话本身没错，
+  // 但它让两张草稿付款单**互相看不见**：出纳给同一张 1200 元的报销单
+  // 连开两张全额付款单（各自校验时都看到「还欠 1200」），再逐一确认，
+  // 就付出去 2400。实测复现过。
+  //
+  // 额度要按「已付 + 在途」算：草稿随时会被确认，它已经占住了这笔钱。
+  // 只有作废（cancelled）的才真正释放额度。
   if (input.scheduleId) {
     const rows = await tx.query<{ amount_cents: string; paid: string }>(
       `select s.amount_cents,
               coalesce((select sum(p.amount_cents) from payments p
-                         where p.schedule_id = s.id and p.status = 'paid'), 0) as paid
+                         where p.schedule_id = s.id
+                           and p.status <> 'cancelled'), 0) as paid
          from contract_payment_schedules s where s.id = $1`,
       [input.scheduleId]
     );
@@ -146,7 +156,8 @@ async function remainingCents(
       `select coalesce((select sum(l.amount_cents) from reimbursement_lines l
                          where l.reimbursement_id = $1), 0) as total,
               coalesce((select sum(p.amount_cents) from payments p
-                         where p.reimbursement_id = $1 and p.status = 'paid'), 0) as paid`,
+                         where p.reimbursement_id = $1
+                           and p.status <> 'cancelled'), 0) as paid`,
       [input.reimbursementId]
     );
     const row = rows.rows[0];

@@ -272,11 +272,16 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
           summary,
           status,
           source,
+          -- **必须显式写入**：这一列有 default current_date（迁移 045 给存量数据兜底用的），
+          -- 漏掉它不会报错，只会把每一张凭证的会计日期悄悄记成「今天」。
+          -- 第 163 行早就按事项发生日算好了 accountingDate，此前只是没送进来——
+          -- POST 的响应还是对的（那是内存对象），只有再 GET 一次才看得出来。
+          accounting_date,
           approved_at,
           posted_at,
           created_at,
           updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, $10::timestamptz, $11::timestamptz, $12::timestamptz)
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::timestamptz, $11::timestamptz, $12::timestamptz, $13::timestamptz)
       `,
       [
         voucher.id,
@@ -287,6 +292,7 @@ export async function createVoucherFromTemplate(req: ApiRequest, res: ServerResp
         voucher.summary,
         voucher.status,
         voucher.source,
+        voucher.accountingDate,
         voucher.approvedAt,
         voucher.postedAt,
         voucher.createdAt,
