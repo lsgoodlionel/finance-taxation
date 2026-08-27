@@ -11,7 +11,7 @@ test("buildVatDeclarationXml includes company name", () => {
   const paper: VatWorkingPaper = {
     companyId: "c1", filingPeriod: "2026-05", taxpayerType: "general_vat",
     outputTaxAmount: "13000", inputTaxAmount: "5000",
-    simplifiedTaxAmount: "0", payableVatAmount: "8000", lines: [],
+    simplifiedTaxAmount: "0", payableVatAmount: "8000", incompleteTaxItemIds: [], lines: [],
   };
   const xml = buildVatDeclarationXml({ name: "测试公司", creditCode: "9134000072600956XH" }, paper);
   assert.ok(xml.includes("测试公司"), "company name in XML");
@@ -25,7 +25,7 @@ test("buildVatDeclarationXml handles small taxpayer", () => {
   const paper: VatWorkingPaper = {
     companyId: "c1", filingPeriod: "2026-05", taxpayerType: "small_scale",
     outputTaxAmount: "0", inputTaxAmount: "0",
-    simplifiedTaxAmount: "1500", payableVatAmount: "1500", lines: [],
+    simplifiedTaxAmount: "1500", payableVatAmount: "1500", incompleteTaxItemIds: [], lines: [],
   };
   const xml = buildVatDeclarationXml({ name: "小规模公司", creditCode: "X" }, paper);
   assert.ok(xml.includes("小规模纳税人") || xml.includes("简易计税"), "small taxpayer section present");
@@ -35,7 +35,7 @@ test("buildVatDeclarationXml handles small taxpayer", () => {
 test("buildVatDeclarationXml escapes special characters", () => {
   const paper: VatWorkingPaper = {
     companyId: "c1", filingPeriod: "2026-05", taxpayerType: "general_vat",
-    outputTaxAmount: "0", inputTaxAmount: "0", simplifiedTaxAmount: "0", payableVatAmount: "0", lines: [],
+    outputTaxAmount: "0", inputTaxAmount: "0", simplifiedTaxAmount: "0", payableVatAmount: "0", incompleteTaxItemIds: [], lines: [],
   };
   const xml = buildVatDeclarationXml({ name: "A&B<测试>公司", creditCode: "X" }, paper);
   assert.ok(xml.includes("A&amp;B&lt;测试&gt;公司"), "special chars escaped");

@@ -6,8 +6,11 @@ import {
   hasCompanyWideEventAccess
 } from "./visibility.js";
 
-const OWNER = { userId: "usr-owner", roleCodes: ["role-accountant"] };
-const OTHER = { userId: "usr-other", roleCodes: ["role-accountant"] };
+// 用**普通成员**做主角：这几条验的是「owner + 协作人」这条收敛口径。
+// 不能用 role-accountant——V16 起会计是公司级可见角色（他是唯一做账的人，
+// 看不到事项就分析不了），拿他当普通成员，这些用例会全部失去意义。
+const OWNER = { userId: "usr-owner", roleCodes: ["role-employee"] };
+const OTHER = { userId: "usr-other", roleCodes: ["role-employee"] };
 const CHAIRMAN = { userId: "usr-boss", roleCodes: ["role-chairman"] };
 
 const EVENT = { id: "evt-1", ownerId: "usr-owner" };
@@ -70,10 +73,14 @@ test("批量过滤：公司级角色拿到全部，且是新数组", () => {
   assert.notEqual(result, events, "返回新数组，调用方改它不该动到入参");
 });
 
-test("公司级角色清单：只有董事长与财务总监", () => {
+test("公司级角色清单：董事长、财务总监、会计", () => {
   assert.equal(hasCompanyWideEventAccess(["role-chairman"]), true);
   assert.equal(hasCompanyWideEventAccess(["role-finance-director"]), true);
-  assert.equal(hasCompanyWideEventAccess(["role-accountant"]), false);
+  // 会计是公司级可见：全公司的业务最终都要经他的手变成凭证。
+  assert.equal(hasCompanyWideEventAccess(["role-accountant"]), true);
+  // 出纳不是——他管钱不管账，不需要看全部业务。
+  assert.equal(hasCompanyWideEventAccess(["role-cashier"]), false);
+  assert.equal(hasCompanyWideEventAccess(["role-employee"]), false);
   assert.equal(hasCompanyWideEventAccess(["role-manager"]), false);
   assert.equal(hasCompanyWideEventAccess([]), false);
 });

@@ -84,21 +84,46 @@ export function buildVatWorkingPaper(
   let inputTax = 0;
   let simplifiedTax = 0;
 
+  /**
+   * 计税依据缺失的税项。
+   *
+   * 它们**不参与合计**，但必须在底稿上显式列出来——一份少算了一笔的申报表，
+   * 如果没有任何提示，会被当成完整的报上去。
+   */
+  const missingBasisLines: string[] = [];
+
   const lines = scoped.map((item, index) => {
-    const taxableAmount = parseAmount(item.basis);
+    // **金额取 taxableAmountCents，不是 basis。**
+    //
+    // basis 存的是政策依据散文（「需结合交付、验收或约定开票条件确认纳税义务
+    // 发生时点。」）。这里曾写 `Number(item.basis)` → NaN，一路流进底稿、
+    // 申报向导和申报 XML——`<本期销项税额>NaN</本期销项税额>` 就是这么来的。
+    //
+    // 模块自己的单测用 `basis: "1000"` 构造输入，所以一直是绿的：
+    // 测试喂的输入不是系统真实产生的输入。
+    const hasBasis =
+      item.taxableAmountCents !== null &&
+      item.taxableAmountCents !== undefined &&
+      Number.isFinite(item.taxableAmountCents);
+    const taxableAmount = hasBasis ? item.taxableAmountCents! / 100 : 0;
+    if (!hasBasis) {
+      missingBasisLines.push(item.id);
+    }
     const rate = rateOf(item.treatment);
     const taxAmount = taxableAmount * rate;
     let sourceType: "output" | "input" | "adjustment" = "adjustment";
 
     if (profile.taxpayerType === "general_vat" && item.treatment.includes("销项")) {
-      outputTax += taxAmount;
+      // 计税依据缺失的行只归类、不计金额——把它当 0 加进去，
+      // 合计会看起来是个正常数字，而少的那一笔没人知道。
+      if (hasBasis) outputTax += taxAmount;
       sourceType = "output";
     } else if (profile.taxpayerType === "general_vat" && item.treatment.includes("进项")) {
-      inputTax += taxAmount;
+      if (hasBasis) inputTax += taxAmount;
       sourceType = "input";
     } else {
       if (!item.treatment.includes("进项")) {
-        simplifiedTax += taxableAmount * simplifiedRate;
+        if (hasBasis) simplifiedTax += taxableAmount * simplifiedRate;
         sourceType = "output";
       } else {
         sourceType = "input";
@@ -112,14 +137,18 @@ export function buildVatWorkingPaper(
       taxItemId: item.id,
       description: item.treatment,
       taxRate: formatAmount(rate * 100),
-      taxableAmount: formatAmount(taxableAmount),
-      taxAmount: formatAmount(
-        profile.taxpayerType === "general_vat"
-          ? taxAmount
-          : item.treatment.includes("进项")
-            ? 0
-            : taxableAmount * simplifiedRate
-      )
+      /** 计税依据缺失时为 null——**不是 "0.00"**，那会让人以为这笔业务金额为零。 */
+      taxableAmount: hasBasis ? formatAmount(taxableAmount) : null,
+      basisMissing: !hasBasis,
+      taxAmount: hasBasis
+        ? formatAmount(
+            profile.taxpayerType === "general_vat"
+              ? taxAmount
+              : item.treatment.includes("进项")
+                ? 0
+                : taxableAmount * simplifiedRate
+          )
+        : null
     };
   });
 
@@ -134,6 +163,14 @@ export function buildVatWorkingPaper(
     inputTaxAmount: formatAmount(inputTax),
     simplifiedTaxAmount: formatAmount(simplifiedTax),
     payableVatAmount: formatAmount(payableVatAmount),
+    /**
+     * 计税依据缺失、未纳入合计的税项 id。
+     *
+     * 非空时上面那几个合计**是不完整的**，调用方必须把这件事显示出来。
+     * 底稿、申报向导、申报导出三处都要拦——一份少算了一笔的申报表，
+     * 没有提示就会被当成完整的报上去。
+     */
+    incompleteTaxItemIds: missingBasisLines,
     lines
   };
 }

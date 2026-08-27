@@ -17,6 +17,7 @@ function makeItem(id: string, status: "pending" | "review_required" | "ready" = 
     taxType: "增值税",
     treatment: "销项计税",
     basis: "含税收入",
+    taxableAmountCents: null,
     filingPeriod: "2026-05",
     status,
     source: "analysis" as const,

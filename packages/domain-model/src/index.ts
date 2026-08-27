@@ -147,7 +147,15 @@ export interface EventTaxMapping {
   taxType: string;
   treatment: string;
   status: EventTaxMappingStatus;
+  /** 政策依据，**文字**。金额在 `taxableAmountCents`——见 `TaxItem.basis` 的说明。 */
   basis: string;
+  /**
+   * 计税依据，整数分。`null` = 还没确定（**不是 0**）。
+   *
+   * 省略时按 null 处理：新增税项映射的人如果不清楚计税依据是多少，
+   * 留空比填 0 好——0 会静默参与合计。
+   */
+  taxableAmountCents?: number | null;
   filingPeriod: string;
 }
 
@@ -286,7 +294,22 @@ export interface TaxItem {
   mappingId: string;
   taxType: string;
   treatment: string;
+  /**
+   * 政策依据，**文字**。例如「需结合交付、验收或约定开票条件确认纳税义务发生时点。」
+   *
+   * **不要拿它去算数。** 增值税底稿曾对它做 `Number(item.basis)`，
+   * 得到 NaN 并一路流进申报 XML——那是报给税务局的数字。
+   * 金额在 `taxableAmountCents`。
+   */
   basis: string;
+  /**
+   * 计税依据，**整数分**。
+   *
+   * `null` = 这条税项还没有确定计税依据（例如印花税待复核合同性质），
+   * **不是 0**。消费方必须把它排除在合计之外并显式列出，
+   * 绝不能当成零参与计算——那会让申报表少算一笔而没有任何提示。
+   */
+  taxableAmountCents: number | null;
   filingPeriod: string;
   status: TaxItemStatus;
   source: "analysis";
@@ -381,8 +404,17 @@ export interface VatWorkingPaperLine {
   taxItemId: string | null;
   description: string;
   taxRate: string;
-  taxableAmount: string;
-  taxAmount: string;
+  /**
+   * 计税依据。`null` = 这条税项还没有确定计税依据。
+   *
+   * **不是 `"0.00"`**——那会让人以为这笔业务金额为零，
+   * 而实际情况是「还不知道多少钱」。
+   */
+  taxableAmount: string | null;
+  /** 计税依据缺失，本行未纳入合计。 */
+  basisMissing: boolean;
+  /** 税额。计税依据缺失时为 `null`，理由同 `taxableAmount`。 */
+  taxAmount: string | null;
 }
 
 export interface VatWorkingPaper {
@@ -393,6 +425,13 @@ export interface VatWorkingPaper {
   inputTaxAmount: string;
   simplifiedTaxAmount: string;
   payableVatAmount: string;
+  /**
+   * 计税依据缺失、**未纳入上述合计**的税项 id。
+   *
+   * 非空时那几个合计是不完整的，调用方必须把这件事显示出来——
+   * 一份少算了一笔的申报表，没有提示就会被当成完整的报上去。
+   */
+  incompleteTaxItemIds: string[];
   lines: VatWorkingPaperLine[];
 }
 

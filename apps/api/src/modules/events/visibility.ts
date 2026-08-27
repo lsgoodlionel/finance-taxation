@@ -17,7 +17,24 @@
  */
 
 /** 能看到公司全部事项的角色。 */
-const COMPANY_WIDE_ROLES = ["role-chairman", "role-finance-director"] as const;
+/**
+ * 能看到公司全部事项的角色。
+ *
+ * `role-accountant` 是 V16 补的：**会计是这套系统里唯一做账的人**，
+ * 全公司的业务最终都要经他的手变成凭证。看不到事项，他就分析不了、
+ * 也做不了账——V15 把可见性收敛到「owner + 显式协作人」之后，
+ * 会计对业务部门的事项一律 404，而分析（派生凭证草稿）正是他的本职。
+ *
+ * 这不是把 V15 的收敛退回去。收敛针对的是**普通成员按部门扩散**：
+ * 财务部任何人都能看到财务部每一条事项，包括薪酬、补偿。
+ * 记账岗位需要全量可见是岗位职责决定的，与那条口径不冲突——
+ * 凭证生成（`createVoucherFromTemplate`）本来也只校验同一家公司。
+ */
+const COMPANY_WIDE_ROLES = [
+  "role-chairman",
+  "role-finance-director",
+  "role-accountant"
+] as const;
 
 export function hasCompanyWideEventAccess(roleCodes: readonly string[]): boolean {
   return roleCodes.some((role) => (COMPANY_WIDE_ROLES as readonly string[]).includes(role));

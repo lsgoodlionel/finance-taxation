@@ -44,6 +44,16 @@ export const PENDING_ACCOUNT_CODE = "待定";
  */
 export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
   const amount = event.amount || "0.00";
+  /**
+   * 事项金额的整数分，作为派生税项的计税依据。
+   *
+   * 事项没填金额时是 `null` 而不是 0——「不知道多少钱」和「零元」是两回事，
+   * 后者会静默参与申报合计。见 `TaxItem.taxableAmountCents`。
+   */
+  const taxableAmountCents =
+    event.amount === null || event.amount === undefined || event.amount === ""
+      ? null
+      : Math.round(Number(event.amount) * 100);
   const documentMappings: EventDocumentMapping[] = [];
   const taxMappings: EventTaxMapping[] = [];
   const voucherDrafts: EventVoucherDraft[] = [];
@@ -98,6 +108,7 @@ export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBu
           treatment: "确认销项税并纳入当期或后续开票申报计划。",
           status: "pending",
           basis: "需结合交付、验收或约定开票条件确认纳税义务发生时点。",
+          taxableAmountCents,
           filingPeriod: event.occurredOn.slice(0, 7)
         },
         {
@@ -108,6 +119,7 @@ export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBu
           treatment: "将合同金额纳入应税合同台账复核。",
           status: "attention",
           basis: "需按合同性质复核税目与计税依据。",
+          taxableAmountCents,
           filingPeriod: quarterLabel(event.occurredOn)
         }
       );
@@ -180,6 +192,7 @@ export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBu
         treatment: "复核专票、用途和认证条件后再确认是否可抵扣进项税额。",
         status: "attention",
         basis: "需取得合规发票并满足业务用途条件。",
+        taxableAmountCents,
         filingPeriod: event.occurredOn.slice(0, 7)
       });
       voucherDrafts.push({
@@ -241,6 +254,7 @@ export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBu
           treatment: "复核发票类型、用途与抵扣条件，判断是否形成可抵扣进项税额。",
           status: "attention",
           basis: "报销事项如取得合规专票且用途符合规定，需同步进入进项税额复核。",
+          taxableAmountCents,
           filingPeriod: event.occurredOn.slice(0, 7)
         },
         {
@@ -510,6 +524,9 @@ export function toTaxItems(bundle: BusinessEventMappingBundle, generatedAt: stri
     taxType: mapping.taxType,
     treatment: mapping.treatment,
     basis: mapping.basis,
+    // `?? null` 而不是 `?? 0`：映射没给计税依据时如实记「不知道」。
+    // 填 0 会让这条税项以零金额参与申报合计，而没有任何提示。
+    taxableAmountCents: mapping.taxableAmountCents ?? null,
     filingPeriod: mapping.filingPeriod,
     status:
       mapping.status === "ready"

@@ -42,7 +42,11 @@ const items: TaxItem[] = [
     mappingId: "m-1",
     taxType: "增值税",
     treatment: "销项税额",
-    basis: "1000",
+    // basis 是**政策依据文字**，不是金额——这正是这个模块出过的问题：
+    // 测试喂 "1000"（干净数字），而生产写进来的是「需结合交付、验收…」，
+    // Number() 出 NaN 一路流进申报 XML，而测试一直是绿的。
+    basis: "需结合交付、验收或约定开票条件确认纳税义务发生时点。",
+    taxableAmountCents: 100000,
     filingPeriod: "2026-05",
     status: "ready",
     source: "analysis",
@@ -56,7 +60,8 @@ const items: TaxItem[] = [
     mappingId: "m-2",
     taxType: "增值税",
     treatment: "进项税额",
-    basis: "300",
+    basis: "需取得合规发票并满足业务用途条件。",
+    taxableAmountCents: 30000,
     filingPeriod: "2026-05",
     status: "ready",
     source: "analysis",

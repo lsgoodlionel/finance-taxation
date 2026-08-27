@@ -5,6 +5,7 @@ import type {
   EventTaxMapping,
   EventVoucherDraft
 } from "@finance-taxation/domain-model";
+import { toCents } from "../../utils/money.js";
 
 type ContractRevenueClassification =
   | "service_revenue"
@@ -220,6 +221,10 @@ function buildRevenueVoucherDraft(event: BusinessEvent, scenario: ContractRevenu
 
 export function buildContractRevenueBundle(event: BusinessEvent): BusinessEventMappingBundle {
   const scenario = resolveContractRevenueScenario(event);
+  // 增值税与所得税的计税依据都是**不含税**销售额，不是含税总额。
+  // 价税分离与凭证分录用的是同一个函数，口径必然一致。
+  const { net: netAmount } = splitGrossAmount(event.amount);
+  const taxableAmountCents = toCents(netAmount);
   const documentMappings: EventDocumentMapping[] = scenario.documentTypes.map((documentType) => ({
     id: `doc-map-${event.id}-${documentType}`,
     companyId: event.companyId,
@@ -243,6 +248,9 @@ export function buildContractRevenueBundle(event: BusinessEvent): BusinessEventM
         : "复核销项税确认时点、税率和开票节点。",
       status: "attention",
       basis: scenario.taxSummary,
+      // 增值税的计税依据是**不含税**销售额，不是含税总额。
+      // scenario 里已经把价税分离算好了（net），直接用它。
+      taxableAmountCents,
       filingPeriod: event.occurredOn.slice(0, 7)
     });
     taxMappings.push({
@@ -254,6 +262,8 @@ export function buildContractRevenueBundle(event: BusinessEvent): BusinessEventM
         ? "复核会计确认与所得税收入归属时点，必要时按履约期间分期核验。"
         : "复核收入真实性、履约完成证据和所得税收入确认时点。",
       status: "attention",
+      // 所得税的收入口径同样是不含税额。
+      taxableAmountCents,
       basis: scenario.taxSummary,
       filingPeriod: event.occurredOn.slice(0, 7)
     });
@@ -265,6 +275,9 @@ export function buildContractRevenueBundle(event: BusinessEvent): BusinessEventM
       taxType: "增值税",
       treatment: "阻止重复合同收入形成重复销项税额，需先核对合同主档与既有收入链。",
       status: "attention",
+      // 疑似重复的收入**不给计税依据**：它到底算不算数还没定，
+      // 填一个金额会让它悄悄进申报合计。留 null，底稿会把它列为「待确定」。
+      taxableAmountCents: null,
       basis: scenario.taxSummary,
       filingPeriod: event.occurredOn.slice(0, 7)
     });

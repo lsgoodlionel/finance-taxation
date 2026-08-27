@@ -28,6 +28,7 @@ test("buildCorporateIncomeTaxPreparation estimates prepayment and checklist", ()
       taxType: "企业所得税",
       treatment: "业务招待费纳税调整关注",
       basis: "2000",
+      taxableAmountCents: null,
       filingPeriod: "2026-Q2",
       status: "review_required",
       source: "analysis",

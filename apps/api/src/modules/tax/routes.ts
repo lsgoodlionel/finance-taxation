@@ -55,6 +55,7 @@ interface TaxItemRow {
   tax_type: string;
   treatment: string;
   basis: string;
+  taxable_amount_cents: string | number | null;
   filing_period: string;
   status: TaxItem["status"];
   source: TaxItem["source"];
@@ -119,6 +120,12 @@ function mapTaxItemRow(row: TaxItemRow): TaxItem {
     taxType: row.tax_type,
     treatment: row.treatment,
     basis: row.basis,
+    // bigint 走 pg 会是字符串。`?? null` 而不是 `|| null`：
+    // 0 是有效的计税依据（零税率业务），用 `||` 会把它变成「不知道」。
+    taxableAmountCents:
+      row.taxable_amount_cents === null || row.taxable_amount_cents === undefined
+        ? null
+        : Number(row.taxable_amount_cents),
     filingPeriod: row.filing_period,
     status: row.status,
     source: row.source,
@@ -227,6 +234,7 @@ export async function listCompanyTaxItems(
     `
       select
         id, company_id, business_event_id, mapping_id, tax_type, treatment, basis,
+        taxable_amount_cents,
         filing_period, status, source, created_at, updated_at
       from tax_items
       ${where}
