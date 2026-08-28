@@ -384,6 +384,14 @@ export interface TaxpayerProfile {
   companyId: string;
   taxpayerType: TaxpayerType;
   effectiveFrom: string;
+  /**
+   * 失效日（含）。`null` = 仍然有效。
+   *
+   * 与 `effectiveFrom` 一起构成生效区间。一家公司可以有多档 active、
+   * 各管一段时间——纳税人身份是会变的（小规模转一般纳税人），
+   * 而重算旧属期要按**当时**的身份，不是按今天的。
+   */
+  effectiveTo: string | null;
   status: "active" | "inactive";
   notes: string;
   createdAt: string;

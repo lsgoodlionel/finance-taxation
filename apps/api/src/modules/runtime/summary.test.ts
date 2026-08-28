@@ -79,7 +79,7 @@ test("deriveTaxRuntimeSummary exposes review retry action for review-required ba
     items,
     [batch],
     batch,
-    [{ id: "profile-1", companyId: "cmp-1", taxpayerType: "general_vat", effectiveFrom: "2026-01-01", status: "active", notes: "", createdAt: "", updatedAt: "" }],
+    [{ id: "profile-1", companyId: "cmp-1", taxpayerType: "general_vat", effectiveFrom: "2026-01-01", effectiveTo: null, status: "active", notes: "", createdAt: "", updatedAt: "" }],
     ["role-tax-specialist"]
   );
 
@@ -122,7 +122,7 @@ test("deriveTaxRuntimeSummary follows selected batch state after review is appro
     items,
     [batch],
     batch,
-    [{ id: "profile-1", companyId: "cmp-1", taxpayerType: "general_vat", effectiveFrom: "2026-01-01", status: "active", notes: "", createdAt: "", updatedAt: "" }],
+    [{ id: "profile-1", companyId: "cmp-1", taxpayerType: "general_vat", effectiveFrom: "2026-01-01", effectiveTo: null, status: "active", notes: "", createdAt: "", updatedAt: "" }],
     ["role-tax-specialist"]
   );
 

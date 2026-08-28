@@ -56,12 +56,17 @@ export async function exportVatXml(req: ApiRequest, res: ServerResponse): Promis
   // Load taxpayer profiles and resolve active
   const profileRows = await query<{
     id: string; company_id: string; taxpayer_type: string; effective_from: string;
+    effective_to: string | null;
     status: string; notes: string; created_at: string; updated_at: string;
   }>("SELECT * FROM taxpayer_profiles WHERE company_id = $1 ORDER BY effective_from DESC", [cid]);
 
   const profiles: TaxpayerProfile[] = profileRows.map((r) => ({
     id: r.id, companyId: r.company_id, taxpayerType: r.taxpayer_type as TaxpayerProfile["taxpayerType"],
-    effectiveFrom: r.effective_from, status: r.status as TaxpayerProfile["status"],
+    effectiveFrom: r.effective_from,
+    // null = 仍然有效。漏掉这一列会让每一档都被当成「永远有效」，
+    // 沿革就白建了。
+    effectiveTo: r.effective_to ?? null,
+    status: r.status as TaxpayerProfile["status"],
     notes: r.notes, createdAt: r.created_at, updatedAt: r.updated_at,
   }));
 

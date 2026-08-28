@@ -32,6 +32,7 @@ test("buildChairmanReportSummary builds concise boss summary", () => {
     companyId: "cmp-1",
     taxpayerType: "general_vat",
     effectiveFrom: "2026-01-01",
+    effectiveTo: null,
     status: "active",
     notes: "",
     createdAt: "2026-05-15T00:00:00.000Z",

@@ -78,6 +78,7 @@ interface TaxpayerProfileRow {
   company_id: string;
   taxpayer_type: TaxpayerProfile["taxpayerType"];
   effective_from: string | Date;
+  effective_to: string | Date | null;
   status: TaxpayerProfile["status"];
   notes: string;
   created_at: string | Date;
@@ -153,6 +154,9 @@ function mapTaxpayerProfileRow(row: TaxpayerProfileRow): TaxpayerProfile {
     companyId: row.company_id,
     taxpayerType: row.taxpayer_type,
     effectiveFrom: (toIsoString(row.effective_from) || "").slice(0, 10),
+    // null = 仍然有效，没有上界。空串会被日期比较当成「早于一切」，
+    // 让这一档对任何查询日都失效。
+    effectiveTo: (toIsoString(row.effective_to) || "").slice(0, 10) || null,
     status: row.status,
     notes: row.notes,
     createdAt: toIsoString(row.created_at) || new Date().toISOString(),
@@ -289,7 +293,8 @@ export async function listCompanyTaxpayerProfiles(companyId: string): Promise<Ta
   const rows = await query<TaxpayerProfileRow>(
     `
       select
-        id, company_id, taxpayer_type, effective_from, status, notes, created_at, updated_at
+        id, company_id, taxpayer_type, effective_from, effective_to,
+        status, notes, created_at, updated_at
       from taxpayer_profiles
       where company_id = $1
       order by effective_from desc, created_at desc
@@ -909,34 +914,62 @@ export async function createTaxpayerProfile(req: ApiRequest, res: ServerResponse
     companyId: req.auth!.companyId,
     taxpayerType: body.taxpayerType,
     effectiveFrom: body.effectiveFrom,
+    effectiveTo: body.effectiveTo ?? null,
     status: body.status || "active",
     notes: body.notes || "",
     createdAt: now,
     updatedAt: now
   };
-  await withTransaction(async (client) => {
-    if (profile.status === "active") {
-      await client.query(
-        `
-          update taxpayer_profiles
-          set status = 'inactive', updated_at = $1::timestamptz
-          where company_id = $2 and status = 'active'
-        `,
-        [profile.updatedAt, profile.companyId]
-      );
+  // ── 生效区间不得重叠（V16）──────────────────────────────────────────────
+  //
+  // 此前这里无条件把**所有** active 档案改成 inactive，于是纳税人身份的沿革
+  // 保存不下来。税务专员实测到的后果更糟：录一条 2030-01-01 生效的小规模登记，
+  // 当场把 2026 年那条也改成 inactive，`GET /api/tax/rules?occurredOn=2026-05-01`
+  // 立刻变成「Active taxpayer profile not found」——**整个税务模块当期瘫痪**，
+  // 而用户只是录了一条未来生效的登记。
+  //
+  // 读取端 resolveActiveTaxpayerProfile 本来就是按多档沿革设计的
+  // （取生效日 ≤ 查询日的最近一条），是写入端和它对不上。
+  //
+  // 校验口径照搬税率主数据（tax-rate-store.ts）：同一家公司的区间不得重叠，
+  // 重叠会让「这一天算什么纳税人」有两个答案，而解析函数只返回一个——
+  // 结果取决于排序，静默的不确定性比报错糟糕得多。
+  if (profile.status === "active") {
+    const overlapping = await query<{ id: string; effective_from: string | Date }>(
+      `select id, effective_from from taxpayer_profiles
+        where company_id = $1 and status = 'active'
+          and effective_from <= coalesce($3::date, 'infinity'::date)
+          and coalesce(effective_to, 'infinity'::date) >= $2::date`,
+      [profile.companyId, profile.effectiveFrom, profile.effectiveTo ?? null]
+    );
+    if (overlapping.length > 0) {
+      return json(res, 409, {
+        error:
+          `已有生效区间与此重叠（${overlapping
+            .map((row) => (toIsoString(row.effective_from) || "").slice(0, 10))
+            .join("、")} 起）。同一家公司在同一天只能是一种纳税人身份——` +
+          "请先给上一档填上失效日，再新增。",
+        code: "TAXPAYER_PROFILE_OVERLAPS",
+        conflictIds: overlapping.map((row) => row.id)
+      });
     }
+  }
+
+  await withTransaction(async (client) => {
     await client.query(
       `
         insert into taxpayer_profiles (
-          id, company_id, taxpayer_type, effective_from, status, notes, created_at, updated_at
+          id, company_id, taxpayer_type, effective_from, effective_to,
+          status, notes, created_at, updated_at
         )
-        values ($1,$2,$3,$4,$5,$6,$7::timestamptz,$8::timestamptz)
+        values ($1,$2,$3,$4,$5::date,$6,$7,$8::timestamptz,$9::timestamptz)
       `,
       [
         profile.id,
         profile.companyId,
         profile.taxpayerType,
         profile.effectiveFrom,
+        profile.effectiveTo,
         profile.status,
         profile.notes,
         profile.createdAt,
