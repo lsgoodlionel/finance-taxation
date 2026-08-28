@@ -1,5 +1,8 @@
 /**
- * 把报销单的状态流转接到审批引擎上（V16）。
+ * 把业务单据的状态流转接到审批引擎上（V16）。
+ *
+ * 报销单与借款单共用这一层——两者的接线形状完全相同，
+ * 各写一份迟早漂移。
  *
  * ## 为什么需要这一层
  *
@@ -25,10 +28,17 @@
  * 用户知道发生了什么，比静默走掉好。
  */
 
-import { act, findInstanceByDocument, submitForApproval } from "../approval/store.js";
+import {
+  act,
+  findInstanceByDocument,
+  submitForApproval,
+  type ApprovalDocumentType
+} from "./store.js";
 
 export interface ApprovalSyncInput {
   companyId: string;
+  /** 单据类型。审批流按类型配置，报销与借款各有各的流程。 */
+  documentType: ApprovalDocumentType;
   documentId: string;
   /** 报销单刚刚执行的动作。 */
   action: string;
@@ -37,14 +47,21 @@ export interface ApprovalSyncInput {
   amountCents: number;
 }
 
+/** 单据类型的中文说法，用在给用户看的提示里。 */
+function documentLabel(documentType: ApprovalDocumentType): string {
+  if (documentType === "reimbursement") return "报销";
+  if (documentType === "advance") return "借款";
+  if (documentType === "request") return "申请单";
+  if (documentType === "payment") return "付款";
+  return "合同";
+}
+
 export interface ApprovalSyncNotice {
   /** 审批流是否真的在跟进这张单据。false = 公司没配流程，走的是直接处理。 */
   tracked: boolean;
   /** 给用户看的一句话。没有要说的时候是 null。 */
   message: string | null;
 }
-
-const DOCUMENT_TYPE = "reimbursement" as const;
 
 /**
  * 同步审批实例。
@@ -60,7 +77,7 @@ export async function syncApprovalInstance(
     if (input.action === "submit") {
       const submitted = await submitForApproval({
         companyId: input.companyId,
-        documentType: DOCUMENT_TYPE,
+        documentType: input.documentType,
         documentId: input.documentId,
         submitterUserId: input.actor.userId,
         amountCents: input.amountCents
@@ -75,7 +92,8 @@ export async function syncApprovalInstance(
         return {
           tracked: false,
           message:
-            "本公司还没有配置报销审批流程，这张单据将由有费用审批权限的同事直接处理。" +
+            `本公司还没有配置${documentLabel(input.documentType)}审批流程，` +
+            "这张单据将由有费用审批权限的同事直接处理。" +
             "需要多级审批的话，请到系统设置里配置审批流。"
         };
       }
@@ -91,7 +109,7 @@ export async function syncApprovalInstance(
 
     const instance = await findInstanceByDocument(
       input.companyId,
-      DOCUMENT_TYPE,
+      input.documentType,
       input.documentId
     );
     // 提交时没建实例（公司没配流程），这里自然也没有可推进的——不是错。
@@ -104,7 +122,9 @@ export async function syncApprovalInstance(
       instanceId: instance.id,
       actor: input.actor,
       action: input.action === "approve" ? "approve" : "reject",
-      comment: `由报销单 ${input.documentId} 的${input.action === "approve" ? "批准" : "驳回"}动作同步`
+      comment:
+        `由${documentLabel(input.documentType)} ${input.documentId} 的` +
+        `${input.action === "approve" ? "批准" : "驳回"}动作同步`
     });
 
     if (!acted.ok) {

@@ -75,6 +75,10 @@ export const OWNERSHIP_RULES = {
   task: { column: "owner_id", managePermission: "tasks.manage" },
   businessEvent: { column: "owner_id", managePermission: "events.assign" },
   reimbursement: { column: "applicant_user_id", managePermission: "expense.manage" },
+  // 借款单（V16 补）：借款人是归属人。此前这条规则不存在，
+  // 于是 transitionAdvance 谁都能调——角色实验的真实审计日志里
+  // 有 3 组「出纳自借、自批、自付」，同一个人 36 毫秒走完全流程。
+  advance: { column: "borrower_user_id", managePermission: "expense.manage" },
   contract: { column: "created_by_user_id", managePermission: "contracts.manage" }
 } as const satisfies Record<string, { column: string; managePermission: PermissionKey }>;
 

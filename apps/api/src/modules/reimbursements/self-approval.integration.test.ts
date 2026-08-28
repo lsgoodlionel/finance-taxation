@@ -145,7 +145,7 @@ test("报销单：本人不能批准自己的单，也不能动别人的单", as
   const selfApprove = await transition(id, "approve", employee);
   assert.equal(selfApprove.statusCode, 403, "不能审批自己提交的报销单");
   assert.equal(selfApprove.body!.code, "REIMBURSEMENT_SELF_APPROVAL");
-  assert.match(selfApprove.body!.error!, /不能审批自己/, "错误文案要说人话");
+  assert.match(selfApprove.body!.error!, /不能审批或付款自己提交的/, "错误文案要说人话");
 
   // 单据状态没有被推动。
   const stillPending = await pool.query<{ status: string }>(

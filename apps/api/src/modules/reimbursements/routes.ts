@@ -15,9 +15,8 @@ import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { ensureEmployeeCounterparty } from "../advances/store.js";
 import { runReimbursementAudit } from "./audit-service.js";
-import { syncApprovalInstance } from "./approval-sync.js";
-import { canMutate } from "../access/ownership.js";
-import { hasPermission } from "../../middleware/auth.js";
+import { syncApprovalInstance } from "../approval/document-sync.js";
+import { checkExpenseAction } from "../access/expense-actions.js";
 import { createReimbursementVoucher } from "./voucher.js";
 import {
   createReimbursement,
@@ -210,31 +209,14 @@ export async function transitionReimbursementRoute(
     return;
   }
 
-  const actor = { userId: req.auth!.userId, roleCodes: req.auth!.roleCodes };
-  const isApprovalAction = action === "approve" || action === "reject" || action === "pay";
-
-  if (isApprovalAction) {
-    // **审批人 ≠ 申请人**，任何角色都绕不过去——这是内控的底线，不是可配置项。
-    if (target.applicantUserId === req.auth!.userId) {
-      json(res, 403, {
-        error: "不能审批自己提交的报销单。请交给有审批权限的同事处理。",
-        code: "REIMBURSEMENT_SELF_APPROVAL"
-      });
-      return;
-    }
-    if (!hasPermission(req.auth!.roleCodes, "expense.manage")) {
-      json(res, 403, {
-        error: "只有有费用审批权限的人可以批准、驳回或付款。",
-        code: "REIMBURSEMENT_APPROVAL_FORBIDDEN"
-      });
-      return;
-    }
-  } else if (!canMutate("reimbursement", target.applicantUserId, actor)) {
-    // submit / cancel 只能动自己的单。
-    json(res, 403, {
-      error: "只能提交或撤回自己的报销单。",
-      code: "REIMBURSEMENT_NOT_OWNER"
-    });
+  // 判定抽在 access/expense-actions.ts——借款单有完全相同的漏洞，
+  // 两处各写一遍迟早漂移，而漂移的方向通常是某一边忘了拦。
+  const verdict = checkExpenseAction("reimbursement", action, target.applicantUserId, {
+    userId: req.auth!.userId,
+    roleCodes: req.auth!.roleCodes
+  });
+  if (!verdict.ok) {
+    json(res, verdict.status!, { error: verdict.error, code: verdict.code });
     return;
   }
 
@@ -257,6 +239,7 @@ export async function transitionReimbursementRoute(
   // pending，变成另一种幽灵——待办列表里堆着一批早就处理完的单子。
   const approvalNotice = await syncApprovalInstance({
     companyId: req.auth!.companyId,
+    documentType: "reimbursement",
     documentId: id,
     action,
     actor: { userId: req.auth!.userId, roleCodes: req.auth!.roleCodes },
