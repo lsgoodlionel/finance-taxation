@@ -109,7 +109,16 @@ export function VoucherDetailPanel({
   const latestCommand = runtimeDetail?.commands[0] ?? null;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+    // aria-label 让这块区域可被定位：列表每行也有「审核通过」等快捷按钮，
+    // 没有锚点时「点详情里的那个按钮」这件事无从表达——
+    // 对读屏用户同样如此，他们需要知道自己进了哪一块。
+    <Space
+      direction="vertical"
+      size={16}
+      style={{ width: "100%" }}
+      role="region"
+      aria-label="凭证详情"
+    >
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>

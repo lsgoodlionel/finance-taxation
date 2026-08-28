@@ -202,7 +202,10 @@ test("posting rejects self-review: the same user cannot both approve and post", 
     const result = await postAs(voucherId, REVIEWER, authorizedBody);
     assert.equal(result.statusCode, 400);
     assert.equal(result.body?.code, "WORKFLOW_DUTY_CONFLICT");
-    assert.match(String(result.body?.error), /reviewer and poster/);
+    // 断言的是**给用户看的那句话**，不只是错误码。
+    // 这些消息会原样弹在页面上——V16 之前它们是英文原文
+    // （`reviewer and poster must be different users`），会计看不懂该怎么办。
+    assert.match(String(result.body?.error), /复核人和过账人不能是同一个人/);
 
     const entries = await pool.query<{ count: string }>(
       `select count(*)::text as count from ledger_entries where voucher_id = $1`,
@@ -236,7 +239,7 @@ test("posting requires a final authorizer, and the authorizer cannot be the post
     });
     assert.equal(self.statusCode, 400);
     assert.equal(self.body?.code, "WORKFLOW_DUTY_CONFLICT");
-    assert.match(String(self.body?.error), /executor and authorizer/);
+    assert.match(String(self.body?.error), /执行人和终审人不能是同一个人/);
   } finally {
     await closePool();
     await pool.end();
