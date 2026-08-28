@@ -10,6 +10,8 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useAccessUser } from "../../features/runtime/useAccessUser";
+import { canShowApprovalActions } from "./approval-actions";
 import { useSearchParams } from "react-router-dom";
 import {
   Alert,
@@ -19,6 +21,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Popconfirm,
   Select,
   Skeleton,
   Space,
@@ -77,6 +80,7 @@ interface DraftLine {
 }
 
 export function ReimbursementsPage() {
+  const accessUser = useAccessUser();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<ReimbursementRow[]>([]);
   const [advances, setAdvances] = useState<AdvanceRow[]>([]);
@@ -209,6 +213,13 @@ export function ReimbursementsPage() {
     }
   };
 
+  // 审批入口的显示判定抽在 approval-actions.ts，那里有单测。
+  // 权限键来自后端（/api/access/me 的 permissions），不在前端按角色推。
+  const approvalActor = {
+    userId: accessUser?.id ?? "",
+    permissions: accessUser?.permissions
+  };
+
   const handleTransition = async (row: ReimbursementRow, action: string) => {
     // 提交前先审核。**把结果展开给用户看，而不是让他撞一个 409**——
     // 服务端仍会拦（那是最终防线），但用户应当在点之前就知道哪里不行。
@@ -279,6 +290,48 @@ export function ReimbursementsPage() {
           <Button size="small" onClick={() => void handleTransition(row, "submit")}>
             改后再提
           </Button>
+        ) : row.status === "pending" ? (
+          /*
+            待审批：**必须有人能批**。
+
+            此前这里落进下面那个 `—` 分支——申请单、借款单、报销单三种
+            全部只能「提交」，前端不存在任何批准/驳回入口，提交后永久停在
+            pending。审批引擎配好的流程也没人推得动。
+
+            按权限显示：只有持 expense.manage 的人看得到这两个按钮，
+            而且服务端还会再拦一次「审批人 ≠ 申请人」——
+            界面上不显示不等于点不了，两层都要有。
+          */
+          canShowApprovalActions(row, approvalActor) ? (
+            <Space size={4}>
+              <Popconfirm
+                title="批准这张报销单？"
+                description="批准后会生成报销凭证草稿，仍需会计复核过账。"
+                okText="批准"
+                cancelText="取消"
+                onConfirm={() => void handleTransition(row, "approve")}
+              >
+                <Button size="small" type="primary">
+                  批准
+                </Button>
+              </Popconfirm>
+              <Popconfirm
+                title="驳回这张报销单？"
+                description="驳回后申请人可以修改再提交。"
+                okText="驳回"
+                cancelText="取消"
+                onConfirm={() => void handleTransition(row, "reject")}
+              >
+                <Button size="small" danger>
+                  驳回
+                </Button>
+              </Popconfirm>
+            </Space>
+          ) : (
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {row.applicantUserId === approvalActor.userId ? "等待他人审批" : "等待审批"}
+            </Typography.Text>
+          )
         ) : (
           <Typography.Text type="secondary">—</Typography.Text>
         )

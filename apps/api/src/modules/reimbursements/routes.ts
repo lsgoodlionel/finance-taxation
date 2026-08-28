@@ -15,6 +15,7 @@ import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { ensureEmployeeCounterparty } from "../advances/store.js";
 import { runReimbursementAudit } from "./audit-service.js";
+import { syncApprovalInstance } from "./approval-sync.js";
 import { canMutate } from "../access/ownership.js";
 import { hasPermission } from "../../middleware/auth.js";
 import { createReimbursementVoucher } from "./voucher.js";
@@ -246,6 +247,22 @@ export async function transitionReimbursementRoute(
     return;
   }
 
+  // ── 让审批流真的跑起来（V16）────────────────────────────────────────────
+  //
+  // 此前 `submitForApproval` **全仓只有它自己的测试在调用**：公司配好的审批流
+  // 从来没被启动过，`approval_instances` 里没有报销单的记录，
+  // 于是「我的审批」对谁都是空的，没有任何人被通知。审批引擎是死代码。
+  //
+  // 同样重要的是 approve/reject 也要推进实例：只建不推，实例会永远停在
+  // pending，变成另一种幽灵——待办列表里堆着一批早就处理完的单子。
+  const approvalNotice = await syncApprovalInstance({
+    companyId: req.auth!.companyId,
+    documentId: id,
+    action,
+    actor: { userId: req.auth!.userId, roleCodes: req.auth!.roleCodes },
+    amountCents: result.value.totalCents ?? 0
+  });
+
   // 审批通过时生成凭证草稿。**放在状态流转之后而不是之内**：凭证生成失败
   // 不该让审批本身回滚——单据已经批了是事实，凭证可以重新生成。
   let voucherId: string | null = result.value.voucherId;
@@ -261,14 +278,21 @@ export async function transitionReimbursementRoute(
     resourceType: "reimbursement",
     resourceId: id,
     resourceLabel: `${result.value.reimbursementNo}（${(result.value.totalCents / 100).toFixed(2)} 元）`,
-    changes: { status: result.value.status, voucherId }
+    changes: { status: result.value.status, voucherId, approvalTracked: approvalNotice.tracked }
   });
+
+  // 提示按重要性拼：凭证是草稿这件事必须说，审批流有没有在跟也必须说——
+  // 用户提交完最想知道的就是「现在轮到谁了」。
+  const notes = [
+    result.value.status === "approved" ? "已生成报销凭证草稿，需会计复核后过账。" : null,
+    approvalNotice.message
+  ].filter((text): text is string => Boolean(text));
 
   json(res, 200, {
     reimbursement: { ...result.value, voucherId },
-    ...(result.value.status === "approved"
-      ? { note: "已生成报销凭证草稿，需会计复核后过账。" }
-      : {})
+    /** 审批流是否在跟进这张单据。false = 公司没配流程，走的是直接处理。 */
+    approvalTracked: approvalNotice.tracked,
+    ...(notes.length > 0 ? { note: notes.join(" ") } : {})
   });
 }
 
