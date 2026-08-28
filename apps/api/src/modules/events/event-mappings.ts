@@ -50,6 +50,8 @@ export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBu
    * 事项没填金额时是 `null` 而不是 0——「不知道多少钱」和「零元」是两回事，
    * 后者会静默参与申报合计。见 `TaxItem.taxableAmountCents`。
    */
+  /** 事项上标的应税行为类别，派生的税项跟着走。 */
+  const taxableCategory = event.taxableCategory ?? null;
   const taxableAmountCents =
     event.amount === null || event.amount === undefined || event.amount === ""
       ? null
@@ -109,6 +111,7 @@ export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBu
           status: "pending",
           basis: "需结合交付、验收或约定开票条件确认纳税义务发生时点。",
           taxableAmountCents,
+          taxableCategory,
           filingPeriod: event.occurredOn.slice(0, 7)
         },
         {
@@ -120,6 +123,7 @@ export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBu
           status: "attention",
           basis: "需按合同性质复核税目与计税依据。",
           taxableAmountCents,
+          taxableCategory,
           filingPeriod: quarterLabel(event.occurredOn)
         }
       );
@@ -193,6 +197,7 @@ export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBu
         status: "attention",
         basis: "需取得合规发票并满足业务用途条件。",
         taxableAmountCents,
+        taxableCategory,
         filingPeriod: event.occurredOn.slice(0, 7)
       });
       voucherDrafts.push({
@@ -255,6 +260,7 @@ export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBu
           status: "attention",
           basis: "报销事项如取得合规专票且用途符合规定，需同步进入进项税额复核。",
           taxableAmountCents,
+          taxableCategory,
           filingPeriod: event.occurredOn.slice(0, 7)
         },
         {
@@ -527,6 +533,9 @@ export function toTaxItems(bundle: BusinessEventMappingBundle, generatedAt: stri
     // `?? null` 而不是 `?? 0`：映射没给计税依据时如实记「不知道」。
     // 填 0 会让这条税项以零金额参与申报合计，而没有任何提示。
     taxableAmountCents: mapping.taxableAmountCents ?? null,
+    // 应税行为类别从事项带过来。事项没标就是 null，
+    // 底稿会回退到公司主营类别；公司也没配就报「税目待确认」，不猜。
+    taxableCategory: mapping.taxableCategory ?? null,
     filingPeriod: mapping.filingPeriod,
     status:
       mapping.status === "ready"

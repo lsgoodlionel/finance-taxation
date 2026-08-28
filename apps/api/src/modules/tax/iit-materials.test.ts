@@ -14,6 +14,7 @@ test("buildIndividualIncomeTaxMaterials summarizes payroll withholding materials
       treatment: "工资薪金个人所得税代扣代缴",
       basis: "5000",
       taxableAmountCents: null,
+      taxableCategory: null,
       filingPeriod: "2026-05",
       status: "ready",
       source: "analysis",

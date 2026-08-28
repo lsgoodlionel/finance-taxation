@@ -305,13 +305,27 @@ const counts: SeedCounts = {
     client = await pool.connect();
     await client.query("BEGIN");
 
+    /**
+     * 公司主营的应税行为类别（V17）。决定这家公司的业务默认按哪一档增值税算。
+     *
+     * 只给得出来的公司填：科技公司卖货 13%，服务公司做现代服务 6%。
+     * 填不出来的保持 null——那时税率判定会报「税目待确认」，
+     * **不猜一个默认档**。
+     */
+    const defaultTaxableCategories: Record<string, string> = {
+      "cmp-v4-tech": "goods",
+      "cmp-v4-service": "modern_service"
+    };
+
     for (const company of companies) {
       await client.query(
-        `INSERT INTO companies (id, name, status)
-         VALUES ($1, $2, 'active')
+        `INSERT INTO companies (id, name, status, default_taxable_category)
+         VALUES ($1, $2, 'active', $3)
          ON CONFLICT (id) DO UPDATE
-         SET name = EXCLUDED.name, status = EXCLUDED.status, updated_at = now()`,
-        [company.id, company.name]
+         SET name = EXCLUDED.name, status = EXCLUDED.status,
+             default_taxable_category = EXCLUDED.default_taxable_category,
+             updated_at = now()`,
+        [company.id, company.name, defaultTaxableCategories[company.id] ?? null]
       );
     }
 

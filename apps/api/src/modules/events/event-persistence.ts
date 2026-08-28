@@ -41,6 +41,7 @@ export async function listCompanyEvents(companyId: string): Promise<BusinessEven
         occurred_on,
         amount,
         currency,
+        taxable_category,
         status,
         source,
         contract_id,
@@ -317,12 +318,13 @@ export async function insertTaxItems(executor: DbExecutor, rows: TaxItem[]) {
           -- 计税依据与政策依据分开存：basis 是文字，金额在这一列。
           -- 漏写这一列不会报错，只会让增值税底稿算不出税额（历史上算成了 NaN）。
           taxable_amount_cents,
+          taxable_category,
           filing_period,
           status,
           source,
           created_at,
           updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz, $13::timestamptz)
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::timestamptz, $14::timestamptz)
       `,
       [
         row.id,
@@ -333,6 +335,7 @@ export async function insertTaxItems(executor: DbExecutor, rows: TaxItem[]) {
         row.treatment,
         row.basis,
         row.taxableAmountCents,
+        row.taxableCategory,
         row.filingPeriod,
         row.status,
         row.source,

@@ -47,6 +47,10 @@ const items: TaxItem[] = [
     // Number() 出 NaN 一路流进申报 XML，而测试一直是绿的。
     basis: "需结合交付、验收或约定开票条件确认纳税义务发生时点。",
     taxableAmountCents: 100000,
+    // 给上类别：这几条验的是**算税逻辑**（税率时点、减征、合计），
+    // 不是类别判定。V17 起类别为空且公司没配默认值时会算「税目待确认」，
+    // 那样这些用例就测不到原本要测的东西了。
+    taxableCategory: "goods",
     filingPeriod: "2026-05",
     status: "ready",
     source: "analysis",
@@ -62,6 +66,7 @@ const items: TaxItem[] = [
     treatment: "进项税额",
     basis: "需取得合规发票并满足业务用途条件。",
     taxableAmountCents: 30000,
+    taxableCategory: "goods",
     filingPeriod: "2026-05",
     status: "ready",
     source: "analysis",

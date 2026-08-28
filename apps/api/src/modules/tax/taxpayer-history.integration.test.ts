@@ -70,7 +70,7 @@ function capture() {
 }
 
 async function createProfile(body: Record<string, unknown>) {
-  const { createTaxpayerProfile } = await import("./routes.js");
+  const { createTaxpayerProfile } = await import("./taxpayer-profile.routes.js");
   const c = capture();
   await createTaxpayerProfile(
     { method: "POST", url: "/api/tax/taxpayer-profiles", body, auth: auth() } as ApiRequest,

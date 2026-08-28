@@ -11,7 +11,7 @@ test("buildTaxWorkingPaperPrintableHtml renders VAT working paper headline", () 
     outputTaxAmount: "130",
     inputTaxAmount: "39",
     simplifiedTaxAmount: "0",
-    payableVatAmount: "91", incompleteTaxItemIds: [],
+    payableVatAmount: "91", incompleteTaxItemIds: [], unknownCategoryTaxItemIds: [],
     lines: [
       {
         id: "line-1",
@@ -22,6 +22,7 @@ test("buildTaxWorkingPaperPrintableHtml renders VAT working paper headline", () 
         taxRate: "13",
         taxableAmount: "1000",
         basisMissing: false,
+        categoryMissing: false,
         taxAmount: "130"
       }
     ]

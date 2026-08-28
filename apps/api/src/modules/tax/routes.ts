@@ -15,6 +15,7 @@ import type {
 import { query, queryOne, withTransaction } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
+import { loadCompanyDefaultCategory } from "./taxpayer-profile.routes.js";
 import { listCompanyRndCostLines, listCompanyRndProjects, listCompanyRndTimeEntries } from "../rnd/routes.js";
 import { buildRndProjectSummary } from "../rnd/summary.js";
 import {
@@ -56,6 +57,7 @@ interface TaxItemRow {
   treatment: string;
   basis: string;
   taxable_amount_cents: string | number | null;
+  taxable_category: string | null;
   filing_period: string;
   status: TaxItem["status"];
   source: TaxItem["source"];
@@ -107,7 +109,7 @@ interface TaxFilingBatchArchiveRow {
   archived_at: string | Date;
 }
 
-function toIsoString(value: string | Date | null | undefined): string | null {
+export function toIsoString(value: string | Date | null | undefined): string | null {
   if (!value) return null;
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
@@ -127,6 +129,7 @@ function mapTaxItemRow(row: TaxItemRow): TaxItem {
       row.taxable_amount_cents === null || row.taxable_amount_cents === undefined
         ? null
         : Number(row.taxable_amount_cents),
+    taxableCategory: row.taxable_category ?? null,
     filingPeriod: row.filing_period,
     status: row.status,
     source: row.source,
@@ -148,7 +151,7 @@ function mapTaxFilingBatchRow(row: TaxFilingBatchRow, itemIds: string[]): TaxFil
   };
 }
 
-function mapTaxpayerProfileRow(row: TaxpayerProfileRow): TaxpayerProfile {
+export function mapTaxpayerProfileRow(row: TaxpayerProfileRow): TaxpayerProfile {
   return {
     id: row.id,
     companyId: row.company_id,
@@ -238,7 +241,7 @@ export async function listCompanyTaxItems(
     `
       select
         id, company_id, business_event_id, mapping_id, tax_type, treatment, basis,
-        taxable_amount_cents,
+        taxable_amount_cents, taxable_category,
         filing_period, status, source, created_at, updated_at
       from tax_items
       ${where}
@@ -898,87 +901,6 @@ export async function archiveTaxFilingBatch(req: ApiRequest, res: ServerResponse
   return getTaxFilingBatchDetail(req, res, batchId);
 }
 
-export async function listTaxpayerProfiles(req: ApiRequest, res: ServerResponse) {
-  const items = await listCompanyTaxpayerProfiles(req.auth!.companyId);
-  return json(res, 200, { items, total: items.length });
-}
-
-export async function createTaxpayerProfile(req: ApiRequest, res: ServerResponse) {
-  const body = (req.body || {}) as Partial<TaxpayerProfile>;
-  if (!body.taxpayerType || !body.effectiveFrom) {
-    return json(res, 400, { error: "taxpayerType and effectiveFrom are required" });
-  }
-  const now = new Date().toISOString();
-  const profile: TaxpayerProfile = {
-    id: `taxpayer-${Date.now()}`,
-    companyId: req.auth!.companyId,
-    taxpayerType: body.taxpayerType,
-    effectiveFrom: body.effectiveFrom,
-    effectiveTo: body.effectiveTo ?? null,
-    status: body.status || "active",
-    notes: body.notes || "",
-    createdAt: now,
-    updatedAt: now
-  };
-  // ── 生效区间不得重叠（V16）──────────────────────────────────────────────
-  //
-  // 此前这里无条件把**所有** active 档案改成 inactive，于是纳税人身份的沿革
-  // 保存不下来。税务专员实测到的后果更糟：录一条 2030-01-01 生效的小规模登记，
-  // 当场把 2026 年那条也改成 inactive，`GET /api/tax/rules?occurredOn=2026-05-01`
-  // 立刻变成「Active taxpayer profile not found」——**整个税务模块当期瘫痪**，
-  // 而用户只是录了一条未来生效的登记。
-  //
-  // 读取端 resolveActiveTaxpayerProfile 本来就是按多档沿革设计的
-  // （取生效日 ≤ 查询日的最近一条），是写入端和它对不上。
-  //
-  // 校验口径照搬税率主数据（tax-rate-store.ts）：同一家公司的区间不得重叠，
-  // 重叠会让「这一天算什么纳税人」有两个答案，而解析函数只返回一个——
-  // 结果取决于排序，静默的不确定性比报错糟糕得多。
-  if (profile.status === "active") {
-    const overlapping = await query<{ id: string; effective_from: string | Date }>(
-      `select id, effective_from from taxpayer_profiles
-        where company_id = $1 and status = 'active'
-          and effective_from <= coalesce($3::date, 'infinity'::date)
-          and coalesce(effective_to, 'infinity'::date) >= $2::date`,
-      [profile.companyId, profile.effectiveFrom, profile.effectiveTo ?? null]
-    );
-    if (overlapping.length > 0) {
-      return json(res, 409, {
-        error:
-          `已有生效区间与此重叠（${overlapping
-            .map((row) => (toIsoString(row.effective_from) || "").slice(0, 10))
-            .join("、")} 起）。同一家公司在同一天只能是一种纳税人身份——` +
-          "请先给上一档填上失效日，再新增。",
-        code: "TAXPAYER_PROFILE_OVERLAPS",
-        conflictIds: overlapping.map((row) => row.id)
-      });
-    }
-  }
-
-  await withTransaction(async (client) => {
-    await client.query(
-      `
-        insert into taxpayer_profiles (
-          id, company_id, taxpayer_type, effective_from, effective_to,
-          status, notes, created_at, updated_at
-        )
-        values ($1,$2,$3,$4,$5::date,$6,$7,$8::timestamptz,$9::timestamptz)
-      `,
-      [
-        profile.id,
-        profile.companyId,
-        profile.taxpayerType,
-        profile.effectiveFrom,
-        profile.effectiveTo,
-        profile.status,
-        profile.notes,
-        profile.createdAt,
-        profile.updatedAt
-      ]
-    );
-  });
-  return json(res, 201, profile);
-}
 
 export async function getTaxRuleProfile(req: ApiRequest, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://127.0.0.1");
@@ -1045,7 +967,14 @@ export async function getVatWorkingPaper(req: ApiRequest, res: ServerResponse) {
   }
   // 税率主数据按属期解析（V12-D2）：历史属期取当时的税率，小规模取减征后的征收率
   const rates = await listTaxRates(req.auth!.companyId, "vat");
-  const paper: VatWorkingPaper = buildVatWorkingPaper(profile, items, filingPeriod, rates);
+  const companyDefaultCategory = await loadCompanyDefaultCategory(req.auth!.companyId);
+  const paper: VatWorkingPaper = buildVatWorkingPaper(
+    profile,
+    items,
+    filingPeriod,
+    rates,
+    companyDefaultCategory
+  );
   return json(res, 200, paper);
 }
 
@@ -1140,7 +1069,8 @@ export async function getTaxWorkingPaperPrintable(req: ApiRequest, res: ServerRe
     return;
   }
   const rates = await listTaxRates(req.auth!.companyId, "vat");
-  const paper = buildVatWorkingPaper(profile, items, filingPeriod, rates);
+  const companyDefaultCategory = await loadCompanyDefaultCategory(req.auth!.companyId);
+  const paper = buildVatWorkingPaper(profile, items, filingPeriod, rates, companyDefaultCategory);
   const html = buildTaxWorkingPaperPrintableHtml("增值税底稿", paper);
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");

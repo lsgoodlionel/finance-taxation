@@ -26,6 +26,7 @@ export interface BusinessEventRow {
   department: string;
   owner_id: string | null;
   occurred_on: string | Date;
+  taxable_category: string | null;
   amount: string | number | null;
   currency: string;
   status: BusinessEvent["status"];
@@ -148,6 +149,8 @@ export function mapEventRow(row: BusinessEventRow): BusinessEvent {
     ownerId: row.owner_id,
     // occurred_on 是 PG `date`：用 toDateOnly 保证结果与运行时时区无关。
     occurredOn: toDateOnly(row.occurred_on) ?? "",
+    // 应税行为类别（税目口径，V17）。null = 未标，税率判定回退到公司主营类别。
+    taxableCategory: row.taxable_category ?? null,
     amount: toAmountString(row.amount),
     currency: row.currency,
     status: row.status,

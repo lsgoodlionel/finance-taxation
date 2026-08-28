@@ -5,11 +5,15 @@
  * **一个数组字面量**，任何两个人同时加接口都在同一处冲突。
  */
 import type { RouteDef } from "../../router/router.js";
+import {
+  createTaxpayerProfile,
+  listTaxpayerProfiles
+} from "../../modules/tax/taxpayer-profile.routes.js";
 import { createVoucherFromTemplate } from "../../modules/vouchers/voucher-from-template.js";
 import { closingBundleHandler } from "../shared-handlers.js";
 import { archiveDocument, attachDocumentFile, downloadAttachment, getDocumentDetail, listDocumentAttachments, listDocuments, updateDocument, uploadDocumentFile } from "../../modules/documents/routes.js";
 import { getTaxRuntimeSummaryRoute, getVoucherRuntimeSummaryRoute } from "../../modules/runtime/routes.js";
-import { archiveTaxFilingBatch, createTaxFilingBatch, createTaxpayerProfile, getCorporateIncomeTaxPreparation, getIndividualIncomeTaxMaterials, getStampAndSurtaxSummary, getTaxFilingBatchDetail, getTaxItemDetail, getTaxRuleProfile, getTaxWorkingPaperPrintable, getVatWorkingPaper, listTaxFilingBatches, listTaxItems, listTaxpayerProfiles, reviewTaxFilingBatch, submitTaxFilingBatch, updateTaxItem, validateTaxFilingBatch } from "../../modules/tax/routes.js";
+import { archiveTaxFilingBatch, createTaxFilingBatch, getCorporateIncomeTaxPreparation, getIndividualIncomeTaxMaterials, getStampAndSurtaxSummary, getTaxFilingBatchDetail, getTaxItemDetail, getTaxRuleProfile, getTaxWorkingPaperPrintable, getVatWorkingPaper, listTaxFilingBatches, listTaxItems, reviewTaxFilingBatch, submitTaxFilingBatch, updateTaxItem, validateTaxFilingBatch } from "../../modules/tax/routes.js";
 import { createVatSettlementVoucher, previewVatSettlement } from "../../modules/tax/vat-settlement.routes.js";
 import { approveVoucher, getVoucherDetail, getVoucherTemplates, listVoucherPostingRecords, listVouchers, postVoucher, reverseVoucher, updateVoucher, validateVoucher } from "../../modules/vouchers/routes.js";
 

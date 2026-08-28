@@ -85,6 +85,16 @@ export interface BusinessEvent {
   occurredOn: string;
   amount: string | null;
   currency: string;
+  /**
+   * 应税行为类别（税目口径，V17）。决定这笔业务适用哪一档增值税税率。
+   *
+   * **与 `type` 不是一回事**：`type`（sales / procurement / expense…）是
+   * 记账口径——这笔业务在账上怎么走；类别是税目口径——这笔业务卖的是什么。
+   * 一笔 `sales` 可能是卖货 13%、卖服务 6%、卖不动产 9%。
+   *
+   * `null` = 未标，税率判定回退到公司主营类别；公司也没配就报「税目待确认」。
+   */
+  taxableCategory?: string | null;
   status: BusinessEventStatus;
   source: BusinessEventSource;
   contractId?: string | null;
@@ -156,6 +166,8 @@ export interface EventTaxMapping {
    * 留空比填 0 好——0 会静默参与合计。
    */
   taxableAmountCents?: number | null;
+  /** 应税行为类别（税目口径）。省略时按 null 处理——见 `TaxItem.taxableCategory`。 */
+  taxableCategory?: string | null;
   filingPeriod: string;
 }
 
@@ -310,6 +322,14 @@ export interface TaxItem {
    * 绝不能当成零参与计算——那会让申报表少算一笔而没有任何提示。
    */
   taxableAmountCents: number | null;
+  /**
+   * 应税行为类别（税目口径，V17）。决定这笔业务适用哪一档增值税税率。
+   *
+   * `null` = 未确定，回退到公司主营类别；公司也没配就是「税目待确认」——
+   * **不猜一个默认档**。与记账口径的 `BusinessEvent.type` 不是一回事：
+   * 一笔 `sales` 可能是卖货 13%、卖服务 6%、卖不动产 9%。
+   */
+  taxableCategory: string | null;
   filingPeriod: string;
   status: TaxItemStatus;
   source: "analysis";
@@ -421,6 +441,12 @@ export interface VatWorkingPaperLine {
   taxableAmount: string | null;
   /** 计税依据缺失，本行未纳入合计。 */
   basisMissing: boolean;
+  /**
+   * 税目未确定，本行未纳入合计。
+   *
+   * 与 `basisMissing` 分开：那个是不知道按多少钱算，这个是不知道按什么税率算。
+   */
+  categoryMissing: boolean;
   /** 税额。计税依据缺失时为 `null`，理由同 `taxableAmount`。 */
   taxAmount: string | null;
 }
@@ -440,6 +466,13 @@ export interface VatWorkingPaper {
    * 一份少算了一笔的申报表，没有提示就会被当成完整的报上去。
    */
   incompleteTaxItemIds: string[];
+  /**
+   * 税目未确定、**未纳入上述合计**的税项 id（V17）。
+   *
+   * 非空时合计不完整。与 `incompleteTaxItemIds` 分开报，
+   * 因为用户要补的东西不同：一个补金额，一个补税目。
+   */
+  unknownCategoryTaxItemIds: string[];
   lines: VatWorkingPaperLine[];
 }
 

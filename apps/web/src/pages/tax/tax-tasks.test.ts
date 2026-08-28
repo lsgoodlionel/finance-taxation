@@ -37,6 +37,7 @@ function makeItem(id: string, status: TaxItem["status"]): TaxItem {
     treatment: "销项计税",
     basis: "含税收入",
     taxableAmountCents: null,
+    taxableCategory: null,
     filingPeriod: "2026-05",
     status,
     source: "analysis",
