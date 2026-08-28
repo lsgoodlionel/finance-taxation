@@ -18,6 +18,7 @@ import {
   Empty,
   InputNumber,
   Modal,
+  Popconfirm,
   Skeleton,
   Space,
   Statistic,
@@ -39,6 +40,7 @@ import {
   getScheduleThreeWay,
   listDuePayments,
   listPayments,
+  submitPaymentForBank,
   type AuditFinding,
   type ControlLevel,
   type DuePaymentRow,
@@ -129,6 +131,20 @@ export function PaymentsPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  /** 提交待发：草稿 → 已提交，之后才能导出银行指令或走银企直连。 */
+  const handleSubmitPayment = useCallback(
+    async (row: PaymentRow) => {
+      try {
+        const result = await submitPaymentForBank(row.id);
+        toast.success(result.note);
+        await reload();
+      } catch (error) {
+        toast.error(errorMessage(error, "提交待发失败"));
+      }
+    },
+    [reload]
+  );
 
   /** 打款。凭证是草稿，提示必须说清，否则出纳以为账已经做好了。 */
   const handlePayAdvance = useCallback(
@@ -305,16 +321,56 @@ export function PaymentsPage() {
         value ?? <Typography.Text type="secondary">未导出</Typography.Text>
     },
     {
+      /*
+        提交待发（V16）。
+
+        `submitted` 这个状态此前**全库没有任何路径能产生**——它只被检查、
+        从没被写入。于是出纳的两条本职路径都是死的：导出银行 CSV 的复选框
+        永远勾不中任何一行（禁用条件是 `status !== "submitted"`），
+        银企直连恒返回 409。
+
+        门槛本身没错——草稿的意思就是「还没定」，不该发给银行。缺的是这一步。
+      */
+      title: "操作",
+      key: "actions",
+      width: 110,
+      render: (_: unknown, row: PaymentRow) =>
+        row.status === "draft" ? (
+          <Popconfirm
+            title="提交待发？"
+            description="提交后金额与收款方锁定，接下来可以导出银行指令或走银企直连。手工付款（现金、柜台）可以跳过这一步直接确认。"
+            okText="提交待发"
+            cancelText="取消"
+            onConfirm={() => void handleSubmitPayment(row)}
+          >
+            <Button size="small" type="primary" ghost>
+              提交待发
+            </Button>
+          </Popconfirm>
+        ) : (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            —
+          </Typography.Text>
+        )
+    },
+    {
       // V14-A：银企直连的入口。与「导出批次」并列——两者是同一件事的
       // 两条路径（导 CSV 去网银上传，或直接发给银行），放一起才看得出可以二选一。
       title: "银企直连",
       key: "bankConnect",
       width: 110,
-      render: (_: unknown, row: PaymentRow) => (
-        <Button size="small" onClick={() => setBankTarget(row)}>
-          发往银行
-        </Button>
-      )
+      render: (_: unknown, row: PaymentRow) =>
+        // 只有已提交待发的才给直连入口：草稿点了必然 409，
+        // 摆一个必然失败的按钮比不摆更糟。
+        row.status === "submitted" ? (
+          <Button size="small" onClick={() => setBankTarget(row)}>
+            发往银行
+          </Button>
+        ) : (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {row.status === "draft" ? "先提交待发" : "—"}
+          </Typography.Text>
+        )
     }
   ];
 

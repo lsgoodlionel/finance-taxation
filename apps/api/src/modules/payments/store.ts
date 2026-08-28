@@ -275,6 +275,59 @@ async function resolveTarget(payment: PaymentRow): Promise<PaymentTarget | null>
 }
 
 /**
+ * 提交待发：把付款单从 `draft` 推到 `submitted`（V16）。
+ *
+ * ## 为什么需要这个动作
+ *
+ * `submitted` 这个状态**全库没有任何路径能产生**——它只被检查，从没被写入。
+ * 于是两条出纳的本职路径都是死的：
+ *
+ *   - 银企直连发款：`POST /api/bank-connect/instructions` 只接受 submitted，
+ *     恒返回 409 BANK_PAYMENT_NOT_SUBMITTED
+ *   - 导出银行 CSV：页面上 `disabled: row.status !== "submitted"`，
+ *     所以那个复选框**永远勾不中任何一行**，导出按钮恒为灰
+ *
+ * 门槛本身没错——草稿的意思就是「还没定」，不该发给银行。缺的是这个动作。
+ *
+ * ## 语义
+ *
+ * `submitted` = 出纳确认这笔款要发出去了，金额与收款方就此锁定，
+ * 接下来走两条路之一：导出 CSV 去网银，或走银企直连。
+ *
+ * **不强制所有付款都走这一步**：手工付款（现金、柜台转账）仍然可以
+ * `draft → paid` 直接确认。强制会破坏那条正当的流程。
+ */
+export async function submitPaymentForBank(
+  companyId: string,
+  id: string
+): Promise<PaymentResult<PaymentRow>> {
+  const payment = await getPayment(companyId, id);
+  if (!payment) {
+    return { ok: false, failure: { code: "PAYMENT_NOT_FOUND", message: "付款单不存在" } };
+  }
+  if (payment.status === "submitted") {
+    // 幂等：重复提交返回当前状态，不报错。
+    return { ok: true, value: payment };
+  }
+  if (payment.status !== "draft") {
+    return {
+      ok: false,
+      failure: {
+        code: "PAYMENT_INVALID_TRANSITION",
+        message: `付款单当前为「${payment.status}」，只有草稿能提交待发`
+      }
+    };
+  }
+
+  await query(
+    `update payments set status = 'submitted', updated_at = now()
+      where company_id = $1 and id = $2`,
+    [companyId, id]
+  );
+  return { ok: true, value: { ...payment, status: "submitted" } };
+}
+
+/**
  * 确认付款：生成凭证草稿并把状态推进到 `paid`。
  *
  * 幂等：已有凭证的付款单直接返回那一张。重试不能生成第二张——

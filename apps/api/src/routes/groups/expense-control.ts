@@ -18,7 +18,7 @@ import { carryOverRunRoute, listProductsRoute, listRunsRoute, previewRunRoute, u
 import { createRevaluationVoucherRoute, listExchangeRatesRoute, previewRevaluationRoute, upsertExchangeRateRoute } from "../../modules/currency/routes.js";
 import { checkExpenseStandardRoute, createExpenseStandardRoute, expireExpenseStandardRoute, listExpenseStandardsRoute } from "../../modules/expense-standards/routes.js";
 import { suggestInvoicesRoute } from "../../modules/invoices/match-routes.js";
-import { cancelScheduleRoute, confirmPaymentRoute, createPaymentRoute, createScheduleRoute, exportPaymentsRoute, listDuePaymentsRoute, listPaymentsRoute, listSchedulesRoute } from "../../modules/payments/routes.js";
+import { cancelScheduleRoute, confirmPaymentRoute, createPaymentRoute, createScheduleRoute, exportPaymentsRoute, listDuePaymentsRoute, listPaymentsRoute, listSchedulesRoute, submitPaymentRoute } from "../../modules/payments/routes.js";
 import { createRecurringRoute, generateRecurringRoute, listRecurringRoute, updateRecurringStatusRoute } from "../../modules/recurring/routes.js";
 import { auditReimbursementRoute, createReimbursementRoute, getReimbursementRoute, invoiceReimbursementUsageRoute, listReimbursementsRoute, transitionReimbursementRoute } from "../../modules/reimbursements/routes.js";
 import { expenseAnalysisRoute } from "../../modules/reports/expense-analysis-routes.js";
@@ -267,6 +267,15 @@ export const expenseControlRoutes: RouteDef[] = [
   { method: "GET", path: "/api/payments/due", auth: true, permission: "contracts.view", handler: listDuePaymentsRoute },
   { method: "GET", path: "/api/payments", auth: true, permission: "contracts.view", handler: listPaymentsRoute },
   { method: "POST", path: "/api/payments", auth: true, permission: "banking.manage", handler: createPaymentRoute },
+  {
+    // 提交待发：草稿 → 已提交。导出银行 CSV 与银企直连都只接受 submitted，
+    // 而此前这个状态全库没有任何路径能产生，两条路因此都是死的。
+    method: "POST",
+    path: "/api/payments/:id/submit",
+    auth: true,
+    permission: "banking.manage",
+    handler: (req, res, p) => submitPaymentRoute(req, res, p.id!)
+  },
   {
     method: "POST",
     path: "/api/payments/:id/confirm",

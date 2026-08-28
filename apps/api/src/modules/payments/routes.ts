@@ -26,6 +26,7 @@ import {
 import { buildBankExportRows, toBankCsv } from "./voucher.js";
 import {
   confirmPayment,
+  submitPaymentForBank,
   createPayment,
   getPayment,
   listPayments,
@@ -197,6 +198,42 @@ export async function createPaymentRoute(req: ApiRequest, res: ServerResponse): 
   }
 
   json(res, 201, { payment: result.value });
+}
+
+/**
+ * 提交待发：草稿 → 已提交。
+ *
+ * 这一步之后才能导出银行 CSV 或走银企直连——那两条路都只接受 `submitted`，
+ * 而此前这个状态**全库没有任何路径能产生**，两条出纳的本职路径因此都是死的。
+ */
+export async function submitPaymentRoute(
+  req: ApiRequest,
+  res: ServerResponse,
+  id: string
+): Promise<void> {
+  const result = await submitPaymentForBank(req.auth!.companyId, id);
+  if (!result.ok) {
+    json(res, PAYMENT_STATUS[result.failure.code], {
+      error: result.failure.message,
+      code: result.failure.code
+    });
+    return;
+  }
+
+  writeAudit({
+    companyId: req.auth!.companyId,
+    userId: req.auth!.userId,
+    action: "payment.submit",
+    resourceType: "payment",
+    resourceId: id,
+    resourceLabel: `${result.value.paymentNo}`,
+    changes: { status: result.value.status }
+  });
+
+  json(res, 200, {
+    payment: result.value,
+    note: "已提交待发。接下来可以导出银行付款指令，或通过银企直连发往银行。"
+  });
 }
 
 export async function confirmPaymentRoute(
