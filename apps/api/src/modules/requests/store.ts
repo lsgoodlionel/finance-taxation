@@ -49,7 +49,9 @@ export type RequestFailureCode =
   | "REQUEST_NOT_EDITABLE"
   | "REQUEST_INVALID_TRANSITION"
   | "REQUEST_BUDGET_BLOCKED"
-  | "REQUEST_NOT_OWNER";
+  | "REQUEST_NOT_OWNER"
+  /** 审批人 == 发起人。内控底线，任何角色都绕不过去。 */
+  | "REQUEST_SELF_APPROVAL";
 
 export type RequestResult<T> =
   | { ok: true; value: T }
@@ -388,8 +390,7 @@ export async function transitionRequest(
     }
     const current = mapRow(row);
 
-    // 提交与撤回只有发起人能做。批准/驳回的判权在审批流那一侧，
-    // 这里不重复判——两处各判一次迟早不一致。
+    // 提交与撤回只有发起人能做。
     if ((input.action === "submit" || input.action === "cancel") &&
         current.requesterUserId !== input.actorUserId) {
       return {
@@ -397,6 +398,27 @@ export async function transitionRequest(
         failure: {
           code: "REQUEST_NOT_OWNER" as const,
           message: input.action === "submit" ? "只有发起人能提交" : "只有发起人能撤回"
+        }
+      };
+    }
+
+    // **审批人 ≠ 发起人**（V16）。
+    //
+    // 这里原本写着「批准/驳回的判权在审批流那一侧，这里不重复判」——
+    // 而审批流**从来没有被启动过**（`submitForApproval` 全仓只有它自己的测试
+    // 在调用）。于是那句注释把一个洞说成了一个设计：实测员工可以批准自己
+    // 8000 元的采购申请。
+    //
+    // 现在审批流真的接上了（见 approval/document-sync.ts），但这一层仍然要判：
+    // 没配审批流的公司走的是直接处理，那条路上没有别的东西拦着。
+    // 内控底线不能依赖「另有一处会管」。
+    if ((input.action === "approve" || input.action === "reject") &&
+        current.requesterUserId === input.actorUserId) {
+      return {
+        ok: false as const,
+        failure: {
+          code: "REQUEST_SELF_APPROVAL" as const,
+          message: "不能审批自己提交的申请单。请交给有审批权限的同事处理。"
         }
       };
     }

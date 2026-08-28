@@ -13,6 +13,7 @@ import type { ServerResponse } from "node:http";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
+import { syncApprovalInstance } from "../approval/document-sync.js";
 import { checkBudget } from "../budget/check.js";
 import { findApplicableBudgets, loadBudgetUsage } from "../budget/queries.js";
 import { highestLevel, type ControlCheckResult } from "../controls/result.js";
@@ -28,6 +29,7 @@ import {
 
 const STATUS_BY_FAILURE: Record<RequestFailureCode, number> = {
   REQUEST_NOT_FOUND: 404,
+  REQUEST_SELF_APPROVAL: 403,
   REQUEST_AMOUNT_INVALID: 400,
   REQUEST_DATE_INVALID: 400,
   REQUEST_NOT_EDITABLE: 409,
@@ -219,6 +221,16 @@ export async function transitionRequestRoute(
     return;
   }
 
+  // 审批流同步：与报销、借款同一套机制（approval/document-sync.ts）。
+  const approvalNotice = await syncApprovalInstance({
+    companyId: req.auth!.companyId,
+    documentType: "request",
+    documentId: id,
+    action,
+    actor: { userId: req.auth!.userId, roleCodes: req.auth!.roleCodes },
+    amountCents: result.value.amountCents
+  });
+
   writeAudit({
     companyId: req.auth!.companyId,
     userId: req.auth!.userId,
@@ -231,5 +243,9 @@ export async function transitionRequestRoute(
     changes: { status: result.value.status, businessEventId: result.value.businessEventId }
   });
 
-  json(res, 200, { request: result.value });
+  json(res, 200, {
+    request: result.value,
+    approvalTracked: approvalNotice.tracked,
+    ...(approvalNotice.message ? { note: approvalNotice.message } : {})
+  });
 }
