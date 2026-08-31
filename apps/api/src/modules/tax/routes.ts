@@ -23,6 +23,7 @@ import {
 } from "../vouchers/voucher-queries.js";
 import { buildProfitStatementReport } from "../reports/summary.js";
 import { buildCorporateIncomeTaxPreparation } from "./corporate-income-tax.js";
+import { loadTaxQualification } from "./corporate-income-tax-rate.js";
 import { buildArchiveRecord, buildReviewRecord, canArchiveBatch } from "./filing-workflow.js";
 import { buildIndividualIncomeTaxMaterials } from "./iit-materials.js";
 import { buildTaxWorkingPaperPrintableHtml } from "./printable.js";
@@ -1007,6 +1008,10 @@ export async function getCorporateIncomeTaxPreparation(req: ApiRequest, res: Ser
   const preparation: CorporateIncomeTaxPreparation = buildCorporateIncomeTaxPreparation({
     companyId,
     filingPeriod,
+    // 资格档案的缺失项保持 null——判定层据此报「资格待确认」，
+    // 而不是按 25% 兜底让小微企业多交五倍。
+    qualification: await loadTaxQualification(companyId),
+    on: new Date().toISOString().slice(0, 10),
     profitStatement,
     taxItems: taxItems.filter((item) => item.filingPeriod === filingPeriod || item.taxType.includes("企业所得税")),
     rndSummaries
@@ -1046,6 +1051,8 @@ export async function getTaxWorkingPaperPrintable(req: ApiRequest, res: ServerRe
     const payload = buildCorporateIncomeTaxPreparation({
       companyId,
       filingPeriod,
+      qualification: await loadTaxQualification(companyId),
+      on: new Date().toISOString().slice(0, 10),
       profitStatement,
       taxItems,
       rndSummaries

@@ -481,8 +481,37 @@ export interface CorporateIncomeTaxPreparation {
   filingPeriod: string;
   accountingProfit: string;
   taxableIncomeEstimate: string;
-  incomeTaxRate: string;
-  prepaymentTaxEstimate: string;
+  /**
+   * 实际税负（%）。**null = 优惠资格待确认**，见 `preferenceNotice`。
+   *
+   * 此前这里恒为 "25"：高新（15%）与小型微利（实际 5%）都被按一般税率算，
+   * 小微企业多交五倍。资格信息缺失时不按 25% 兜底——按最高档兜底看起来
+   * 保守稳妥，实际是静默地让企业多交钱。
+   */
+  incomeTaxRate: string | null;
+  /** 优惠类型：standard / high_tech / small_profit / unknown。 */
+  preferenceKind: string;
+  /** 判定结论的说明，直接给用户看。 */
+  preferenceNotice: string;
+  /**
+   * 小型微利专用：减按多少比例计入应纳税所得额（"25"）。其余情形为 null。
+   *
+   * **与 appliedRatePercent 分开存**：政策原文是「减按 25% 计入，按 20% 征」，
+   * 合成一个 5% 数值上一样，但申报表要分别列示「减免税额」，
+   * 而且这两个系数历史上分别调整过。
+   */
+  reducedInclusionPercent: string | null;
+  /** 小型微利专用：适用税率（"20"）。其余情形为 null。 */
+  appliedRatePercent: string | null;
+  /** 应纳/预缴税额。null = 算不出（资格待确认）。 */
+  prepaymentTaxEstimate: string | null;
+  /**
+   * 可结转以后年度弥补的亏损。
+   *
+   * 此前应纳税所得额被 `Math.max(x, 0)` 抹成 0——当期不缴税没错，
+   * 但「可结转多少亏损」这个信息一起没了。
+   */
+  carryforwardLoss: string;
   adjustmentHints: string[];
   checklist: string[];
 }

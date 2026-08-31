@@ -46,6 +46,20 @@ export interface CompanyProfile {
   bankName?: string;
   bankAccount?: string;
   financeApproverRole?: string;
+  /**
+   * 税收资格（V17 阶段三）。决定企业所得税按 25% / 15% / 5% 哪一档算。
+   *
+   * **`null` 是「没登记」，不是 0。** 判定层据此报「优惠资格待确认」，
+   * 而不是替用户按 25% 算——那会让本该按 5% 的小微企业多交五倍。
+   */
+  employeeCount?: number | null;
+  /** 资产总额（分）。界面上按元显示。 */
+  totalAssetsCents?: number | null;
+  isRestrictedIndustry?: boolean;
+  /** 高新资质有效期止日。存止日而不是布尔值：资质会过期。 */
+  highTechCertificateExpiresOn?: string | null;
+  /** 城建税所在地档位：city 7% / county 5% / other 1%。 */
+  urbanConstructionTaxZone?: string | null;
   updatedAt?: string;
 }
 

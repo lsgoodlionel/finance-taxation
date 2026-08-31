@@ -253,6 +253,9 @@ export function PayrollPage({ activeTask = PAYROLL_TASK_KEYS.run }: PayrollPageP
     return (
       <PayrollRunWizard
         employees={employees}
+        // 加载失败的原因传下去：向导里那句「暂无在职员工」在薪资场景格外
+        // 误导——HR 会去查员工档案，而问题可能只是读不到这张表。
+        loadError={message || null}
         periods={periods}
         policy={policy}
         period={activePeriod}

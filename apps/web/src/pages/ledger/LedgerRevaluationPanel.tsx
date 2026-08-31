@@ -25,6 +25,7 @@ import {
   Typography
 } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
+import { LoadErrorState } from "../../components/ui/LoadErrorState";
 import { toast } from "sonner";
 import {
   createRevaluationVoucher,
@@ -43,6 +44,9 @@ export function LedgerRevaluationPanel() {
   const [preview, setPreview] = useState<RevaluationPreview | null>(null);
   const [asOfDate, setAsOfDate] = useState<string>(todayIso());
   const [loading, setLoading] = useState(false);
+  // 加载失败的原因。**与「没有外币余额」严格区分**——预览接口 403 时
+  // 那句话会让用户以为账上真没有外币，而不去检查权限。
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [rateForm] = Form.useForm();
 
   const loadRates = useCallback(async () => {
@@ -58,8 +62,11 @@ export function LedgerRevaluationPanel() {
     setLoading(true);
     try {
       setPreview(await previewRevaluation(date));
+      setLoadError(null);
     } catch (err) {
-      toast.error(errorMessage(err, "调汇预览失败"));
+      const message = errorMessage(err, "调汇预览失败");
+      toast.error(message);
+      setLoadError(message);
     } finally {
       setLoading(false);
     }
@@ -196,7 +203,11 @@ export function LedgerRevaluationPanel() {
           loading={loading}
           dataSource={preview?.lines ?? []}
           pagination={false}
-          locale={{ emptyText: `截至 ${asOfDate} 没有外币余额` }}
+          locale={{
+            emptyText: loadError
+              ? <LoadErrorState subject="调汇预览" error={loadError} />
+              : `截至 ${asOfDate} 没有外币余额`
+          }}
           columns={[
             { title: "科目", dataIndex: "accountCode", width: 90 },
             { title: "科目名称", dataIndex: "accountName", ellipsis: true },

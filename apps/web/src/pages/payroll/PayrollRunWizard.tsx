@@ -9,6 +9,7 @@ import {
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
+import { LoadErrorState } from "../../components/ui/LoadErrorState";
 import { toast } from "sonner";
 import type { Employee, PayrollRecord, PayrollPolicy, PayrollPeriodSummary } from "@finance-taxation/domain-model";
 import { computePayroll, confirmPayroll, listPayroll, syncPayrollReviewLedgers } from "../../lib/api";
@@ -31,6 +32,8 @@ const STEPS = [
 
 interface Props {
   employees: Employee[];
+  /** 员工清单加载失败的原因。**与「暂无在职员工」严格区分**。 */
+  loadError?: string | null;
   periods: PayrollPeriodSummary[];
   policy: PayrollPolicy | null;
   /**
@@ -49,6 +52,7 @@ interface Props {
 
 export function PayrollRunWizard({
   employees,
+  loadError,
   periods,
   policy,
   period,
@@ -310,7 +314,13 @@ export function PayrollRunWizard({
               pagination={false}
               size="small"
               scroll={{ x: 600 }}
-              locale={{ emptyText: <Empty description="暂无在职员工，请先在员工管理中添加" /> }}
+              locale={{
+                // 「暂无在职员工」在薪资场景里格外误导：HR 看到这句话
+                // 会去查员工档案，而问题可能只是读不到这张表。
+                emptyText: loadError
+                  ? <LoadErrorState subject="在职员工" error={loadError} />
+                  : <Empty description="暂无在职员工，请先在员工管理中添加" />
+              }}
             />
           </div>
         );

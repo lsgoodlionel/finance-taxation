@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Table, Tag, Button, Space, Statistic, Row, Col, Modal, Form, Input, Select, InputNumber, Spin } from "antd";
 import { TeamOutlined, ReloadOutlined, EditOutlined } from "@ant-design/icons";
+import { LoadErrorState } from "../components/ui/LoadErrorState";
 import { toast } from "sonner";
 import { PageHeader } from "../components/ui/PageHeader";
 import { listCounterparties, createCounterparty, updateCounterparty, type Counterparty } from "../lib/api";
@@ -22,14 +23,24 @@ const RISK: Record<string, { color: string; label: string }> = {
 export function CounterpartiesPage() {
   const [items, setItems] = useState<Counterparty[]>([]);
   const [loading, setLoading] = useState(true);
+  // 加载失败的原因。**与「暂无往来单位」严格区分**——403 时照常显示空态
+  // 会把权限问题伪装成业务事实，而 toast 几秒后就消失了。
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Counterparty | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [form] = Form.useForm();
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setItems((await listCounterparties()).items); }
-    catch (err) { toast.error((err as Error).message); }
+    try {
+      setItems((await listCounterparties()).items);
+      setLoadError(null);
+    }
+    catch (err) {
+      const message = (err as Error).message;
+      toast.error(message);
+      setLoadError(message);
+    }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -83,7 +94,8 @@ export function CounterpartiesPage() {
       </section>
 
       <section className="v3-section-shell">
-        {loading ? <div style={{ textAlign: "center", padding: 40 }}><Spin /></div> : (
+        {loading ? <div style={{ textAlign: "center", padding: 40 }}><Spin /></div>
+          : loadError ? <LoadErrorState subject="往来单位" error={loadError} /> : (
           <Table<Counterparty> size="small" rowKey={(r) => r.id ?? r.name} dataSource={items} pagination={{ pageSize: 20, hideOnSinglePage: true }}
             columns={[
               { title: "名称", dataIndex: "name", render: (v, r) => <Space>{v}{!r.registered && <Tag color="default" style={{ fontSize: 10 }}>未建档</Tag>}</Space> },

@@ -1,3 +1,7 @@
+import {
+  resolveCorporateIncomeTaxTreatment,
+  type TaxQualification
+} from "./corporate-income-tax-rate.js";
 import type {
   CorporateIncomeTaxPreparation,
   ProfitStatementReport,
@@ -21,13 +25,26 @@ export function buildCorporateIncomeTaxPreparation(input: {
   profitStatement: ProfitStatementReport;
   taxItems: TaxItem[];
   rndSummaries: RndProjectSummary[];
+  /** 公司的税收资格档案。缺失项为 null 时不猜，报「资格待确认」。 */
+  qualification: TaxQualification;
+  /** 判定基准日，用来看高新资质是否还在有效期内。 */
+  on: string;
 }): CorporateIncomeTaxPreparation {
   // 会计利润 = 利润总额（税前），不是净利润；用 netProfit 会把所得税费用重复扣除，
   // 低估应纳税所得额与预缴税额。对应企业所得税申报表主表「利润总额」行。
-  const accountingProfit = Math.max(parseAmount(input.profitStatement.totals.totalProfit), 0);
+  //
+  // **不再 Math.max(x, 0)**：亏损抹成 0 之后，当期不缴税的结论没错，
+  // 但「可结转多少亏损到以后年度」这个信息一起没了。亏损是资产。
+  const accountingProfit = parseAmount(input.profitStatement.totals.totalProfit);
   const taxableIncomeEstimate = accountingProfit;
-  const incomeTaxRate = 25;
-  const prepaymentTaxEstimate = taxableIncomeEstimate * incomeTaxRate * 0.01;
+
+  // 税率按优惠资格判定，不再写死 25%。资格信息缺失时返回 null——
+  // 按最高档兜底会让本该按 5% 的小微企业多交五倍，且用户看不出是猜的。
+  const treatment = resolveCorporateIncomeTaxTreatment({
+    taxableIncomeCents: Math.round(taxableIncomeEstimate * 100),
+    qualification: input.qualification,
+    on: input.on
+  });
 
   const adjustmentHints: string[] = [];
   if (input.taxItems.some((item) => item.treatment.includes("业务招待"))) {
@@ -52,8 +69,17 @@ export function buildCorporateIncomeTaxPreparation(input: {
     filingPeriod: input.filingPeriod,
     accountingProfit: formatAmount(accountingProfit),
     taxableIncomeEstimate: formatAmount(taxableIncomeEstimate),
-    incomeTaxRate: String(incomeTaxRate),
-    prepaymentTaxEstimate: formatAmount(prepaymentTaxEstimate),
+    incomeTaxRate:
+      treatment.effectiveRatePercent === null ? null : String(treatment.effectiveRatePercent),
+    preferenceKind: treatment.kind,
+    preferenceNotice: treatment.reason,
+    reducedInclusionPercent:
+      treatment.reducedInclusionPercent === null ? null : String(treatment.reducedInclusionPercent),
+    appliedRatePercent:
+      treatment.appliedRatePercent === null ? null : String(treatment.appliedRatePercent),
+    prepaymentTaxEstimate:
+      treatment.taxAmountCents === null ? null : formatAmount(treatment.taxAmountCents / 100),
+    carryforwardLoss: formatAmount(treatment.carryforwardLossCents / 100),
     adjustmentHints,
     checklist
   };
