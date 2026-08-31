@@ -32,6 +32,9 @@ function baseProps(overrides: Record<string, unknown> = {}) {
     stampAndSurtax: null,
     taxPayments: [],
     onTaxPaymentCreated: () => {},
+    lossLedger: [],
+    onLossLedgerCreated: () => {},
+    lossCarryforwardYears: 5,
     incomeTaxPreparation: null,
     iitMaterials: null,
     vatWorkingPaper: null,
@@ -68,6 +71,11 @@ function citPreparation(
     appliedRatePercent: null,
     prepaymentTaxEstimate: "200",
     carryforwardLoss: "0",
+    lossOffset: "0",
+    taxableIncomeAfterLoss: "800",
+    expiredLossNotice: "",
+    prepaidTax: "0",
+    taxPayableOrRefundable: "200",
     adjustmentHints: [],
     checklist: [],
     ...overrides
@@ -182,6 +190,57 @@ function render(props: Record<string, unknown>): string {
   assert(
     !html.includes("¥0") && !html.includes("0.00"),
     "算不出时不能显示成 0 元——那会让用户以为本期不用交附加税"
+  );
+}
+
+// ── 弥补与抵减要显示出来 ────────────────────────────────────────────────
+{
+  // 用户要能看懂这三步：利润 → 弥补后基数 → 应补退。
+  // 只显示最后一个数字的话，对不上账时无从查起。
+  const html = render({
+    incomeTaxPreparation: citPreparation({
+      taxableIncomeEstimate: "800",
+      lossOffset: "300",
+      taxableIncomeAfterLoss: "500",
+      prepaymentTaxEstimate: "125",
+      prepaidTax: "80",
+      taxPayableOrRefundable: "45"
+    })
+  });
+
+  assert(html.includes("300"), "弥补了多少要显示");
+  assert(html.includes("500"), "弥补后的基数要显示——那才是计税基数");
+  assert(html.includes("80"), "已预缴要显示");
+  assert(html.includes("45"), "应补退要显示");
+}
+
+// ── 应退是负数，不能显示成应补 ──────────────────────────────────────────
+{
+  const html = render({
+    incomeTaxPreparation: citPreparation({
+      prepaymentTaxEstimate: "125",
+      prepaidTax: "280",
+      taxPayableOrRefundable: "-155"
+    })
+  });
+
+  assert(
+    html.includes("应退") || html.includes("退税"),
+    "**负数要说成「应退」**——显示「应补 -155」会让用户以为要交负数的钱"
+  );
+  assert(html.includes("155"), "退多少要显示");
+}
+
+// ── 超期的亏损要提示 ────────────────────────────────────────────────────
+{
+  const html = render({
+    incomeTaxPreparation: citPreparation({
+      expiredLossNotice: "以下年度的亏损已超过结转年限，不能再弥补：2019 年（剩余 1000.00 元）。"
+    })
+  });
+  assert(
+    html.includes("2019") && html.includes("超过结转年限"),
+    "超期要提示——一笔权利作废了，用户得知道"
   );
 }
 

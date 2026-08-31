@@ -24,6 +24,7 @@ import {
 import { buildProfitStatementReport } from "../reports/summary.js";
 import { buildCorporateIncomeTaxPreparation } from "./corporate-income-tax.js";
 import { loadTaxQualification } from "./corporate-income-tax-rate.js";
+import { loadLossLedger } from "./loss-carryforward.js";
 import { buildArchiveRecord, buildReviewRecord, canArchiveBatch } from "./filing-workflow.js";
 import { buildIndividualIncomeTaxMaterials } from "./iit-materials.js";
 import { buildTaxWorkingPaperPrintableHtml } from "./printable.js";
@@ -1055,6 +1056,10 @@ export async function getCorporateIncomeTaxPreparation(req: ApiRequest, res: Ser
     // 而不是按 25% 兜底让小微企业多交五倍。
     qualification: await loadTaxQualification(companyId),
     on: new Date().toISOString().slice(0, 10),
+    // 以前年度亏损与已预缴（V17 阶段三批次 C）。
+    // 预缴复用批次 B 的缴款记录（taxType = cit），不另建一张表。
+    lossLedger: await loadLossLedger(companyId),
+    prepaidTaxCents: (await loadPaidTaxCents(companyId, "cit", filingPeriod)) ?? 0,
     profitStatement,
     taxItems: taxItems.filter((item) => item.filingPeriod === filingPeriod || item.taxType.includes("企业所得税")),
     rndSummaries
@@ -1096,6 +1101,8 @@ export async function getTaxWorkingPaperPrintable(req: ApiRequest, res: ServerRe
       filingPeriod,
       qualification: await loadTaxQualification(companyId),
       on: new Date().toISOString().slice(0, 10),
+      lossLedger: await loadLossLedger(companyId),
+      prepaidTaxCents: (await loadPaidTaxCents(companyId, "cit", filingPeriod)) ?? 0,
       profitStatement,
       taxItems,
       rndSummaries

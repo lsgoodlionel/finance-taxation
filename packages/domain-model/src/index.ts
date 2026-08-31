@@ -527,6 +527,26 @@ export interface CorporateIncomeTaxPreparation {
    * 但「可结转多少亏损」这个信息一起没了。
    */
   carryforwardLoss: string;
+  /**
+   * 本期用以前年度亏损弥补掉的金额（V17 阶段三批次 C）。
+   *
+   * 此前系统里没有亏损台账，盈利年度的应纳税所得额一分不减——
+   * 企业所得税法第十八条给的弥补权利用不上。
+   */
+  lossOffset: string;
+  /** 弥补后的应纳税所得额。**这个才是计税基数**。 */
+  taxableIncomeAfterLoss: string;
+  /** 已超过结转年限、不能再弥补的台账说明。空串 = 没有超期的。 */
+  expiredLossNotice: string;
+  /** 本期已预缴的企业所得税。 */
+  prepaidTax: string;
+  /**
+   * 应补（正）或应退（负）税额。
+   *
+   * **负数是应退，不能截断成 0**——那等于让企业白交。
+   * null = 应纳税额算不出（优惠资格待确认）。
+   */
+  taxPayableOrRefundable: string | null;
   adjustmentHints: string[];
   checklist: string[];
 }

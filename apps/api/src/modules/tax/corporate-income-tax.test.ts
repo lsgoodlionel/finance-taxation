@@ -61,7 +61,11 @@ test("buildCorporateIncomeTaxPreparation estimates prepayment and checklist", ()
       isRestrictedIndustry: false,
       highTechCertificateExpiresOn: null
     },
-    on: "2026-08-31"
+    on: "2026-08-31",
+    // 没有以前年度亏损、没有预缴——这两条验的仍然是取数口径，
+    // 把批次 C 的两个新变量固定成中性值，原有断言一条不用改。
+    lossLedger: [],
+    prepaidTaxCents: 0
   });
 
   assert.equal(result.accountingProfit, "50000");
@@ -105,7 +109,11 @@ test("buildCorporateIncomeTaxPreparation uses 利润总额 as accounting profit,
       isRestrictedIndustry: false,
       highTechCertificateExpiresOn: null
     },
-    on: "2026-08-31"
+    on: "2026-08-31",
+    // 没有以前年度亏损、没有预缴——这两条验的仍然是取数口径，
+    // 把批次 C 的两个新变量固定成中性值，原有断言一条不用改。
+    lossLedger: [],
+    prepaidTaxCents: 0
   });
 
   // Assert：会计利润取税前的利润总额，否则所得税基数被重复扣税而低估

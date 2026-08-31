@@ -9,6 +9,7 @@ import {
   createTaxpayerProfile,
   listTaxpayerProfiles
 } from "../../modules/tax/taxpayer-profile.routes.js";
+import { createLossLedgerEntry, listLossLedgerEntries } from "../../modules/tax/loss-ledger.routes.js";
 import { createTaxPayment, listTaxPayments } from "../../modules/tax/tax-payment.routes.js";
 import { listTaxableCategoryOptions } from "../../modules/tax/taxable-category.routes.js";
 import { createVoucherFromTemplate } from "../../modules/vouchers/voucher-from-template.js";
@@ -77,6 +78,8 @@ export const documentsTaxRoutes: RouteDef[] = [
   { method: "GET", path: "/api/runtime/tax", auth: true, permission: "tax.view", handler: getTaxRuntimeSummaryRoute },
   { method: "GET", path: "/api/tax-filing-batches", auth: true, permission: "tax.view", handler: listTaxFilingBatches },
   { method: "POST", path: "/api/tax-filing-batches", auth: true, permission: "tax.manage", handler: createTaxFilingBatch },
+  { method: "GET", path: "/api/tax/loss-ledger", auth: true, permission: "tax.view", handler: listLossLedgerEntries },
+  { method: "POST", path: "/api/tax/loss-ledger", auth: true, permission: "tax.manage", handler: createLossLedgerEntry },
   { method: "GET", path: "/api/tax/payments", auth: true, permission: "tax.view", handler: listTaxPayments },
   { method: "POST", path: "/api/tax/payments", auth: true, permission: "tax.manage", handler: createTaxPayment },
   { method: "GET", path: "/api/tax/taxable-categories", auth: true, permission: "events.view", handler: listTaxableCategoryOptions },

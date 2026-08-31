@@ -246,6 +246,16 @@ test("单据中心：列表、改状态、归档与归属收敛", async (t) => {
   });
 
   await t.test("审计留痕：改过状态的动作要能查到", async () => {
+    // **先排空审计队列再查。**
+    //
+    // `writeAudit` 是有意的即发即忘（注释：审计失败绝不能拖垮业务操作），
+    // 按公司串行排队算 prev_hash。路由返回时那条记录可能还没落库——
+    // 这条测试此前直接查表，靠时序侥幸通过，整轮跑时偶发失败。
+    //
+    // `drainAuditQueues` 就是为这个场景提供的，另外两条审计测试都在用。
+    const { drainAuditQueues } = await import("../../services/audit.js");
+    await drainAuditQueues();
+
     const rows = await pool.query<{ action: string }>(
       `select action from audit_logs
         where company_id=$1 and resource_id=$2 order by created_at`,

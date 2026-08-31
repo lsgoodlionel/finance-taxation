@@ -8,6 +8,8 @@ import type {
 import { actionButtonStyle, cellStyle, miniStatStyle, panelStyle } from "./taxStyles";
 import { Term } from "../../components/ui/Term";
 import { TaxPaymentEntry } from "./TaxPaymentEntry";
+import { LossLedgerEntry } from "./LossLedgerEntry";
+import type { LossLedgerRecord } from "../../lib/api-loss-ledger";
 import type { TaxPaymentRecord } from "../../lib/api-tax-payments";
 
 /** 分转元，用于展示。null 由调用处先挡掉——这里不该出现。 */
@@ -27,6 +29,11 @@ type TaxMaterialsPanelProps = {
   /** 本期已登记的税款缴款记录。附加税的计税依据就是它们的合计。 */
   taxPayments: TaxPaymentRecord[];
   onTaxPaymentCreated(): void;
+  /** 以前年度亏损台账（V17 阶段三批次 C）。 */
+  lossLedger: LossLedgerRecord[];
+  onLossLedgerCreated(): void;
+  /** 结转年限：一般企业 5 年，高新技术企业 10 年。 */
+  lossCarryforwardYears: number;
   vatFilingPeriod: string;
   iitFilingPeriod: string;
   stampFilingPeriod: string;
@@ -66,6 +73,9 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
     stampAndSurtax,
     taxPayments,
     onTaxPaymentCreated,
+    lossLedger,
+    onLossLedgerCreated,
+    lossCarryforwardYears,
     vatFilingPeriod,
     iitFilingPeriod,
     stampFilingPeriod,
@@ -258,6 +268,23 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
                   <div>会计利润：{incomeTaxPreparation.accountingProfit}</div>
                   <div>应纳税所得额估算：{incomeTaxPreparation.taxableIncomeEstimate}</div>
                   {/*
+                    弥补与抵减的三步要都显示：利润 → 弥补后基数 → 应补退。
+                    只给最后一个数字的话，对不上账时用户无从查起。
+                  */}
+                  {Number(incomeTaxPreparation.lossOffset) > 0 && (
+                    <>
+                      <div>弥补以前年度亏损：-{incomeTaxPreparation.lossOffset}</div>
+                      <div>
+                        <strong>弥补后应纳税所得额：{incomeTaxPreparation.taxableIncomeAfterLoss}</strong>
+                      </div>
+                    </>
+                  )}
+                  {incomeTaxPreparation.expiredLossNotice && (
+                    <div style={{ color: "#b45309" }}>
+                      {incomeTaxPreparation.expiredLossNotice}
+                    </div>
+                  )}
+                  {/*
                     税率可能是 null（优惠资格未登记）。此前这里写的是
                     `{incomeTaxRate}%`，null 会渲染成「税率：%」——
                     一个看不懂的空白，用户不知道是系统坏了还是税率真是空的。
@@ -280,7 +307,21 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
                           <span style={{ color: "#6c7a89" }}>（高新技术企业优惠）</span>
                         )}
                       </div>
-                      <div>预缴税额估算：{incomeTaxPreparation.prepaymentTaxEstimate}</div>
+                      <div>应纳税额：{incomeTaxPreparation.prepaymentTaxEstimate}</div>
+                      <div>本期已预缴：{incomeTaxPreparation.prepaidTax}</div>
+                      {incomeTaxPreparation.taxPayableOrRefundable !== null && (
+                        <div>
+                          {/*
+                            **负数是应退**。显示成「应补 -155」会让用户以为
+                            要交负数的钱——这两个词对应的动作完全不同。
+                          */}
+                          <strong>
+                            {Number(incomeTaxPreparation.taxPayableOrRefundable) < 0
+                              ? `应退税额：${Math.abs(Number(incomeTaxPreparation.taxPayableOrRefundable))}`
+                              : `应补税额：${incomeTaxPreparation.taxPayableOrRefundable}`}
+                          </strong>
+                        </div>
+                      )}
                     </>
                   )}
                   {Number(incomeTaxPreparation.carryforwardLoss) > 0 && (
@@ -288,6 +329,12 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
                       可结转以后年度弥补的亏损：{incomeTaxPreparation.carryforwardLoss}
                     </div>
                   )}
+                  <LossLedgerEntry
+                    entries={lossLedger}
+                    currentYear={Number(incomeTaxPeriod.slice(0, 4)) || new Date().getFullYear()}
+                    carryforwardYears={lossCarryforwardYears}
+                    onCreated={onLossLedgerCreated}
+                  />
                   <h4>调整提示</h4>
                   <ul style={{ paddingLeft: "20px" }}>
                     {incomeTaxPreparation.adjustmentHints.map((item) => (

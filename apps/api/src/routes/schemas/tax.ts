@@ -22,6 +22,19 @@ export const taxBodySchemas: Record<string, ObjectSchema> = {
    * 「金额必须正数」「日期必须 YYYY-MM-DD」要配错误码与说明文案，
    * 而 FieldSpec 给不出那些。
    */
+  /**
+   * 以前年度亏损台账（V17 阶段三批次 C）。
+   *
+   * 年度与金额的范围校验放在 handler 里——要配错误码与说明文案，
+   * FieldSpec 给不出那些。
+   */
+  "POST /api/tax/loss-ledger": {
+    lossYear: { type: "number", required: true },
+    lossCents: { type: "number", required: true },
+    offsetCents: { type: "number" },
+    note: { type: "string", max: 500 }
+  },
+
   "POST /api/tax/payments": {
     taxType: { type: "string", required: true, min: 1, max: 40 },
     filingPeriod: { type: "string", required: true, min: 1, max: 20 },

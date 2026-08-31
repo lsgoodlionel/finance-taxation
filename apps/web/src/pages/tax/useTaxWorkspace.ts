@@ -1,4 +1,5 @@
 import { listTaxPayments as listTaxPaymentsApi, type TaxPaymentRecord } from "../../lib/api-tax-payments";
+import { listLossLedger as listLossLedgerApi, type LossLedgerRecord } from "../../lib/api-loss-ledger";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type {
@@ -72,6 +73,8 @@ export function useTaxWorkspace() {
   // 本期已登记的税款缴款。附加税的计税依据就是它们的合计——
   // 没有缴款记录时附加税算不出，用户要能在同一块里看到并补录。
   const [taxPayments, setTaxPayments] = useState<TaxPaymentRecord[]>([]);
+  // 以前年度亏损台账（V17 阶段三批次 C）。没有它盈利年度会多缴税。
+  const [lossLedger, setLossLedger] = useState<LossLedgerRecord[]>([]);
   const [vatFilingPeriod, setVatFilingPeriod] = useState("2026-05");
   const [iitFilingPeriod, setIitFilingPeriod] = useState("2026-05");
   const [stampFilingPeriod, setStampFilingPeriod] = useState("2026-Q2");
@@ -285,6 +288,18 @@ export function useTaxWorkspace() {
     await handleGenerateStamp();
   }
 
+  async function reloadLossLedger() {
+    try {
+      const payload = await listLossLedgerApi();
+      setLossLedger(payload.items);
+    } catch {
+      setLossLedger([]);
+    }
+    // 台账变了，弥补后的基数就变了——汇算要跟着重算，
+    // 否则用户登记完看到的还是没弥补的税额。
+    await handleGenerateCit();
+  }
+
   async function handleGenerateStamp() {
     try {
       const payload = await getStampAndSurtaxSummary(stampFilingPeriod);
@@ -306,6 +321,13 @@ export function useTaxWorkspace() {
   async function handleGenerateCit() {
     try {
       const payload = await getCorporateIncomeTaxPreparation(incomeTaxPeriod);
+      // 台账与汇算一起拉：用户要在同一块里看到「弥补了哪几笔」。
+      try {
+        const ledger = await listLossLedgerApi();
+        setLossLedger(ledger.items);
+      } catch {
+        setLossLedger([]);
+      }
       setIncomeTaxPreparation(payload);
       setNotice({ tone: "success", message: "已生成企业所得税预缴与汇算准备。" });
     } catch (error) {
@@ -380,6 +402,8 @@ export function useTaxWorkspace() {
     stampAndSurtax,
     taxPayments,
     reloadTaxPayments,
+    lossLedger,
+    reloadLossLedger,
     vatFilingPeriod,
     setVatFilingPeriod,
     iitFilingPeriod,

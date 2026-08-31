@@ -51,6 +51,17 @@ const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
   cit: "企业所得税准备"
 };
 
+/**
+ * 台账列表上标「已超期」时用的结转年限。
+ *
+ * **只影响显示**：真正的弥补计算在后端，那边按公司的高新资质取 5 年或
+ * 10 年。前端不重复判定资质——判两处迟早漂移，而漂移的表现是列表上
+ * 标着「已超期」的那笔其实被正常弥补了（或反过来）。
+ *
+ * 高新企业在这里会看到偏保守的标记，但金额是对的。
+ */
+const LOSS_CARRYFORWARD_YEARS_DISPLAY = 5;
+
 const ACTION_ROW_STYLE = { display: "flex", flexWrap: "wrap" as const, gap: "10px", alignItems: "center" };
 
 /** 跳去导出中心的链接按钮：外观和同排的动作按钮一致，但语义上是导航而非动作。 */
@@ -97,6 +108,8 @@ export function TaxPage() {
     stampAndSurtax,
     taxPayments,
     reloadTaxPayments,
+    lossLedger,
+    reloadLossLedger,
     vatFilingPeriod,
     setVatFilingPeriod,
     iitFilingPeriod,
@@ -218,6 +231,9 @@ export function TaxPage() {
         <TaxMaterialsPanel
           taxPayments={taxPayments}
           onTaxPaymentCreated={() => void reloadTaxPayments()}
+          lossLedger={lossLedger}
+          onLossLedgerCreated={() => void reloadLossLedger()}
+          lossCarryforwardYears={LOSS_CARRYFORWARD_YEARS_DISPLAY}
           activeMaterial={activeMaterial}
           vatPaper={vatPaper}
           incomeTaxPreparation={incomeTaxPreparation}
