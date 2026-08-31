@@ -47,7 +47,7 @@ const FILE_LIMITS = new Map([
   // 这一段硬切会造出循环依赖，等各自领域稳定再动。
   ["apps/web/src/lib/api.ts", 950],
   // 事项路由：映射规则与落库都拆走了，剩下的是 HTTP 层本身。
-  ["apps/api/src/modules/events/routes.ts", 950],
+  ["apps/api/src/modules/events/routes.ts", 544],
   // 事项 → 单据/税务/凭证的派生规则。这是一整套业务规则，拆散反而更难读。
   ["apps/api/src/modules/events/event-mappings.ts", 600],
   // 费控地基路由组：申请单/借款/报销/验收/发票池/成本/银企/付款/审批流。

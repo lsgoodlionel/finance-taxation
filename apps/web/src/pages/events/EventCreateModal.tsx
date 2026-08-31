@@ -8,6 +8,7 @@
 import React from "react";
 import { Modal } from "antd";
 import { EventCreatePanel } from "./EventCreatePanel";
+import type { TaxableCategoryOption } from "../../lib/api-events";
 
 import type { Counterparty } from "../../lib/api";
 
@@ -21,6 +22,7 @@ type EventFormState = {
   currency?: string;
   source?: string;
   counterpartyId?: string;
+  taxableCategory?: string;
 };
 
 export interface EventCreateModalProps {
@@ -30,6 +32,8 @@ export interface EventCreateModalProps {
   isSaving: boolean;
   options: Array<{ value: string; label: string }>;
   counterparties: Counterparty[];
+  taxableCategories: TaxableCategoryOption[];
+  taxpayerType: string | null;
   onChange(next: EventFormState): void;
   onSubmit(): void;
   onClose(): void;
@@ -42,6 +46,8 @@ export function EventCreateModal({
   isSaving,
   options,
   counterparties,
+  taxableCategories,
+  taxpayerType,
   onChange,
   onSubmit,
   onClose
@@ -62,6 +68,8 @@ export function EventCreateModal({
         isSaving={isSaving}
         options={options}
         counterparties={counterparties}
+        taxableCategories={taxableCategories}
+        taxpayerType={taxpayerType}
         onChange={onChange}
         onSubmit={onSubmit}
       />

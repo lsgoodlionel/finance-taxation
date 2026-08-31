@@ -128,6 +128,11 @@ export async function createEvent(input: {
    * 分户依据，进不了账龄表也没法做核销。
    */
   counterpartyId?: string | null;
+  /**
+   * 应税行为类别（税目口径，V17）。不填则按公司主营类别兜底；
+   * 公司也没配时这笔在税务底稿上显示「税目待确认」，不进合计。
+   */
+  taxableCategory?: string | null;
 }) {
   return request<BusinessEvent>("/api/events", {
     method: "POST",

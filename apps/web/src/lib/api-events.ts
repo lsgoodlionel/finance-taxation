@@ -53,3 +53,26 @@ export async function listCompanyMembers(permission?: string) {
   const suffix = permission ? `?permission=${encodeURIComponent(permission)}` : "";
   return request<{ items: CompanyMember[]; total: number }>(`/api/settings/users${suffix}`);
 }
+
+/** 应税行为类别的一个可选项。清单与税率提示都来自服务端。 */
+export interface TaxableCategoryOption {
+  value: string;
+  label: string;
+  rateCode: string;
+  rateHint: string;
+}
+
+/**
+ * 建事项时可选的应税行为类别（V17 阶段二）。
+ *
+ * **清单不在前端写死**：类别与税率档的对应关系是政策，写两份就会漂移，
+ * 而漂移的表现是界面上写着 9%、实际按 13% 算。返回里还带公司主营类别
+ * （用来预填）和当前纳税人身份（决定税率提示按哪档显示）。
+ */
+export async function listTaxableCategories() {
+  return request<{
+    companyDefault: string | null;
+    taxpayerType: string | null;
+    options: TaxableCategoryOption[];
+  }>("/api/tax/taxable-categories");
+}

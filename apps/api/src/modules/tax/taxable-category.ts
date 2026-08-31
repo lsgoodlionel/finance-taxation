@@ -103,6 +103,12 @@ const CATEGORY_LABELS: Record<TaxableCategory, string> = {
   export_zero_rated: "出口 / 跨境零税率"
 };
 
+/**
+ * 全部类别，顺序按税率档从高到低——给用户看的清单要有个稳定的次序，
+ * 而「先 13% 再 9% 再 6%」和税法条文的排法一致。
+ */
+export const ALL_TAXABLE_CATEGORIES = Object.keys(CATEGORY_TO_RATE_CODE) as TaxableCategory[];
+
 export function isTaxableCategory(value: unknown): value is TaxableCategory {
   return typeof value === "string" && value in CATEGORY_TO_RATE_CODE;
 }

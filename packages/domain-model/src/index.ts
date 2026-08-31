@@ -608,6 +608,11 @@ export interface CreateBusinessEventInput {
    * 与核销功能整条链路都是空的。
    */
   counterpartyId?: string | null;
+  /**
+   * 应税行为类别（税目口径）。可选——不填回退到公司主营类别。
+   * 见 `BusinessEvent.taxableCategory`。
+   */
+  taxableCategory?: string | null;
 }
 
 export interface CreateTaskInput {

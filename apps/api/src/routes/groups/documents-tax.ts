@@ -9,6 +9,7 @@ import {
   createTaxpayerProfile,
   listTaxpayerProfiles
 } from "../../modules/tax/taxpayer-profile.routes.js";
+import { listTaxableCategoryOptions } from "../../modules/tax/taxable-category.routes.js";
 import { createVoucherFromTemplate } from "../../modules/vouchers/voucher-from-template.js";
 import { closingBundleHandler } from "../shared-handlers.js";
 import { archiveDocument, attachDocumentFile, downloadAttachment, getDocumentDetail, listDocumentAttachments, listDocuments, updateDocument, uploadDocumentFile } from "../../modules/documents/routes.js";
@@ -75,6 +76,7 @@ export const documentsTaxRoutes: RouteDef[] = [
   { method: "GET", path: "/api/runtime/tax", auth: true, permission: "tax.view", handler: getTaxRuntimeSummaryRoute },
   { method: "GET", path: "/api/tax-filing-batches", auth: true, permission: "tax.view", handler: listTaxFilingBatches },
   { method: "POST", path: "/api/tax-filing-batches", auth: true, permission: "tax.manage", handler: createTaxFilingBatch },
+  { method: "GET", path: "/api/tax/taxable-categories", auth: true, permission: "events.view", handler: listTaxableCategoryOptions },
   { method: "GET", path: "/api/taxpayer-profiles", auth: true, permission: "tax.view", handler: listTaxpayerProfiles },
   { method: "POST", path: "/api/taxpayer-profiles", auth: true, permission: "tax.manage", handler: createTaxpayerProfile },
   { method: "GET", path: "/api/tax/vat-working-paper", auth: true, permission: "tax.view", handler: getVatWorkingPaper },

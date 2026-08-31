@@ -1,7 +1,13 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import type { OpsSourceArtifact, OpsSourceMetadata } from "./ops-source-recorders.ts";
+import type {
+  AiEvalSourceInput,
+  BackupRestoreSourceInput,
+  ConnectorSourceInput,
+  OpsSourceArtifact,
+  OpsSourceMetadata
+} from "./ops-source-recorders.ts";
 
 type PlaywrightResult = {
   status?: string;
@@ -39,49 +45,38 @@ type AcceptanceReportLike = {
   };
 };
 
-type BackupRestoreSource = {
-  metadata: OpsSourceMetadata;
-  backupCompletedAt: string;
-  restoreVerifiedAt: string;
-  rpoHours: number;
-  rtoHours: number;
-  verifiedBy: string;
-} | null;
+/**
+ * 三种运维证据的形状**复用记录器里的定义**，不再各自重写一份。
+ *
+ * 此前这里手抄了一套，抄漏了 `generatedAt`——真实数据里有，局部类型里没有，
+ * 于是按真实结构写的测试报 TS2353。`typecheck:v4:tools` 因此长期红着 3 条，
+ * 而一个长期红着的检查等于没有检查：V17 阶段二拆种子文件时忘了加 `export`，
+ * 它本来能抓到（TS2459），却淹没在这三条既存错误里。
+ */
+/**
+ * 渲染用的投影：比记录器的输入少一个 `generatedAt`——那是产出时间戳，
+ * 报告正文里不呈现。
+ *
+ * **投影与输入是两个类型**，此前混成了一个：局部手抄了一份输入的形状、
+ * 抄漏了 `generatedAt`，于是按真实数据写的测试报 TS2353，
+ * `typecheck:v4:tools` 长期红着 3 条。而一个长期红着的检查等于没有检查——
+ * V17 阶段二拆种子文件时忘了加 `export`，它本来能抓到（TS2459），
+ * 却淹没在这三条既存错误里。
+ *
+ * 现在输入侧引用记录器的定义（漏字段就报错），投影侧显式写出来。
+ */
+type BackupRestoreSource = Omit<BackupRestoreSourceInput, "generatedAt"> | null;
 
-type ConnectorSource = {
-  metadata: OpsSourceMetadata;
-  connectors: Array<{
-    key: string;
-    label: string;
-    status: "passed" | "failed";
-    lastVerifiedAt: string;
-    roundtripMs: number;
-    notes?: string;
-  }>;
-} | null;
+type ConnectorSource = Omit<ConnectorSourceInput, "generatedAt"> | null;
 
-type AiEvalSource = {
-  metadata: OpsSourceMetadata;
-  sampleSize: number;
-  suggestionAcceptanceRate: number;
-  documentRecallRate: number;
-  highRiskAutoExecutionCount: number;
-  falsePositiveRate: number;
-} | null;
+type AiEvalSource = Omit<AiEvalSourceInput, "generatedAt"> | null;
 
 function hasMeaningfulString(value: string | undefined) {
   return typeof value === "string" && value.trim() !== "";
 }
 
 export function createRenderableBackupRestoreSource(
-  value: Exclude<BackupRestoreSource, null> | {
-    metadata: OpsSourceMetadata;
-    backupCompletedAt: string;
-    restoreVerifiedAt: string;
-    rpoHours: number;
-    rtoHours: number;
-    verifiedBy: string;
-  }
+  value: Exclude<BackupRestoreSource, null> | BackupRestoreSourceInput
 ): BackupRestoreSource {
   if (
     !hasMeaningfulString(value.backupCompletedAt) ||
@@ -104,17 +99,7 @@ export function createRenderableBackupRestoreSource(
 }
 
 export function createRenderableConnectorSource(
-  value: Exclude<ConnectorSource, null> | {
-    metadata: OpsSourceMetadata;
-    connectors: Array<{
-      key: string;
-      label: string;
-      status: "passed" | "failed";
-      lastVerifiedAt: string;
-      roundtripMs: number;
-      notes?: string;
-    }>;
-  }
+  value: Exclude<ConnectorSource, null> | ConnectorSourceInput
 ): ConnectorSource {
   const connectors = value.connectors.filter((item) =>
     hasMeaningfulString(item.lastVerifiedAt) ||
@@ -125,14 +110,7 @@ export function createRenderableConnectorSource(
 }
 
 export function createRenderableAiEvalSource(
-  value: Exclude<AiEvalSource, null> | {
-    metadata: OpsSourceMetadata;
-    sampleSize: number;
-    suggestionAcceptanceRate: number;
-    documentRecallRate: number;
-    highRiskAutoExecutionCount: number;
-    falsePositiveRate: number;
-  }
+  value: Exclude<AiEvalSource, null> | AiEvalSourceInput
 ): AiEvalSource {
   if (
     value.sampleSize <= 0 &&

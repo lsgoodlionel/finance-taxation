@@ -30,7 +30,16 @@ export const eventsTasksBodySchemas: Record<string, ObjectSchema> = {
     department: { type: "string" },
     occurredOn: { type: "string", required: true, min: 1, max: 40 },
     currency: { type: "string" },
-    source: { type: "string" }
+    source: { type: "string" },
+    /**
+     * 应税行为类别（税目口径，V17 阶段二）。
+     *
+     * 可选：不填就回退到公司主营类别；公司也没配就报「税目待确认」，不猜。
+     * 值域由 `tax/taxable-category.ts` 的 TaxableCategory 定义，
+     * 这里只做长度约束——枚举校验放在 handler 里，
+     * 因为值域随政策走，写死在两处迟早漂移。
+     */
+    taxableCategory: { type: "string", max: 40 }
     // amount, contractId: nullable in CreateBusinessEventInput — omitted.
   },
 
@@ -39,7 +48,13 @@ export const eventsTasksBodySchemas: Record<string, ObjectSchema> = {
     description: { type: "string" },
     department: { type: "string" },
     status: { type: "string" },
-    occurredOn: { type: "string" }
+    occurredOn: { type: "string" },
+    /**
+     * 应税行为类别。标错了要能改——事项一旦建好就可能已经派生了税项与凭证，
+     * 重建一笔的代价远大于改一个字段，而用户面对「只能重建」的实际做法
+     * 是将错就错，于是那笔业务一直按错的税率算下去。
+     */
+    taxableCategory: { type: "string", max: 40 }
     // amount: nullable in BusinessEvent — omitted.
   },
 
