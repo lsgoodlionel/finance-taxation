@@ -370,6 +370,21 @@ export interface StampAndSurtaxSummary {
   stampDutyItems: TaxItem[];
   surtaxItems: TaxItem[];
   notes: string[];
+  /**
+   * 算出来的附加税（V17 阶段三批次 B）。
+   *
+   * 此前这个模块只把税种名含「附加」的税项筛出来展示，一分钱都不算。
+   * `totalCents` 为 null 表示算不出——实缴增值税未知，或所在地档位没登记。
+   */
+  surtax: {
+    kind: "calculated" | "pending_main_tax" | "zone_unknown";
+    urbanConstructionCents: number | null;
+    educationSurchargeCents: number | null;
+    localEducationSurchargeCents: number | null;
+    totalCents: number | null;
+    reductionCents: number;
+    reason: string;
+  };
 }
 
 export interface TaxFilingBatchReviewRecord {

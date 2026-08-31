@@ -30,6 +30,8 @@ import { buildTaxWorkingPaperPrintableHtml } from "./printable.js";
 import { resolveActiveTaxpayerProfile } from "./profile.js";
 import { resolveFilingPeriod, resolveTaxRuleProfile } from "./rules.js";
 import { buildStampAndSurtaxSummary } from "./stamp-surtax.js";
+import { calculateSurtax, loadPaidTaxCents } from "./surtax.js";
+import { resolveCorporateIncomeTaxTreatment } from "./corporate-income-tax-rate.js";
 import { buildVatWorkingPaper } from "./vat-working-paper.js";
 import { listTaxRates } from "./tax-rate-store.js";
 import { validateWorkflowAuthorization } from "../workflows/authorization.js";
@@ -947,8 +949,49 @@ export async function getStampAndSurtaxSummary(req: ApiRequest, res: ServerRespo
   if (!filingPeriod) {
     return json(res, 400, { error: "filingPeriod is required" });
   }
-  const taxItems = await listCompanyTaxItems(req.auth!.companyId);
-  const payload: StampAndSurtaxSummary = buildStampAndSurtaxSummary(req.auth!.companyId, filingPeriod, taxItems);
+  const companyId = req.auth!.companyId;
+
+  // 附加税以**实际缴纳**的增值税为计税依据，不是应纳额——
+  // 两者在有留抵、有减免、分期缴纳时都不相等。没有缴款记录时
+  // `loadPaidTaxCents` 返回 null，计算层据此报「待主税缴纳后计算」。
+  const [taxItems, paidVatCents, companyRow, profiles] = await Promise.all([
+    listCompanyTaxItems(companyId),
+    loadPaidTaxCents(companyId, "vat", filingPeriod),
+    queryOne<{ urban_construction_tax_zone: string | null }>(
+      `select urban_construction_tax_zone from companies where id = $1`,
+      [companyId]
+    ),
+    listCompanyTaxpayerProfiles(companyId)
+  ]);
+
+  // 六税两费减半：小规模纳税人或小型微利企业。
+  // **判定复用已有的两处**，不在这里再写一份——小微的四个条件写第二遍
+  // 迟早和 `corporate-income-tax-rate.ts` 那份漂移。
+  const today = new Date().toISOString().slice(0, 10);
+  const taxpayerType = resolveActiveTaxpayerProfile(profiles, today)?.taxpayerType ?? null;
+  const qualification = await loadTaxQualification(companyId);
+  const halvedReduction =
+    taxpayerType === "small_scale" ||
+    resolveCorporateIncomeTaxTreatment({
+      // 小微的所得额条件在这里不适用（附加税不看所得额），传 0 让判定
+      // 只看人数与资产——0 落在阈值内，不会因为所得额把资格挡掉。
+      taxableIncomeCents: 1,
+      qualification,
+      on: today
+    }).kind === "small_profit";
+
+  const surtax = calculateSurtax({
+    paidVatCents,
+    zone: companyRow?.urban_construction_tax_zone ?? null,
+    halvedReduction
+  });
+
+  const payload: StampAndSurtaxSummary = buildStampAndSurtaxSummary(
+    companyId,
+    filingPeriod,
+    taxItems,
+    surtax
+  );
   return json(res, 200, payload);
 }
 

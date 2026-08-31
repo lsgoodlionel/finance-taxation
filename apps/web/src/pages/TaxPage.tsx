@@ -95,6 +95,8 @@ export function TaxPage() {
     incomeTaxPreparation,
     iitMaterials,
     stampAndSurtax,
+    taxPayments,
+    reloadTaxPayments,
     vatFilingPeriod,
     setVatFilingPeriod,
     iitFilingPeriod,
@@ -214,6 +216,8 @@ export function TaxPage() {
           </span>
         </div>
         <TaxMaterialsPanel
+          taxPayments={taxPayments}
+          onTaxPaymentCreated={() => void reloadTaxPayments()}
           activeMaterial={activeMaterial}
           vatPaper={vatPaper}
           incomeTaxPreparation={incomeTaxPreparation}

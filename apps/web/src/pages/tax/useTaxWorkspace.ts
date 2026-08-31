@@ -1,3 +1,4 @@
+import { listTaxPayments as listTaxPaymentsApi, type TaxPaymentRecord } from "../../lib/api-tax-payments";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type {
@@ -68,6 +69,9 @@ export function useTaxWorkspace() {
   const [incomeTaxPreparation, setIncomeTaxPreparation] = useState<CorporateIncomeTaxPreparation | null>(null);
   const [iitMaterials, setIitMaterials] = useState<IndividualIncomeTaxMaterial | null>(null);
   const [stampAndSurtax, setStampAndSurtax] = useState<StampAndSurtaxSummary | null>(null);
+  // 本期已登记的税款缴款。附加税的计税依据就是它们的合计——
+  // 没有缴款记录时附加税算不出，用户要能在同一块里看到并补录。
+  const [taxPayments, setTaxPayments] = useState<TaxPaymentRecord[]>([]);
   const [vatFilingPeriod, setVatFilingPeriod] = useState("2026-05");
   const [iitFilingPeriod, setIitFilingPeriod] = useState("2026-05");
   const [stampFilingPeriod, setStampFilingPeriod] = useState("2026-Q2");
@@ -262,10 +266,37 @@ export function useTaxWorkspace() {
     }
   }
 
+  /**
+   * 拉本期的缴款记录。
+   *
+   * 拉不到就让列表空着：登记入口本身还在，不该因为这一个接口挡住补录。
+   * 但**不能把失败当成「本期没缴款」**——附加税的结论由服务端给，
+   * 这里只负责显示已登记的明细。
+   */
+  async function reloadTaxPayments() {
+    try {
+      const payload = await listTaxPaymentsApi(stampFilingPeriod);
+      setTaxPayments(payload.items);
+    } catch {
+      setTaxPayments([]);
+    }
+    // 缴款变了，附加税的计税依据就变了——汇总要跟着重算，
+    // 否则用户登记完看到的还是「等主税缴纳后计算」。
+    await handleGenerateStamp();
+  }
+
   async function handleGenerateStamp() {
     try {
       const payload = await getStampAndSurtaxSummary(stampFilingPeriod);
       setStampAndSurtax(payload);
+      // 汇总的同时把缴款明细也拉上：用户要在同一块里看到
+      // 「计税依据是这几笔的合计」。
+      try {
+        const payments = await listTaxPaymentsApi(stampFilingPeriod);
+        setTaxPayments(payments.items);
+      } catch {
+        setTaxPayments([]);
+      }
       setNotice({ tone: "success", message: "已汇总印花税与附加税事项。" });
     } catch (error) {
       setNotice({ tone: "error", message: (error as Error).message });
@@ -347,6 +378,8 @@ export function useTaxWorkspace() {
     incomeTaxPreparation,
     iitMaterials,
     stampAndSurtax,
+    taxPayments,
+    reloadTaxPayments,
     vatFilingPeriod,
     setVatFilingPeriod,
     iitFilingPeriod,
