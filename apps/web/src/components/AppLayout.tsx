@@ -1,5 +1,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { VersionDriftBanner } from "./ui/VersionDriftBanner";
+import { WEB_RELEASE_VERSION } from "../lib/release-version";
 import { RouteFallback } from "./RouteFallback";
 import {
   Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid, Badge, Breadcrumb, Segmented,
@@ -170,6 +172,9 @@ function sidebarPalette(isGuided: boolean) {
 export function AppLayout() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
+  // 后端自报的发布版本，用来发现「只部署了一侧」。拿不到就保持 null——
+  // 猜一个值会让漂移提示要么漏报要么误报。
+  const [apiVersion, setApiVersion] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [badges, setBadges] = useState<NavBadges>({});
@@ -184,6 +189,23 @@ export function AppLayout() {
   const isGuided = mode === "guided";
 
   // 拉取待办数量，贴成导航角标（登录后 + 切换路由时刷新）
+  // 只在挂载时拉一次：版本在容器生命周期内不会变。
+  // 失败时静默——健康检查拿不到不该打扰用户，更不该因此挡住页面。
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/health")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { version?: string } | null) => {
+        if (!cancelled) setApiVersion(d?.version ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setApiVersion(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -258,8 +280,14 @@ export function AppLayout() {
   }
 
   if (!user) {
+    // 漂移提示放在登录页上也要显示：**版本不一致在登录之前就已经存在**，
+    // 而登录接口本身就可能因为契约不符而失败——那时候用户会以为是
+    // 密码错了，实际是只部署了一侧。
     return (
-      <LoginGate onLogin={(u) => { initFromRoles(u.roleIds); setUser(u); }} />
+      <>
+        <VersionDriftBanner webVersion={WEB_RELEASE_VERSION} apiVersion={apiVersion} />
+        <LoginGate onLogin={(u) => { initFromRoles(u.roleIds); setUser(u); }} />
+      </>
     );
   }
 
@@ -459,6 +487,13 @@ export function AppLayout() {
       </Sider>
 
       <Layout style={{ marginLeft: collapsed ? 64 : 224, transition: "margin-left 0.2s", background: "#f1f5f9", minHeight: "100vh" }}>
+        {/*
+          前后端版本漂移提示。放在顶栏**之上**且不随路由变化——
+          只升了一侧时，任何页面都可能读到后端不返回的字段，
+          而报出来的错与真正的原因无关。一致时它渲染为空，不占空间。
+        */}
+        <VersionDriftBanner webVersion={WEB_RELEASE_VERSION} apiVersion={apiVersion} />
+
         {/* Top bar with mode switcher + global period picker */}
         <div style={{
           position: "sticky", top: 0, zIndex: 50,

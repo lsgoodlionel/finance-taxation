@@ -21,6 +21,7 @@ import { Alert, Button, Card, Descriptions, Input, Space, Table, Tag, Typography
 import { ExportOutlined, FilePdfOutlined, EyeOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PAGE_GUIDES, guideAnchorId, guideTitleOf, type PageGuide } from "../../lib/page-guides";
+import { WEB_RELEASE_VERSION } from "../../lib/release-version";
 import {
   ADMIN_SETUP,
   DATA_FLOWS,
@@ -33,13 +34,25 @@ import { buildManualHtml } from "../../lib/manual-print";
 import { TERMINOLOGY } from "../../lib/terminology";
 import { Term } from "../../components/ui/Term";
 
-/** 系统事实。**改了版本号要连同下面的能力清单一起改**，只改数字等于说谎。 */
+/**
+ * 系统事实。**改了版本号要连同下面的能力清单一起改**，只改数字等于说谎。
+ *
+ * 「发布版本」一项例外：它由构建注入（见 `lib/release-version.ts`），
+ * 不手工维护——手工维护的版本号必然过时，这一页上次就写着一个
+ * 过期了十几个版本的数字。
+ */
 const SYSTEM_FACTS: ReadonlyArray<readonly [string, string]> = [
-  ["系统版本", "V15（2026-08）"],
+  [
+    "发布版本",
+    WEB_RELEASE_VERSION === "dev"
+      ? "开发构建（未经 Release 发布）"
+      : WEB_RELEASE_VERSION
+  ],
+  ["系统阶段", "V17（2026-09）"],
   ["后端", "Node.js + TypeScript + PostgreSQL 17"],
   ["前端", "React 18 + TypeScript + Vite + Ant Design 5"],
   ["部署", "Docker Compose：db / api / web 三个服务"],
-  ["数据库迁移", "87 个（001–095，含期初建账、审批流、成本结转、银企直连）"],
+  ["数据库迁移", "96 个（001–104，含期初建账、审批流、成本结转、银企直连、税率政策）"],
   ["业务页面", `${PAGE_GUIDES.length} 个（本页下方逐页说明）`],
   [
     "AI 后端",

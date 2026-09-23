@@ -1,0 +1,229 @@
+name: Release
+
+# 打一个 v* 标签就发一次版。
+#
+# ## 为什么前后端必须在同一个 workflow 里出
+#
+# 前端是静态产物、后端是独立容器，分开发布就会漂移——而这个仓库的契约
+# （`CorporateIncomeTaxPreparation`、`StampAndSurtaxSummary` …）一直在演进，
+# 前端新版读一个后端旧版不返回的字段，页面报的错与真正的原因毫无关系。
+#
+# 这里两个镜像**由同一次运行、同一个 tag 产出**，带同一个版本号；
+# 前端运行时会拿自己的版本与 `/health` 比对，只部署了一侧时当场能看出来。
+on:
+  push:
+    tags:
+      - "v*"
+  # 允许手动发一次（补发、或验证流水线本身）。
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布的版本号，如 v1.0.0"
+        required: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # 创建 Release
+  packages: write # 推 GHCR
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ── 先验证，再发布 ──────────────────────────────────────────────────
+  #
+  # tag 通常打在已经过 CI 的提交上，但「通常」不够：手工打错 tag、
+  # 打在未经验证的提交上都是真实会发生的事。发布是不可逆的
+  # （镜像推出去就可能被拉走），所以这里再跑一遍快速验证。
+  verify:
+    name: Verify before publishing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Verify (typecheck + unit + web + progress board)
+        run: npm run verify
+
+  publish:
+    name: Build and publish images
+    runs-on: ubuntu-latest
+    needs: verify
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: meta
+        run: |
+          RAW="${{ github.event.inputs.tag || github.ref_name }}"
+          # 去掉 v 前缀：镜像标签与 /health 报出的版本号保持同一种写法，
+          # 否则比对逻辑会把同一次发布误判成前后端漂移。
+          VERSION="${RAW#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "raw=${RAW}" >> "$GITHUB_OUTPUT"
+          echo "发布版本：${VERSION}（tag ${RAW}）" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 镜像名统一小写：GHCR 不接受大写，而仓库名可能含大写字母。
+      - name: Normalize image prefix
+        id: img
+        run: echo "prefix=${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.raw }}
+          tags: |
+            ${{ steps.img.outputs.prefix }}/api:${{ steps.meta.outputs.version }}
+            ${{ steps.img.outputs.prefix }}/api:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Build and push Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.raw }}
+          tags: |
+            ${{ steps.img.outputs.prefix }}/web:${{ steps.meta.outputs.version }}
+            ${{ steps.img.outputs.prefix }}/web:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+      # 镜像推上去之后再冒烟一次：能 build 不等于能跑。
+      # 这一步失败时 Release 不会创建，避免把一个起不来的版本标成正式发布。
+      - name: Smoke test published images
+        run: |
+          set -euo pipefail
+          PREFIX="${{ steps.img.outputs.prefix }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+
+          docker network create smoke
+          docker run -d --name smoke-db --network smoke \
+            -e POSTGRES_USER=ft -e POSTGRES_PASSWORD=ft -e POSTGRES_DB=ftv \
+            postgres:17-alpine
+          for i in $(seq 1 30); do
+            docker exec smoke-db pg_isready -U ft -d ftv >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          echo "→ 迁移作为一次性任务"
+          docker run --rm --network smoke \
+            -e DATABASE_URL=postgres://ft:ft@smoke-db:5432/ftv \
+            -e JWT_SECRET=smoke-test-only-secret-0123456789 \
+            "${PREFIX}/api:${VERSION}" node apps/api/dist/db/migrate.js
+
+          echo "→ 启动 API 并等健康检查"
+          docker run -d --name smoke-api --network smoke -p 3100:3100 \
+            -e DATABASE_URL=postgres://ft:ft@smoke-db:5432/ftv \
+            -e JWT_SECRET=smoke-test-only-secret-0123456789 \
+            -e HOST=0.0.0.0 "${PREFIX}/api:${VERSION}"
+          for i in $(seq 1 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' smoke-api)" = "healthy" ] && break
+            sleep 1
+          done
+          if [ "$(docker inspect -f '{{.State.Health.Status}}' smoke-api)" != "healthy" ]; then
+            echo "API 没有变成 healthy："; docker logs smoke-api | tail -40; exit 1
+          fi
+
+          echo "→ 校验 /health 报出的版本与本次发布一致"
+          REPORTED=$(curl -fsS http://127.0.0.1:3100/health | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+          if [ "$REPORTED" != "$VERSION" ]; then
+            echo "版本对不上：镜像标签 ${VERSION}，/health 报 ${REPORTED}"
+            echo "这会让前端的漂移检测天天误报，必须在发布前修掉。"
+            exit 1
+          fi
+          echo "✅ API ${VERSION} 冒烟通过（迁移 + 健康检查 + 版本自报一致）" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "→ Web 镜像能否提供页面"
+          docker run -d --name smoke-web --network smoke -p 8080:80 "${PREFIX}/web:${VERSION}"
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/ >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/ >/dev/null
+          echo "✅ Web ${VERSION} 冒烟通过" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tear down smoke stack
+        if: always()
+        run: |
+          docker rm -f smoke-web smoke-api smoke-db 2>/dev/null || true
+          docker network rm smoke 2>/dev/null || true
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: publish
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compose release notes
+        id: notes
+        run: |
+          VERSION="${{ needs.publish.outputs.version }}"
+          PREFIX="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          PREV=$(git tag --sort=-v:refname | grep -v "^${{ github.ref_name }}$" | head -1)
+
+          {
+            echo "## 部署"
+            echo
+            echo '前后端来自同一次发布，版本号一致。`docker-compose.prod.yml` 里设置：'
+            echo
+            echo '```bash'
+            echo "export FT_VERSION=${VERSION}"
+            echo 'docker compose -f docker-compose.prod.yml up -d'
+            echo '```'
+            echo
+            echo "镜像："
+            echo "- \`${PREFIX}/api:${VERSION}\`"
+            echo "- \`${PREFIX}/web:${VERSION}\`"
+            echo
+            echo "部署后用 \`curl <host>/api/health\` 确认 \`version\` 是 \`${VERSION}\`。"
+            echo "前端会自行比对，只升了一侧时页面上会直接提示。"
+            echo
+            echo "## 数据库迁移"
+            echo
+            echo '`docker-compose.prod.yml` 里的 `migrate` 服务会先跑完再放行 api。'
+            echo '迁移带 advisory lock，多副本并发启动也安全。'
+            echo
+            echo "## 变更"
+            echo
+            if [ -n "$PREV" ]; then
+              git log --no-merges --pretty='- %s' "${PREV}..${{ github.ref_name }}"
+            else
+              git log --no-merges --pretty='- %s' -20
+            fi
+          } > notes.md
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes-file notes.md

@@ -25,6 +25,9 @@ export const healthHandler: RouteHandler = async (_req, res) => {
   return json(res, dbOk ? 200 : 503, {
     ok: dbOk,
     service: env.appName,
+    // 发布版本号。部署后排查问题的第一个问题是「这是哪个版本」——
+    // 没有它就只能靠猜或去翻部署记录。前端也会读它来比对自身版本。
+    version: env.appVersion,
     db: { ok: dbOk, latencyMs: dbLatencyMs },
     uptimeSec: Math.round(process.uptime()),
     timestamp: new Date().toISOString()

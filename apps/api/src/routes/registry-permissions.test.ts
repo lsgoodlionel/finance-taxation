@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
-import type { PermissionKey } from "@finance-taxation/domain-model";
+import type { PermissionKey } from "../access/permission-catalog.js";
 import { hasPermission, requirePermission } from "../middleware/auth.js";
 import { createAppRouter } from "./registry.js";
 import type { RouteDef, RoutePermission } from "../router/router.js";

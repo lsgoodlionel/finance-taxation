@@ -1,6 +1,7 @@
 import type { ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
-import type { PermissionKey, UserProfile } from "@finance-taxation/domain-model";
+import type { UserProfile } from "@finance-taxation/domain-model";
+import type { PermissionKey } from "../access/permission-catalog.js";
 import type { ApiRequest, AuthContext } from "../types.js";
 import { env } from "../config/env.js";
 import { query, queryOne, withTransaction } from "../db/client.js";

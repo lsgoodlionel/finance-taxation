@@ -25,7 +25,7 @@
  */
 
 import { hasPermission } from "../../middleware/auth.js";
-import type { PermissionKey } from "@finance-taxation/domain-model";
+import type { PermissionKey } from "../../access/permission-catalog.js";
 
 export interface OwnershipActor {
   userId: string;

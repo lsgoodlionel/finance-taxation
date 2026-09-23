@@ -1,5 +1,8 @@
 node_modules/
 apps/web/dist/
+# 构建产物不入库：由 Release 流水线在镜像里生成。
+apps/api/dist/
+packages/domain-model/dist/
 backend/storage/*
 !backend/storage/.gitkeep
 

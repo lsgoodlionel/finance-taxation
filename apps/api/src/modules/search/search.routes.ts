@@ -20,7 +20,7 @@ import { query } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { hasPermission } from "../../middleware/auth.js";
-import type { PermissionKey } from "@finance-taxation/domain-model";
+import type { PermissionKey } from "../../access/permission-catalog.js";
 
 export interface SearchResult {
   type: string;

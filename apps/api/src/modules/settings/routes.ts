@@ -3,7 +3,7 @@ import { query, queryOne } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import { AI_PROVIDERS, loadAiConfig, listOllamaModels } from "../../services/ai.js";
 import type { ApiRequest } from "../../types.js";
-import { permissionCatalog, type PermissionKey } from "@finance-taxation/domain-model";
+import { permissionCatalog, type PermissionKey } from "../../access/permission-catalog.js";
 import { hasPermission } from "../../middleware/auth.js";
 import { toDateOnly } from "../../db/date-column.js";
 import {
