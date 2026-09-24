@@ -96,6 +96,8 @@ const taxItems: TaxItem[] = [
     taxType: "企业所得税",
     treatment: "复核税前扣除凭证",
     basis: "票据与事由",
+    taxableAmountCents: null,
+    taxableCategory: null,
     filingPeriod: "2026-05",
     status: "review_required",
     source: "analysis",

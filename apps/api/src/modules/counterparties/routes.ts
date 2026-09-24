@@ -102,12 +102,25 @@ export async function updateCounterparty(req: ApiRequest, res: ServerResponse, i
   const b = (req.body ?? {}) as Record<string, unknown>;
   const existing = await queryOne<{ id: string }>("SELECT id FROM counterparties WHERE id=$1 AND company_id=$2", [id, cid]);
   if (!existing) { json(res, 404, { error: "往来单位不存在" }); return; }
+  // **收款账户三件套（V13 迁移 091 加的列）此前不在这条 SQL 里**——
+  // 列加了、付款导出与银企直连都依赖它们，但更新路由没跟上，
+  // 于是前台就算填了也保存不进去。P0 的路径级测试把它揪了出来。
+  //
+  // 用 coalesce 语义：**不传就是不改**。全量覆盖会让「只改联系人」
+  // 把银行账号清空，而那个后果要到付款失败时才被发现。
   await query(
     `UPDATE counterparties SET category=$1, tax_no=$2, contact_name=$3, contact_phone=$4,
-       credit_limit=$5, credit_days=$6, risk_level=$7, notes=$8, updated_at=now()
+       credit_limit=$5, credit_days=$6, risk_level=$7, notes=$8,
+       bank_name=coalesce($11, bank_name),
+       bank_account=coalesce($12, bank_account),
+       bank_account_name=coalesce($13, bank_account_name),
+       updated_at=now()
      WHERE id=$9 AND company_id=$10`,
     [b.category ?? "both", b.taxNo ?? "", b.contactName ?? "", b.contactPhone ?? "",
-     b.creditLimit ?? 0, b.creditDays ?? 0, b.riskLevel ?? "normal", b.notes ?? "", id, cid],
+     b.creditLimit ?? 0, b.creditDays ?? 0, b.riskLevel ?? "normal", b.notes ?? "", id, cid,
+     typeof b.bankName === "string" ? b.bankName : null,
+     typeof b.bankAccount === "string" ? b.bankAccount : null,
+     typeof b.bankAccountName === "string" ? b.bankAccountName : null],
   );
   writeAudit({ companyId: cid, userId: req.auth!.userId, action: "counterparty.updated", resourceType: "counterparty", resourceId: id });
   json(res, 200, { ok: true });

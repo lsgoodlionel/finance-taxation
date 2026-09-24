@@ -1,0 +1,79 @@
+# 生产部署清单：拉 Release 发布的镜像，不在目标机上构建。
+#
+#   export FT_VERSION=1.0.0          # 与 GitHub Release 的版本号一致
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# ## 为什么迁移是独立的一次性服务
+#
+# 改造前迁移写在 API 的启动命令里（`migrate && main`），三个后果：
+#   1. 多副本部署时每个副本都跑迁移（迁移侧已加 advisory lock 兜底，
+#      但让它们排队等待，不如根本不让它们并发）
+#   2. 迁移失败表现为「容器起不来」，与代码起不来混在一起，难以分辨
+#   3. 每个副本启动都要等迁移走完，冷启动慢
+#
+# 拆成一次性服务后：迁移跑一次、成功才放行 api，失败时 `docker compose ps`
+# 上直接看到是 migrate 退出码非零，可以单独重跑而不必动服务。
+
+name: finance-taxation
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-finance_taxation}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?生产部署必须显式设置数据库密码}
+      POSTGRES_DB: ${POSTGRES_DB:-finance_taxation}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finance_taxation} -d ${POSTGRES_DB:-finance_taxation}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # 不对外暴露端口：数据库只在 compose 网络内可达。
+    # 要从外部连（排查、备份）时用 `docker compose exec db psql`。
+
+  # 一次性任务：跑完就退出。api 等它成功之后才启动。
+  migrate:
+    image: ghcr.io/${FT_IMAGE_REPO:-lsgoodlionel/finance-taxation}/api:${FT_VERSION:?请设置 FT_VERSION，如 export FT_VERSION=1.0.0}
+    command: ["node", "apps/api/dist/db/migrate.js"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-finance_taxation}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finance_taxation}
+      JWT_SECRET: ${JWT_SECRET:?生产部署必须显式设置 JWT_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    image: ghcr.io/${FT_IMAGE_REPO:-lsgoodlionel/finance-taxation}/api:${FT_VERSION}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-finance_taxation}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finance_taxation}
+      JWT_SECRET: ${JWT_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      HOST: 0.0.0.0
+      PORT: "3100"
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+      # 迁移成功退出才放行——库结构没升上去就启动，表现为满屏的
+      # 「column does not exist」，而真正的原因在另一个容器的日志里。
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    image: ghcr.io/${FT_IMAGE_REPO:-lsgoodlionel/finance-taxation}/web:${FT_VERSION}
+    restart: unless-stopped
+    ports:
+      - "${FT_HTTP_PORT:-8080}:80"
+    depends_on:
+      api:
+        # 等 API healthy 而不是只等它启动：nginx 先就绪、API 还没连上库时，
+        # 用户打开页面看到的是一堆 502，而不是「正在启动」。
+        condition: service_healthy
+
+volumes:
+  pgdata:

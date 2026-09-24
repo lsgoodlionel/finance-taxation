@@ -6,6 +6,7 @@ import {
   Row, Col, Card, Button, Tag, Space, Typography, Progress, Segmented, Spin, Modal, Input, Table, Alert,
 } from "antd";
 import { CrownOutlined, CheckOutlined, ReloadOutlined } from "@ant-design/icons";
+import { LoadErrorState } from "../components/ui/LoadErrorState";
 import { toast } from "sonner";
 import { PageHeader } from "../components/ui/PageHeader";
 import {
@@ -34,12 +35,21 @@ export function BillingPage() {
   const [payModal, setPayModal] = useState<{ paymentId: string; amount: number } | null>(null);
   const [reference, setReference] = useState("");
 
+  // 加载失败的原因。**与「暂无账单」严格区分**——一个是读不到数据，
+  // 一个是确实没有账单，用户该做的事完全不同。
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [p, s, pay] = await Promise.all([listBillingPlans(), getSubscription(), listBillingPayments()]);
       setPlans(p.items); setSub(s); setPayments(pay.items);
-    } catch (err) { toast.error((err as Error).message); }
+      setLoadError(null);
+    } catch (err) {
+      const message = (err as Error).message;
+      toast.error(message);
+      setLoadError(message);
+    }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -152,7 +162,11 @@ export function BillingPage() {
             { title: "状态", dataIndex: "status", render: (v) => <Tag color={v === "paid" ? "success" : v === "pending" ? "warning" : "error"}>{v === "paid" ? "已支付" : v === "pending" ? "待支付" : "失败"}</Tag> },
             { title: "时间", dataIndex: "created_at", render: (v) => String(v).slice(0, 10) },
           ]}
-          locale={{ emptyText: "暂无账单" }} />
+          locale={{
+            emptyText: loadError
+              ? <LoadErrorState subject="账单" error={loadError} />
+              : "暂无账单"
+          }} />
       </section>
 
       <Modal open={!!payModal} title="确认支付" onOk={() => void handleConfirm()} onCancel={() => setPayModal(null)}

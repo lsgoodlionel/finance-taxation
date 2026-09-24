@@ -15,6 +15,35 @@ import type { ObjectSchema } from "../../utils/validate.js";
  * - itemIds on createTaxFilingBatch — FieldSpec has no array type.
  */
 export const taxBodySchemas: Record<string, ObjectSchema> = {
+  /**
+   * 税款缴纳记录（V17 阶段三批次 B）。附加税以实缴主税为计税依据。
+   *
+   * 金额与日期的**取值范围校验放在 handler 里**：这里只做类型与必填，
+   * 「金额必须正数」「日期必须 YYYY-MM-DD」要配错误码与说明文案，
+   * 而 FieldSpec 给不出那些。
+   */
+  /**
+   * 以前年度亏损台账（V17 阶段三批次 C）。
+   *
+   * 年度与金额的范围校验放在 handler 里——要配错误码与说明文案，
+   * FieldSpec 给不出那些。
+   */
+  "POST /api/tax/loss-ledger": {
+    lossYear: { type: "number", required: true },
+    lossCents: { type: "number", required: true },
+    offsetCents: { type: "number" },
+    note: { type: "string", max: 500 }
+  },
+
+  "POST /api/tax/payments": {
+    taxType: { type: "string", required: true, min: 1, max: 40 },
+    filingPeriod: { type: "string", required: true, min: 1, max: 20 },
+    amountCents: { type: "number", required: true },
+    paidOn: { type: "string", required: true, min: 1, max: 20 },
+    note: { type: "string", max: 500 }
+    // voucherId: nullable — omitted.
+  },
+
   "POST /api/tax-filing-batches": {
     taxType: { type: "string", required: true, min: 1 },
     filingPeriod: { type: "string", required: true, min: 1 }

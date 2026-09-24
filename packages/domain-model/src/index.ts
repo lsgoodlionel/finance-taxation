@@ -85,6 +85,16 @@ export interface BusinessEvent {
   occurredOn: string;
   amount: string | null;
   currency: string;
+  /**
+   * 应税行为类别（税目口径，V17）。决定这笔业务适用哪一档增值税税率。
+   *
+   * **与 `type` 不是一回事**：`type`（sales / procurement / expense…）是
+   * 记账口径——这笔业务在账上怎么走；类别是税目口径——这笔业务卖的是什么。
+   * 一笔 `sales` 可能是卖货 13%、卖服务 6%、卖不动产 9%。
+   *
+   * `null` = 未标，税率判定回退到公司主营类别；公司也没配就报「税目待确认」。
+   */
+  taxableCategory?: string | null;
   status: BusinessEventStatus;
   source: BusinessEventSource;
   contractId?: string | null;
@@ -147,7 +157,17 @@ export interface EventTaxMapping {
   taxType: string;
   treatment: string;
   status: EventTaxMappingStatus;
+  /** 政策依据，**文字**。金额在 `taxableAmountCents`——见 `TaxItem.basis` 的说明。 */
   basis: string;
+  /**
+   * 计税依据，整数分。`null` = 还没确定（**不是 0**）。
+   *
+   * 省略时按 null 处理：新增税项映射的人如果不清楚计税依据是多少，
+   * 留空比填 0 好——0 会静默参与合计。
+   */
+  taxableAmountCents?: number | null;
+  /** 应税行为类别（税目口径）。省略时按 null 处理——见 `TaxItem.taxableCategory`。 */
+  taxableCategory?: string | null;
   filingPeriod: string;
 }
 
@@ -286,7 +306,30 @@ export interface TaxItem {
   mappingId: string;
   taxType: string;
   treatment: string;
+  /**
+   * 政策依据，**文字**。例如「需结合交付、验收或约定开票条件确认纳税义务发生时点。」
+   *
+   * **不要拿它去算数。** 增值税底稿曾对它做 `Number(item.basis)`，
+   * 得到 NaN 并一路流进申报 XML——那是报给税务局的数字。
+   * 金额在 `taxableAmountCents`。
+   */
   basis: string;
+  /**
+   * 计税依据，**整数分**。
+   *
+   * `null` = 这条税项还没有确定计税依据（例如印花税待复核合同性质），
+   * **不是 0**。消费方必须把它排除在合计之外并显式列出，
+   * 绝不能当成零参与计算——那会让申报表少算一笔而没有任何提示。
+   */
+  taxableAmountCents: number | null;
+  /**
+   * 应税行为类别（税目口径，V17）。决定这笔业务适用哪一档增值税税率。
+   *
+   * `null` = 未确定，回退到公司主营类别；公司也没配就是「税目待确认」——
+   * **不猜一个默认档**。与记账口径的 `BusinessEvent.type` 不是一回事：
+   * 一笔 `sales` 可能是卖货 13%、卖服务 6%、卖不动产 9%。
+   */
+  taxableCategory: string | null;
   filingPeriod: string;
   status: TaxItemStatus;
   source: "analysis";
@@ -327,6 +370,21 @@ export interface StampAndSurtaxSummary {
   stampDutyItems: TaxItem[];
   surtaxItems: TaxItem[];
   notes: string[];
+  /**
+   * 算出来的附加税（V17 阶段三批次 B）。
+   *
+   * 此前这个模块只把税种名含「附加」的税项筛出来展示，一分钱都不算。
+   * `totalCents` 为 null 表示算不出——实缴增值税未知，或所在地档位没登记。
+   */
+  surtax: {
+    kind: "calculated" | "pending_main_tax" | "zone_unknown";
+    urbanConstructionCents: number | null;
+    educationSurchargeCents: number | null;
+    localEducationSurchargeCents: number | null;
+    totalCents: number | null;
+    reductionCents: number;
+    reason: string;
+  };
 }
 
 export interface TaxFilingBatchReviewRecord {
@@ -361,6 +419,14 @@ export interface TaxpayerProfile {
   companyId: string;
   taxpayerType: TaxpayerType;
   effectiveFrom: string;
+  /**
+   * 失效日（含）。`null` = 仍然有效。
+   *
+   * 与 `effectiveFrom` 一起构成生效区间。一家公司可以有多档 active、
+   * 各管一段时间——纳税人身份是会变的（小规模转一般纳税人），
+   * 而重算旧属期要按**当时**的身份，不是按今天的。
+   */
+  effectiveTo: string | null;
   status: "active" | "inactive";
   notes: string;
   createdAt: string;
@@ -381,8 +447,23 @@ export interface VatWorkingPaperLine {
   taxItemId: string | null;
   description: string;
   taxRate: string;
-  taxableAmount: string;
-  taxAmount: string;
+  /**
+   * 计税依据。`null` = 这条税项还没有确定计税依据。
+   *
+   * **不是 `"0.00"`**——那会让人以为这笔业务金额为零，
+   * 而实际情况是「还不知道多少钱」。
+   */
+  taxableAmount: string | null;
+  /** 计税依据缺失，本行未纳入合计。 */
+  basisMissing: boolean;
+  /**
+   * 税目未确定，本行未纳入合计。
+   *
+   * 与 `basisMissing` 分开：那个是不知道按多少钱算，这个是不知道按什么税率算。
+   */
+  categoryMissing: boolean;
+  /** 税额。计税依据缺失时为 `null`，理由同 `taxableAmount`。 */
+  taxAmount: string | null;
 }
 
 export interface VatWorkingPaper {
@@ -393,6 +474,20 @@ export interface VatWorkingPaper {
   inputTaxAmount: string;
   simplifiedTaxAmount: string;
   payableVatAmount: string;
+  /**
+   * 计税依据缺失、**未纳入上述合计**的税项 id。
+   *
+   * 非空时那几个合计是不完整的，调用方必须把这件事显示出来——
+   * 一份少算了一笔的申报表，没有提示就会被当成完整的报上去。
+   */
+  incompleteTaxItemIds: string[];
+  /**
+   * 税目未确定、**未纳入上述合计**的税项 id（V17）。
+   *
+   * 非空时合计不完整。与 `incompleteTaxItemIds` 分开报，
+   * 因为用户要补的东西不同：一个补金额，一个补税目。
+   */
+  unknownCategoryTaxItemIds: string[];
   lines: VatWorkingPaperLine[];
 }
 
@@ -401,8 +496,57 @@ export interface CorporateIncomeTaxPreparation {
   filingPeriod: string;
   accountingProfit: string;
   taxableIncomeEstimate: string;
-  incomeTaxRate: string;
-  prepaymentTaxEstimate: string;
+  /**
+   * 实际税负（%）。**null = 优惠资格待确认**，见 `preferenceNotice`。
+   *
+   * 此前这里恒为 "25"：高新（15%）与小型微利（实际 5%）都被按一般税率算，
+   * 小微企业多交五倍。资格信息缺失时不按 25% 兜底——按最高档兜底看起来
+   * 保守稳妥，实际是静默地让企业多交钱。
+   */
+  incomeTaxRate: string | null;
+  /** 优惠类型：standard / high_tech / small_profit / unknown。 */
+  preferenceKind: string;
+  /** 判定结论的说明，直接给用户看。 */
+  preferenceNotice: string;
+  /**
+   * 小型微利专用：减按多少比例计入应纳税所得额（"25"）。其余情形为 null。
+   *
+   * **与 appliedRatePercent 分开存**：政策原文是「减按 25% 计入，按 20% 征」，
+   * 合成一个 5% 数值上一样，但申报表要分别列示「减免税额」，
+   * 而且这两个系数历史上分别调整过。
+   */
+  reducedInclusionPercent: string | null;
+  /** 小型微利专用：适用税率（"20"）。其余情形为 null。 */
+  appliedRatePercent: string | null;
+  /** 应纳/预缴税额。null = 算不出（资格待确认）。 */
+  prepaymentTaxEstimate: string | null;
+  /**
+   * 可结转以后年度弥补的亏损。
+   *
+   * 此前应纳税所得额被 `Math.max(x, 0)` 抹成 0——当期不缴税没错，
+   * 但「可结转多少亏损」这个信息一起没了。
+   */
+  carryforwardLoss: string;
+  /**
+   * 本期用以前年度亏损弥补掉的金额（V17 阶段三批次 C）。
+   *
+   * 此前系统里没有亏损台账，盈利年度的应纳税所得额一分不减——
+   * 企业所得税法第十八条给的弥补权利用不上。
+   */
+  lossOffset: string;
+  /** 弥补后的应纳税所得额。**这个才是计税基数**。 */
+  taxableIncomeAfterLoss: string;
+  /** 已超过结转年限、不能再弥补的台账说明。空串 = 没有超期的。 */
+  expiredLossNotice: string;
+  /** 本期已预缴的企业所得税。 */
+  prepaidTax: string;
+  /**
+   * 应补（正）或应退（负）税额。
+   *
+   * **负数是应退，不能截断成 0**——那等于让企业白交。
+   * null = 应纳税额算不出（优惠资格待确认）。
+   */
+  taxPayableOrRefundable: string | null;
   adjustmentHints: string[];
   checklist: string[];
 }
@@ -528,6 +672,11 @@ export interface CreateBusinessEventInput {
    * 与核销功能整条链路都是空的。
    */
   counterpartyId?: string | null;
+  /**
+   * 应税行为类别（税目口径）。可选——不填回退到公司主营类别。
+   * 见 `BusinessEvent.taxableCategory`。
+   */
+  taxableCategory?: string | null;
 }
 
 export interface CreateTaskInput {
@@ -662,6 +811,17 @@ export interface ReportSnapshot {
   snapshotDate: string;
   payload: BalanceSheetReport | ProfitStatementReport | CashFlowReport;
   createdAt: string;
+  /**
+   * 溯源回指（V15/P1）。全部可空——迁移 096 之前生成的快照没有这些信息，
+   * 那是事实，取不到时前端显示「无法判断是否为最新」而不是给绿勾。
+   */
+  generatedByUserId?: string | null;
+  /** 生成时纳入计算的分录条数。与当前条数不一致即说明快照已过期。 */
+  sourceEntryCount?: number | null;
+  /** 数据截止时点：纳入计算的最后一笔分录的过账时间。 */
+  sourceLatestPostedAt?: string | null;
+  periodStart?: string | null;
+  periodEnd?: string | null;
 }
 
 export interface ReportDiffLine {
@@ -1145,48 +1305,11 @@ export interface WorkflowCompensationRecord {
   resolvedAt: string | null;
 }
 
-export const permissionCatalog = [
-  "dashboard.view",
-  "events.view",
-  "events.create",
-  "events.assign",
-  "tasks.view",
-  "tasks.manage",
-  "documents.view",
-  "documents.manage",
-  "ledger.view",
-  "ledger.post",
-  // 银行账户、流水导入/同步、对账确认自成一档：这些是出纳的本职工作，
-  // 而 ledger.post 是记账权（出纳不持有）。此前整组 banking 写路由挂 ledger.post，
-  // 等于把出纳挡在自己的活儿外面；再往回降到 ledger.view 又会让只读账号也能导流水。
-  "banking.manage",
-  "tax.view",
-  "tax.manage",
-  "rnd.view",
-  "rnd.manage",
-  "risk.view",
-  "risk.manage",
-  "contracts.view",
-  "contracts.manage",
-  "payroll.view",
-  "payroll.manage",
-  "audit.view",
-  "workflow.view",
-  "workflow.manage",
-  // V13 费控。预算与费用标准分开授权：预算额度是管理层的决策数据（部门经理
-  // 该看得到自己部门的预算执行），而费用标准是行政/HR 维护的制度配置，
-  // 两者的持有人在多数公司里不是同一批人。
-  "budget.view",
-  "budget.manage",
-  "expense.view",
-  // 提交费用类单据（申请/借款/报销）。**与 expense.view 分开**：只读角色
-  // 与审计要看得到费用标准和别人的单据，但不该能提单——V13-B 的权限护栏
-  // 正是抓到「role-viewer 能建申请单」才拆出这个键。
-  "expense.submit",
-  "expense.manage",
-  "knowledge.view",
-  "knowledge.manage",
-  "settings.manage"
-] as const;
-
-export type PermissionKey = (typeof permissionCatalog)[number];
+// permissionCatalog 与 PermissionKey 已移到 apps/api/src/access/permission-catalog.ts。
+//
+// 原因：它们是本包**唯一的运行时值**，而只有 API 用得到（web 一处都没引用）。
+// 留在这里意味着 API 的生产产物必须在运行时加载本包，而本包的 exports 指向
+// .ts 源文件——那要靠 Node 的 type stripping 实验特性才能加载。
+//
+// 移走之后本包是**纯类型包**：类型在编译后全部消失，运行时零加载，
+// 既不依赖实验特性，也不需要维护一份会过时的编译产物。

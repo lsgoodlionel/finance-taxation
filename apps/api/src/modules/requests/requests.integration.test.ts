@@ -49,6 +49,19 @@ test("申请单的状态流转与连带动作", async (t) => {
   );
   const userId = userRow.rows[0]!.id;
 
+  /**
+   * 审批人。**必须与发起人是两个人**——V16 起「审批人 ≠ 发起人」是硬约束。
+   *
+   * 这几条用例原先用同一个 userId 走完提交与批准，那正是被堵掉的行为
+   * （员工能批准自己 8000 元的采购申请）。用例的意图是验证状态流转与预算联动，
+   * 不是验证自批，所以换个人继续测原来的东西。
+   */
+  const approverRow = await pool.query<{ id: string }>(
+    `select id from users where company_id = $1 and id <> $2 order by id limit 1`,
+    [COMPANY_ID, userId]
+  );
+  const approverId = approverRow.rows[0]!.id;
+
   // 种子已经播了 2026-04 的差旅费预算（seed-acceptance-data 的 SEED_BUDGETS），
   // 但那条属于 cmp-v4-tech 以外的公司也有，这里显式建一条 2026-09 的，
   // 避免与种子数据和其他用例互相干扰。
@@ -125,7 +138,7 @@ test("申请单的状态流转与连带动作", async (t) => {
       companyId: COMPANY_ID,
       id: requestId,
       action: "approve",
-      actorUserId: userId
+      actorUserId: approverId
     });
     assert.equal(approved.ok, true);
     if (!approved.ok) return;
@@ -153,7 +166,7 @@ test("申请单的状态流转与连带动作", async (t) => {
       companyId: COMPANY_ID,
       id: requestId,
       action: "approve",
-      actorUserId: userId
+      actorUserId: approverId
     });
     // 状态机会拒绝（approved 不允许 approve），这本身就是第一道防线。
     assert.equal(again.ok, false);
@@ -209,7 +222,7 @@ test("申请单的状态流转与连带动作", async (t) => {
       companyId: COMPANY_ID,
       id: second.value.id,
       action: "approve",
-      actorUserId: userId
+      actorUserId: approverId
     });
     assert.equal((await usage()).encumberedCents, 2_000_00);
 
@@ -250,7 +263,7 @@ test("申请单的状态流转与连带动作", async (t) => {
       companyId: COMPANY_ID,
       id: third.value.id,
       action: "reject",
-      actorUserId: userId
+      actorUserId: approverId
     });
     assert.equal(rejected.ok, true);
 
@@ -297,7 +310,7 @@ test("申请单的状态流转与连带动作", async (t) => {
       companyId: COMPANY_ID,
       id: noAccount.value.id,
       action: "approve",
-      actorUserId: userId
+      actorUserId: approverId
     });
 
     assert.equal(approved.ok, true);

@@ -317,7 +317,7 @@ test("外币业务从录入到调汇的完整链路", async (t) => {
   let voucherId = "";
 
   await t.test("按业务发生日的汇率折算，而不是今天的", async () => {
-    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const { createVoucherFromTemplate } = await import("../vouchers/voucher-from-template.js");
     const capture = createResponseCapture();
     await createVoucherFromTemplate(
       {
@@ -378,7 +378,7 @@ test("外币业务从录入到调汇的完整链路", async (t) => {
        values ('evt-fx-eur', $1, 'expense', '欧元服务费', '', '财务部', '2026-03-15'::date, 500, 'EUR', 'analyzed', 'manual')`,
       [COMPANY_ID]
     );
-    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const { createVoucherFromTemplate } = await import("../vouchers/voucher-from-template.js");
     const capture = createResponseCapture();
     await createVoucherFromTemplate(
       {
@@ -407,7 +407,7 @@ test("外币业务从录入到调汇的完整链路", async (t) => {
        values ('evt-cny', $1, 'expense', '本币服务费', '', '财务部', '2026-03-15'::date, 500, 'CNY', 'analyzed', 'manual')`,
       [COMPANY_ID]
     );
-    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const { createVoucherFromTemplate } = await import("../vouchers/voucher-from-template.js");
     const capture = createResponseCapture();
     await createVoucherFromTemplate(
       {

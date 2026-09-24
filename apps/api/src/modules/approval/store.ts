@@ -703,6 +703,31 @@ export async function act(input: ActInput): Promise<ApprovalResult<ApprovalInsta
  * 在 SQL 里判不了（要查组织架构），单独用 `directReportUserIds` 传进来——
  * 调用方已经为了别的用途查过下属清单，这里不再查一遍。
  */
+/**
+ * 按业务单据找它的审批实例。
+ *
+ * V16 补的：报销 / 申请 / 借款要在自己的状态流转里同步推进审批实例，
+ * 而此前 store 里根本没有「按单据查实例」这条路——两套流程因此各走各的，
+ * 审批引擎从提交那一刻起就是个幽灵：实例建了没人推，或者根本没建。
+ *
+ * 返回最近一条：同一张单据被撤回后重新提交会有多条实例，正在生效的是最新那条。
+ */
+export async function findInstanceByDocument(
+  companyId: string,
+  documentType: ApprovalDocumentType,
+  documentId: string
+): Promise<ApprovalInstance | null> {
+  const rows = await query<InstanceDbRow>(
+    `select ${INSTANCE_COLUMNS} from approval_instances
+      where company_id = $1 and document_type = $2 and document_id = $3
+      order by created_at desc
+      limit 1`,
+    [companyId, documentType, documentId]
+  );
+  const row = rows[0];
+  return row ? mapInstance(row) : null;
+}
+
 export async function listPendingFor(
   companyId: string,
   actor: { userId: string; roleCodes: readonly string[]; directReportUserIds?: readonly string[] }

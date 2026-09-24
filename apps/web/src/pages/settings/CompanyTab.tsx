@@ -3,6 +3,7 @@ import { getCompanyProfile, updateCompanyProfile } from "../../lib/api";
 import type { CompanyProfile } from "../../lib/api";
 import { panelStyle, SectionHeader, FieldRow, inputStyle } from "./settings-ui";
 import { Term } from "../../components/ui/Term";
+import { TaxQualificationSection } from "./TaxQualificationSection";
 
 // ─── Company Tab ──────────────────────────────────────────────────────────────
 
@@ -19,9 +20,10 @@ export function CompanyTab() {
     }).catch((e: Error) => setMessage(e.message));
   }, []);
 
-  function updateField(key: keyof CompanyProfile, value: string) {
+  function updateField(key: keyof CompanyProfile, value: unknown) {
     setEditProfile((prev) => ({ ...prev, [key]: value }));
   }
+
 
   async function saveProfile() {
     if (!profile) return;
@@ -37,7 +39,14 @@ export function CompanyTab() {
         legalRepresentative: editProfile.legalRepresentative,
         bankName: editProfile.bankName,
         bankAccount: editProfile.bankAccount,
-        financeApproverRole: editProfile.financeApproverRole
+        financeApproverRole: editProfile.financeApproverRole,
+        // 税收资格（V17 阶段三）。空串一路传到后端，由它落成 null。
+        employeeCount: editProfile.employeeCount as number | null,
+        // 换算在 TaxQualificationSection 里做完了，这里直传。
+        totalAssetsCents: editProfile.totalAssetsCents,
+        isRestrictedIndustry: editProfile.isRestrictedIndustry,
+        highTechCertificateExpiresOn: editProfile.highTechCertificateExpiresOn,
+        urbanConstructionTaxZone: editProfile.urbanConstructionTaxZone
       });
       setProfile(updated);
       setEditProfile(updated);
@@ -90,6 +99,9 @@ export function CompanyTab() {
       <FieldRow label="联系电话">
         <input value={editProfile.contactPhone ?? ""} onChange={(e) => updateField("contactPhone", e.target.value)} placeholder="选填" style={inputStyle()} />
       </FieldRow>
+
+      <div style={{ height: "20px" }} />
+      <TaxQualificationSection profile={editProfile} onChange={updateField} />
 
       <div style={{ height: "20px" }} />
       <SectionHeader>银行账户</SectionHeader>

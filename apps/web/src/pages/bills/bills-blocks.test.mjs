@@ -56,8 +56,16 @@ test("三个子页的动作与筛选并入内容块，不再各占一行", () =>
   assert.ok(INVOICES.includes('aria-label="刷新发票列表"'), "纯图标刷新按钮必须有无障碍名称");
   // 银行：账户动作进页签栏
   assert.ok(BANKING.includes("tabBarExtraContent"), "银行的账户动作应挂在页签栏");
-  // 单据：指引与帮助入口并入概览区
-  assert.ok(DOCUMENTS_HEADER.includes('aria-label="打开业务说明"'), "业务说明入口应保留");
+  // 单据：指引留在概览区；**帮助入口不在这里了**。
+  //
+  // V15 把帮助统一到页面右上角的「本页指南」（PageHeader 自动渲染，
+  // 内容来自 page-guides 注册表）。这里原来手写的「?」按钮与它重复——
+  // 用户报过「税务中心右上角有两个说明」，就是这种并存造成的。
+  assert.ok(
+    !DOCUMENTS_HEADER.includes('aria-label="打开业务说明"'),
+    "手写的帮助按钮应已删除，帮助统一走「本页指南」"
+  );
+  assert.ok(DOCUMENTS_HEADER.includes("资料完整度"), "概览区的指引文案仍应保留");
   assert.ok(
     DOCUMENTS_SHELL.includes("{summary}") && DOCUMENTS_SHELL.includes("{list}") && DOCUMENTS_SHELL.includes("{detail}"),
     "单据主体应只剩概览 + 列表/详情两块"

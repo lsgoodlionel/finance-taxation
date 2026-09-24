@@ -5,7 +5,7 @@ import { json } from "../../utils/http.js";
 import {
   listCompanyLedgerEntries,
   listCompanyLedgerPostingBatches
-} from "../vouchers/routes.js";
+} from "../vouchers/voucher-queries.js";
 import { closePeriod } from "./close-period.js";
 
 const PERIOD_LABEL = /^\d{4}-\d{2}$/;

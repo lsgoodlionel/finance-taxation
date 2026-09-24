@@ -297,6 +297,14 @@ export async function listCloseDrafts(req: ApiRequest, res: ServerResponse): Pro
   json(res, 200, { items, total: items.length });
 }
 
+/** 凭证状态的中文说法，用在给用户看的错误里。 */
+function voucherStatusLabel(status: string): string {
+  if (status === "draft") return "为草稿";
+  if (status === "review_required") return "待过账";
+  if (status === "posted") return "已过账";
+  return `状态为 ${status}`;
+}
+
 async function getDraftWithLines(
   companyId: string,
   draftId: string
@@ -378,6 +386,29 @@ export async function approveCloseDraft(req: ApiRequest, res: ServerResponse, dr
   }
   if (!lines.length) {
     json(res, 400, { error: "草稿无分录，无法批准" });
+    return;
+  }
+
+  // **同一份草稿不得产生第二张凭证**（V16 角色实验发现）。
+  //
+  // 两条路径都从 event_voucher_drafts 出发：事项 analyze 会生成
+  // voucher-{eventId}-*，这里的批准会生成 close-voucher-{draftId}，两者互不知情。
+  // 老板在首页点一次「批准」，同一笔 50000 就变成两张等额凭证，都未过账、
+  // 都躺在会计的待办队列里——**两张都过账就是把一笔业务记了两遍**。
+  //
+  // 查重字段本来就有：两张凭证的 mapping_id 都等于 draft.id，只是从来没人查。
+  const existingVoucher = await queryOne<{ id: string; status: string }>(
+    `select id, status from vouchers where company_id = $1 and mapping_id = $2 limit 1`,
+    [companyId, draft.id]
+  );
+  if (existingVoucher) {
+    json(res, 409, {
+      error:
+        `这条业务已经生成过凭证（${existingVoucher.id}，当前${voucherStatusLabel(existingVoucher.status)}），` +
+        "不能再批一张——同一笔业务记两遍会让账翻倍。请到凭证中心处理已有的那张。",
+      code: "VOUCHER_ALREADY_EXISTS",
+      voucherId: existingVoucher.id
+    });
     return;
   }
 

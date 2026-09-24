@@ -27,6 +27,11 @@ function formatMoney(value: string): string {
 
 interface RndProjectListPanelProps {
   projects: readonly RndProjectRow[];
+  /**
+   * 加载失败的原因。**与「没有项目」严格区分**——403 时照常显示
+   * 「还没有研发项目」会把权限问题伪装成业务事实。
+   */
+  loadError?: string | null;
   selectedProjectId: string | null;
   onSelectProject: (projectId: string) => void;
   /** 选中项目并直接跳到「归集费用」那件事。 */
@@ -35,6 +40,7 @@ interface RndProjectListPanelProps {
 
 export function RndProjectListPanel({
   projects,
+  loadError,
   selectedProjectId,
   onSelectProject,
   onCollectCosts
@@ -114,6 +120,28 @@ export function RndProjectListPanel({
       )
     }
   ];
+
+  // **加载失败 ≠ 没有项目。**
+  //
+  // 接口 403 时这里曾照常显示「还没有研发项目」，而实际上是这个账号读不到数据。
+  // 税务专员在实验里被这句话误导过——他的本职工作就是归集加计扣除，
+  // 看到「还没有研发项目」会去问业务部门为什么不立项，而真正的问题在权限上。
+  if (loadError) {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message="研发项目没有加载出来"
+        description={
+          <span>
+            {loadError}
+            <br />
+            <strong>这不是「还没有项目」</strong>——是读不到数据，请不要按当前画面下判断。
+          </span>
+        }
+      />
+    );
+  }
 
   if (projects.length === 0) {
     return (

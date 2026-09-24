@@ -49,6 +49,11 @@ interface AmountEntry {
   credit: string;
   /** 科目的报表口径，随分录从 accounts 表取出（V12 残留 7）。缺省时走兜底判定。 */
   accountCategory?: AccountCategory | null;
+  /**
+   * 科目名。**可选**——只有费用构成明细需要它，既有调用方不传也不影响。
+   * 缺省时那里回退到编码显示。
+   */
+  accountName?: string | null;
 }
 
 export interface ProfitTotals {
@@ -175,4 +180,80 @@ export function summarizeProfitTotals(entries: readonly AmountEntry[]): ProfitTo
     totalProfit,
     netProfit: totalProfit - incomeTax
   };
+}
+
+/**
+ * 费用构成明细（P1 数据契约缺口）。
+ *
+ * ## 为什么要下发这个
+ *
+ * 驾驶舱的费用构成饼图此前**按固定比例估算**——
+ * `expense-slices.ts` 里写着「成本与费用的内部构成后端暂未下发，
+ * 这里按固定比例估算」。那张图是给老板看的，编出来的比例比不显示更糟：
+ * 他会据此判断「人工成本占比是不是太高」，而那个数字根本不是真的。
+ *
+ * 一个月回顾把它列进 P1「补齐数据契约缺口」：
+ * 「下发费用构成明细，替换驾驶舱饼图里的固定比例估算」。
+ *
+ * ## 按科目名分组，不按科目编码前缀
+ *
+ * 前缀分组要维护一张「哪个前缀算什么」的表，而科目表本身可以被用户改。
+ * 直接用科目名分组，用户新增的明细科目自动出现在图上——
+ * 那正是他分设明细科目的目的。
+ */
+export interface ExpenseBreakdownSlice {
+  /** 科目名，直接作为图例。 */
+  name: string;
+  accountCode: string;
+  /** 元，保留两位。前端不再自己算比例。 */
+  amount: number;
+  /** 归属：成本 / 费用 / 所得税。前端据此分组着色。 */
+  kind: "cost" | "expense" | "incomeTax";
+}
+
+/**
+ * 按科目汇总费用构成。
+ *
+ * **只收借方净额为正的科目**：净额为负多半是红冲或结转，
+ * 把它画成一个负的扇形会让整张饼图读不懂。
+ *
+ * 结果按金额降序——看图的人先看到最大的那块。
+ */
+export function summarizeExpenseBreakdown(
+  entries: readonly AmountEntry[]
+): ExpenseBreakdownSlice[] {
+  const byAccount = new Map<string, { name: string; amount: number; kind: ExpenseBreakdownSlice["kind"] }>();
+
+  for (const entry of entries) {
+    const kind = classifyProfitAccount(entry.accountCode, entry.accountCategory);
+    if (kind !== "cost" && kind !== "expense") continue;
+
+    const signed = parseAmount(entry.debit) - parseAmount(entry.credit);
+    const bucket: ExpenseBreakdownSlice["kind"] = isIncomeTaxAccount(entry.accountCode)
+      ? "incomeTax"
+      : kind;
+
+    const existing = byAccount.get(entry.accountCode);
+    byAccount.set(
+      entry.accountCode,
+      existing
+        ? { ...existing, amount: existing.amount + signed }
+        : {
+            // 科目名缺失时回退到编码——显示 "660203" 也好过显示空白。
+            name: entry.accountName || entry.accountCode,
+            amount: signed,
+            kind: bucket
+          }
+    );
+  }
+
+  return [...byAccount.entries()]
+    .filter(([, value]) => value.amount > 0)
+    .map(([accountCode, value]) => ({
+      name: value.name,
+      accountCode,
+      amount: Math.round(value.amount * 100) / 100,
+      kind: value.kind
+    }))
+    .sort((a, b) => b.amount - a.amount);
 }

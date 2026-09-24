@@ -12,10 +12,10 @@ import {
   updateEvent,
   type EventDetail
 } from "../lib/api";
+import { listTaxableCategories, type TaxableCategoryOption } from "../lib/api-events";
 import { useI18n, EVENT_TYPE_LABELS, EVENT_STATUS_LABELS } from "../lib/i18n";
 import { EVENTS_ENTRY_SUBTITLE } from "../lib/entry-guidance";
 import { PageHeader } from "../components/ui/PageHeader";
-import { HelpTriggerButton } from "../components/ui/HelpPanel";
 import { NextStepBar } from "../components/ui/NextStepBar";
 import { ProPageBanner } from "../components/ui/ProPageBanner";
 import { PageSkeleton } from "../components/ui/PageSkeleton";
@@ -27,7 +27,6 @@ import { EventCreateModal } from "./events/EventCreateModal";
 import { EventDetailPanel } from "./events/EventDetailPanel";
 import { EventDetailActions } from "./events/EventDetailActions";
 import { EventDetailBody } from "./events/EventDetailBody";
-import { EventsHelpPanel } from "./events/EventsHelpPanel";
 
 const EVENT_TYPE_KEYS = [
   "sales", "procurement", "expense", "payroll",
@@ -40,7 +39,6 @@ export function EventsPage() {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState("idle");
   const [message, setMessage] = useState("");
-  const [showHelp, setShowHelp] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
     type: "general",
@@ -53,10 +51,18 @@ export function EventsPage() {
     source: "manual",
     // 往来单位（V12-C2）。此前事项完全没有这个字段，导致凭证继承不到、
     // 账龄表与核销整条链路都是空的。
-    counterpartyId: ""
+    counterpartyId: "",
+    // 应税行为类别（V17 阶段二）。空串 = 没选，按公司主营类别兜底。
+    // 挂载时若拿到公司主营类别会预填成它——大多数事项就是主营业务。
+    taxableCategory: ""
   });
   const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
+  const [taxableCategories, setTaxableCategories] = useState<TaxableCategoryOption[]>([]);
+  const [taxpayerType, setTaxpayerType] = useState<string | null>(null);
   const [statusDraft, setStatusDraft] = useState<BusinessEventStatus>("draft");
+  // 详情里改类别的草稿值。切换事项时同步成那笔当前的类别——
+  // 不同步的话用户会看着上一笔的类别，以为这笔标的是那个。
+  const [categoryDraft, setCategoryDraft] = useState("");
   const { t } = useI18n();
   const selectedEventId = selectedEventIdState || null;
 
@@ -94,9 +100,29 @@ export function EventsPage() {
       .catch(() => setCounterparties([]));
   }, []);
 
+  // 应税行为类别清单：清单本身是政策，来自服务端，前端不写死。
+  // 顺带按公司主营类别预填——大多数事项就是主营业务，让用户每笔重选没有意义。
+  //
+  // 拉不到就让选择器空着：类别是选填的（有公司默认值兜底），
+  // 不该因为这一个接口挂了就挡住建事项。
+  useEffect(() => {
+    void listTaxableCategories()
+      .then((payload) => {
+        setTaxableCategories(payload.options);
+        setTaxpayerType(payload.taxpayerType);
+        if (payload.companyDefault) {
+          setForm((prev) => (prev.taxableCategory ? prev : { ...prev, taxableCategory: payload.companyDefault! }));
+        }
+      })
+      .catch(() => setTaxableCategories([]));
+  }, []);
+
   useEffect(() => {
     if (detail) {
       setStatusDraft(detail.status);
+      // 类别草稿也要跟着换事项走——不同步的话用户看着上一笔的类别，
+      // 会以为这一笔标的是那个。null（未标）对应空串「按公司主营类别」。
+      setCategoryDraft(detail.taxableCategory ?? "");
     }
   }, [detail]);
 
@@ -113,7 +139,9 @@ export function EventsPage() {
         ...form,
         amount: form.amount || null,
         // 空串是「没选」，不是一个 id —— 直传会让后端拿它去查一个不存在的往来单位
-        counterpartyId: form.counterpartyId || null
+        counterpartyId: form.counterpartyId || null,
+        // 同理，空串是「没选」不是一个类别值——直传会被后端的值域校验拒掉。
+        taxableCategory: form.taxableCategory || null
       });
       const payload = await listEvents();
       setEvents(payload.items);
@@ -141,6 +169,29 @@ export function EventsPage() {
       setMessage((err as Error).message);
     } finally {
       setLoading("done");
+    }
+  }
+
+  /**
+   * 改正标错的应税行为类别。
+   *
+   * 与「更新状态」分开两个动作，而不是合成一个「保存」——它们的后果不同：
+   * 状态变更走工作流校验，改税目影响的是这笔怎么算税。
+   * 合成一个按钮会让用户以为改了状态顺便也提交了税目，反之亦然。
+   */
+  async function handleCategoryUpdate(eventId: string) {
+    setLoading("updating");
+    try {
+      // 空串是「按公司主营类别」，要显式传 null 让服务端清掉原值。
+      await updateEvent(eventId, { taxableCategory: categoryDraft || null });
+      await refreshDetail(eventId);
+      const payload = await listEvents();
+      setEvents(payload.items);
+      setMessage(categoryDraft ? "税目已更新" : "税目已改回按公司主营类别");
+    } catch (err) {
+      setMessage((err as Error).message);
+    } finally {
+      setLoading("idle");
     }
   }
 
@@ -206,7 +257,6 @@ export function EventsPage() {
         subtitle={EVENTS_ENTRY_SUBTITLE}
         actions={(
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <HelpTriggerButton onClick={() => setShowHelp(true)} label="查看经营事项页说明" />
           </div>
         )}
       />
@@ -221,6 +271,8 @@ export function EventsPage() {
       isSaving={loading === "saving"}
       options={eventTypeOptions}
       counterparties={counterparties}
+      taxableCategories={taxableCategories}
+      taxpayerType={taxpayerType}
       onChange={(next) => setForm((prev) => ({ ...prev, ...next }))}
       onSubmit={() => void handleCreate()}
       onClose={() => setShowCreate(false)}
@@ -245,6 +297,10 @@ export function EventsPage() {
     <EventDetailActions
       statusDraft={statusDraft}
       isBusy={isBusy}
+      taxableCategories={taxableCategories}
+      categoryDraft={categoryDraft}
+      onCategoryDraftChange={setCategoryDraft}
+      onCategoryUpdate={() => void handleCategoryUpdate(selectedEventId)}
       onStatusDraftChange={setStatusDraft}
       onAnalyze={() => void handleAnalyze(selectedEventId)}
       onRiskCheck={() => void handleRiskCheck(selectedEventId)}
@@ -258,7 +314,6 @@ export function EventsPage() {
 
   return (
     <>
-      <EventsHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
       {createModal}
       <EventsShell
         header={header}

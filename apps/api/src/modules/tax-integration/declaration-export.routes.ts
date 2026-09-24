@@ -56,12 +56,17 @@ export async function exportVatXml(req: ApiRequest, res: ServerResponse): Promis
   // Load taxpayer profiles and resolve active
   const profileRows = await query<{
     id: string; company_id: string; taxpayer_type: string; effective_from: string;
+    effective_to: string | null;
     status: string; notes: string; created_at: string; updated_at: string;
   }>("SELECT * FROM taxpayer_profiles WHERE company_id = $1 ORDER BY effective_from DESC", [cid]);
 
   const profiles: TaxpayerProfile[] = profileRows.map((r) => ({
     id: r.id, companyId: r.company_id, taxpayerType: r.taxpayer_type as TaxpayerProfile["taxpayerType"],
-    effectiveFrom: r.effective_from, status: r.status as TaxpayerProfile["status"],
+    effectiveFrom: r.effective_from,
+    // null = 仍然有效。漏掉这一列会让每一档都被当成「永远有效」，
+    // 沿革就白建了。
+    effectiveTo: r.effective_to ?? null,
+    status: r.status as TaxpayerProfile["status"],
     notes: r.notes, createdAt: r.created_at, updatedAt: r.updated_at,
   }));
 
@@ -71,18 +76,61 @@ export async function exportVatXml(req: ApiRequest, res: ServerResponse): Promis
   const taxRows = await query<{
     id: string; company_id: string; business_event_id: string; mapping_id: string;
     tax_type: string; treatment: string; basis: string; filing_period: string;
+    taxable_amount_cents: string | number | null;
+    taxable_category: string | null;
     status: string; source: string; created_at: string; updated_at: string;
   }>("SELECT * FROM tax_items WHERE company_id = $1 AND filing_period = $2", [cid, period]);
 
   const taxItems: TaxItem[] = taxRows.map((r) => ({
     id: r.id, companyId: r.company_id, businessEventId: r.business_event_id,
     mappingId: r.mapping_id, taxType: r.tax_type, treatment: r.treatment,
-    basis: r.basis, filingPeriod: r.filing_period, status: r.status as TaxItem["status"],
+    basis: r.basis,
+    // `?? null` 而不是 `|| null`：0 是有效的计税依据（零税率业务）。
+    taxableAmountCents:
+      r.taxable_amount_cents === null || r.taxable_amount_cents === undefined
+        ? null
+        : Number(r.taxable_amount_cents),
+    taxableCategory: r.taxable_category ?? null,
+    filingPeriod: r.filing_period, status: r.status as TaxItem["status"],
     source: r.source as TaxItem["source"], createdAt: r.created_at, updatedAt: r.updated_at,
   }));
 
   const rates = await listTaxRates(req.auth!.companyId, "vat");
-  const paper = buildVatWorkingPaper(profile, taxItems, period, rates);
+  const companyRow = await queryOne<{ default_taxable_category: string | null }>(
+    "SELECT default_taxable_category FROM companies WHERE id = $1", [cid]
+  );
+  const paper = buildVatWorkingPaper(
+    profile, taxItems, period, rates, companyRow?.default_taxable_category ?? null
+  );
+
+  // **不完整的底稿不许导出。**
+  //
+  // 有税项没确定计税依据时，上面那几个合计是缺了几笔的。生成一份看起来正常
+  // 的申报文件，它会被直接上传给税务局——而少报的那部分没有任何提示。
+  // 宁可让导出失败：失败会让人去补数据，一个数字不全的文件不会。
+  // 税目待确认同样不许导出：不知道按哪一档税率算，导出的就是个错数。
+  if (paper.unknownCategoryTaxItemIds.length > 0) {
+    json(res, 409, {
+      error:
+        `有 ${paper.unknownCategoryTaxItemIds.length} 条税项还没有确定应税行为类别（税目），` +
+        "算不出适用税率，申报数据不完整。请先在税务中心补齐这些税项的税目，" +
+        "或在公司设置里配置主营业务类别。",
+      code: "VAT_CATEGORY_UNKNOWN",
+      unknownCategoryTaxItemIds: paper.unknownCategoryTaxItemIds
+    });
+    return;
+  }
+
+  if (paper.incompleteTaxItemIds.length > 0) {
+    json(res, 409, {
+      error:
+        `有 ${paper.incompleteTaxItemIds.length} 条税项还没有确定计税依据，` +
+        "申报数据不完整，不能导出。请先在税务中心补齐这些税项的金额。",
+      code: "VAT_BASIS_INCOMPLETE",
+      incompleteTaxItemIds: paper.incompleteTaxItemIds
+    });
+    return;
+  }
   const xml = buildVatDeclarationXml(
     { name: company.name, creditCode: company.credit_code ?? "", bankName: company.bank_name ?? undefined, bankAccount: company.bank_account ?? undefined },
     paper,
@@ -237,7 +285,7 @@ async function loadPayrollData(cid: string, period: string): Promise<{
     housing_fund_employee_rate: string; housing_fund_employer_rate: string;
     iit_threshold: string; updated_at: string;
   }>(
-    "SELECT * FROM payroll_policies WHERE company_id=$1 ORDER BY updated_at DESC LIMIT 1", [cid],
+    "SELECT * FROM payroll_policy WHERE company_id=$1 ORDER BY updated_at DESC LIMIT 1", [cid],
   );
 
   const polRow = polRows[0];

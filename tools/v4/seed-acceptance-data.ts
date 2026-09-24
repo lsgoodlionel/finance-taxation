@@ -16,6 +16,14 @@ import {
   type ScenarioFixture,
   type UserFixture
 } from "./fixture-schema.ts";
+import {
+  SEED_BUDGETS,
+  SEED_BUDGET_PERIOD,
+  SEED_COST_CENTERS,
+  SEED_STANDARDS,
+  SEED_STANDARD_EFFECTIVE_FROM
+} from "./seed-expense-control-fixtures.ts";
+
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const fixtureRoot = resolve(repoRoot, "tests/fixtures/v4");
@@ -194,84 +202,7 @@ export async function seedAcceptanceData(databaseUrl: string): Promise<SeedCount
     }
   }
 
-  /**
- * 种子预算的期间：2026-04。
- *
- * **刻意与种子账的业务期间对齐**（种子分录集中在 2026-01/02/04）——预算落在
- * 没有任何分录的月份，打开预算中心看到的就是一排「已发生 0.00」，
- * 那等于没验证取数口径通不通，与不播种没有区别。
- */
-const SEED_BUDGET_PERIOD = "2026-04";
-
-/** 费用标准的生效起日：设在账套期间之前，让整个种子期间都被标准覆盖。 */
-const SEED_STANDARD_EFFECTIVE_FROM = "2026-01-01";
-
-/**
- * V13-A 费控地基的种子。
- *
- * 每个公司播两条预算（一条带科目与部门、一条全公司总额）与两条费用标准
- * （一条通用、一条按职级），覆盖「维度为 null」与「维度有值」两种形态——
- * 只播全 null 的那种，`coalesce` 唯一索引与最具体匹配都测不出来。
- */
-const SEED_BUDGETS = [
-  {
-    suffix: "travel",
-    periodType: "month",
-    periodKey: SEED_BUDGET_PERIOD,
-    accountCode: "660203",
-    amountCents: 500000,
-    controlPolicy: "warn",
-    note: "差旅费月度预算（V13 种子）"
-  },
-  {
-    suffix: "company",
-    periodType: "year",
-    periodKey: SEED_BUDGET_PERIOD.slice(0, 4),
-    accountCode: null,
-    amountCents: 20000000,
-    controlPolicy: "warn",
-    note: "全公司年度总额预算（V13 种子）"
-  }
-] as const;
-
-/**
- * 成本中心（V12-D1 的能力，V13-B 补种子）。
- *
- * 没有它，费用分摊在页面上是死的——分摊对象的下拉框空着，而用户看不出
- * 是「功能没做」还是「数据没配」。两个部门够了：分摊至少要两个对象才成立。
- */
-//
-// **编码带 SEED- 前缀**：`CC-RND` / `CC-SALES` 这类通用编码会与测试自建的
-// 成本中心撞车（cost-center.integration.test.ts 用的正是 CC-SALES），
-// 而撞车表现为「新建成本中心」用例报 409——从那句话看不出是种子的锅。
-const SEED_COST_CENTERS = [
-  { suffix: "rnd", code: "SEED-RD", name: "研发部" },
-  { suffix: "sales", code: "SEED-MK", name: "市场部" }
-] as const;
-
-const SEED_STANDARDS = [
-  {
-    suffix: "hotel-generic",
-    expenseType: "travel_hotel",
-    gradeCode: null,
-    cityTier: null,
-    limitCents: 30000,
-    limitBasis: "per_day",
-    overPolicy: "warn",
-    note: "住宿通用标准 300/晚（V13 种子）"
-  },
-  {
-    suffix: "hotel-m2-tier1",
-    expenseType: "travel_hotel",
-    gradeCode: "M2",
-    cityTier: "tier1",
-    limitCents: 60000,
-    limitBasis: "per_day",
-    overPolicy: "escalate",
-    note: "M2 一线城市住宿 600/晚，超标加签（V13 种子）"
-  }
-] as const;
-
+  
 const counts: SeedCounts = {
     companies: companies.length,
     departments: organization.departments.length,
@@ -305,13 +236,27 @@ const counts: SeedCounts = {
     client = await pool.connect();
     await client.query("BEGIN");
 
+    /**
+     * 公司主营的应税行为类别（V17）。决定这家公司的业务默认按哪一档增值税算。
+     *
+     * 只给得出来的公司填：科技公司卖货 13%，服务公司做现代服务 6%。
+     * 填不出来的保持 null——那时税率判定会报「税目待确认」，
+     * **不猜一个默认档**。
+     */
+    const defaultTaxableCategories: Record<string, string> = {
+      "cmp-v4-tech": "goods",
+      "cmp-v4-service": "modern_service"
+    };
+
     for (const company of companies) {
       await client.query(
-        `INSERT INTO companies (id, name, status)
-         VALUES ($1, $2, 'active')
+        `INSERT INTO companies (id, name, status, default_taxable_category)
+         VALUES ($1, $2, 'active', $3)
          ON CONFLICT (id) DO UPDATE
-         SET name = EXCLUDED.name, status = EXCLUDED.status, updated_at = now()`,
-        [company.id, company.name]
+         SET name = EXCLUDED.name, status = EXCLUDED.status,
+             default_taxable_category = EXCLUDED.default_taxable_category,
+             updated_at = now()`,
+        [company.id, company.name, defaultTaxableCategories[company.id] ?? null]
       );
     }
 

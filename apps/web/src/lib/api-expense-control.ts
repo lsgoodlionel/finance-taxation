@@ -412,6 +412,35 @@ export async function transitionAdvance(id: string, action: string) {
   );
 }
 
+/**
+ * 提交待发：付款单 draft → submitted。
+ *
+ * 这一步之后才能导出银行指令或走银企直连——两条路都只接受 `submitted`。
+ * 手工付款（现金、柜台转账）可以跳过它直接确认。
+ */
+export async function submitPaymentForBank(paymentId: string) {
+  return request<{ payment: { id: string; status: string }; note: string }>(
+    `/api/payments/${encodeURIComponent(paymentId)}/submit`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
+/**
+ * 借款单付款（出纳动作）。
+ *
+ * 生成的是**付款凭证草稿**——出纳点完付款不会立刻在账上看到这笔，
+ * 要会计复核过账之后才进总账。提示里必须说清，否则会被当成故障。
+ */
+export async function payAdvance(
+  id: string,
+  body: { paidOn?: string; bankAccountCode?: string } = {}
+) {
+  return request<{ voucherId: string; status: AdvanceStatus; note: string }>(
+    `/api/advances/${encodeURIComponent(id)}/pay`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
 // ── 报销单（V13-B4/B5/B7）────────────────────────────────────────
 
 export type ReimbursementStatus =

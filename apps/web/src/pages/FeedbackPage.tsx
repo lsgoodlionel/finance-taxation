@@ -7,6 +7,7 @@ import {
   Row, Col, Card, Button, Tag, Space, Typography, Table, Modal, Form, Input, Select, Tabs, Alert,
 } from "antd";
 import { BulbOutlined, ThunderboltOutlined, CheckOutlined, CloseOutlined, PlusOutlined } from "@ant-design/icons";
+import { LoadErrorState } from "../components/ui/LoadErrorState";
 import { toast } from "sonner";
 import { PageHeader } from "../components/ui/PageHeader";
 import {
@@ -33,12 +34,20 @@ export function FeedbackPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form] = Form.useForm();
+  // 加载失败的原因。**与「暂无反馈」严格区分**——toast 几秒后消失，
+  // 空态文案不会，用户看一眼就以为真的没有数据。
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const [f, p] = await Promise.all([listFeedback(), listProposals()]);
       setFeedback(f.items); setProposals(p.items);
-    } catch (err) { toast.error((err as Error).message); }
+      setLoadError(null);
+    } catch (err) {
+      const message = (err as Error).message;
+      toast.error(message);
+      setLoadError(message);
+    }
   }, []);
   useEffect(() => { void load(); }, [load]);
 
@@ -86,7 +95,13 @@ export function FeedbackPage() {
                 { title: "状态", dataIndex: "status", width: 100, render: (v) => <Tag>{FB_STATUS[v] ?? v}</Tag> },
                 { title: "时间", dataIndex: "created_at", width: 100, render: (v) => String(v).slice(0, 10) },
               ]}
-              locale={{ emptyText: "暂无反馈，点击「提交反馈」开始" }} />
+              locale={{
+                // 空态的位置就是该说话的位置：读不到数据时在这里说清楚，
+                // 而不是让一句「暂无反馈」留在屏幕上。
+                emptyText: loadError
+                  ? <LoadErrorState subject="反馈" error={loadError} />
+                  : "暂无反馈，点击「提交反馈」开始"
+              }} />
           ),
         },
         {

@@ -15,17 +15,24 @@ import type {
 import { query, queryOne, withTransaction } from "../../db/client.js";
 import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
+import { loadCompanyDefaultCategory } from "./taxpayer-profile.routes.js";
 import { listCompanyRndCostLines, listCompanyRndProjects, listCompanyRndTimeEntries } from "../rnd/routes.js";
 import { buildRndProjectSummary } from "../rnd/summary.js";
-import { listCompanyLedgerEntries } from "../vouchers/routes.js";
+import {
+  listCompanyLedgerEntries
+} from "../vouchers/voucher-queries.js";
 import { buildProfitStatementReport } from "../reports/summary.js";
 import { buildCorporateIncomeTaxPreparation } from "./corporate-income-tax.js";
+import { loadTaxQualification } from "./corporate-income-tax-rate.js";
+import { loadLossLedger } from "./loss-carryforward.js";
 import { buildArchiveRecord, buildReviewRecord, canArchiveBatch } from "./filing-workflow.js";
 import { buildIndividualIncomeTaxMaterials } from "./iit-materials.js";
 import { buildTaxWorkingPaperPrintableHtml } from "./printable.js";
 import { resolveActiveTaxpayerProfile } from "./profile.js";
 import { resolveFilingPeriod, resolveTaxRuleProfile } from "./rules.js";
 import { buildStampAndSurtaxSummary } from "./stamp-surtax.js";
+import { calculateSurtax, loadPaidTaxCents } from "./surtax.js";
+import { resolveCorporateIncomeTaxTreatment } from "./corporate-income-tax-rate.js";
 import { buildVatWorkingPaper } from "./vat-working-paper.js";
 import { listTaxRates } from "./tax-rate-store.js";
 import { validateWorkflowAuthorization } from "../workflows/authorization.js";
@@ -53,6 +60,8 @@ interface TaxItemRow {
   tax_type: string;
   treatment: string;
   basis: string;
+  taxable_amount_cents: string | number | null;
+  taxable_category: string | null;
   filing_period: string;
   status: TaxItem["status"];
   source: TaxItem["source"];
@@ -75,6 +84,7 @@ interface TaxpayerProfileRow {
   company_id: string;
   taxpayer_type: TaxpayerProfile["taxpayerType"];
   effective_from: string | Date;
+  effective_to: string | Date | null;
   status: TaxpayerProfile["status"];
   notes: string;
   created_at: string | Date;
@@ -103,7 +113,7 @@ interface TaxFilingBatchArchiveRow {
   archived_at: string | Date;
 }
 
-function toIsoString(value: string | Date | null | undefined): string | null {
+export function toIsoString(value: string | Date | null | undefined): string | null {
   if (!value) return null;
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
@@ -117,6 +127,13 @@ function mapTaxItemRow(row: TaxItemRow): TaxItem {
     taxType: row.tax_type,
     treatment: row.treatment,
     basis: row.basis,
+    // bigint 走 pg 会是字符串。`?? null` 而不是 `|| null`：
+    // 0 是有效的计税依据（零税率业务），用 `||` 会把它变成「不知道」。
+    taxableAmountCents:
+      row.taxable_amount_cents === null || row.taxable_amount_cents === undefined
+        ? null
+        : Number(row.taxable_amount_cents),
+    taxableCategory: row.taxable_category ?? null,
     filingPeriod: row.filing_period,
     status: row.status,
     source: row.source,
@@ -138,12 +155,15 @@ function mapTaxFilingBatchRow(row: TaxFilingBatchRow, itemIds: string[]): TaxFil
   };
 }
 
-function mapTaxpayerProfileRow(row: TaxpayerProfileRow): TaxpayerProfile {
+export function mapTaxpayerProfileRow(row: TaxpayerProfileRow): TaxpayerProfile {
   return {
     id: row.id,
     companyId: row.company_id,
     taxpayerType: row.taxpayer_type,
     effectiveFrom: (toIsoString(row.effective_from) || "").slice(0, 10),
+    // null = 仍然有效，没有上界。空串会被日期比较当成「早于一切」，
+    // 让这一档对任何查询日都失效。
+    effectiveTo: (toIsoString(row.effective_to) || "").slice(0, 10) || null,
     status: row.status,
     notes: row.notes,
     createdAt: toIsoString(row.created_at) || new Date().toISOString(),
@@ -225,6 +245,7 @@ export async function listCompanyTaxItems(
     `
       select
         id, company_id, business_event_id, mapping_id, tax_type, treatment, basis,
+        taxable_amount_cents, taxable_category,
         filing_period, status, source, created_at, updated_at
       from tax_items
       ${where}
@@ -279,7 +300,8 @@ export async function listCompanyTaxpayerProfiles(companyId: string): Promise<Ta
   const rows = await query<TaxpayerProfileRow>(
     `
       select
-        id, company_id, taxpayer_type, effective_from, status, notes, created_at, updated_at
+        id, company_id, taxpayer_type, effective_from, effective_to,
+        status, notes, created_at, updated_at
       from taxpayer_profiles
       where company_id = $1
       order by effective_from desc, created_at desc
@@ -883,59 +905,6 @@ export async function archiveTaxFilingBatch(req: ApiRequest, res: ServerResponse
   return getTaxFilingBatchDetail(req, res, batchId);
 }
 
-export async function listTaxpayerProfiles(req: ApiRequest, res: ServerResponse) {
-  const items = await listCompanyTaxpayerProfiles(req.auth!.companyId);
-  return json(res, 200, { items, total: items.length });
-}
-
-export async function createTaxpayerProfile(req: ApiRequest, res: ServerResponse) {
-  const body = (req.body || {}) as Partial<TaxpayerProfile>;
-  if (!body.taxpayerType || !body.effectiveFrom) {
-    return json(res, 400, { error: "taxpayerType and effectiveFrom are required" });
-  }
-  const now = new Date().toISOString();
-  const profile: TaxpayerProfile = {
-    id: `taxpayer-${Date.now()}`,
-    companyId: req.auth!.companyId,
-    taxpayerType: body.taxpayerType,
-    effectiveFrom: body.effectiveFrom,
-    status: body.status || "active",
-    notes: body.notes || "",
-    createdAt: now,
-    updatedAt: now
-  };
-  await withTransaction(async (client) => {
-    if (profile.status === "active") {
-      await client.query(
-        `
-          update taxpayer_profiles
-          set status = 'inactive', updated_at = $1::timestamptz
-          where company_id = $2 and status = 'active'
-        `,
-        [profile.updatedAt, profile.companyId]
-      );
-    }
-    await client.query(
-      `
-        insert into taxpayer_profiles (
-          id, company_id, taxpayer_type, effective_from, status, notes, created_at, updated_at
-        )
-        values ($1,$2,$3,$4,$5,$6,$7::timestamptz,$8::timestamptz)
-      `,
-      [
-        profile.id,
-        profile.companyId,
-        profile.taxpayerType,
-        profile.effectiveFrom,
-        profile.status,
-        profile.notes,
-        profile.createdAt,
-        profile.updatedAt
-      ]
-    );
-  });
-  return json(res, 201, profile);
-}
 
 export async function getTaxRuleProfile(req: ApiRequest, res: ServerResponse) {
   const url = new URL(req.url || "/", "http://127.0.0.1");
@@ -981,8 +950,49 @@ export async function getStampAndSurtaxSummary(req: ApiRequest, res: ServerRespo
   if (!filingPeriod) {
     return json(res, 400, { error: "filingPeriod is required" });
   }
-  const taxItems = await listCompanyTaxItems(req.auth!.companyId);
-  const payload: StampAndSurtaxSummary = buildStampAndSurtaxSummary(req.auth!.companyId, filingPeriod, taxItems);
+  const companyId = req.auth!.companyId;
+
+  // 附加税以**实际缴纳**的增值税为计税依据，不是应纳额——
+  // 两者在有留抵、有减免、分期缴纳时都不相等。没有缴款记录时
+  // `loadPaidTaxCents` 返回 null，计算层据此报「待主税缴纳后计算」。
+  const [taxItems, paidVatCents, companyRow, profiles] = await Promise.all([
+    listCompanyTaxItems(companyId),
+    loadPaidTaxCents(companyId, "vat", filingPeriod),
+    queryOne<{ urban_construction_tax_zone: string | null }>(
+      `select urban_construction_tax_zone from companies where id = $1`,
+      [companyId]
+    ),
+    listCompanyTaxpayerProfiles(companyId)
+  ]);
+
+  // 六税两费减半：小规模纳税人或小型微利企业。
+  // **判定复用已有的两处**，不在这里再写一份——小微的四个条件写第二遍
+  // 迟早和 `corporate-income-tax-rate.ts` 那份漂移。
+  const today = new Date().toISOString().slice(0, 10);
+  const taxpayerType = resolveActiveTaxpayerProfile(profiles, today)?.taxpayerType ?? null;
+  const qualification = await loadTaxQualification(companyId);
+  const halvedReduction =
+    taxpayerType === "small_scale" ||
+    resolveCorporateIncomeTaxTreatment({
+      // 小微的所得额条件在这里不适用（附加税不看所得额），传 0 让判定
+      // 只看人数与资产——0 落在阈值内，不会因为所得额把资格挡掉。
+      taxableIncomeCents: 1,
+      qualification,
+      on: today
+    }).kind === "small_profit";
+
+  const surtax = calculateSurtax({
+    paidVatCents,
+    zone: companyRow?.urban_construction_tax_zone ?? null,
+    halvedReduction
+  });
+
+  const payload: StampAndSurtaxSummary = buildStampAndSurtaxSummary(
+    companyId,
+    filingPeriod,
+    taxItems,
+    surtax
+  );
   return json(res, 200, payload);
 }
 
@@ -1002,7 +1012,14 @@ export async function getVatWorkingPaper(req: ApiRequest, res: ServerResponse) {
   }
   // 税率主数据按属期解析（V12-D2）：历史属期取当时的税率，小规模取减征后的征收率
   const rates = await listTaxRates(req.auth!.companyId, "vat");
-  const paper: VatWorkingPaper = buildVatWorkingPaper(profile, items, filingPeriod, rates);
+  const companyDefaultCategory = await loadCompanyDefaultCategory(req.auth!.companyId);
+  const paper: VatWorkingPaper = buildVatWorkingPaper(
+    profile,
+    items,
+    filingPeriod,
+    rates,
+    companyDefaultCategory
+  );
   return json(res, 200, paper);
 }
 
@@ -1035,6 +1052,14 @@ export async function getCorporateIncomeTaxPreparation(req: ApiRequest, res: Ser
   const preparation: CorporateIncomeTaxPreparation = buildCorporateIncomeTaxPreparation({
     companyId,
     filingPeriod,
+    // 资格档案的缺失项保持 null——判定层据此报「资格待确认」，
+    // 而不是按 25% 兜底让小微企业多交五倍。
+    qualification: await loadTaxQualification(companyId),
+    on: new Date().toISOString().slice(0, 10),
+    // 以前年度亏损与已预缴（V17 阶段三批次 C）。
+    // 预缴复用批次 B 的缴款记录（taxType = cit），不另建一张表。
+    lossLedger: await loadLossLedger(companyId),
+    prepaidTaxCents: (await loadPaidTaxCents(companyId, "cit", filingPeriod)) ?? 0,
     profitStatement,
     taxItems: taxItems.filter((item) => item.filingPeriod === filingPeriod || item.taxType.includes("企业所得税")),
     rndSummaries
@@ -1074,6 +1099,10 @@ export async function getTaxWorkingPaperPrintable(req: ApiRequest, res: ServerRe
     const payload = buildCorporateIncomeTaxPreparation({
       companyId,
       filingPeriod,
+      qualification: await loadTaxQualification(companyId),
+      on: new Date().toISOString().slice(0, 10),
+      lossLedger: await loadLossLedger(companyId),
+      prepaidTaxCents: (await loadPaidTaxCents(companyId, "cit", filingPeriod)) ?? 0,
       profitStatement,
       taxItems,
       rndSummaries
@@ -1097,7 +1126,8 @@ export async function getTaxWorkingPaperPrintable(req: ApiRequest, res: ServerRe
     return;
   }
   const rates = await listTaxRates(req.auth!.companyId, "vat");
-  const paper = buildVatWorkingPaper(profile, items, filingPeriod, rates);
+  const companyDefaultCategory = await loadCompanyDefaultCategory(req.auth!.companyId);
+  const paper = buildVatWorkingPaper(profile, items, filingPeriod, rates, companyDefaultCategory);
   const html = buildTaxWorkingPaperPrintableHtml("增值税底稿", paper);
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");

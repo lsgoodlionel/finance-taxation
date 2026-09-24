@@ -22,6 +22,7 @@ import { collectRelatedObjects } from "../../lib/object-flow";
 import { ObjectFlowBar } from "../../components/ui/ObjectFlowBar";
 import { RelatedObjectsPanel } from "../../components/ui/RelatedObjectsPanel";
 import { AiEventInsights } from "./AiEventInsights";
+import { EventCollaborators } from "./EventCollaborators";
 import { EventReferenceDetails } from "./EventReferenceDetails";
 import { EventSummaryCard, type EventExceptionSummary } from "./EventSummaryCard";
 import { buildEventObjectFlow } from "./event-object-flow";
@@ -101,6 +102,9 @@ export function EventDetailBody({ detail, selectedEventId }: EventDetailBodyProp
       {selectedEventId ? <AiEventInsights businessEventId={selectedEventId} /> : null}
 
       <RelatedObjectsPanel objects={relatedObjects} />
+
+      {/* 可见性收敛后，谁能看到这条事项在这里维护。 */}
+      <EventCollaborators businessEventId={detail.id} />
 
       <EventReferenceDetails detail={detail} />
     </div>

@@ -13,7 +13,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import type { LedgerEntry, LedgerPostingBatch } from "@finance-taxation/domain-model";
-import { HelpPanel, HelpTriggerButton } from "../components/ui/HelpPanel";
 import { ProPageBanner } from "../components/ui/ProPageBanner";
 import { TaskFocusShell } from "../components/ui/TaskFocusShell";
 import { Term } from "../components/ui/Term";
@@ -24,6 +23,7 @@ import {
   listLedgerEntries,
   listLedgerPostingBatches,
   listAccountingPeriods,
+  closeIncomeForPeriod,
   lockPeriod,
   unlockPeriod
 } from "../lib/api";
@@ -62,40 +62,6 @@ const LEDGER_SCENE_GUIDE: readonly (readonly [string, string])[] = [
   ["期间锁账", "把已结账的月份锁定（或解锁），防止旧账被继续过账或篡改"]
 ] as const;
 
-function LedgerHelpPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return (
-    <HelpPanel
-      open={open}
-      title="总账中心 · 业务关系与操作说明"
-      onClose={onClose}
-      relations={(
-        <>
-          <strong><Term k="voucher">凭证</Term>中心</strong>审核<Term k="posting">过账</Term>后，<Term k="journal-entry">分录</Term>进入<strong>总账中心</strong>按<Term k="account">科目</Term>归集；<Term k="general-ledger">总账</Term>是<strong>财务报表</strong>的直接数据来源，也为<strong>税务申报</strong>和<strong><Term k="archive">归档</Term>审计</strong>提供账务依据。
-        </>
-      )}
-      workflowSteps={[
-        "凭证在凭证中心审核并过账",
-        "过账批次进入总账，按科目形成分录和余额",
-        "在本页复核科目汇总、余额和资金日记账",
-        "月结完成后对账期执行锁账，保护已结账数据",
-        "总账数据流向报表、税务和归档"
-      ]}
-      responsibility="这里是全公司账务的结果页：汇总所有已过账凭证，按科目展示发生额、余额和资金流水，并管理会计期间的锁账与解锁。"
-      caution="总账数据只能通过凭证过账形成，不能在本页直接修改。发现错账应回到凭证中心处理；已锁账期间需先解锁（反结账）并会留下审计记录。"
-    >
-      <div>
-        <strong>五件事各是什么</strong>
-        {LEDGER_SCENE_GUIDE.map(([scene, description]) => (
-          <div key={scene} style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-            <span style={{ fontWeight: 600, minWidth: "76px" }}>{scene}</span>
-            <span style={{ color: "#4d5d6c" }}>{description}</span>
-          </div>
-        ))}
-      </div>
-    </HelpPanel>
-  );
-}
-
 export function LedgerPage() {
   const location = useLocation();
   const navState = normalizeDrilldownState(location.state);
@@ -117,7 +83,6 @@ export function LedgerPage() {
   const [newPeriod, setNewPeriod] = useState("");
   const [periodOp, setPeriodOp] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [showHelp, setShowHelp] = useState(false);
 
   const activeTask: LedgerSceneKey = readLedgerTask(searchParams);
   const tasks = useMemo(() => buildLedgerTasks({ periods }), [periods]);
@@ -220,6 +185,28 @@ export function LedgerPage() {
       await lockPeriod(period);
       await loadPeriods();
       setMessage(`期间 ${period} 已锁账。`);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setPeriodOp(null);
+    }
+  }
+
+  /**
+   * 结转损益。幂等：已结转过的属期不会重复生成分录。
+   *
+   * 提示要区分「刚生成」和「本来就已结转」——两种都成功，但用户该做的事不同。
+   */
+  async function handleCloseIncome(period: string) {
+    setPeriodOp(period);
+    try {
+      const result = await closeIncomeForPeriod(period);
+      setMessage(
+        result.alreadyClosed
+          ? `期间 ${period} 之前已经结转过损益，本次未重复生成。`
+          : `已生成 ${period} 的结转损益凭证草稿，去凭证中心复核过账后才入账。`
+      );
+      await loadPeriods();
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -330,6 +317,9 @@ export function LedgerPage() {
             onUnlock={(period) => {
               void handleUnlock(period);
             }}
+            onCloseIncome={(period) => {
+              void handleCloseIncome(period);
+            }}
           />
         );
       case "opening":
@@ -351,13 +341,9 @@ export function LedgerPage() {
         pageName="总账中心"
         plain="账本的原始记录：每笔业务记进了哪个科目、什么时候入的账、有没有正式生效，财务在这里查账对账。想知道钱花在哪儿、还剩多少，看「经营报告」或直接问 AI 更快。"
       />
-      <LedgerHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
       <LedgerShell
         header={(
           <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <HelpTriggerButton onClick={() => setShowHelp(true)} label="查看总账中心操作说明" />
-            </div>
             <LedgerHeader activeSceneLabel={activeTaskLabel} />
           </div>
         )}

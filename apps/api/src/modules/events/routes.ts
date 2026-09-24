@@ -17,12 +17,52 @@ import type {
   Voucher,
   VoucherDraftLine
 } from "@finance-taxation/domain-model";
+import {
+  BusinessEventActivityRow,
+  BusinessEventRelationRow,
+  EventDocumentMappingRow,
+  EventTaxMappingRow,
+  EventVoucherDraftRow,
+  TaskRow,
+  VoucherDraftLineRow,
+  buildVoucherDrafts,
+  mapActivityRow,
+  mapDocumentMappingRow,
+  mapRelationRow,
+  mapTaskRow,
+  mapTaxMappingRow,
+  toIsoString
+} from "./event-rows.js";
+import {
+  buildEventMappings,
+  toGeneratedDocuments,
+  toTaxItems,
+  toVouchers
+} from "./event-mappings.js";
+import {
+  insertActivities,
+  insertContractObjectLinks,
+  insertDocumentMappings,
+  insertGeneratedDocuments,
+  insertTasks,
+  insertTaxItems,
+  insertTaxMappings,
+  insertVoucherDrafts,
+  insertVouchers,
+  listCompanyEvents
+} from "./event-persistence.js";
+import { loadCollaboratingEventIds } from "./collaborators.js";
+import { buildActivity, scopeEvents } from "./event-scope.js";
+import { isTaxableCategory } from "../tax/taxable-category.js";
+import { filterVisibleEvents, hasCompanyWideEventAccess } from "./visibility.js";
 import type { ApiRequest } from "../../types.js";
 import { query, withTransaction } from "../../db/client.js";
 import { toDateOnly } from "../../db/date-column.js";
 import { listCompanyDocuments } from "../documents/routes.js";
 import { listCompanyTaxItems } from "../tax/routes.js";
-import { listCompanyVouchers } from "../vouchers/routes.js";
+import {
+  listCompanyVouchers
+} from "../vouchers/voucher-queries.js";
 import { json } from "../../utils/http.js";
 import { uniqueId } from "../../utils/id.js";
 import { writeAudit } from "../../services/audit.js";
@@ -44,250 +84,8 @@ import {
   validateWorkflowTransition
 } from "../workflows/runtime.js";
 
-interface BusinessEventRow {
-  id: string;
-  company_id: string;
-  type: BusinessEvent["type"];
-  title: string;
-  description: string;
-  department: string;
-  owner_id: string | null;
-  occurred_on: string | Date;
-  amount: string | number | null;
-  currency: string;
-  status: BusinessEvent["status"];
-  source: BusinessEvent["source"];
-  contract_id: string | null;
-  counterparty_id: string | null;
-  project_id: string | null;
-  created_at: string | Date;
-  updated_at: string | Date;
-}
-
-interface BusinessEventRelationRow {
-  id: string;
-  company_id: string;
-  business_event_id: string;
-  relation_type: BusinessEventRelation["relationType"];
-  target_id: string;
-  label: string;
-  created_at: string | Date;
-}
-
-interface BusinessEventActivityRow {
-  id: string;
-  company_id: string;
-  business_event_id: string;
-  activity_type: BusinessEventActivity["activityType"];
-  actor_user_id: string | null;
-  actor_name: string;
-  summary: string;
-  created_at: string | Date;
-}
-
-interface TaskRow {
-  id: string;
-  company_id: string;
-  business_event_id: string | null;
-  parent_task_id: string | null;
-  title: string;
-  description: string;
-  status: Task["status"];
-  priority: Task["priority"];
-  owner_id: string | null;
-  due_at: string | Date | null;
-  assignee_department: string | null;
-  source: Task["source"];
-  created_at: string | Date;
-  updated_at: string | Date;
-}
-
-interface EventDocumentMappingRow {
-  id: string;
-  company_id: string;
-  business_event_id: string;
-  document_type: string;
-  title: string;
-  status: EventDocumentMapping["status"];
-  owner_department: string;
-  notes: string;
-  created_at: string | Date;
-}
-
-interface EventTaxMappingRow {
-  id: string;
-  company_id: string;
-  business_event_id: string;
-  tax_type: string;
-  treatment: string;
-  status: EventTaxMapping["status"] | "required";
-  basis: string;
-  filing_period: string;
-  created_at: string | Date;
-}
-
-interface EventVoucherDraftRow {
-  id: string;
-  company_id: string;
-  business_event_id: string;
-  voucher_type: EventVoucherDraft["voucherType"];
-  status: EventVoucherDraft["status"];
-  summary: string;
-  created_at: string | Date;
-}
-
-interface VoucherDraftLineRow {
-  id: string;
-  draft_id: string;
-  summary: string;
-  account_code: string;
-  account_name: string;
-  debit: string | number;
-  credit: string | number;
-  sort_order: number;
-}
-
-interface DbExecutor {
-  query<T extends object = Record<string, unknown>>(
-    sql: string,
-    params?: unknown[]
-  ): Promise<{ rows: T[] }>;
-}
-
-function toIsoString(value: string | Date | null | undefined): string | null {
-  if (!value) return null;
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-}
-
-function toAmountString(value: string | number | null | undefined): string | null {
-  if (value === null || value === undefined || value === "") return null;
-  return typeof value === "number" ? value.toFixed(2) : String(value);
-}
-
-function mapEventRow(row: BusinessEventRow): BusinessEvent {
-  return {
-    id: row.id,
-    companyId: row.company_id,
-    type: row.type,
-    title: row.title,
-    description: row.description,
-    department: row.department,
-    ownerId: row.owner_id,
-    // occurred_on 是 PG `date`：用 toDateOnly 保证结果与运行时时区无关。
-    occurredOn: toDateOnly(row.occurred_on) ?? "",
-    amount: toAmountString(row.amount),
-    currency: row.currency,
-    status: row.status,
-    source: row.source,
-    contractId: row.contract_id,
-    counterpartyId: row.counterparty_id,
-    projectId: row.project_id,
-    createdAt: toIsoString(row.created_at) || undefined,
-    updatedAt: toIsoString(row.updated_at) || undefined
-  };
-}
-
-function mapRelationRow(row: BusinessEventRelationRow): BusinessEventRelation {
-  return {
-    id: row.id,
-    companyId: row.company_id,
-    businessEventId: row.business_event_id,
-    relationType: row.relation_type,
-    targetId: row.target_id,
-    label: row.label,
-    createdAt: toIsoString(row.created_at) || new Date().toISOString()
-  };
-}
-
-function mapActivityRow(row: BusinessEventActivityRow): BusinessEventActivity {
-  return {
-    id: row.id,
-    companyId: row.company_id,
-    businessEventId: row.business_event_id,
-    activityType: row.activity_type,
-    actorUserId: row.actor_user_id,
-    actorName: row.actor_name,
-    summary: row.summary,
-    createdAt: toIsoString(row.created_at) || new Date().toISOString()
-  };
-}
-
-function mapTaskRow(row: TaskRow): Task {
-  return {
-    id: row.id,
-    companyId: row.company_id,
-    businessEventId: row.business_event_id,
-    parentTaskId: row.parent_task_id,
-    title: row.title,
-    description: row.description,
-    status: row.status,
-    priority: row.priority,
-    ownerId: row.owner_id,
-    dueAt: toIsoString(row.due_at),
-    assigneeDepartment: row.assignee_department,
-    source: row.source,
-    createdAt: toIsoString(row.created_at) || undefined,
-    updatedAt: toIsoString(row.updated_at) || undefined
-  };
-}
-
-function mapDocumentMappingRow(row: EventDocumentMappingRow): EventDocumentMapping {
-  return {
-    id: row.id,
-    companyId: row.company_id,
-    businessEventId: row.business_event_id,
-    documentType: row.document_type,
-    title: row.title,
-    status: row.status,
-    ownerDepartment: row.owner_department,
-    notes: row.notes
-  };
-}
-
-function mapTaxMappingRow(row: EventTaxMappingRow): EventTaxMapping {
-  return {
-    id: row.id,
-    companyId: row.company_id,
-    businessEventId: row.business_event_id,
-    taxType: row.tax_type,
-    treatment: row.treatment,
-    status: row.status === "required" ? "attention" : row.status,
-    basis: row.basis,
-    filingPeriod: row.filing_period
-  };
-}
-
-function mapVoucherLineRow(row: VoucherDraftLineRow): VoucherDraftLine {
-  return {
-    id: row.id,
-    summary: row.summary,
-    accountCode: row.account_code,
-    accountName: row.account_name,
-    debit: toAmountString(row.debit) || "0.00",
-    credit: toAmountString(row.credit) || "0.00"
-  };
-}
-
-function buildVoucherDrafts(
-  rows: EventVoucherDraftRow[],
-  lineRows: VoucherDraftLineRow[]
-): EventVoucherDraft[] {
-  return rows.map((row) => ({
-    id: row.id,
-    companyId: row.company_id,
-    businessEventId: row.business_event_id,
-    voucherType: row.voucher_type,
-    status: row.status,
-    summary: row.summary,
-    lines: lineRows
-      .filter((line) => line.draft_id === row.id)
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map(mapVoucherLineRow)
-  }));
-}
-
 export function hasCompanyWideAccess(roleCodes: string[]) {
-  return roleCodes.some((role) => ["role-chairman", "role-finance-director"].includes(role));
+  return hasCompanyWideEventAccess(roleCodes);
 }
 
 export function buildTaskTree(tasks: Task[]): TaskTreeNode[] {
@@ -309,974 +107,19 @@ export function buildTaskTree(tasks: Task[]): TaskTreeNode[] {
   return roots;
 }
 
-export function scopeEvents(rows: BusinessEvent[], req: ApiRequest) {
-  const companyRows = rows.filter((row) => row.companyId === req.auth!.companyId);
-  if (hasCompanyWideAccess(req.auth!.roleCodes)) {
-    return companyRows;
-  }
-  return companyRows.filter(
-    (row) => row.ownerId === req.auth!.userId || row.department === req.auth!.departmentName
-  );
-}
-
-function buildActivity(
-  req: ApiRequest,
-  businessEventId: string,
-  activityType: BusinessEventActivity["activityType"],
-  summary: string
-): BusinessEventActivity {
-  return {
-    id: `act-${businessEventId}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-    companyId: req.auth!.companyId,
-    businessEventId,
-    activityType,
-    actorUserId: req.auth!.userId,
-    actorName: req.auth!.username,
-    summary,
-    createdAt: new Date().toISOString()
-  };
-}
-
-function makeId(prefix: string, eventId: string, suffix: string) {
-  return `${prefix}-${eventId}-${suffix}`;
-}
-
-function quarterLabel(dateString: string) {
-  const year = dateString.slice(0, 4);
-  const month = Number(dateString.slice(5, 7));
-  return `${year}-Q${Math.floor((month - 1) / 3) + 1}`;
-}
-
 /**
- * 未知事项类型的兜底凭证草稿占位科目。这不是会计科目，凭证状态恒为 draft，
- * 必须由人工替换成真实叶子科目后才能过账；科目码护栏测试对它单独放行。
+ * 事项可见性（V15/P1 收敛后）。
+ *
+ * 口径从「owner 或**同部门**」改成「owner 或**显式协作人**」——
+ * 部门口径让财务部任何人看得到财务部每一条事项（含薪酬、补偿），
+ * 而且是拿部门名字符串比的，改个部门名可见性就变了。
+ *
+ * 存量的部门可见关系由迁移 097 一次性固化成协作人，所以升级当天没人会
+ * 突然看不到东西；变的是机制：此后新建的事项不再自动扩散给整个部门。
+ *
+ * 协作人集合必须由调用方查好传进来（`loadCollaboratingEventIds`）——
+ * 让这个函数保持同步纯函数，才能被单测直接钉住。
  */
-export const PENDING_ACCOUNT_CODE = "待定";
-
-/**
- * 按业务事项类型生成资料/税务/凭证草稿映射。
- * 导出是为了让科目码护栏测试（vouchers/account-code-guard.test.ts）能直接覆盖
- * 这里内联的凭证分录——它们和 events/*-rules.ts 一样会落成真实分录。
- */
-export function buildEventMappings(event: BusinessEvent): BusinessEventMappingBundle {
-  const amount = event.amount || "0.00";
-  const documentMappings: EventDocumentMapping[] = [];
-  const taxMappings: EventTaxMapping[] = [];
-  const voucherDrafts: EventVoucherDraft[] = [];
-  const eventType = String(event.type);
-
-  switch (eventType) {
-    case "contract_revenue":
-      return buildContractRevenueBundle(event);
-    case "purchase_expense":
-      return buildPurchaseExpenseBundle(event);
-    case "travel_expense":
-      return buildTravelExpenseBundle(event);
-    case "sales":
-      documentMappings.push(
-        {
-          id: makeId("doc-map", event.id, "contract"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "contract",
-          title: "销售合同/订单归档",
-          status: "generated",
-          ownerDepartment: event.department,
-          notes: "作为开票、回款和收入确认的主依据。"
-        },
-        {
-          id: makeId("doc-map", event.id, "invoice"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "invoice_application",
-          title: "开票申请与客户开票信息",
-          status: "required",
-          ownerDepartment: "财务部",
-          notes: "需核对税率、抬头、纳税识别号和开票时点。"
-        },
-        {
-          id: makeId("doc-map", event.id, "collection"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "collection_schedule",
-          title: "回款计划与对账记录",
-          status: "suggested",
-          ownerDepartment: event.department,
-          notes: "用于合同、开票、回款、收入确认勾稽。"
-        }
-      );
-      taxMappings.push(
-        {
-          id: makeId("tax-map", event.id, "vat"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          taxType: "增值税",
-          treatment: "确认销项税并纳入当期或后续开票申报计划。",
-          status: "pending",
-          basis: "需结合交付、验收或约定开票条件确认纳税义务发生时点。",
-          filingPeriod: event.occurredOn.slice(0, 7)
-        },
-        {
-          id: makeId("tax-map", event.id, "stamp"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          taxType: "印花税",
-          treatment: "将合同金额纳入应税合同台账复核。",
-          status: "attention",
-          basis: "需按合同性质复核税目与计税依据。",
-          filingPeriod: quarterLabel(event.occurredOn)
-        }
-      );
-      voucherDrafts.push({
-        id: makeId("vou-map", event.id, "sales"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        voucherType: "accrual",
-        status: "review_required",
-        summary: `${event.title} 收入确认草稿`,
-        lines: [
-          {
-            id: makeId("vou-line", event.id, "debit-ar"),
-            summary: "确认应收款",
-            accountCode: "1122",
-            accountName: "应收账款",
-            debit: amount,
-            credit: "0.00"
-          },
-          {
-            id: makeId("vou-line", event.id, "credit-revenue"),
-            summary: "确认主营业务收入",
-            accountCode: "6001",
-            accountName: "主营业务收入",
-            debit: "0.00",
-            credit: amount
-          }
-        ]
-      });
-      break;
-    case "procurement":
-    case "asset":
-      documentMappings.push(
-        {
-          id: makeId("doc-map", event.id, "purchase"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "purchase_contract",
-          title: "采购合同/订单",
-          status: "generated",
-          ownerDepartment: event.department,
-          notes: "作为采购、付款和验收的主依据。"
-        },
-        {
-          id: makeId("doc-map", event.id, "invoice"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "supplier_invoice",
-          title: "供应商发票",
-          status: "required",
-          ownerDepartment: "财务部",
-          notes: "用于成本、资产入账和进项税额复核。"
-        },
-        {
-          id: makeId("doc-map", event.id, "acceptance"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "acceptance_record",
-          title: event.type === "asset" ? "资产验收单" : "采购验收单",
-          status: "required",
-          ownerDepartment: event.department,
-          notes: "未验收前不建议直接形成最终入账结论。"
-        }
-      );
-      taxMappings.push({
-        id: makeId("tax-map", event.id, "input-vat"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        taxType: "增值税",
-        treatment: "复核专票、用途和认证条件后再确认是否可抵扣进项税额。",
-        status: "attention",
-        basis: "需取得合规发票并满足业务用途条件。",
-        filingPeriod: event.occurredOn.slice(0, 7)
-      });
-      voucherDrafts.push({
-        id: makeId("vou-map", event.id, "purchase"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        voucherType: "payment",
-        status: "review_required",
-        summary: `${event.title} ${event.type === "asset" ? "资产" : "采购"}入账草稿`,
-        lines: [
-          {
-            id: makeId("vou-line", event.id, "debit-main"),
-            summary: "确认采购/资产",
-            accountCode: event.type === "asset" ? "1601" : "1401",
-            accountName: event.type === "asset" ? "固定资产" : "原材料",
-            debit: amount,
-            credit: "0.00"
-          },
-          {
-            id: makeId("vou-line", event.id, "credit-ap"),
-            summary: "确认应付款",
-            accountCode: "2202",
-            accountName: "应付账款",
-            debit: "0.00",
-            credit: amount
-          }
-        ]
-      });
-      break;
-    case "expense":
-      documentMappings.push(
-        {
-          id: makeId("doc-map", event.id, "expense-form"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "expense_claim",
-          title: "费用报销单",
-          status: "generated",
-          ownerDepartment: event.department,
-          notes: "应列明事由、时间、经办人、审批流。"
-        },
-        {
-          id: makeId("doc-map", event.id, "receipts"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "invoice_bundle",
-          title: "报销票据包",
-          status: "required",
-          ownerDepartment: "财务部",
-          notes: "需补齐发票、回单、差旅行程或招待说明。"
-        }
-      );
-      taxMappings.push(
-        {
-          id: makeId("tax-map", event.id, "input-vat"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          taxType: "增值税",
-          treatment: "复核发票类型、用途与抵扣条件，判断是否形成可抵扣进项税额。",
-          status: "attention",
-          basis: "报销事项如取得合规专票且用途符合规定，需同步进入进项税额复核。",
-          filingPeriod: event.occurredOn.slice(0, 7)
-        },
-        {
-          id: makeId("tax-map", event.id, "eit"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          taxType: "企业所得税",
-          treatment: "复核费用真实性、关联性和税前扣除凭证完整性。",
-          status: "attention",
-          basis: "资料不完整时不应直接作为最终税前扣除依据。",
-          filingPeriod: event.occurredOn.slice(0, 7)
-        }
-      );
-      voucherDrafts.push({
-        id: makeId("vou-map", event.id, "expense"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        voucherType: "payment",
-        status: "review_required",
-        summary: `${event.title} 费用报销草稿`,
-        lines: [
-          {
-            id: makeId("vou-line", event.id, "debit-expense"),
-            summary: "确认费用",
-            accountCode: "660207",
-            accountName: "管理费用-其他",
-            debit: amount,
-            credit: "0.00"
-          },
-          {
-            id: makeId("vou-line", event.id, "credit-payable"),
-            summary: "确认员工垫付款",
-            accountCode: "2241",
-            accountName: "其他应付款",
-            debit: "0.00",
-            credit: amount
-          }
-        ]
-      });
-      break;
-    case "payroll":
-      documentMappings.push(
-        {
-          id: makeId("doc-map", event.id, "payroll"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "payroll_sheet",
-          title: "工资表与审批单",
-          status: "required",
-          ownerDepartment: "人事行政部",
-          notes: "工资、奖金、补贴应与考勤和审批单一致。"
-        },
-        {
-          id: makeId("doc-map", event.id, "attendance"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "attendance_record",
-          title: "考勤与绩效附件",
-          status: "suggested",
-          ownerDepartment: "人事行政部",
-          notes: "用于工资分配与合规复核。"
-        }
-      );
-      taxMappings.push(
-        {
-          id: makeId("tax-map", event.id, "iit"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          taxType: "个人所得税",
-          treatment: "纳入工资薪金个税申报批次。",
-          status: "pending",
-          basis: "需复核专项附加扣除、累计预扣数据。",
-          filingPeriod: event.occurredOn.slice(0, 7)
-        },
-        {
-          id: makeId("tax-map", event.id, "social"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          taxType: "社保公积金",
-          treatment: "按员工归属和申报基数生成缴费台账。",
-          status: "pending",
-          basis: "需复核当月在职人数和基数。",
-          filingPeriod: event.occurredOn.slice(0, 7)
-        }
-      );
-      voucherDrafts.push({
-        id: makeId("vou-map", event.id, "payroll"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        voucherType: "accrual",
-        status: "review_required",
-        summary: `${event.title} 工资计提草稿`,
-        lines: [
-          {
-            id: makeId("vou-line", event.id, "debit-payroll"),
-            summary: "计提工资费用",
-            // D6：此前挂 6601「职工薪酬（成本）」，已由迁移 079 废弃——
-            // 同一件业务事实，此前的科目取决于用户从哪个入口进来（工资模块挂
-            // 管理费用、模板与本处挂 6601），现在统一到 660208。
-            accountCode: "660208",
-            accountName: "管理费用-工资",
-            debit: amount,
-            credit: "0.00"
-          },
-          {
-            id: makeId("vou-line", event.id, "credit-payroll"),
-            summary: "确认应付职工薪酬",
-            accountCode: "22110101",
-            accountName: "应付职工薪酬-工资",
-            debit: "0.00",
-            credit: amount
-          }
-        ]
-      });
-      break;
-    case "rnd":
-      documentMappings.push(
-        {
-          id: makeId("doc-map", event.id, "project"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "rnd_project_file",
-          title: "研发项目立项资料",
-          status: "required",
-          ownerDepartment: "研发部",
-          notes: "需包含立项、预算、成员、目标与阶段成果。"
-        },
-        {
-          id: makeId("doc-map", event.id, "timesheet"),
-          companyId: event.companyId,
-          businessEventId: event.id,
-          documentType: "timesheet",
-          title: "研发工时与费用归集附件",
-          status: "required",
-          ownerDepartment: "研发部",
-          notes: "用于辅助账与加计扣除口径。"
-        }
-      );
-      taxMappings.push({
-        id: makeId("tax-map", event.id, "rnd"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        taxType: "研发加计扣除",
-        treatment: "纳入研发辅助账和汇算优惠备查。",
-        status: "attention",
-        basis: "需判断是否属于研发活动并形成费用归集证据链。",
-        filingPeriod: event.occurredOn.slice(0, 4)
-      });
-      voucherDrafts.push({
-        id: makeId("vou-map", event.id, "rnd"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        voucherType: "accrual",
-        status: "review_required",
-        summary: `${event.title} 研发费用归集草稿`,
-        lines: [
-          {
-            id: makeId("vou-line", event.id, "debit-rnd"),
-            summary: "归集研发支出",
-            accountCode: "1801001",
-            accountName: "研发支出-费用化支出",
-            debit: amount,
-            credit: "0.00"
-          },
-          {
-            id: makeId("vou-line", event.id, "credit-rnd"),
-            summary: "确认待支付/已支付款项",
-            accountCode: "2202",
-            accountName: "应付账款",
-            debit: "0.00",
-            credit: amount
-          }
-        ]
-      });
-      break;
-    default:
-      documentMappings.push({
-        id: makeId("doc-map", event.id, "general"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        documentType: "supporting_document",
-        title: "经营事项支撑资料包",
-        status: "required",
-        ownerDepartment: event.department,
-        notes: "需至少补齐业务背景、审批依据、付款或收款证据。"
-      });
-      taxMappings.push({
-        id: makeId("tax-map", event.id, "general"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        taxType: "综合复核",
-        treatment: "根据事项类型复核税种影响，不直接形成最终申报结论。",
-        status: "attention",
-        basis: "当前仅形成分析映射，待资料补齐后再进入正式处理。",
-        filingPeriod: event.occurredOn.slice(0, 7)
-      });
-      voucherDrafts.push({
-        id: makeId("vou-map", event.id, "general"),
-        companyId: event.companyId,
-        businessEventId: event.id,
-        voucherType: "general",
-        status: "draft",
-        summary: `${event.title} 通用凭证草稿`,
-        lines: [
-          {
-            id: makeId("vou-line", event.id, "debit-general"),
-            summary: "待人工补充会计科目",
-            accountCode: PENDING_ACCOUNT_CODE,
-            accountName: "待人工确认",
-            debit: amount,
-            credit: "0.00"
-          },
-          {
-            id: makeId("vou-line", event.id, "credit-general"),
-            summary: "待人工补充对方科目",
-            accountCode: PENDING_ACCOUNT_CODE,
-            accountName: "待人工确认",
-            debit: "0.00",
-            credit: amount
-          }
-        ]
-      });
-      break;
-  }
-
-  return {
-    businessEventId: event.id,
-    documentMappings,
-    taxMappings,
-    voucherDrafts,
-    generatedAt: new Date().toISOString()
-  };
-}
-
-function toGeneratedDocuments(
-  bundle: BusinessEventMappingBundle,
-  generatedAt: string
-): GeneratedDocument[] {
-  return bundle.documentMappings.map((mapping) => ({
-    id: `doc-${mapping.businessEventId}-${mapping.documentType}`,
-    companyId: mapping.companyId,
-    businessEventId: mapping.businessEventId,
-    mappingId: mapping.id,
-    documentType: mapping.documentType,
-    title: mapping.title,
-    ownerDepartment: mapping.ownerDepartment,
-    status:
-      mapping.status === "generated"
-        ? "ready"
-        : mapping.status === "missing"
-          ? "awaiting_upload"
-          : "draft",
-    attachmentIds: [],
-    archivedAt: null,
-    source: "analysis",
-    createdAt: generatedAt,
-    updatedAt: generatedAt
-  }));
-}
-
-function toTaxItems(bundle: BusinessEventMappingBundle, generatedAt: string): TaxItem[] {
-  return bundle.taxMappings.map((mapping) => ({
-    id: `tax-item-${mapping.businessEventId}-${mapping.taxType}`,
-    companyId: mapping.companyId,
-    businessEventId: mapping.businessEventId,
-    mappingId: mapping.id,
-    taxType: mapping.taxType,
-    treatment: mapping.treatment,
-    basis: mapping.basis,
-    filingPeriod: mapping.filingPeriod,
-    status:
-      mapping.status === "ready"
-        ? "ready"
-        : mapping.status === "pending"
-          ? "pending"
-          : "review_required",
-    source: "analysis",
-    createdAt: generatedAt,
-    updatedAt: generatedAt
-  }));
-}
-
-/**
- * `occurredOn` 是这批凭证的会计日期 —— 事项分析出来的凭证，账要记在业务发生的
- * 那个期间，而不是跑分析的那天。
- */
-function toVouchers(
-  bundle: BusinessEventMappingBundle,
-  generatedAt: string,
-  occurredOn: string
-): Voucher[] {
-  return bundle.voucherDrafts.map((draft) => ({
-    id: `voucher-${draft.businessEventId}-${draft.voucherType}`,
-    companyId: draft.companyId,
-    businessEventId: draft.businessEventId,
-    mappingId: draft.id,
-    voucherType: draft.voucherType,
-    accountingDate: occurredOn,
-    voucherNumber: null,
-    summary: draft.summary,
-    status: draft.status === "ready" ? "posted" : draft.status,
-    lines: draft.lines,
-    approvedAt: null,
-    postedAt: draft.status === "ready" ? generatedAt : null,
-    source: "analysis",
-    createdAt: generatedAt,
-    updatedAt: generatedAt
-  }));
-}
-
-export async function listCompanyEvents(companyId: string): Promise<BusinessEvent[]> {
-  const rows = await query<BusinessEventRow>(
-    `
-      select
-        id,
-        company_id,
-        type,
-        title,
-        description,
-        department,
-        owner_id,
-        occurred_on,
-        amount,
-        currency,
-        status,
-        source,
-        contract_id,
-        counterparty_id,
-        project_id,
-        created_at,
-        updated_at
-      from business_events
-      where company_id = $1
-      order by occurred_on desc, created_at desc
-    `,
-    [companyId]
-  );
-  return rows.map(mapEventRow);
-}
-
-export async function listCompanyTasks(companyId: string): Promise<Task[]> {
-  const rows = await query<TaskRow>(
-    `
-      select
-        id,
-        company_id,
-        business_event_id,
-        parent_task_id,
-        title,
-        description,
-        status,
-        priority,
-        owner_id,
-        due_at,
-        assignee_department,
-        source,
-        created_at,
-        updated_at
-      from tasks
-      where company_id = $1
-      order by
-        CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
-        created_at desc
-    `,
-    [companyId]
-  );
-  return rows.map(mapTaskRow);
-}
-
-async function insertActivities(executor: DbExecutor, activities: BusinessEventActivity[]) {
-  for (const activity of activities) {
-    await executor.query(
-      `
-        insert into business_event_activities (
-          id,
-          company_id,
-          business_event_id,
-          activity_type,
-          actor_user_id,
-          actor_name,
-          summary,
-          created_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz)
-      `,
-      [
-        activity.id,
-        activity.companyId,
-        activity.businessEventId,
-        activity.activityType,
-        activity.actorUserId,
-        activity.actorName,
-        activity.summary,
-        activity.createdAt
-      ]
-    );
-  }
-}
-
-async function insertTasks(executor: DbExecutor, tasks: Task[]) {
-  for (const task of tasks) {
-    await executor.query(
-      `
-        insert into tasks (
-          id,
-          company_id,
-          business_event_id,
-          parent_task_id,
-          title,
-          description,
-          status,
-          priority,
-          owner_id,
-          due_at,
-          assignee_department,
-          source,
-          created_at,
-          updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz, $11, $12, $13::timestamptz, $14::timestamptz)
-      `,
-      [
-        task.id,
-        task.companyId,
-        task.businessEventId,
-        task.parentTaskId,
-        task.title,
-        task.description,
-        task.status,
-        task.priority,
-        task.ownerId,
-        task.dueAt,
-        task.assigneeDepartment,
-        task.source,
-        task.createdAt,
-        task.updatedAt
-      ]
-    );
-  }
-}
-
-async function insertDocumentMappings(executor: DbExecutor, rows: EventDocumentMapping[]) {
-  for (const row of rows) {
-    await executor.query(
-      `
-        insert into event_document_mappings (
-          id,
-          company_id,
-          business_event_id,
-          document_type,
-          title,
-          status,
-          owner_department,
-          notes
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8)
-      `,
-      [
-        row.id,
-        row.companyId,
-        row.businessEventId,
-        row.documentType,
-        row.title,
-        row.status,
-        row.ownerDepartment,
-        row.notes
-      ]
-    );
-  }
-}
-
-async function insertTaxMappings(executor: DbExecutor, rows: EventTaxMapping[]) {
-  for (const row of rows) {
-    await executor.query(
-      `
-        insert into event_tax_mappings (
-          id,
-          company_id,
-          business_event_id,
-          tax_type,
-          treatment,
-          status,
-          basis,
-          filing_period
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8)
-      `,
-      [
-        row.id,
-        row.companyId,
-        row.businessEventId,
-        row.taxType,
-        row.treatment,
-        row.status,
-        row.basis,
-        row.filingPeriod
-      ]
-    );
-  }
-}
-
-async function insertVoucherDrafts(executor: DbExecutor, rows: EventVoucherDraft[]) {
-  for (const row of rows) {
-    await executor.query(
-      `
-        insert into event_voucher_drafts (
-          id,
-          company_id,
-          business_event_id,
-          voucher_type,
-          status,
-          summary
-        ) values ($1, $2, $3, $4, $5, $6)
-      `,
-      [
-        row.id,
-        row.companyId,
-        row.businessEventId,
-        row.voucherType,
-        row.status,
-        row.summary
-      ]
-    );
-    for (const [index, line] of row.lines.entries()) {
-      await executor.query(
-        `
-          insert into voucher_draft_lines (
-            id,
-            draft_id,
-            summary,
-            account_code,
-            account_name,
-            debit,
-            credit,
-            sort_order
-          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8)
-        `,
-        [
-          line.id,
-          row.id,
-          line.summary,
-          line.accountCode,
-          line.accountName,
-          line.debit,
-          line.credit,
-          index
-        ]
-      );
-    }
-  }
-}
-
-async function insertGeneratedDocuments(executor: DbExecutor, rows: GeneratedDocument[]) {
-  for (const row of rows) {
-    await executor.query(
-      `
-        insert into generated_documents (
-          id,
-          company_id,
-          business_event_id,
-          mapping_id,
-          document_type,
-          title,
-          owner_department,
-          status,
-          source,
-          archived_at,
-          created_at,
-          updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz, $11::timestamptz, $12::timestamptz)
-      `,
-      [
-        row.id,
-        row.companyId,
-        row.businessEventId,
-        row.mappingId,
-        row.documentType,
-        row.title,
-        row.ownerDepartment,
-        row.status,
-        row.source,
-        row.archivedAt,
-        row.createdAt,
-        row.updatedAt
-      ]
-    );
-  }
-}
-
-async function insertTaxItems(executor: DbExecutor, rows: TaxItem[]) {
-  for (const row of rows) {
-    await executor.query(
-      `
-        insert into tax_items (
-          id,
-          company_id,
-          business_event_id,
-          mapping_id,
-          tax_type,
-          treatment,
-          basis,
-          filing_period,
-          status,
-          source,
-          created_at,
-          updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::timestamptz, $12::timestamptz)
-      `,
-      [
-        row.id,
-        row.companyId,
-        row.businessEventId,
-        row.mappingId,
-        row.taxType,
-        row.treatment,
-        row.basis,
-        row.filingPeriod,
-        row.status,
-        row.source,
-        row.createdAt,
-        row.updatedAt
-      ]
-    );
-  }
-}
-
-async function insertVouchers(executor: DbExecutor, rows: Voucher[]) {
-  for (const row of rows) {
-    await executor.query(
-      `
-        insert into vouchers (
-          id,
-          company_id,
-          business_event_id,
-          mapping_id,
-          voucher_type,
-          summary,
-          status,
-          source,
-          approved_at,
-          posted_at,
-          created_at,
-          updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, $10::timestamptz, $11::timestamptz, $12::timestamptz)
-      `,
-      [
-        row.id,
-        row.companyId,
-        row.businessEventId,
-        row.mappingId,
-        row.voucherType,
-        row.summary,
-        row.status,
-        row.source,
-        row.approvedAt,
-        row.postedAt,
-        row.createdAt,
-        row.updatedAt
-      ]
-    );
-    for (const [index, line] of row.lines.entries()) {
-      await executor.query(
-        `
-          insert into voucher_lines (
-            id,
-            voucher_id,
-            summary,
-            account_code,
-            account_name,
-            debit,
-            credit,
-            sort_order
-          ) values ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8)
-        `,
-        [
-          line.id,
-          row.id,
-          line.summary,
-          line.accountCode,
-          line.accountName,
-          line.debit,
-          line.credit,
-          index
-        ]
-      );
-    }
-  }
-}
-
-async function insertContractObjectLinks(executor: DbExecutor, rows: ContractObjectLink[]) {
-  for (const row of rows) {
-    await executor.query(
-      `
-        insert into contract_object_links (
-          id,
-          company_id,
-          contract_id,
-          business_event_id,
-          object_type,
-          object_id,
-          relation_kind,
-          created_at,
-          updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9::timestamptz)
-        on conflict (contract_id, object_type, object_id)
-        do update set
-          business_event_id = excluded.business_event_id,
-          relation_kind = excluded.relation_kind,
-          updated_at = excluded.updated_at
-      `,
-      [
-        row.id,
-        row.companyId,
-        row.contractId,
-        row.businessEventId,
-        row.objectType,
-        row.objectId,
-        row.relationKind,
-        row.createdAt,
-        row.updatedAt
-      ]
-    );
-  }
-}
 
 export function handleEventsMeta(_req: ApiRequest, res: ServerResponse) {
   return json(res, 200, {
@@ -1293,13 +136,29 @@ export function handleEventsMeta(_req: ApiRequest, res: ServerResponse) {
 }
 
 export async function listEvents(req: ApiRequest, res: ServerResponse) {
-  const rows = await listCompanyEvents(req.auth!.companyId);
-  const scoped = scopeEvents(rows, req);
+  const [rows, collaborating] = await Promise.all([
+    listCompanyEvents(req.auth!.companyId),
+    loadCollaboratingEventIds(req.auth!.companyId, req.auth!.userId)
+  ]);
+  const scoped = scopeEvents(rows, req, collaborating);
   return json(res, 200, { items: scoped, total: scoped.length });
 }
 
 export async function createEvent(req: ApiRequest, res: ServerResponse) {
   const body = req.body as CreateBusinessEventInput;
+
+  // 应税行为类别（V17 阶段二）：值域校验放在这里而不是 body schema，
+  // 因为类别清单随政策走，写死在两处迟早漂移。
+  //
+  // **认不出就拒**，不静默存一个坏值——存进去之后税率判定会当它是「未确定」，
+  // 用户以为标好了，实际底稿上是「税目待确认」，要到申报被拒才发现。
+  if (body.taxableCategory != null && !isTaxableCategory(body.taxableCategory)) {
+    return json(res, 400, {
+      error: `认不出的应税行为类别「${body.taxableCategory}」。请从系统提供的类别里选。`,
+      code: "TAXABLE_CATEGORY_INVALID"
+    });
+  }
+
   const now = new Date().toISOString();
   const next: BusinessEvent = {
     id: uniqueId("evt"),
@@ -1318,6 +177,8 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
     status: "draft",
     source: body.source ?? "manual",
     contractId: body.contractId ?? null,
+    // 税目口径的类别。null = 没标，税率判定回退到公司主营类别。
+    taxableCategory: body.taxableCategory ?? null,
     // 往来单位（V12-C2 补齐）。此前这里硬编码成 null —— 凭证的 attachCounterparty
     // 从事项继承这个维度，事项没有它就等于整条往来链路（账龄、核销）都是空的。
     counterpartyId: body.counterpartyId ?? null,
@@ -1346,9 +207,10 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
           contract_id,
           counterparty_id,
           project_id,
+          taxable_category,
           created_at,
           updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8::date, $9::numeric, $10, $11, $12, $13, $14, $15, $16::timestamptz, $17::timestamptz)
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8::date, $9::numeric, $10, $11, $12, $13, $14, $15, $16, $17::timestamptz, $18::timestamptz)
       `,
       [
         next.id,
@@ -1366,6 +228,7 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
         next.contractId,
         next.counterpartyId,
         next.projectId,
+        next.taxableCategory,
         next.createdAt,
         next.updatedAt
       ]
@@ -1401,8 +264,11 @@ export async function createEvent(req: ApiRequest, res: ServerResponse) {
 }
 
 export async function getEventDetail(req: ApiRequest, res: ServerResponse, eventId: string) {
-  const companyEvents = await listCompanyEvents(req.auth!.companyId);
-  const event = scopeEvents(companyEvents, req).find((row) => row.id === eventId);
+  const [companyEvents, collaborating] = await Promise.all([
+    listCompanyEvents(req.auth!.companyId),
+    loadCollaboratingEventIds(req.auth!.companyId, req.auth!.userId)
+  ]);
+  const event = scopeEvents(companyEvents, req, collaborating).find((row) => row.id === eventId);
   if (!event) {
     return json(res, 404, { error: "Event not found" });
   }
@@ -1513,8 +379,21 @@ export async function getEventDetail(req: ApiRequest, res: ServerResponse, event
 }
 
 export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId: string) {
-  const companyEvents = await listCompanyEvents(req.auth!.companyId);
-  const existing = scopeEvents(companyEvents, req).find((row) => row.id === eventId);
+  // 改类别时也要挡住认不出的值——理由同 createEvent：存进去之后
+  // 税率判定会当它「未确定」，用户以为标好了，实际底稿上是「税目待确认」。
+  const patch = req.body as { taxableCategory?: unknown };
+  if (patch.taxableCategory != null && !isTaxableCategory(patch.taxableCategory)) {
+    return json(res, 400, {
+      error: `认不出的应税行为类别「${String(patch.taxableCategory)}」。请从系统提供的类别里选。`,
+      code: "TAXABLE_CATEGORY_INVALID"
+    });
+  }
+
+  const [companyEvents, collaborating] = await Promise.all([
+    listCompanyEvents(req.auth!.companyId),
+    loadCollaboratingEventIds(req.auth!.companyId, req.auth!.userId)
+  ]);
+  const existing = scopeEvents(companyEvents, req, collaborating).find((row) => row.id === eventId);
   if (!existing) {
     return json(res, 404, { error: "Event not found" });
   }
@@ -1528,6 +407,9 @@ export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId:
     status: body.status ?? existing.status,
     amount: body.amount ?? existing.amount,
     occurredOn: body.occurredOn ?? existing.occurredOn,
+    // 没传等于**没改**，不等于清空：前端改标题时不会把类别一起发上来，
+    // 当成清空的话改一次标题就把税目标注抹掉了。
+    taxableCategory: body.taxableCategory ?? existing.taxableCategory,
     updatedAt: new Date().toISOString()
   };
 
@@ -1566,8 +448,9 @@ export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId:
           status = $4,
           amount = $5::numeric,
           occurred_on = $6::date,
-          updated_at = $7::timestamptz
-        where id = $8 and company_id = $9
+          taxable_category = $7,
+          updated_at = $8::timestamptz
+        where id = $9 and company_id = $10
       `,
       [
         updated.title,
@@ -1576,6 +459,7 @@ export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId:
         updated.status,
         updated.amount,
         updated.occurredOn,
+        updated.taxableCategory,
         updated.updatedAt,
         updated.id,
         updated.companyId
@@ -1635,427 +519,14 @@ export async function updateEvent(req: ApiRequest, res: ServerResponse, eventId:
 
   return json(res, 200, updated);
 }
-
 /**
- * analyze 的每一条出口都要留痕：此前该路由删除已入账分录时完全无审计记录，
- * 事后无法回答"谁在什么时候抹掉了哪些账"。
- */
-function auditAnalyze(
-  req: ApiRequest,
-  eventId: string,
-  action: string,
-  changes: Record<string, unknown>
-): void {
-  writeAudit({
-    companyId: req.auth!.companyId,
-    userId: req.auth!.userId,
-    userName: req.auth!.username,
-    action,
-    resourceType: "business_event",
-    resourceId: eventId,
-    changes
-  });
-}
-
-/**
- * 读取 analyze 闸门所需的两项事实：该事项下已过账的凭证，以及该事项分录落在
- * 哪些已锁账期间。
+ * 分析路由拆到了 `analyze.routes.ts`，这里保留出口。
  *
- * 必须在**将要执行删除的同一个事务里**调用：
- * - 凭证行整批 `for update`（不只锁 posted 的那些）。只锁 posted 会留下竞态——
- *   并发的 `postVoucher` 改的是当时还是 draft 的行，不在锁集合内，就能在"检查"
- *   与"删除"之间把它变成 posted。锁全量后并发过账会阻塞到本事务结束。
- * - 期间同样用本事务的连接查，不走 `isPeriodLocked` 的全局连接池。
- *
- * 期间按 `ledger_entries.entry_date` 在库内 `to_char` 成期——不能沿用过账路径
- * `isPeriodLocked(companyId, 当前月)` 的"当前月"口径，否则跨月重新分析会绕过
- * 锁账；在 SQL 内成期也避开了 `date` 列经 JS `Date` 往返的时区偏移。
+ * 不是为了省事：`events/routes.js` 是这个模块对外的聚合出口，
+ * 多处动态 `import("./routes.js")` 按名字取 `analyzeEvent`——
+ * 搬走而不保留出口，它们会在运行时取到 undefined，而 tsc 查不出来。
+ * V17 阶段一拆纳税人档案时就踩过这个。
  */
-async function loadAnalyzeGuardInput(
-  client: PoolClient,
-  companyId: string,
-  eventId: string
-): Promise<AnalyzeGuardInput> {
-  // `reversed_by` 反查这张凭证有没有被红冲过。已被红冲的凭证账务影响已归零，
-  // 不该再拦着重新分析——否则红冲做完了事项依然是死路，等于没有出口。
-  const voucherResult = await client.query<{ id: string; status: string; reversed_by: string | null }>(
-    `
-      select
-        v.id,
-        v.status,
-        (
-          select r.id from vouchers r
-          where r.company_id = v.company_id
-            and r.reverses_voucher_id = v.id
-            and r.status = 'posted'
-          limit 1
-        ) as reversed_by
-      from vouchers v
-      where v.company_id = $1 and v.business_event_id = $2
-      order by v.id
-      for update
-    `,
-    [companyId, eventId]
-  );
-
-  const periodResult = await client.query<{ period: string }>(
-    `
-      select distinct to_char(entry_date, 'YYYY-MM') as period
-      from ledger_entries
-      where company_id = $1 and business_event_id = $2
-      order by 1
-    `,
-    [companyId, eventId]
-  );
-  const periods = periodResult.rows.map((row) => row.period);
-
-  const lockedResult = periods.length
-    ? await client.query<{ period: string }>(
-        `
-          select period
-          from accounting_periods
-          where company_id = $1 and period = any($2::text[]) and is_locked
-          order by period
-        `,
-        [companyId, periods]
-      )
-    : { rows: [] as { period: string }[] };
-
-  return {
-    // 只有**未被红冲**的已过账凭证才构成阻断：红冲凭证自身也要过账，
-    // 冲销完成后原凭证的账务影响已归零，再拦就没有出口了。
-    postedVoucherIds: voucherResult.rows
-      .filter((row) => row.status === "posted" && !row.reversed_by)
-      .map((row) => row.id),
-    lockedPeriods: lockedResult.rows.map((row) => row.period)
-  };
-}
-
-export async function analyzeEvent(req: ApiRequest, res: ServerResponse, eventId: string) {
-  const companyEvents = await listCompanyEvents(req.auth!.companyId);
-  const target = scopeEvents(companyEvents, req).find((row) => row.id === eventId);
-  if (!target) {
-    // 越权/探测同样留痕：调用方持有 events.create，但该事项不在其可见范围内。
-    auditAnalyze(req, eventId, "event.analyze.denied", { reason: "not_found_or_out_of_scope" });
-    return json(res, 404, { error: "Event not found" });
-  }
-
-  const now = new Date().toISOString();
-  const generatedTasks: Task[] = buildGeneratedTasksForEvent({
-    event: target,
-    now,
-    actorUserId: req.auth!.userId
-  });
-
-  const analyzedEvent: BusinessEvent = {
-    ...target,
-    status: "analyzed",
-    updatedAt: now
-  };
-  const bundle = buildEventMappings(analyzedEvent);
-
-  const nextDocuments = [
-    ...toGeneratedDocuments(bundle, now)
-  ];
-  const nextTaxItems = [
-    ...toTaxItems(bundle, now)
-  ];
-  const nextVouchers = [
-    ...toVouchers(bundle, now, analyzedEvent.occurredOn)
-  ];
-  const contractObjectLinks = analyzedEvent.contractId
-    ? buildContractObjectLinks({
-        companyId: analyzedEvent.companyId,
-        contractId: analyzedEvent.contractId,
-        businessEventId: analyzedEvent.id,
-        tasks: generatedTasks,
-        documents: nextDocuments,
-        taxItems: nextTaxItems,
-        vouchers: nextVouchers
-      })
-    : [];
-
-  const analysisActivities = [
-    buildActivity(
-      req,
-      eventId,
-      "task_generated",
-      `自动生成 ${generatedTasks.length} 个任务，并同步 ${nextDocuments.length} 份单据、${nextTaxItems.length} 条税务事项、${nextVouchers.length} 张凭证草稿。`
-    ),
-    buildActivity(req, eventId, "analyzed", "完成事项分析并输出执行建议。")
-  ];
-  const previousState = mapBusinessEventStatusToWorkflowState(target.status);
-  const nextState = mapBusinessEventStatusToWorkflowState(analyzedEvent.status);
-  const analysisTransitionValidation = validateWorkflowTransition(previousState, nextState);
-  if (!analysisTransitionValidation.ok) {
-    auditAnalyze(req, eventId, "event.analyze.blocked", {
-      code: analysisTransitionValidation.errorCode,
-      previousState,
-      nextState
-    });
-    return json(res, 400, { error: analysisTransitionValidation.message, code: analysisTransitionValidation.errorCode });
-  }
-
-  // 已入账的账务不可被"重新分析"顺手删掉：只能红冲，且锁账期间一律拒绝。
-  // 闸门放在事务内、且在任何删除之前——先锁住凭证行再判定，检查结果才不会在
-  // 检查与删除之间过期。裁决为拒绝时直接返回，事务不做任何写入。
-  const guard = await withTransaction(async (client) => {
-    const verdict = evaluateAnalyzeGuard(
-      await loadAnalyzeGuardInput(client, target.companyId, target.id)
-    );
-    if (!verdict.allowed) {
-      return verdict;
-    }
-
-    await client.query(
-      `
-        update business_events
-        set status = 'analyzed', updated_at = $1::timestamptz
-        where id = $2 and company_id = $3
-      `,
-      [now, target.id, target.companyId]
-    );
-
-    await client.query(
-      `
-        delete from tasks
-        where company_id = $1 and business_event_id = $2 and source = 'ai'
-      `,
-      [target.companyId, target.id]
-    );
-    await insertTasks(client, generatedTasks);
-
-    await client.query(
-      `
-        delete from document_attachment_records
-        where document_id in (
-          select id from generated_documents
-          where company_id = $1 and business_event_id = $2
-        )
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from generated_documents
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from tax_filing_batch_items
-        where tax_item_id in (
-          select id from tax_items
-          where company_id = $1 and business_event_id = $2
-        )
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from tax_items
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from ledger_posting_batch_entries
-        where batch_id in (
-          select id from ledger_posting_batches
-          where company_id = $1 and business_event_id = $2
-        )
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from ledger_posting_batches
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from ledger_entries
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from voucher_posting_records
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from voucher_lines
-        where voucher_id in (
-          select id from vouchers
-          where company_id = $1 and business_event_id = $2
-        )
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from vouchers
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from contract_object_links
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    // Mapping tables are deleted last: generated_documents.mapping_id,
-    // tax_items.mapping_id and vouchers.mapping_id all reference them, so a
-    // re-analyze must remove those children first or the FK constraints abort
-    // the transaction (surfaced as analyze 500 on already-analyzed events).
-    await client.query(
-      `
-        delete from voucher_draft_lines
-        where draft_id in (
-          select id from event_voucher_drafts
-          where company_id = $1 and business_event_id = $2
-        )
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from event_voucher_drafts
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from event_document_mappings
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-    await client.query(
-      `
-        delete from event_tax_mappings
-        where company_id = $1 and business_event_id = $2
-      `,
-      [target.companyId, target.id]
-    );
-
-    await insertDocumentMappings(client, bundle.documentMappings);
-    await insertTaxMappings(client, bundle.taxMappings);
-    await insertVoucherDrafts(client, bundle.voucherDrafts);
-    await insertGeneratedDocuments(client, nextDocuments);
-    await insertTaxItems(client, nextTaxItems);
-    await insertVouchers(client, nextVouchers);
-    await insertContractObjectLinks(client, contractObjectLinks);
-    await insertActivities(client, analysisActivities);
-    const run = await ensureWorkflowRun(
-      client,
-      buildWorkflowRun({
-        companyId: analyzedEvent.companyId,
-        workflowKey: "business_event.lifecycle",
-        resourceType: "business_event",
-        resourceId: analyzedEvent.id,
-        resourceLabel: analyzedEvent.title,
-        currentState: previousState,
-        initiatorUserId: req.auth!.userId,
-        initiatorName: req.auth!.username
-      })
-    );
-    const transition = buildWorkflowTransitionRecord({
-      companyId: analyzedEvent.companyId,
-      workflowRunId: run.id,
-      resourceType: "business_event",
-      resourceId: analyzedEvent.id,
-      previousState,
-      nextState,
-      actorUserId: req.auth!.userId,
-      actorName: req.auth!.username,
-      basis: "event.analyze",
-      ruleVersion: "v4-1a"
-    });
-    await insertWorkflowTransition(client, transition);
-    await updateWorkflowRunState(client, run.id, nextState, null, transition.occurredAt);
-    return { allowed: true } as const;
-  });
-
-  if (!guard.allowed) {
-    auditAnalyze(req, eventId, "event.analyze.blocked", {
-      code: guard.code,
-      postedVoucherIds: guard.postedVoucherIds,
-      lockedPeriods: guard.lockedPeriods
-    });
-    return json(res, 409, { error: guard.message, code: guard.code });
-  }
-
-  auditAnalyze(req, eventId, "event.analyze", {
-    previousStatus: target.status,
-    generatedTasks: generatedTasks.length,
-    generatedDocuments: nextDocuments.length,
-    taxItems: nextTaxItems.length,
-    vouchers: nextVouchers.length
-  });
-
-  // 单据与税务事项的诞生点。上面那条 event.analyze 只记了个数，回答不了
-  // 「这份单据是哪次分析生出来的」——而 /audit 的单据/税务事项深链恰恰是按
-  // resourceType=document|tax_item + 对象编号来查的（见 apps/web/src/pages/
-  // drilldown.ts 的 resolveAuditContextFromState），不逐条留痕那两个深链永远是空。
-  //
-  // 对象 id 是确定性的（doc-<eventId>-<type> / tax-item-<eventId>-<taxType>），
-  // 重新分析会删旧建新、id 不变，所以这里如实记成又一次 created：
-  // 同一个 id 上的多条 created 就是「这个对象被重建过几次」，本身即事实。
-  for (const document of nextDocuments) {
-    writeAudit({
-      companyId: analyzedEvent.companyId,
-      userId: req.auth!.userId,
-      userName: req.auth!.username,
-      action: "document.created",
-      resourceType: "document",
-      resourceId: document.id,
-      resourceLabel: document.title,
-      changes: {
-        data: {
-          businessEventId: document.businessEventId,
-          documentType: document.documentType,
-          ownerDepartment: document.ownerDepartment,
-          status: document.status
-        }
-      }
-    });
-  }
-  for (const taxItem of nextTaxItems) {
-    writeAudit({
-      companyId: analyzedEvent.companyId,
-      userId: req.auth!.userId,
-      userName: req.auth!.username,
-      action: "tax_item.created",
-      resourceType: "tax_item",
-      resourceId: taxItem.id,
-      resourceLabel: `${taxItem.taxType} ${taxItem.filingPeriod}`,
-      changes: {
-        data: {
-          businessEventId: taxItem.businessEventId,
-          taxType: taxItem.taxType,
-          treatment: taxItem.treatment,
-          filingPeriod: taxItem.filingPeriod,
-          status: taxItem.status
-        }
-      }
-    });
-  }
-
-  return json(res, 200, {
-    eventId,
-    generatedTasks: generatedTasks.length,
-    status: "analyzed"
-  });
-}
+export { analyzeEvent } from "./analyze.routes.js";
+// scopeEvents 有模块外的引用，出口保留在聚合点上。
+export { scopeEvents } from "./event-scope.js";

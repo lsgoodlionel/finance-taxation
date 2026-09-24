@@ -451,7 +451,7 @@ test("往来单位从事项录入并传到凭证行", async (t) => {
   }
 
   async function createVoucher(body: Record<string, unknown>) {
-    const { createVoucherFromTemplate } = await import("../vouchers/routes.js");
+    const { createVoucherFromTemplate } = await import("../vouchers/voucher-from-template.js");
     const capture = createResponseCapture();
     await createVoucherFromTemplate(
       { method: "POST", url: "/api/vouchers", auth: createAuthContext(), body } as ApiRequest,

@@ -1,3 +1,4 @@
+import { resolveReleaseVersion } from "./release-version.js";
 function positiveIntEnv(raw: string | undefined, fallback: number): number {
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -26,6 +27,9 @@ export const env = {
   schedulerEnabled: process.env.SCHEDULER_ENABLED !== "false",
   schedulerIntervalMs: positiveIntEnv(process.env.SCHEDULER_INTERVAL_MS, 60 * 1000),
   databaseUrl: process.env.DATABASE_URL || null,
+  // 发布版本号，由构建时注入（见 release-version.ts）。
+  // 部署后 /health 会带上它，用来回答「线上跑的是哪个 Release」。
+  appVersion: resolveReleaseVersion(process.env),
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || null,
   ollamaBaseUrl: process.env.OLLAMA_BASE_URL || "http://host.docker.internal:11434",
   ollamaModel: process.env.OLLAMA_MODEL || "gemma4:latest"

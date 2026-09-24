@@ -6,7 +6,11 @@ import type {
   Voucher
 } from "@finance-taxation/domain-model";
 import { isPeriodClosingEntry } from "../ledger/closing-entries.js";
-import { summarizeProfitTotals } from "../reports/profit-accounts.js";
+import {
+  summarizeExpenseBreakdown,
+  summarizeProfitTotals,
+  type ExpenseBreakdownSlice
+} from "../reports/profit-accounts.js";
 import { formatWhole, formatRate, toWholeYuanOverview } from "./profit-display.js";
 
 interface DashboardQueueItem {
@@ -52,6 +56,13 @@ interface DashboardAiSummary {
 }
 
 export interface DashboardSnapshot {
+  /**
+   * 费用构成明细（P1）。按科目下发真实金额，替换前端此前的固定比例估算。
+   *
+   * 空数组是**合法状态**——本期没有费用分录时就是空的，
+   * 前端据此显示「本期还没有费用」而不是画一张编出来的图。
+   */
+  expenseBreakdown: ExpenseBreakdownSlice[];
   profitOverview: DashboardProfitOverview;
   riskBoard: DashboardRiskBoard;
   aiSummary: DashboardAiSummary;
@@ -92,6 +103,9 @@ export function buildDashboardSnapshot(input: {
   );
   // 科目口径与正式利润表共用同一纯函数，避免驾驶舱与 /reports 再次漂移。
   const totals = summarizeProfitTotals(periodEntries);
+  // P1 数据契约：费用构成明细。前端此前按固定比例估算，
+  // 而那张图是给老板看的——编出来的比例比不显示更糟。
+  const expenseBreakdown = summarizeExpenseBreakdown(periodEntries);
 
   const approvals = input.vouchers
     .filter((voucher) => voucher.status === "review_required")
@@ -152,6 +166,7 @@ export function buildDashboardSnapshot(input: {
   const overview = toWholeYuanOverview(totals);
 
   return {
+    expenseBreakdown,
     profitOverview: {
       revenue: formatWhole(overview.revenue),
       cost: formatWhole(overview.cost),

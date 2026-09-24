@@ -1,5 +1,5 @@
 import type { ServerResponse } from "node:http";
-import type { PermissionKey } from "@finance-taxation/domain-model";
+import type { PermissionKey } from "../access/permission-catalog.js";
 import type { ApiRequest } from "../types.js";
 import type { ObjectSchema } from "../utils/validate.js";
 

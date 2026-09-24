@@ -3,7 +3,8 @@ import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import type { DashboardData } from "../../lib/api";
-import { buildExpenseData } from "./expense-slices";
+import { Term } from "../../components/ui/Term";
+import { resolveExpenseChart } from "./expense-slices";
 
 const { Text } = Typography;
 
@@ -14,14 +15,29 @@ interface DashboardPieChartProps {
 }
 
 export function DashboardPieChart({ data }: DashboardPieChartProps) {
-  const pieData = buildExpenseData(data.profitOverview);
+  const { slices: pieData, isEstimated } = resolveExpenseChart(data);
 
   return (
     <Card
-      title={<Text strong>本月费用构成</Text>}
+      title={
+        <span>
+          <Text strong>本月费用构成</Text>
+          {isEstimated && (
+            // 估算必须写在脸上：老板会拿这张图判断「人工占比是不是太高」。
+            <Text type="warning" style={{ fontSize: 11, marginLeft: 8 }}>
+              内部拆分为估算值
+            </Text>
+          )}
+        </span>
+      }
       style={{ borderRadius: 12 }}
       styles={{ body: { paddingTop: 8 } }}
     >
+      {pieData.length === 0 ? (
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          本期还没有已<Term k="posting">过账</Term>的收入与费用。
+        </Text>
+      ) : (
       <ResponsiveContainer width="100%" height={220}>
         <PieChart>
           <Pie
@@ -47,6 +63,7 @@ export function DashboardPieChart({ data }: DashboardPieChartProps) {
           />
         </PieChart>
       </ResponsiveContainer>
+      )}
     </Card>
   );
 }

@@ -49,6 +49,8 @@ const taxItems: TaxItem[] = [
     taxType: "增值税",
     treatment: "确认销项税",
     basis: "按开票节点确认",
+    taxableAmountCents: null,
+    taxableCategory: null,
     filingPeriod: "2026-05",
     status: "pending",
     source: "analysis",

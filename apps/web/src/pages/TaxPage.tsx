@@ -27,7 +27,6 @@ import { resolveActiveTask } from "../lib/task-focus";
 import { useQueryState } from "../hooks/useQueryState";
 import { TaxBatchesPanel } from "./tax/TaxBatchesPanel";
 import { TaxHeader } from "./tax/TaxHeader";
-import { TaxHelpModal } from "./tax/TaxHelpModal";
 import { TaxItemsPanel } from "./tax/TaxItemsPanel";
 import { TaxMaterialsPanel, type TaxMaterialKey } from "./tax/TaxMaterialsPanel";
 import { TaxProfilePanel } from "./tax/TaxProfilePanel";
@@ -51,6 +50,17 @@ const MATERIAL_LABELS: Record<TaxMaterialKey, string> = {
   stamp: "印花税与附加税",
   cit: "企业所得税准备"
 };
+
+/**
+ * 台账列表上标「已超期」时用的结转年限。
+ *
+ * **只影响显示**：真正的弥补计算在后端，那边按公司的高新资质取 5 年或
+ * 10 年。前端不重复判定资质——判两处迟早漂移，而漂移的表现是列表上
+ * 标着「已超期」的那笔其实被正常弥补了（或反过来）。
+ *
+ * 高新企业在这里会看到偏保守的标记，但金额是对的。
+ */
+const LOSS_CARRYFORWARD_YEARS_DISPLAY = 5;
 
 const ACTION_ROW_STYLE = { display: "flex", flexWrap: "wrap" as const, gap: "10px", alignItems: "center" };
 
@@ -96,6 +106,10 @@ export function TaxPage() {
     incomeTaxPreparation,
     iitMaterials,
     stampAndSurtax,
+    taxPayments,
+    reloadTaxPayments,
+    lossLedger,
+    reloadLossLedger,
     vatFilingPeriod,
     setVatFilingPeriod,
     iitFilingPeriod,
@@ -112,8 +126,6 @@ export function TaxPage() {
     setProfileForm,
     notice,
     setNotice,
-    showHelp,
-    setShowHelp,
     vatWizardOpen,
     setVatWizardOpen,
     runtimeActionKey,
@@ -217,6 +229,11 @@ export function TaxPage() {
           </span>
         </div>
         <TaxMaterialsPanel
+          taxPayments={taxPayments}
+          onTaxPaymentCreated={() => void reloadTaxPayments()}
+          lossLedger={lossLedger}
+          onLossLedgerCreated={() => void reloadLossLedger()}
+          lossCarryforwardYears={LOSS_CARRYFORWARD_YEARS_DISPLAY}
           activeMaterial={activeMaterial}
           vatPaper={vatPaper}
           incomeTaxPreparation={incomeTaxPreparation}
@@ -303,13 +320,12 @@ export function TaxPage() {
 
   return (
     <section style={{ display: "grid", gap: "20px" }}>
-      {showHelp ? <TaxHelpModal onClose={() => setShowHelp(false)} /> : null}
       <ProPageBanner
         pageName="税务中心"
         plain="这里在算本期各个税种要交多少，并按税局要求准备申报用的材料，由财务或税务同事按申报期完成。您通常只需要知道「要交多少、什么时候交完」。"
       />
       <TaxShell
-        header={<TaxHeader activeMaterialLabel={MATERIAL_LABELS[activeMaterial]} onOpenHelp={() => setShowHelp(true)} />}
+        header={<TaxHeader activeMaterialLabel={MATERIAL_LABELS[activeMaterial]} />}
         guidance={<ResultBanner tone={notice.tone} message={notice.message} />}
       >
         <TaskFocusShell

@@ -1,3 +1,4 @@
+import React from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 // ─── Shared layout helpers for SettingsPage tabs ─────────────────────────────

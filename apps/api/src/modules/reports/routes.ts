@@ -5,8 +5,12 @@ import { query, queryOne, withTransaction } from "../../db/client.js";
 import { json } from "../../utils/http.js";
 import { listCompanyRiskFindings } from "../risk/routes.js";
 import { listCompanyTaxpayerProfiles } from "../tax/routes.js";
-import { listCompanyLedgerEntries } from "../vouchers/routes.js";
+import {
+  listCompanyLedgerEntries
+} from "../vouchers/voucher-queries.js";
 import { checkBalanceSheet } from "../ledger/balance-check.js";
+import { buildSnapshotProvenance } from "./provenance.js";
+import { attachFreshness, loadCurrentProvenance } from "./snapshot-freshness.js";
 import { resolveActiveTaxpayerProfile } from "../tax/profile.js";
 import {
   buildBalanceSheetReport,
@@ -25,6 +29,11 @@ interface ReportSnapshotRow {
   snapshot_date: string | Date;
   payload: ReportSnapshot["payload"];
   created_at: string | Date;
+  generated_by_user_id?: string | null;
+  source_entry_count?: number | string | null;
+  source_latest_posted_at?: string | Date | null;
+  period_start?: string | Date | null;
+  period_end?: string | Date | null;
 }
 
 function toIsoString(value: string | Date | null | undefined): string | null {
@@ -41,7 +50,17 @@ function mapSnapshotRow(row: ReportSnapshotRow): ReportSnapshot {
     periodLabel: row.period_label,
     snapshotDate: (toIsoString(row.snapshot_date) || "").slice(0, 10),
     payload: row.payload,
-    createdAt: toIsoString(row.created_at) || new Date().toISOString()
+    createdAt: toIsoString(row.created_at) || new Date().toISOString(),
+    generatedByUserId: row.generated_by_user_id ?? null,
+    // `?? null` 而不是 `|| null`：条数 0 是有效值（本期没有分录的空报表），
+    // 用 `||` 会把它变成 null，快照就被误判成「没有溯源信息」。
+    sourceEntryCount:
+      row.source_entry_count === null || row.source_entry_count === undefined
+        ? null
+        : Number(row.source_entry_count),
+    sourceLatestPostedAt: toIsoString(row.source_latest_posted_at ?? null),
+    periodStart: (toIsoString(row.period_start ?? null) || "").slice(0, 10) || null,
+    periodEnd: (toIsoString(row.period_end ?? null) || "").slice(0, 10) || null
   };
 }
 
@@ -151,26 +170,35 @@ async function buildReportPayload(
   period: ReturnType<typeof resolvePeriod>
 ) {
   if (reportType === "balance_sheet") {
-    return buildBalanceSheetReport({
-      periodLabel: period.periodLabel,
-      asOfDate: period.endDate,
-      entries: await listCompanyLedgerEntries(companyId, { dateTo: period.endDate })
-    });
+    // 资产负债表是时点表，取的是期末之前的全部分录；溯源也就该基于这一批，
+    // 而不是当期那一段——否则「账动过没有」会漏掉对以前期间的补录。
+    const entries = await listCompanyLedgerEntries(companyId, { dateTo: period.endDate });
+    return {
+      payload: buildBalanceSheetReport({
+        periodLabel: period.periodLabel,
+        asOfDate: period.endDate,
+        entries
+      }),
+      entries
+    };
   }
   const periodEntries = await listCompanyLedgerEntries(companyId, {
     dateFrom: period.startDate,
     dateTo: period.endDate
   });
   if (reportType === "profit_statement") {
-    return buildProfitStatementReport({
-      periodLabel: period.periodLabel,
+    return {
+      payload: buildProfitStatementReport({
+        periodLabel: period.periodLabel,
+        entries: periodEntries
+      }),
       entries: periodEntries
-    });
+    };
   }
-  return buildCashFlowReport({
-    periodLabel: period.periodLabel,
+  return {
+    payload: buildCashFlowReport({ periodLabel: period.periodLabel, entries: periodEntries }),
     entries: periodEntries
-  });
+  };
 }
 
 export async function createReportSnapshot(req: ApiRequest, res: ServerResponse) {
@@ -181,17 +209,28 @@ export async function createReportSnapshot(req: ApiRequest, res: ServerResponse)
   };
   const reportType = (input.reportType || "balance_sheet") as ReportSnapshot["reportType"];
   const period = resolvePeriod(req);
-  const payload = await buildReportPayload(companyId, reportType, period);
+  const { payload, entries } = await buildReportPayload(companyId, reportType, period);
+  // 溯源：记下这份报表算的是哪一批分录，之后账再动就能判定它过期了。
+  const provenance = buildSnapshotProvenance(entries);
   const id = `report-snapshot-${Date.now()}`;
   const snapshot = await withTransaction(async (client) => {
     await client.query(
       `
         insert into report_snapshots (
-          id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at
+          id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at,
+          generated_by_user_id, source_entry_count, source_latest_posted_at, period_start, period_end
         )
-        values ($1,$2,$3,$4,$5,$6,$7,$8)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
         on conflict (company_id, report_type, period_type, period_label)
-        do update set snapshot_date = excluded.snapshot_date, payload = excluded.payload, created_at = excluded.created_at
+        do update set
+          snapshot_date = excluded.snapshot_date,
+          payload = excluded.payload,
+          created_at = excluded.created_at,
+          generated_by_user_id = excluded.generated_by_user_id,
+          source_entry_count = excluded.source_entry_count,
+          source_latest_posted_at = excluded.source_latest_posted_at,
+          period_start = excluded.period_start,
+          period_end = excluded.period_end
       `,
       [
         id,
@@ -201,12 +240,18 @@ export async function createReportSnapshot(req: ApiRequest, res: ServerResponse)
         period.periodLabel,
         period.endDate,
         JSON.stringify(payload),
-        new Date().toISOString()
+        new Date().toISOString(),
+        req.auth!.userId,
+        provenance.entryCount,
+        provenance.latestPostedAt,
+        period.startDate,
+        period.endDate
       ]
     );
     const row = await client.query<ReportSnapshotRow>(
       `
-        select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at
+        select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at,
+               generated_by_user_id, source_entry_count, source_latest_posted_at, period_start, period_end
         from report_snapshots
         where company_id = $1 and report_type = $2 and period_type = $3 and period_label = $4
       `,
@@ -229,14 +274,17 @@ export async function listReportSnapshots(req: ApiRequest, res: ServerResponse) 
   }
   const rows = await query<ReportSnapshotRow>(
     `
-      select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at
+      select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at,
+             generated_by_user_id, source_entry_count, source_latest_posted_at, period_start, period_end
       from report_snapshots
       ${where}
       order by snapshot_date desc, created_at desc
     `,
     params
   );
-  const items = rows.map(mapSnapshotRow);
+  // 每条快照都要能回答「生成之后账还动过吗」——月结出完报表有人补一张凭证，
+  // 是这个系统里最常见的一种「报表悄悄失效」。
+  const items = attachFreshness(rows.map(mapSnapshotRow), await loadCurrentProvenance(companyId));
   return json(res, 200, { items, total: items.length });
 }
 
@@ -251,14 +299,16 @@ export async function getReportDiff(req: ApiRequest, res: ServerResponse) {
   const [fromRow, toRow] = await Promise.all([
     queryOne<ReportSnapshotRow>(
       `
-        select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at
+        select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at,
+             generated_by_user_id, source_entry_count, source_latest_posted_at, period_start, period_end
         from report_snapshots where company_id = $1 and id = $2
       `,
       [companyId, fromSnapshotId]
     ),
     queryOne<ReportSnapshotRow>(
       `
-        select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at
+        select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at,
+             generated_by_user_id, source_entry_count, source_latest_posted_at, period_start, period_end
         from report_snapshots where company_id = $1 and id = $2
       `,
       [companyId, toSnapshotId]
@@ -280,7 +330,8 @@ export async function getChairmanReportSummary(req: ApiRequest, res: ServerRespo
   }
   const snapshotRow = await queryOne<ReportSnapshotRow>(
     `
-      select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at
+      select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at,
+             generated_by_user_id, source_entry_count, source_latest_posted_at, period_start, period_end
       from report_snapshots
       where company_id = $1 and id = $2
     `,
@@ -318,7 +369,8 @@ export async function getPrintableReport(req: ApiRequest, res: ServerResponse) {
   }
   const snapshotRow = await queryOne<ReportSnapshotRow>(
     `
-      select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at
+      select id, company_id, report_type, period_type, period_label, snapshot_date, payload, created_at,
+             generated_by_user_id, source_entry_count, source_latest_posted_at, period_start, period_end
       from report_snapshots
       where company_id = $1 and id = $2
     `,

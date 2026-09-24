@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert } from "antd";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type { BusinessEvent, RiskClosureRecord, RiskFinding } from "@finance-taxation/domain-model";
 import {
@@ -8,7 +9,6 @@ import {
   listRiskFindings,
   runEventRiskCheck
 } from "../lib/api";
-import { HelpPanel } from "../components/ui/HelpPanel";
 import { TaskFocusShell } from "../components/ui/TaskFocusShell";
 import { resolveActiveTask } from "../lib/task-focus";
 import { LevelLegend, RISK_SEVERITY_LEVELS } from "../components/ui/LevelLegend";
@@ -37,31 +37,6 @@ import { buildRiskTasks, countOpenFindings, RISK_TASK_KEYS } from "./risk/risk-t
 import { readRiskUrlState, writeRiskUrlState, type RiskViewFilter } from "./risk/risk-url-state";
 import { writeAuditUrlState } from "./audit/audit-url-state";
 
-function RiskHelpPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return (
-    <HelpPanel
-      open={open}
-      title="风险勾稽中心 · 业务关系与操作说明"
-      onClose={onClose}
-      relations={(
-        <>
-          <strong>经营事项页</strong>给出业务背景，<strong>任务中心</strong>推进执行，<strong>单据中心</strong>和<strong><Term k="voucher">凭证</Term>中心</strong>提供依据，<strong>税务中心</strong>提供申报结果。<strong>风险<Term k="reconciliation">勾稽</Term>中心</strong>负责从这些页面中找出不一致、不完整或不合规的问题，并跟踪关闭。
-        </>
-      )}
-      workflowSteps={[
-        "系统基于事项、任务、单据、凭证、税务结果生成风险检查线索",
-        "在本页执行风险检查，生成风险发现",
-        "根据发现回到上游页面整改",
-        "整改完成后在本页关闭风险并记录复盘"
-      ]}
-      responsibility="这里不产生原始业务资料，也不直接记账申报，而是做横向核查。重点是发现“该做没做、该有没补、口径不一致、申报不完整”的问题，并推动闭环。"
-      caution="风险页不负责直接修复问题。发现风险后，应回到事项、任务、单据、凭证或税务页面完成整改，再回来关闭风险。"
-    >
-      <LevelLegend title="风险严重级别" items={RISK_SEVERITY_LEVELS} />
-    </HelpPanel>
-  );
-}
-
 export function RiskPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -84,7 +59,17 @@ export function RiskPage() {
   const [scopeFilter, setScopeFilter] = useState<RiskScopeFilter>(urlState.scope);
   const [viewFilter, setViewFilter] = useState<RiskViewFilter>(urlState.view);
   const [message, setMessage] = useState("正在准备风险勾稽。");
-  const [showHelp, setShowHelp] = useState(false);
+  /**
+   * 加载失败的原因。
+   *
+   * **与「没有风险」严格区分**：接口 403 时，KPI 卡片会照常渲染
+   * 「0 条 · 全部已关闭 · 关闭率 0%」——那看起来是一份健康的看板，
+   * 而实际上是这个账号根本读不到数据。税务专员在实验里就这样被误导过：
+   * 同一账号从归档包接口能读到「未关闭 7 项」。
+   *
+   * 给人看「一切正常」比给人看报错危险得多。
+   */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [taskKey, setTaskKey] = useState(urlState.task);
 
   useEffect(() => {
@@ -123,7 +108,14 @@ export function RiskPage() {
           `${navContractId ? `当前合同 ${navContractId}：` : navEventId ? `当前事项 ${navEventId}：` : navRiskFindingId ? `当前风险 ${navRiskFindingId}：` : ""}已加载 ${findingsPayload.total} 条风险发现。`
         );
       } catch (error) {
-        setMessage((error as Error).message);
+        const raw = (error as Error).message;
+        // 403 说人话：用户要知道这是权限问题，而不是「系统坏了」或「没有风险」。
+        setLoadError(
+          /forbidden|403/i.test(raw)
+            ? "当前账号没有查看风险发现的权限（risk.view）。请联系管理员开通，或换一个有权限的账号。"
+            : raw
+        );
+        setMessage("风险数据加载失败。");
       }
     }
     void bootstrap();
@@ -272,7 +264,24 @@ export function RiskPage() {
 
   const findingsWorkspace = (
     <RiskFindingsWorkspace
-      kpiCards={<RiskKpiCards findings={findings} />}
+      kpiCards={
+        loadError ? (
+          <Alert
+            type="error"
+            showIcon
+            message="风险数据没有加载出来"
+            description={
+              <span>
+                {loadError}
+                <br />
+                <strong>下面不是「没有风险」，而是读不到数据</strong>——请不要按当前画面判断风险状况。
+              </span>
+            }
+          />
+        ) : (
+          <RiskKpiCards findings={findings} />
+        )
+      }
       list={
         <RiskFindingsListPanel
           toolbar={findingsToolbar}
@@ -316,7 +325,6 @@ export function RiskPage() {
 
   return (
     <section style={{ display: "grid", gap: "20px" }}>
-      <RiskHelpPanel open={showHelp} onClose={() => setShowHelp(false)} />
       <RiskPageShell
         header={
           <>
@@ -324,7 +332,7 @@ export function RiskPage() {
               pageName="风险中心"
               plain="系统自动扫出来的账务、税务疑点清单，以及每条疑点的核实和处理记录，财务会逐条销掉。您只需要留意有没有高等级风险一直没人处理。"
             />
-            <RiskWorkbenchHeader message={message} navState={navState} onShowHelp={() => setShowHelp(true)} />
+            <RiskWorkbenchHeader message={message} navState={navState} />
           </>
         }
       >

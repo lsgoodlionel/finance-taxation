@@ -1,5 +1,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { VersionDriftBanner } from "./ui/VersionDriftBanner";
+import { WEB_RELEASE_VERSION } from "../lib/release-version";
 import { RouteFallback } from "./RouteFallback";
 import {
   Layout, Menu, Avatar, Button, Form, Input, Card, Typography, Divider, Spin, Drawer, Grid, Badge, Breadcrumb, Segmented,
@@ -170,6 +172,9 @@ function sidebarPalette(isGuided: boolean) {
 export function AppLayout() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
+  // 后端自报的发布版本，用来发现「只部署了一侧」。拿不到就保持 null——
+  // 猜一个值会让漂移提示要么漏报要么误报。
+  const [apiVersion, setApiVersion] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [badges, setBadges] = useState<NavBadges>({});
@@ -184,6 +189,23 @@ export function AppLayout() {
   const isGuided = mode === "guided";
 
   // 拉取待办数量，贴成导航角标（登录后 + 切换路由时刷新）
+  // 只在挂载时拉一次：版本在容器生命周期内不会变。
+  // 失败时静默——健康检查拿不到不该打扰用户，更不该因此挡住页面。
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/health")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { version?: string } | null) => {
+        if (!cancelled) setApiVersion(d?.version ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setApiVersion(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -258,8 +280,14 @@ export function AppLayout() {
   }
 
   if (!user) {
+    // 漂移提示放在登录页上也要显示：**版本不一致在登录之前就已经存在**，
+    // 而登录接口本身就可能因为契约不符而失败——那时候用户会以为是
+    // 密码错了，实际是只部署了一侧。
     return (
-      <LoginGate onLogin={(u) => { initFromRoles(u.roleIds); setUser(u); }} />
+      <>
+        <VersionDriftBanner webVersion={WEB_RELEASE_VERSION} apiVersion={apiVersion} />
+        <LoginGate onLogin={(u) => { initFromRoles(u.roleIds); setUser(u); }} />
+      </>
     );
   }
 
@@ -405,6 +433,10 @@ export function AppLayout() {
           </div>
           <span style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 700 }}>Finance Taxation</span>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+            {/* V15：移动端也要有本页指南。第一版只加在桌面顶栏，
+                窗口一窄整条就没了——而窄屏上更需要它，因为屏幕小、
+                页面上能放的提示更少。 */}
+            <PageGuideButton compact fallbackOnly />
             <Button type="text" icon={<SearchOutlined style={{ color: "#f1f5f9", fontSize: 16 }} />}
               onClick={() => cmd.setOpen(true)} aria-label="全局搜索" style={{ padding: "0 4px" }} />
             <GlobalPeriodPicker compact />
@@ -455,6 +487,13 @@ export function AppLayout() {
       </Sider>
 
       <Layout style={{ marginLeft: collapsed ? 64 : 224, transition: "margin-left 0.2s", background: "#f1f5f9", minHeight: "100vh" }}>
+        {/*
+          前后端版本漂移提示。放在顶栏**之上**且不随路由变化——
+          只升了一侧时，任何页面都可能读到后端不返回的字段，
+          而报出来的错与真正的原因无关。一致时它渲染为空，不占空间。
+        */}
+        <VersionDriftBanner webVersion={WEB_RELEASE_VERSION} apiVersion={apiVersion} />
+
         {/* Top bar with mode switcher + global period picker */}
         <div style={{
           position: "sticky", top: 0, zIndex: 50,
@@ -472,10 +511,10 @@ export function AppLayout() {
             );
           })()}
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {/* V15：本页指南。放在全局顶栏而不是每页各挂一个——
-              改造前只有 5 个页面挂了帮助，其余 20 多个没有，
-              因为「每页顺手写一段」是不会发生的。 */}
-          <PageGuideButton />
+          {/* V15：本页指南的**兜底**位置。主位置在 PageHeader（页面标题那一行），
+              这里只服务没有用 PageHeader 的 8 个页面——它们有自己的页头。
+              两处同时出现会重复，由 fallbackOnly 靠实际渲染计数避免。 */}
+          <PageGuideButton fallbackOnly />
           {modeSwitcher(false)}
           <button
             onClick={() => cmd.setOpen(true)}

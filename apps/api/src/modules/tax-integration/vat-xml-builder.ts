@@ -17,8 +17,24 @@ export interface CompanyInfo {
   bankAccount?: string;
 }
 
-function amt(value: string): string {
-  return parseFloat(value || "0").toFixed(2);
+/**
+ * 金额格式化。
+ *
+ * **拒绝非有限数**：这里曾把 `NaN` 原样写进 `<本期销项税额>NaN</本期销项税额>`，
+ * 而这份 XML 是报给税务局的。宁可抛错让导出失败，也不能生成一份带 NaN 的申报文件——
+ * 失败会让人去查，一个格式正常但数字是 NaN 的文件会被直接上传。
+ *
+ * `null` 表示计税依据缺失，同样不允许流进申报文件（调用方应当在此之前就拦住）。
+ */
+function amt(value: string | null): string {
+  const parsed = parseFloat(value ?? "0");
+  if (!Number.isFinite(parsed)) {
+    throw new Error(
+      `申报金额不是有效数字（${String(value)}）。拒绝生成申报文件——` +
+        "带 NaN 的 XML 会被当成正常文件报给税务局。"
+    );
+  }
+  return parsed.toFixed(2);
 }
 
 function esc(s: string): string {

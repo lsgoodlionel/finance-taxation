@@ -128,11 +128,21 @@ async function remainingCents(
   tx: { query: <T extends object>(sql: string, params?: unknown[]) => Promise<{ rows: T[] }> },
   input: { scheduleId: string | null; reimbursementId: string | null }
 ): Promise<number | null> {
+  // **在途的付款单也要占额度**（V16 角色实验发现）。
+  //
+  // 此前只减 status='paid' 的付款单，理由是「钱还没出去」——这句话本身没错，
+  // 但它让两张草稿付款单**互相看不见**：出纳给同一张 1200 元的报销单
+  // 连开两张全额付款单（各自校验时都看到「还欠 1200」），再逐一确认，
+  // 就付出去 2400。实测复现过。
+  //
+  // 额度要按「已付 + 在途」算：草稿随时会被确认，它已经占住了这笔钱。
+  // 只有作废（cancelled）的才真正释放额度。
   if (input.scheduleId) {
     const rows = await tx.query<{ amount_cents: string; paid: string }>(
       `select s.amount_cents,
               coalesce((select sum(p.amount_cents) from payments p
-                         where p.schedule_id = s.id and p.status = 'paid'), 0) as paid
+                         where p.schedule_id = s.id
+                           and p.status <> 'cancelled'), 0) as paid
          from contract_payment_schedules s where s.id = $1`,
       [input.scheduleId]
     );
@@ -146,7 +156,8 @@ async function remainingCents(
       `select coalesce((select sum(l.amount_cents) from reimbursement_lines l
                          where l.reimbursement_id = $1), 0) as total,
               coalesce((select sum(p.amount_cents) from payments p
-                         where p.reimbursement_id = $1 and p.status = 'paid'), 0) as paid`,
+                         where p.reimbursement_id = $1
+                           and p.status <> 'cancelled'), 0) as paid`,
       [input.reimbursementId]
     );
     const row = rows.rows[0];
@@ -264,6 +275,59 @@ async function resolveTarget(payment: PaymentRow): Promise<PaymentTarget | null>
 }
 
 /**
+ * 提交待发：把付款单从 `draft` 推到 `submitted`（V16）。
+ *
+ * ## 为什么需要这个动作
+ *
+ * `submitted` 这个状态**全库没有任何路径能产生**——它只被检查，从没被写入。
+ * 于是两条出纳的本职路径都是死的：
+ *
+ *   - 银企直连发款：`POST /api/bank-connect/instructions` 只接受 submitted，
+ *     恒返回 409 BANK_PAYMENT_NOT_SUBMITTED
+ *   - 导出银行 CSV：页面上 `disabled: row.status !== "submitted"`，
+ *     所以那个复选框**永远勾不中任何一行**，导出按钮恒为灰
+ *
+ * 门槛本身没错——草稿的意思就是「还没定」，不该发给银行。缺的是这个动作。
+ *
+ * ## 语义
+ *
+ * `submitted` = 出纳确认这笔款要发出去了，金额与收款方就此锁定，
+ * 接下来走两条路之一：导出 CSV 去网银，或走银企直连。
+ *
+ * **不强制所有付款都走这一步**：手工付款（现金、柜台转账）仍然可以
+ * `draft → paid` 直接确认。强制会破坏那条正当的流程。
+ */
+export async function submitPaymentForBank(
+  companyId: string,
+  id: string
+): Promise<PaymentResult<PaymentRow>> {
+  const payment = await getPayment(companyId, id);
+  if (!payment) {
+    return { ok: false, failure: { code: "PAYMENT_NOT_FOUND", message: "付款单不存在" } };
+  }
+  if (payment.status === "submitted") {
+    // 幂等：重复提交返回当前状态，不报错。
+    return { ok: true, value: payment };
+  }
+  if (payment.status !== "draft") {
+    return {
+      ok: false,
+      failure: {
+        code: "PAYMENT_INVALID_TRANSITION",
+        message: `付款单当前为「${payment.status}」，只有草稿能提交待发`
+      }
+    };
+  }
+
+  await query(
+    `update payments set status = 'submitted', updated_at = now()
+      where company_id = $1 and id = $2`,
+    [companyId, id]
+  );
+  return { ok: true, value: { ...payment, status: "submitted" } };
+}
+
+/**
  * 确认付款：生成凭证草稿并把状态推进到 `paid`。
  *
  * 幂等：已有凭证的付款单直接返回那一张。重试不能生成第二张——
@@ -296,7 +360,24 @@ export async function confirmPayment(
   }
 
   const voucherId = `vch-pay-${randomUUID()}`;
+  // 事务外那次 voucherId 检查只是快路径，**挡不住并发**：
+  // 六个并发请求会同时读到 voucherId 为空、同时通过，生成六张付款凭证。
+  // 实验里实测过——同一付款单并发 6 次 confirm，得到 6 个不同的 voucherId。
+  //
+  // 真正的判断必须在事务里、且对付款单行加锁之后再做一次。
+  let alreadyConfirmed: string | null = null;
   await withTransaction(async (tx) => {
+    // select ... for update：后到的请求在这里排队，等前一个提交后
+    // 才读到已经写好的 voucher_id，于是走幂等返回而不是再记一笔账。
+    const locked = await tx.query<{ voucher_id: string | null }>(
+      `select voucher_id from payments where id = $1 and company_id = $2 for update`,
+      [id, companyId]
+    );
+    const lockedVoucherId = locked.rows[0]?.voucher_id ?? null;
+    if (lockedVoucherId) {
+      alreadyConfirmed = lockedVoucherId;
+      return;
+    }
     const accounts = await tx.query<{ code: string; name: string }>(
       `select code, name from accounts where company_id = $1`,
       [companyId]
@@ -353,6 +434,19 @@ export async function confirmPayment(
       [companyId, id, voucherId]
     );
   });
+
+  // 并发时后到的那些请求在锁上排过队，读到的是前一个已经写好的凭证号——
+  // 如实返回它，而不是再记一笔账。对调用方来说这次调用是成功的，
+  // 因为这笔款确实已经付了。
+  if (alreadyConfirmed) {
+    return {
+      ok: true,
+      value: {
+        payment: { ...payment, status: "paid", voucherId: alreadyConfirmed },
+        voucherId: alreadyConfirmed
+      }
+    };
+  }
 
   return {
     ok: true,

@@ -28,6 +28,8 @@ test("buildCorporateIncomeTaxPreparation estimates prepayment and checklist", ()
       taxType: "企业所得税",
       treatment: "业务招待费纳税调整关注",
       basis: "2000",
+      taxableAmountCents: null,
+      taxableCategory: null,
       filingPeriod: "2026-Q2",
       status: "review_required",
       source: "analysis",
@@ -49,7 +51,21 @@ test("buildCorporateIncomeTaxPreparation estimates prepayment and checklist", ()
     filingPeriod: "2026-Q2",
     profitStatement,
     taxItems,
-    rndSummaries: [rndSummary]
+    rndSummaries: [rndSummary],
+    // 明确不是小微也不是高新：从业人数 500 超过 300 人上限。
+    // 这两条测试验的是**取数口径**（会计利润取税前利润总额），不是税率，
+    // 所以给一个确定走一般税率的资格，原有断言一条不用改。
+    qualification: {
+      employeeCount: 500,
+      totalAssetsCents: 100_000_000_00,
+      isRestrictedIndustry: false,
+      highTechCertificateExpiresOn: null
+    },
+    on: "2026-08-31",
+    // 没有以前年度亏损、没有预缴——这两条验的仍然是取数口径，
+    // 把批次 C 的两个新变量固定成中性值，原有断言一条不用改。
+    lossLedger: [],
+    prepaidTaxCents: 0
   });
 
   assert.equal(result.accountingProfit, "50000");
@@ -83,7 +99,21 @@ test("buildCorporateIncomeTaxPreparation uses 利润总额 as accounting profit,
     filingPeriod: "2026-Q2",
     profitStatement,
     taxItems: [],
-    rndSummaries: []
+    rndSummaries: [],
+    // 明确不是小微也不是高新：从业人数 500 超过 300 人上限。
+    // 这两条测试验的是**取数口径**（会计利润取税前利润总额），不是税率，
+    // 所以给一个确定走一般税率的资格，原有断言一条不用改。
+    qualification: {
+      employeeCount: 500,
+      totalAssetsCents: 100_000_000_00,
+      isRestrictedIndustry: false,
+      highTechCertificateExpiresOn: null
+    },
+    on: "2026-08-31",
+    // 没有以前年度亏损、没有预缴——这两条验的仍然是取数口径，
+    // 把批次 C 的两个新变量固定成中性值，原有断言一条不用改。
+    lossLedger: [],
+    prepaidTaxCents: 0
   });
 
   // Assert：会计利润取税前的利润总额，否则所得税基数被重复扣税而低估

@@ -1,3 +1,5 @@
+import { listTaxPayments as listTaxPaymentsApi, type TaxPaymentRecord } from "../../lib/api-tax-payments";
+import { listLossLedger as listLossLedgerApi, type LossLedgerRecord } from "../../lib/api-loss-ledger";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type {
@@ -68,6 +70,11 @@ export function useTaxWorkspace() {
   const [incomeTaxPreparation, setIncomeTaxPreparation] = useState<CorporateIncomeTaxPreparation | null>(null);
   const [iitMaterials, setIitMaterials] = useState<IndividualIncomeTaxMaterial | null>(null);
   const [stampAndSurtax, setStampAndSurtax] = useState<StampAndSurtaxSummary | null>(null);
+  // 本期已登记的税款缴款。附加税的计税依据就是它们的合计——
+  // 没有缴款记录时附加税算不出，用户要能在同一块里看到并补录。
+  const [taxPayments, setTaxPayments] = useState<TaxPaymentRecord[]>([]);
+  // 以前年度亏损台账（V17 阶段三批次 C）。没有它盈利年度会多缴税。
+  const [lossLedger, setLossLedger] = useState<LossLedgerRecord[]>([]);
   const [vatFilingPeriod, setVatFilingPeriod] = useState("2026-05");
   const [iitFilingPeriod, setIitFilingPeriod] = useState("2026-05");
   const [stampFilingPeriod, setStampFilingPeriod] = useState("2026-Q2");
@@ -262,10 +269,49 @@ export function useTaxWorkspace() {
     }
   }
 
+  /**
+   * 拉本期的缴款记录。
+   *
+   * 拉不到就让列表空着：登记入口本身还在，不该因为这一个接口挡住补录。
+   * 但**不能把失败当成「本期没缴款」**——附加税的结论由服务端给，
+   * 这里只负责显示已登记的明细。
+   */
+  async function reloadTaxPayments() {
+    try {
+      const payload = await listTaxPaymentsApi(stampFilingPeriod);
+      setTaxPayments(payload.items);
+    } catch {
+      setTaxPayments([]);
+    }
+    // 缴款变了，附加税的计税依据就变了——汇总要跟着重算，
+    // 否则用户登记完看到的还是「等主税缴纳后计算」。
+    await handleGenerateStamp();
+  }
+
+  async function reloadLossLedger() {
+    try {
+      const payload = await listLossLedgerApi();
+      setLossLedger(payload.items);
+    } catch {
+      setLossLedger([]);
+    }
+    // 台账变了，弥补后的基数就变了——汇算要跟着重算，
+    // 否则用户登记完看到的还是没弥补的税额。
+    await handleGenerateCit();
+  }
+
   async function handleGenerateStamp() {
     try {
       const payload = await getStampAndSurtaxSummary(stampFilingPeriod);
       setStampAndSurtax(payload);
+      // 汇总的同时把缴款明细也拉上：用户要在同一块里看到
+      // 「计税依据是这几笔的合计」。
+      try {
+        const payments = await listTaxPaymentsApi(stampFilingPeriod);
+        setTaxPayments(payments.items);
+      } catch {
+        setTaxPayments([]);
+      }
       setNotice({ tone: "success", message: "已汇总印花税与附加税事项。" });
     } catch (error) {
       setNotice({ tone: "error", message: (error as Error).message });
@@ -275,6 +321,13 @@ export function useTaxWorkspace() {
   async function handleGenerateCit() {
     try {
       const payload = await getCorporateIncomeTaxPreparation(incomeTaxPeriod);
+      // 台账与汇算一起拉：用户要在同一块里看到「弥补了哪几笔」。
+      try {
+        const ledger = await listLossLedgerApi();
+        setLossLedger(ledger.items);
+      } catch {
+        setLossLedger([]);
+      }
       setIncomeTaxPreparation(payload);
       setNotice({ tone: "success", message: "已生成企业所得税预缴与汇算准备。" });
     } catch (error) {
@@ -347,6 +400,10 @@ export function useTaxWorkspace() {
     incomeTaxPreparation,
     iitMaterials,
     stampAndSurtax,
+    taxPayments,
+    reloadTaxPayments,
+    lossLedger,
+    reloadLossLedger,
     vatFilingPeriod,
     setVatFilingPeriod,
     iitFilingPeriod,

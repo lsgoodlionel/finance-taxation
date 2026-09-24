@@ -17,6 +17,7 @@ import {
   BankOutlined, UploadOutlined, CheckCircleOutlined, ClockCircleOutlined,
   PlusOutlined, SyncOutlined, RobotOutlined,
 } from "@ant-design/icons";
+import { LoadErrorState } from "../../components/ui/LoadErrorState";
 import { toast } from "sonner";
 import type { RcFile } from "antd/es/upload";
 import {
@@ -40,6 +41,9 @@ export function BankingPage() {
   const [candidates, setCandidates] = useState<ReconciliationCandidate[]>([]);
   const [summary, setSummary]       = useState<Record<string, { count: number; totalAmount: number }>>({});
   const [loading, setLoading]       = useState(true);
+  // 加载失败的原因。**与「暂无流水」严格区分**——toast 几秒后消失，
+  // 空态文案会一直留在屏幕上，把权限或网络问题伪装成业务事实。
+  const [loadError, setLoadError]   = useState<string | null>(null);
   const [importing, setImporting]   = useState(false);
   const [running, setRunning]       = useState(false);
   const [savingRules, setSavingRules] = useState(false);
@@ -63,8 +67,11 @@ export function BankingPage() {
       setSummary(smry);
       setCandidates(candidateRes.items);
       rulesForm.setFieldsValue(ruleRes);
+      setLoadError(null);
     } catch (err) {
-      toast.error((err as Error).message);
+      const message = (err as Error).message;
+      toast.error(message);
+      setLoadError(message);
     } finally {
       setLoading(false);
     }
@@ -248,7 +255,13 @@ export function BankingPage() {
                   size="small"
                   pagination={{ pageSize: 20, hideOnSinglePage: true, size: "small",
                     showTotal: t => `共 ${t} 条` }}
-                  locale={{ emptyText: <Empty description="暂无流水数据，请先导入 CSV" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+                  locale={{
+                    // 一次 Promise.all 拉全部，失败时两张表都读不到——
+                    // 空态说「暂无流水」会让用户去找导入按钮，而问题在别处。
+                    emptyText: loadError
+                      ? <LoadErrorState subject="银行流水" error={loadError} />
+                      : <Empty description="暂无流水数据，请先导入 CSV" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  }}
                 />
               ),
             },
@@ -280,7 +293,11 @@ export function BankingPage() {
                   rowKey="id"
                   size="small"
                   pagination={{ hideOnSinglePage: true }}
-                  locale={{ emptyText: <Empty description="暂无银行账户，点击「添加银行账户」" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+                  locale={{
+                    emptyText: loadError
+                      ? <LoadErrorState subject="银行账户" error={loadError} />
+                      : <Empty description="暂无银行账户，点击「添加银行账户」" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  }}
                 />
               ),
             },

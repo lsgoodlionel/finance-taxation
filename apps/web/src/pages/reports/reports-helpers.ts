@@ -61,3 +61,54 @@ export function getSnapshotSelectionLabel(snapshotId: string, snapshots: ReportS
   const snapshot = snapshots.find((item) => item.id === snapshotId);
   return snapshot ? formatSnapshotLabel(snapshot) : "已选择快照";
 }
+
+/**
+ * 从快照的期间标签还原出重新生成它所需的参数（V15/P1）。
+ *
+ * 快照被判定为「账已变动」之后，用户要能就地重算——而重算接口收的是
+ * year/month/quarter，快照上存的却是标签。**这一步不能猜**：把 `2026 Q3`
+ * 错解析成 3 月，会静默生成一份期间不对的报表覆盖掉原来那份。
+ *
+ * 解析不出来时返回 null，调用方据此禁用按钮，而不是拿默认值去生成。
+ */
+export interface SnapshotPeriodParams {
+  periodType: "month" | "quarter" | "year";
+  year: number;
+  month: number;
+  quarter: number;
+}
+
+export function parseSnapshotPeriod(periodLabel: string): SnapshotPeriodParams | null {
+  const label = (periodLabel || "").trim();
+
+  const monthMatch = /^(\d{4})-(\d{2})$/.exec(label);
+  if (monthMatch) {
+    const month = Number(monthMatch[2]);
+    if (month < 1 || month > 12) return null;
+    return {
+      periodType: "month",
+      year: Number(monthMatch[1]),
+      month,
+      quarter: Math.ceil(month / 3)
+    };
+  }
+
+  const quarterMatch = /^(\d{4})\s*Q([1-4])$/.exec(label);
+  if (quarterMatch) {
+    const quarter = Number(quarterMatch[2]);
+    return {
+      periodType: "quarter",
+      year: Number(quarterMatch[1]),
+      // 季度末月：重算接口按 quarter 取期间，month 只是补齐，取季末更不容易误导。
+      month: quarter * 3,
+      quarter
+    };
+  }
+
+  const yearMatch = /^(\d{4})$/.exec(label);
+  if (yearMatch) {
+    return { periodType: "year", year: Number(yearMatch[1]), month: 12, quarter: 4 };
+  }
+
+  return null;
+}

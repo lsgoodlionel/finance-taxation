@@ -360,6 +360,19 @@ test("period closing must not zero out any profit-and-loss read path for the clo
     await seedInvoiceFixture(pool);
     const { closePool } = await import("../../db/client.js");
 
+    // 登记一个明确走一般税率的资格（从业人数 500 超过小微上限 300）。
+    //
+    // V17 阶段三之后，企业所得税不再一律 25%：资格没登记时报「优惠资格待确认」
+    // 而不给数字。这条测试验的是**结账不得把损益读取路径清零**，
+    // 不是税率判定——给一个确定的资格，下面 200 元那条断言就还是在验它原本
+    // 要验的东西（800 × 25%），一个字都不用改。
+    await pool.query(
+      `update companies
+          set employee_count = 500, total_assets_cents = 10000000000
+        where id = $1`,
+      [COMPANY_ID]
+    );
+
     // ── 1. 结转前：确认夹具本身算出来就是对的 ────────────────────────────
     const statementBefore = await fetchProfitStatement();
     assert.equal(statementBefore.revenue, "1300");

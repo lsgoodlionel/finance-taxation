@@ -7,6 +7,16 @@ import type {
 } from "@finance-taxation/domain-model";
 import { actionButtonStyle, cellStyle, miniStatStyle, panelStyle } from "./taxStyles";
 import { Term } from "../../components/ui/Term";
+import { TaxPaymentEntry } from "./TaxPaymentEntry";
+import { LossLedgerEntry } from "./LossLedgerEntry";
+import type { LossLedgerRecord } from "../../lib/api-loss-ledger";
+import type { TaxPaymentRecord } from "../../lib/api-tax-payments";
+
+/** 分转元，用于展示。null 由调用处先挡掉——这里不该出现。 */
+function yuan(cents: number | null): string {
+  if (cents === null) return "—";
+  return `${(cents / 100).toFixed(2)} 元`;
+}
 
 export type TaxMaterialKey = "vat" | "iit" | "stamp" | "cit";
 
@@ -16,6 +26,14 @@ type TaxMaterialsPanelProps = {
   incomeTaxPreparation: CorporateIncomeTaxPreparation | null;
   iitMaterials: IndividualIncomeTaxMaterial | null;
   stampAndSurtax: StampAndSurtaxSummary | null;
+  /** 本期已登记的税款缴款记录。附加税的计税依据就是它们的合计。 */
+  taxPayments: TaxPaymentRecord[];
+  onTaxPaymentCreated(): void;
+  /** 以前年度亏损台账（V17 阶段三批次 C）。 */
+  lossLedger: LossLedgerRecord[];
+  onLossLedgerCreated(): void;
+  /** 结转年限：一般企业 5 年，高新技术企业 10 年。 */
+  lossCarryforwardYears: number;
   vatFilingPeriod: string;
   iitFilingPeriod: string;
   stampFilingPeriod: string;
@@ -53,6 +71,11 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
     incomeTaxPreparation,
     iitMaterials,
     stampAndSurtax,
+    taxPayments,
+    onTaxPaymentCreated,
+    lossLedger,
+    onLossLedgerCreated,
+    lossCarryforwardYears,
     vatFilingPeriod,
     iitFilingPeriod,
     stampFilingPeriod,
@@ -186,6 +209,31 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
                   <div>申报期：{stampAndSurtax.filingPeriod}</div>
                   <div><Term k="stamp-duty">印花税</Term>事项数：{stampAndSurtax.stampDutyItems.length}</div>
                   <div><Term k="surtax">附加税</Term>事项数：{stampAndSurtax.surtaxItems.length}</div>
+
+                  {/*
+                    算出来的附加税（V17 阶段三批次 B）。此前这块只有一个
+                    「事项数：0」——那个数永远是 0，因为没人手工建税项，
+                    而系统一分钱都不算。
+                  */}
+                  {stampAndSurtax.surtax.totalCents === null ? (
+                    <div style={{ color: "#b45309", marginTop: 8 }}>
+                      <strong>附加税暂时算不出</strong>——{stampAndSurtax.surtax.reason}
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 8 }}>
+                      <div>城市维护建设税：{yuan(stampAndSurtax.surtax.urbanConstructionCents)}</div>
+                      <div>教育费附加：{yuan(stampAndSurtax.surtax.educationSurchargeCents)}</div>
+                      <div>地方教育附加：{yuan(stampAndSurtax.surtax.localEducationSurchargeCents)}</div>
+                      <div>
+                        <strong>合计：{yuan(stampAndSurtax.surtax.totalCents)}</strong>
+                      </div>
+                      {stampAndSurtax.surtax.reductionCents > 0 && (
+                        <div style={{ color: "#15803d" }}>
+                          六税两费减半减征：{yuan(stampAndSurtax.surtax.reductionCents)}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <ul style={{ paddingLeft: "20px", marginBottom: 0 }}>
                     {stampAndSurtax.notes.map((item) => (
                       <li key={item}>{item}</li>
@@ -195,6 +243,16 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
               ) : (
                 <p style={{ margin: 0, color: "#6c7a89" }}>尚未汇总<Term k="stamp-duty">印花税</Term>与<Term k="surtax">附加税</Term>事项。</p>
               )}
+
+              {/*
+                缴款登记的入口放在这里：用户在上面看到「等主税缴纳后即可计算」，
+                该做的事的入口就应该在这句话旁边，而不是让人去别的页面找。
+              */}
+              <TaxPaymentEntry
+                filingPeriod={stampFilingPeriod}
+                payments={taxPayments}
+                onCreated={onTaxPaymentCreated}
+              />
             </div>
           )}
           {activeMaterial === "cit" && (
@@ -209,8 +267,74 @@ export function TaxMaterialsPanel(props: TaxMaterialsPanelProps) {
                   <div>申报期：{incomeTaxPreparation.filingPeriod}</div>
                   <div>会计利润：{incomeTaxPreparation.accountingProfit}</div>
                   <div>应纳税所得额估算：{incomeTaxPreparation.taxableIncomeEstimate}</div>
-                  <div>税率：{incomeTaxPreparation.incomeTaxRate}%</div>
-                  <div>预缴税额估算：{incomeTaxPreparation.prepaymentTaxEstimate}</div>
+                  {/*
+                    弥补与抵减的三步要都显示：利润 → 弥补后基数 → 应补退。
+                    只给最后一个数字的话，对不上账时用户无从查起。
+                  */}
+                  {Number(incomeTaxPreparation.lossOffset) > 0 && (
+                    <>
+                      <div>弥补以前年度亏损：-{incomeTaxPreparation.lossOffset}</div>
+                      <div>
+                        <strong>弥补后应纳税所得额：{incomeTaxPreparation.taxableIncomeAfterLoss}</strong>
+                      </div>
+                    </>
+                  )}
+                  {incomeTaxPreparation.expiredLossNotice && (
+                    <div style={{ color: "#b45309" }}>
+                      {incomeTaxPreparation.expiredLossNotice}
+                    </div>
+                  )}
+                  {/*
+                    税率可能是 null（优惠资格未登记）。此前这里写的是
+                    `{incomeTaxRate}%`，null 会渲染成「税率：%」——
+                    一个看不懂的空白，用户不知道是系统坏了还是税率真是空的。
+                  */}
+                  {incomeTaxPreparation.incomeTaxRate === null ? (
+                    <div style={{ color: "#b45309" }}>
+                      税率：<strong>待确认</strong>——{incomeTaxPreparation.preferenceNotice}
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        税率：{incomeTaxPreparation.incomeTaxRate}%
+                        {incomeTaxPreparation.preferenceKind === "small_profit" && (
+                          <span style={{ color: "#6c7a89" }}>
+                            （小型微利：减按 {incomeTaxPreparation.reducedInclusionPercent}% 计入
+                            应纳税所得额，按 {incomeTaxPreparation.appliedRatePercent}% 征收）
+                          </span>
+                        )}
+                        {incomeTaxPreparation.preferenceKind === "high_tech" && (
+                          <span style={{ color: "#6c7a89" }}>（高新技术企业优惠）</span>
+                        )}
+                      </div>
+                      <div>应纳税额：{incomeTaxPreparation.prepaymentTaxEstimate}</div>
+                      <div>本期已预缴：{incomeTaxPreparation.prepaidTax}</div>
+                      {incomeTaxPreparation.taxPayableOrRefundable !== null && (
+                        <div>
+                          {/*
+                            **负数是应退**。显示成「应补 -155」会让用户以为
+                            要交负数的钱——这两个词对应的动作完全不同。
+                          */}
+                          <strong>
+                            {Number(incomeTaxPreparation.taxPayableOrRefundable) < 0
+                              ? `应退税额：${Math.abs(Number(incomeTaxPreparation.taxPayableOrRefundable))}`
+                              : `应补税额：${incomeTaxPreparation.taxPayableOrRefundable}`}
+                          </strong>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {Number(incomeTaxPreparation.carryforwardLoss) > 0 && (
+                    <div>
+                      可结转以后年度弥补的亏损：{incomeTaxPreparation.carryforwardLoss}
+                    </div>
+                  )}
+                  <LossLedgerEntry
+                    entries={lossLedger}
+                    currentYear={Number(incomeTaxPeriod.slice(0, 4)) || new Date().getFullYear()}
+                    carryforwardYears={lossCarryforwardYears}
+                    onCreated={onLossLedgerCreated}
+                  />
                   <h4>调整提示</h4>
                   <ul style={{ paddingLeft: "20px" }}>
                     {incomeTaxPreparation.adjustmentHints.map((item) => (

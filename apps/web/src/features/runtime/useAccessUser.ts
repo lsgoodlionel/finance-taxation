@@ -6,6 +6,13 @@ export interface AccessUserSummary {
   username: string;
   displayName: string;
   roleIds: string[];
+  /**
+   * 这个人实际持有的权限键。
+   *
+   * 用它决定显示哪些按钮，**不要在前端按 roleIds 自己推**——
+   * 那等于把后端的权限表复制一份，两份迟早漂移。
+   */
+  permissions?: string[];
   departmentName: string | null;
 }
 

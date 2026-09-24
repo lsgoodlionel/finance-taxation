@@ -110,12 +110,27 @@ export async function createKnowledgeItem(req: ApiRequest, res: ServerResponse):
   json(res, 201, mapRow(row!));
 }
 
+/**
+ * 校验 id 是不是合法 UUID。
+ *
+ * **不校验的话非 UUID 会在 SQL 层抛错变成 500**，而用户看到的是「服务器错误」
+ * 而不是「这条不存在」。P0 的路径级测试用一个 `"nope"` 就把它试出来了。
+ */
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 export async function updateKnowledgeItem(
   req: ApiRequest,
   res: ServerResponse,
   id: string
 ): Promise<void> {
   const companyId = req.auth!.companyId;
+  // 非 UUID 直接当「不存在」——交给 SQL 会抛 invalid input syntax 变成 500。
+  if (!isUuid(id)) {
+    json(res, 404, { error: "知识库条目不存在" });
+    return;
+  }
   const body = (req.body ?? {}) as Partial<{
     category: string;
     title: string;
@@ -176,6 +191,10 @@ export async function deleteKnowledgeItem(
   id: string
 ): Promise<void> {
   const companyId = req.auth!.companyId;
+  if (!isUuid(id)) {
+    json(res, 404, { error: "知识库条目不存在" });
+    return;
+  }
 
   const [existing] = await query<Record<string, unknown>>(
     "select id, title from company_knowledge_items where id = $1 and company_id = $2",

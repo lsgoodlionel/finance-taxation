@@ -14,6 +14,7 @@ import {
 } from "../../lib/api";
 import { Term } from "../../components/ui/Term";
 import { Explain } from "../../components/ui/Explain";
+import { canSubmitAtStep } from "./vat-wizard-logic";
 
 const BATCH_STATUS_LABELS: Record<string, string> = {
   draft: "草稿",
@@ -272,7 +273,7 @@ export function VatDeclarationWizard({
               下一步
             </Button>
           )}
-          {step === steps.length - 1 && (
+          {canSubmitAtStep(step, steps.length) && (
             <Button type="primary" loading={submitting} onClick={() => void handleSubmit()}>
               确认申报
             </Button>

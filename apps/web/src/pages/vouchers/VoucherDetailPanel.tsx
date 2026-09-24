@@ -1,8 +1,11 @@
-import { Button, Space, Tag, Typography, Descriptions, Divider, Table } from "antd";
+// 显式 import React：本仓的 web 测试用 `node --import tsx` 直接跑组件做服务端渲染，
+// 那条路径下 JSX 走的是 classic transform，缺了它会在渲染时报 React is not defined。
+import React from "react";
+import { Button, Popconfirm, Space, Tag, Typography, Descriptions, Divider, Table } from "antd";
 import type { WorkflowRunDetail } from "../../lib/api";
 import type { ColumnsType } from "antd/es/table";
 import {
-  CheckOutlined, AuditOutlined, PrinterOutlined, EditOutlined, SafetyCertificateOutlined,
+  CheckOutlined, AuditOutlined, PrinterOutlined, EditOutlined, RollbackOutlined, SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import type { VoucherDetail, VoucherTemplate } from "../../lib/api";
 import { VOUCHER_STATUS_LABELS, VOUCHER_TYPE_LABELS, useI18n } from "../../lib/i18n";
@@ -28,7 +31,22 @@ interface VoucherDetailPanelProps {
   updating: boolean;
   onValidate: () => Promise<void>;
   onApprove: () => Promise<void>;
-  onPost: () => Promise<void>;
+  /**
+   * 过账。
+   *
+   * 返回 `void` 而不是 `Promise<void>`：它内部弹一个需要选终审人的确认框，
+   * 真正的过账发生在用户点「确认」之后。让它返回 Promise 会诱使调用方 `await`，
+   * 而那个 Promise 在对话框弹出时就已经 resolve 了——等于什么都没等到。
+   */
+  onPost: () => void;
+  /**
+   * 红冲已过账的凭证。
+   *
+   * 手册和页面指南一直写着「过错了用红冲」「红冲按钮点了报…」，
+   * 而这个按钮在前台**根本不存在**——后端 `POST /api/vouchers/:id/reverse`
+   * 从 V12 起就在，只是没人接上来。
+   */
+  onReverse: () => Promise<void>;
   onSummaryUpdate: (summary: string) => Promise<void>;
   onOpenEvent?: (businessEventId: string) => void;
   onOpenDocuments?: (businessEventId: string) => void;
@@ -67,6 +85,7 @@ export function VoucherDetailPanel({
   onValidate,
   onApprove,
   onPost,
+  onReverse,
   onSummaryUpdate,
   onOpenEvent,
   onOpenDocuments,
@@ -90,7 +109,16 @@ export function VoucherDetailPanel({
   const latestCommand = runtimeDetail?.commands[0] ?? null;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+    // aria-label 让这块区域可被定位：列表每行也有「审核通过」等快捷按钮，
+    // 没有锚点时「点详情里的那个按钮」这件事无从表达——
+    // 对读屏用户同样如此，他们需要知道自己进了哪一块。
+    <Space
+      direction="vertical"
+      size={16}
+      style={{ width: "100%" }}
+      role="region"
+      aria-label="凭证详情"
+    >
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
@@ -180,7 +208,17 @@ export function VoucherDetailPanel({
           >
             借贷校验
           </Button>
-          {detail.status === "draft" && (
+          {/*
+            「复核过没有」的判据是 **approvedAt**，不是 status。
+
+            事项分析生成的凭证落库即 `review_required` 但 `approvedAt` 为 null——
+            按 status 判，它既拿不到「审核通过」（那只给 draft），
+            点「过账」又必然 400（服务端要求 approvedAt 非空）。
+            这类凭证在界面上**无路可走**，实验时库里卡了 5 张。
+
+            status 是粗粒度标记，approvedAt 才是「有没有人复核过」的事实。
+          */}
+          {!detail.approvedAt && (
             <Button
               size="small"
               type="primary"
@@ -192,7 +230,7 @@ export function VoucherDetailPanel({
               审核通过
             </Button>
           )}
-          {detail.status === "review_required" && (
+          {detail.approvedAt && (
             <Button
               size="small"
               type="primary"
@@ -203,6 +241,31 @@ export function VoucherDetailPanel({
               过账
             </Button>
           )}
+          <Button size="small" icon={<PrinterOutlined />} disabled>打印预览</Button>
+        </Space>
+      )}
+
+      {/*
+        已过账凭证的动作区。
+
+        **必须和上面那块并列，不能嵌在 `!isPosted` 里面**——红冲第一版就是嵌进去的，
+        `!isPosted && status === "posted"` 恒假，按钮从来没渲染出来过。
+        tsc 干净、测试全绿、护栏也绿（前端源码里确实出现了 reverseVoucher 这个符号），
+        只有真的打开页面看才发现它不在。
+      */}
+      {isPosted && (
+        <Space size={8} wrap>
+          <Popconfirm
+            title="红冲这张凭证？"
+            description="会生成一张方向相反的红冲凭证（草稿），复核过账后原分录才被冲平。原凭证不会被改动。"
+            okText="生成红冲凭证"
+            cancelText="取消"
+            onConfirm={() => void onReverse()}
+          >
+            <Button size="small" danger icon={<RollbackOutlined />} loading={updating}>
+              红冲
+            </Button>
+          </Popconfirm>
           <Button size="small" icon={<PrinterOutlined />} disabled>打印预览</Button>
         </Space>
       )}

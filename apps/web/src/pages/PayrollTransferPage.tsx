@@ -173,6 +173,7 @@ export function PayrollTransferPage({ activeTask = PAYROLL_TASK_KEYS.transfer }:
                   onApprove={workflow.handleApprove}
                   onDownload={workflow.handleDownload}
                   onDisburse={workflow.handleDisburse}
+                  onSubmitViaApi={workflow.handleSubmitViaApi}
                   onCompensate={workflow.handleCompensate}
                 />
               ) : (

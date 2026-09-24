@@ -49,6 +49,14 @@ test("成本中心从申请单流到凭证", async (t) => {
   );
   const userId = userRow.rows[0]!.id;
 
+  // 审批人必须与发起人不同——V16 起「审批人 ≠ 发起人」是硬约束。
+  // 这条用例验的是成本中心怎么从申请单流到凭证，不是自批，换个人继续测原来的东西。
+  const approverRow = await pool.query<{ id: string }>(
+    `select id from users where company_id = $1 and id <> $2 order by id limit 1`,
+    [COMPANY_ID, userId]
+  );
+  const APPROVER_ID = approverRow.rows[0]!.id;
+
   // 种子已经播了成本中心（SEED-RD / SEED-MK），取一个用。
   const ccRow = await pool.query<{ id: string; name: string }>(
     `select id, name from cost_centers where company_id = $1 order by id limit 1`,
@@ -85,7 +93,7 @@ test("成本中心从申请单流到凭证", async (t) => {
       companyId: COMPANY_ID,
       id: requestId,
       action: "approve",
-      actorUserId: userId
+      actorUserId: APPROVER_ID
     });
     assert.equal(approved.ok, true);
     if (!approved.ok) return;
@@ -234,7 +242,7 @@ test("成本中心从申请单流到凭证", async (t) => {
       companyId: COMPANY_ID,
       id: noCc.value.id,
       action: "approve",
-      actorUserId: userId
+      actorUserId: APPROVER_ID
     });
     assert.equal(approved.ok, true);
     if (!approved.ok) return;

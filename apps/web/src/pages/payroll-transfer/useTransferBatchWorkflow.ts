@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import type { AuditLog } from "@finance-taxation/domain-model";
 import {
   approveTransferBatch, buildTransferBatch, compensateTransferBatch, disburseTransferBatch,
+  submitTransferBatchViaApi,
   downloadTransferFile, getTransferBatch, listAuditLogs, listTransferBatches,
   type PayrollTransferBatch, type PayrollTransferLine,
 } from "../../lib/api";
@@ -26,6 +27,7 @@ export interface TransferBatchWorkflowState {
   handleApprove: () => Promise<void>;
   handleDownload: (format: "generic" | "cmb") => Promise<void>;
   handleDisburse: () => Promise<void>;
+  handleSubmitViaApi: () => Promise<void>;
   handleCompensate: () => Promise<void>;
   handleRuntimeAction: (action: WorkflowRuntimeAction) => Promise<void>;
 }
@@ -151,6 +153,34 @@ export function useTransferBatchWorkflow(genPeriod: string): TransferBatchWorkfl
     } catch (err) { toast.error((err as Error).message); } finally { busyRef.current = false; setBusy(false); }
   }
 
+  /**
+   * 走银企直连提交代发。
+   *
+   * 失败时**不推进状态**——银行退回是常态（限额、账号有误、维护窗口），
+   * 把它当成功会让一批没发出去的工资显示成已代发。
+   */
+  async function handleSubmitViaApi() {
+    if (!selected) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      const result = await submitTransferBatchViaApi(selected.batch.id);
+      toast.success(
+        result.bankTransferRef
+          ? `已发往银行（${result.provider}），银行流水号 ${result.bankTransferRef}`
+          : result.message || "已发往银行"
+      );
+      await loadBatches();
+      await selectBatch(selected.batch.id);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
+
   async function handleCompensate() {
     if (!selected) return;
     if (busyRef.current) return;
@@ -213,6 +243,7 @@ export function useTransferBatchWorkflow(genPeriod: string): TransferBatchWorkfl
     handleApprove,
     handleDownload,
     handleDisburse,
+    handleSubmitViaApi,
     handleCompensate,
     handleRuntimeAction
   };

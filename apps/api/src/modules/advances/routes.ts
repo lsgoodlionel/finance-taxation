@@ -13,6 +13,8 @@ import type { ApiRequest } from "../../types.js";
 import { json } from "../../utils/http.js";
 import { writeAudit } from "../../services/audit.js";
 import { payAdvance } from "./payment.js";
+import { checkExpenseAction } from "../access/expense-actions.js";
+import { syncApprovalInstance } from "../approval/document-sync.js";
 import {
   createAdvance,
   getAdvance,
@@ -105,6 +107,29 @@ export async function transitionAdvanceRoute(
   const body = (req.body ?? {}) as Record<string, unknown>;
   const action = typeof body.action === "string" ? body.action : "";
 
+  // ── 谁能做这个动作（V16）────────────────────────────────────────────────
+  //
+  // 此前这个接口只由 `expense.submit` 守护（每个员工都持有），
+  // `transitionAdvance` 又不接收操作人。角色实验的**真实审计日志**里有 3 组
+  // 「出纳自借、自批、自付」，同一个人 36 毫秒走完全流程。
+  //
+  // 判定与报销单共用 access/expense-actions.ts：两处漏洞形状完全相同，
+  // 各写一遍迟早漂移。
+  const existing = await getAdvance(req.auth!.companyId, id);
+  if (!existing) {
+    json(res, 404, { error: "借款单不存在", code: "ADVANCE_NOT_FOUND" });
+    return;
+  }
+
+  const verdict = checkExpenseAction("advance", action, existing.borrowerUserId, {
+    userId: req.auth!.userId,
+    roleCodes: req.auth!.roleCodes
+  });
+  if (!verdict.ok) {
+    json(res, verdict.status!, { error: verdict.error, code: verdict.code });
+    return;
+  }
+
   const result = await transitionAdvance(req.auth!.companyId, id, action);
   if (!result.ok) {
     json(res, STATUS_BY_FAILURE[result.failure.code], {
@@ -124,7 +149,22 @@ export async function transitionAdvanceRoute(
     changes: { status: result.value.status }
   });
 
-  json(res, 200, { advance: await withBalance(result.value) });
+  // 审批流同步：提交建实例、批准/驳回推进实例。
+  // 与报销单同一套机制（modules/reimbursements/approval-sync.ts 的说明）。
+  const approvalNotice = await syncApprovalInstance({
+    companyId: req.auth!.companyId,
+    documentType: "advance",
+    documentId: id,
+    action,
+    actor: { userId: req.auth!.userId, roleCodes: req.auth!.roleCodes },
+    amountCents: result.value.amountCents
+  });
+
+  json(res, 200, {
+    advance: await withBalance(result.value),
+    approvalTracked: approvalNotice.tracked,
+    ...(approvalNotice.message ? { note: approvalNotice.message } : {})
+  });
 }
 
 /**
@@ -144,6 +184,20 @@ export async function payAdvanceRoute(
     json(res, 404, { error: "借款单不存在", code: "ADVANCE_NOT_FOUND" });
     return;
   }
+  // 打款也是审批类动作：**不能给自己打款**。
+  //
+  // 出纳同时持有 expense.submit 与 banking.manage，此前可以自借 → 自批 → 自付
+  // 走完全程（真实审计日志里 3 组）。transition 那边已经拦住了自批，
+  // 但打款走的是这条独立路径，不拦一样能绕过去。
+  const payVerdict = checkExpenseAction("advance", "pay", found.borrowerUserId, {
+    userId: req.auth!.userId,
+    roleCodes: req.auth!.roleCodes
+  });
+  if (!payVerdict.ok) {
+    json(res, payVerdict.status!, { error: payVerdict.error, code: payVerdict.code });
+    return;
+  }
+
   if (found.status !== "approved" && found.status !== "paid") {
     json(res, 409, {
       error: `借款单当前是「${found.status}」，只有已批准的才能付款。`,
